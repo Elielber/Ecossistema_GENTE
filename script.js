@@ -83,20 +83,21 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        function atualizarPainel(id, historia) {
-            const evento = historia.find(e => e.id === id);
-            if (!evento) return;
+       function atualizarPainel(id, historia) {
+    const evento = historia.find(e => e.id === id);
+    if (!evento) return;
 
-            // Esta seção foi removida pois os dados agora estão no Dashboard e não mais nos cards
-            // document.getElementById('story-summary').innerText = evento.summary;
-            // document.getElementById('problema-content').innerText = evento.components.problema;
-            // document.getElementById('hipoteses-content').innerText = evento.components.hipoteses;
-            // document.getElementById('metodologia-content').innerText = evento.components.metodologia;
+    // Agora preenchemos TODOS os campos que estão no HTML
+    document.getElementById('story-summary').innerText = evento.summary;
+    document.getElementById('problema-content').innerText = evento.components.problema;
+    document.getElementById('hipoteses-content').innerText = evento.components.hipoteses;
+    document.getElementById('metodologia-content').innerText = evento.components.metodologia;
 
-            document.querySelectorAll('.timeline-event').forEach(el => {
-                el.classList.toggle('active', el.dataset.id === id);
-            });
-        }
+    // Atualiza a classe 'active' no menu da timeline
+    document.querySelectorAll('.timeline-event').forEach(el => {
+        el.classList.toggle('active', el.dataset.id === id);
+    });
+}
 
         function configurarInteratividade(historia) {
             const timelineContainer = document.getElementById('timeline');
@@ -113,4 +114,5 @@ document.addEventListener('DOMContentLoaded', function() {
 
         inicializarJornada();
     }
+
 });
