@@ -1,128 +1,116 @@
 // Aguarda o conteúdo da página carregar completamente
 document.addEventListener('DOMContentLoaded', function() {
 
-    // Seleciona todos os botões que têm a classe 'btn-download'
+    // --- FUNCIONALIDADE DOS BOTÕES DE DOWNLOAD (PÁGINA INICIAL) ---
     const downloadButtons = document.querySelectorAll('.btn-download');
-
-    // Para cada botão encontrado, adiciona um "ouvinte" de clique
     downloadButtons.forEach(function(button) {
         button.addEventListener('click', function(event) {
-            
-            // Previne o comportamento padrão do link (que é rolar para o topo)
-            event.preventDefault(); 
-            
-            // Exibe o alerta para o usuário
+            event.preventDefault();
             alert('Download disponível em breve!');
         });
     });
 
-});
-// Aguarda o HTML ser completamente carregado para então executar o código
-document.addEventListener('DOMContentLoaded', () => {
-
-    // --- 1. DEFINIÇÃO DAS CONSTANTES ---
-    // Mapeamento dos elementos do HTML que vamos manipular
-    const storySummaryEl = document.getElementById('story-summary');
-    const timelineEl = document.getElementById('timeline');
-    const components = {
-        problema: document.getElementById('problema-content'),
-        hipoteses: document.getElementById('hipoteses-content'),
-        metodologia: document.getElementById('metodologia-content')
-    };
-
-    let researchData = []; // Variável para armazenar os dados do JSON
-
-    // --- 2. FUNÇÃO PRINCIPAL: CARREGAR DADOS E INICIAR A APLICAÇÃO ---
-    async function initializeApp() {
-        try {
-            const response = await fetch('diario.json');
-            if (!response.ok) {
-                throw new Error('Falha ao carregar o arquivo diario.json');
-            }
-            researchData = await response.json();
-            
-            // Ordena os dados pela data para garantir a sequência correta
-            researchData.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-            // Inicia a aplicação com os dados carregados
-            renderTimeline();
-            // Pega o ID do último episódio para mostrar como estado inicial
-            const latestEpisodeId = researchData[researchData.length - 1].id;
-            updateDashboard(latestEpisodeId);
-
-        } catch (error) {
-            console.error('Erro ao inicializar a aplicação:', error);
-            storySummaryEl.textContent = "Não foi possível carregar a jornada da pesquisa. Verifique o console para mais detalhes.";
-        }
-    }
-
-    // --- 3. FUNÇÃO PARA RENDERIZAR A LINHA DO TEMPO ---
-    function renderTimeline() {
-        timelineEl.innerHTML = ''; // Limpa a timeline antes de criar
-        researchData.forEach(episode => {
-            const timelineEvent = document.createElement('div');
-            timelineEvent.className = 'timeline-event';
-            timelineEvent.innerHTML = `
-                <div class="timeline-date">${new Date(episode.date).toLocaleDateString('pt-BR')}</div>
-                <div class="timeline-dot"></div>
-                <div class="timeline-title">${episode.title}</div>
-            `;
-            // Adiciona um 'data attribute' para sabermos qual episódio é
-            timelineEvent.dataset.episodeId = episode.id;
-            timelineEl.appendChild(timelineEvent);
-        });
-    }
-
-    // --- 4. FUNÇÃO PARA ATUALIZAR O DASHBOARD E O PAINEL DA HISTÓRIA ---
-    function updateDashboard(episodeId) {
-        const episode = researchData.find(ep => ep.id === episodeId);
-        if (!episode) return;
-
-        // Atualiza o painel da história
-        storySummaryEl.textContent = episode.summary;
-
-        // Limpa os cards antes de preencher
-        Object.values(components).forEach(el => {
-            if(el) el.textContent = '...';
-        });
-
-        // Preenche os cards com os dados de todos os episódios ATÉ o selecionado
-        const relevantHistory = researchData.filter(ep => new Date(ep.date) <= new Date(episode.date));
+    // --- LÓGICA DA PÁGINA JORNADA ---
+    if (document.body.contains(document.getElementById('timeline'))) {
         
-        const currentState = {};
-
-        relevantHistory.forEach(histEpisode => {
-            if (histEpisode.updates) {
-                Object.assign(currentState, histEpisode.updates);
-            }
-        });
-
-        // Atualiza o conteúdo dos cards com o estado mais recente
-        for (const key in currentState) {
-            if (components[key]) {
-                // Se for uma lista (como hipóteses), formata como tal
-                if (Array.isArray(currentState[key])) {
-                    components[key].innerHTML = currentState[key].map(item => `<li>${item}</li>`).join('');
-                } else {
-                    components[key].textContent = currentState[key];
+        async function inicializarJornada() {
+            try {
+                const response = await fetch('dados.json');
+                if (!response.ok) {
+                    throw new Error('Erro ao carregar os dados da pesquisa.');
                 }
+                const dados = await response.json();
+                
+                preencherDashboard(dados);
+                preencherTimeline(dados.historia);
+                configurarInteratividade(dados.historia);
+
+            } catch (error) {
+                console.error('Falha na inicialização:', error);
+                document.getElementById('story-summary').innerText = 'Não foi possível carregar os dados da pesquisa. Tente novamente mais tarde.';
             }
         }
-    }
 
-    // --- 5. ADICIONANDO OS EVENT LISTENERS (A INTERATIVIDADE) ---
-    timelineEl.addEventListener('click', (event) => {
-        // Procura pelo elemento pai que é um 'timeline-event'
-        const eventTarget = event.target.closest('.timeline-event');
-        if (eventTarget && eventTarget.dataset.episodeId) {
-            const episodeId = parseInt(eventTarget.dataset.episodeId, 10);
-            updateDashboard(episodeId);
+        function preencherDashboard(dados) {
+            document.getElementById('kpi-cronograma-pct').innerText = dados.kpis.cronogramaConcluido + '%';
+            document.getElementById('kpi-cronograma-bar').style.width = dados.kpis.cronogramaConcluido + '%';
+            document.getElementById('kpi-artigos-submetidos').innerText = dados.kpis.artigosSubmetidos;
+            document.getElementById('kpi-artigos-aceitos').innerText = dados.kpis.artigosAceitos;
+            document.getElementById('kpi-riscos-elevados').innerText = dados.kpis.riscosElevados;
+
+            // ***** TRECHO QUE FALTAVA - INÍCIO *****
+            const cronogramaContainer = document.getElementById('cronograma-container');
+            cronogramaContainer.innerHTML = ''; // Limpa o container
+            dados.cronograma.forEach(item => {
+                cronogramaContainer.innerHTML += `
+                    <div class="gantt-item">
+                        <p>${item.etapa}</p>
+                        <div class="gantt-bar-bg">
+                            <div class="gantt-bar-fill ${item.status}" style="width: ${item.progresso}%;">${item.progresso}%</div>
+                        </div>
+                    </div>
+                `;
+            });
+            // ***** TRECHO QUE FALTAVA - FIM *****
+
+            const producaoTabela = document.getElementById('producao-table');
+            producaoTabela.innerHTML = '<tr><th>Tipo</th><th>Status</th></tr>';
+            dados.producaoCientifica.forEach(item => {
+                producaoTabela.innerHTML += `<tr><td>${item.tipo}</td><td>${item.status}</td></tr>`;
+            });
+
+            const riscosTabela = document.getElementById('riscos-table');
+            riscosTabela.innerHTML = '<tr><th>Risco</th><th>Nível</th><th>Ação</th></tr>';
+            dados.riscos.forEach(item => {
+                riscosTabela.innerHTML += `<tr><td>${item.risco}</td><td>${item.nivel}</td><td>${item.acao}</td></tr>`;
+            });
         }
-    });
+        
+        function preencherTimeline(historia) {
+            const timelineContainer = document.getElementById('timeline');
+            timelineContainer.innerHTML = ''; 
+            historia.forEach((evento, index) => {
+                const isActive = index === 0 ? 'active' : '';
+                timelineContainer.innerHTML += `
+                    <div class="timeline-event ${isActive}" data-id="${evento.id}">
+                        <div class="timeline-dot"></div>
+                        <div class="timeline-info">
+                            <span class="timeline-title">${evento.title}</span>
+                            <span class="timeline-date">${new Date(evento.date).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
 
-    // (Opcional, funcionalidade do botão "Ver Histórico" pode ser adicionada depois)
+        function atualizarPainel(id, historia) {
+            const evento = historia.find(e => e.id === id);
+            if (!evento) return;
 
-    // --- INICIA TUDO ---
-    initializeApp();
+            // Esta seção foi removida pois os dados agora estão no Dashboard e não mais nos cards
+            // document.getElementById('story-summary').innerText = evento.summary;
+            // document.getElementById('problema-content').innerText = evento.components.problema;
+            // document.getElementById('hipoteses-content').innerText = evento.components.hipoteses;
+            // document.getElementById('metodologia-content').innerText = evento.components.metodologia;
 
+            document.querySelectorAll('.timeline-event').forEach(el => {
+                el.classList.toggle('active', el.dataset.id === id);
+            });
+        }
+
+        function configurarInteratividade(historia) {
+            const timelineContainer = document.getElementById('timeline');
+            timelineContainer.addEventListener('click', function(e) {
+                const targetEvent = e.target.closest('.timeline-event');
+                if (targetEvent) {
+                    atualizarPainel(targetEvent.dataset.id, historia);
+                }
+            });
+            if (historia.length > 0) {
+                atualizarPainel(historia[0].id, historia);
+            }
+        }
+
+        inicializarJornada();
+    }
 });
