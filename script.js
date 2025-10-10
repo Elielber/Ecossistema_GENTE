@@ -1,3 +1,22 @@
+// Aguarda o conteúdo da página carregar completamente
+document.addEventListener('DOMContentLoaded', function() {
+
+    // Seleciona todos os botões que têm a classe 'btn-download'
+    const downloadButtons = document.querySelectorAll('.btn-download');
+
+    // Para cada botão encontrado, adiciona um "ouvinte" de clique
+    downloadButtons.forEach(function(button) {
+        button.addEventListener('click', function(event) {
+            
+            // Previne o comportamento padrão do link (que é rolar para o topo)
+            event.preventDefault(); 
+            
+            // Exibe o alerta para o usuário
+            alert('Download disponível em breve!');
+        });
+    });
+
+});
 // Aguarda o HTML ser completamente carregado para então executar o código
 document.addEventListener('DOMContentLoaded', () => {
 
