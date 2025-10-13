@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 preencherDashboard(dados);
                 preencherTimeline(dados.historia);
-                configurarInteratividade(historia);
+                configurarInteratividade(dados.historia);
                 configurarInteratividadeKPIs(dados);
 
             } catch (error) {
@@ -103,4 +103,5 @@ document.addEventListener('DOMContentLoaded', function() {
         // Inicia tudo
         inicializarJornada();
     }
+
 });
