@@ -69,17 +69,41 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         function configurarInteratividadeKPIs(dados) {
-            const painelDetalhe = document.getElementById('painel-detalhe-content');
-            const kpisClicaveis = document.querySelectorAll('.kpi-clicavel');
+    const modalOverlay = document.getElementById('kpi-modal');
+    const modalText = document.getElementById('modal-text');
+    const closeModalButton = document.querySelector('.modal-close');
+    const kpisClicaveis = document.querySelectorAll('.kpi-clicavel');
 
-            kpisClicaveis.forEach(kpi => {
-                kpi.addEventListener('click', () => {
-                    const kpiId = kpi.dataset.kpi;
-                    const memoriaDeCalculo = dados.kpis[kpiId].memoriaDeCalculo;
-                    painelDetalhe.innerHTML = `<pre>${memoriaDeCalculo}</pre>`; 
-                });
-            });
+    // Função para abrir o modal
+    function abrirModal(kpiId) {
+        const memoriaDeCalculo = dados.kpis[kpiId].memoriaDeCalculo;
+        modalText.innerHTML = `<pre>${memoriaDeCalculo}</pre>`;
+        modalOverlay.classList.add('visible');
+    }
+
+    // Função para fechar o modal
+    function fecharModal() {
+        modalOverlay.classList.remove('visible');
+    }
+
+    // Adiciona evento de clique a cada KPI
+    kpisClicaveis.forEach(kpi => {
+        kpi.addEventListener('click', () => {
+            const kpiId = kpi.dataset.kpi;
+            abrirModal(kpiId);
+        });
+    });
+
+    // Adiciona evento para fechar no botão "X"
+    closeModalButton.addEventListener('click', fecharModal);
+
+    // Adiciona evento para fechar ao clicar fora da caixa (no fundo escuro)
+    modalOverlay.addEventListener('click', (event) => {
+        if (event.target === modalOverlay) {
+            fecharModal();
         }
+    });
+}
 
         // FUNÇÃO PRINCIPAL (executada ao carregar a página)
         async function inicializarJornada() {
@@ -103,5 +127,4 @@ document.addEventListener('DOMContentLoaded', function() {
         // Inicia tudo
         inicializarJornada();
     }
-
 });
