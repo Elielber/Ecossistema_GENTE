@@ -13,57 +13,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- LÓGICA DA PÁGINA JORNADA ---
     if (document.body.contains(document.getElementById('timeline'))) {
         
-        async function inicializarJornada() {
-            try {
-                const response = await fetch('dados.json');
-                if (!response.ok) {
-                    throw new Error('Erro ao carregar os dados da pesquisa.');
-                }
-                const dados = await response.json();
-                
-                preencherDashboard(dados);
-                preencherTimeline(dados.historia);
-                configurarInteratividade(dados.historia);
-
-            } catch (error) {
-                console.error('Falha na inicialização:', error);
-                document.getElementById('story-summary').innerText = 'Não foi possível carregar os dados da pesquisa. Tente novamente mais tarde.';
-            }
-        }
-
+        // FUNÇÕES DE APOIO (declaradas primeiro)
         function preencherDashboard(dados) {
-            document.getElementById('kpi-cronograma-pct').innerText = dados.kpis.cronogramaConcluido + '%';
-            document.getElementById('kpi-cronograma-bar').style.width = dados.kpis.cronogramaConcluido + '%';
-            document.getElementById('kpi-artigos-submetidos').innerText = dados.kpis.artigosSubmetidos;
-            document.getElementById('kpi-artigos-aceitos').innerText = dados.kpis.artigosAceitos;
-            document.getElementById('kpi-riscos-elevados').innerText = dados.kpis.riscosElevados;
-
-            // ***** TRECHO QUE FALTAVA - INÍCIO *****
-            const cronogramaContainer = document.getElementById('cronograma-container');
-            cronogramaContainer.innerHTML = ''; // Limpa o container
-            dados.cronograma.forEach(item => {
-                cronogramaContainer.innerHTML += `
-                    <div class="gantt-item">
-                        <p>${item.etapa}</p>
-                        <div class="gantt-bar-bg">
-                            <div class="gantt-bar-fill ${item.status}" style="width: ${item.progresso}%;">${item.progresso}%</div>
-                        </div>
-                    </div>
-                `;
-            });
-            // ***** TRECHO QUE FALTAVA - FIM *****
-
-            const producaoTabela = document.getElementById('producao-table');
-            producaoTabela.innerHTML = '<tr><th>Tipo</th><th>Status</th></tr>';
-            dados.producaoCientifica.forEach(item => {
-                producaoTabela.innerHTML += `<tr><td>${item.tipo}</td><td>${item.status}</td></tr>`;
-            });
-
-            const riscosTabela = document.getElementById('riscos-table');
-            riscosTabela.innerHTML = '<tr><th>Risco</th><th>Nível</th><th>Ação</th></tr>';
-            dados.riscos.forEach(item => {
-                riscosTabela.innerHTML += `<tr><td>${item.risco}</td><td>${item.nivel}</td><td>${item.acao}</td></tr>`;
-            });
+            document.getElementById('kpi-viabilidade-resumo').innerText = dados.kpis.viabilidade.resumo;
+            document.getElementById('kpi-prazo-resumo').innerText = dados.kpis.prazo.resumo;
+            document.getElementById('kpi-publicidade-resumo').innerText = dados.kpis.publicidade.resumo;
         }
         
         function preencherTimeline(historia) {
@@ -82,22 +36,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
             });
         }
+       
+        function atualizarPainel(id, historia) {
+            const evento = historia.find(e => e.id === id);
+            if (!evento) return;
 
-       function atualizarPainel(id, historia) {
-    const evento = historia.find(e => e.id === id);
-    if (!evento) return;
+            document.getElementById('painel-episodio-numero').innerText = `Episódio #${evento.id.replace('ep','')}`;
+            document.getElementById('painel-titulo-texto').innerText = evento.title;
+            document.getElementById('problema-content').innerText = evento.components.problema;
+            document.getElementById('hipoteses-content').innerText = evento.components.hipoteses;
+            document.getElementById('metodologia-content').innerText = evento.components.metodologia;
+            document.getElementById('referencial-content').innerText = evento.components.referencial || 'A ser preenchido...';
+            document.getElementById('impacto-content').innerText = evento.components.impacto || 'A ser preenchido...';
+            document.getElementById('produto-content').innerText = evento.components.produto || 'A ser preenchido...';
 
-    // Agora preenchemos TODOS os campos que estão no HTML
-    document.getElementById('story-summary').innerText = evento.summary;
-    document.getElementById('problema-content').innerText = evento.components.problema;
-    document.getElementById('hipoteses-content').innerText = evento.components.hipoteses;
-    document.getElementById('metodologia-content').innerText = evento.components.metodologia;
-
-    // Atualiza a classe 'active' no menu da timeline
-    document.querySelectorAll('.timeline-event').forEach(el => {
-        el.classList.toggle('active', el.dataset.id === id);
-    });
-}
+            document.querySelectorAll('.timeline-event').forEach(el => {
+                el.classList.toggle('active', el.dataset.id === id);
+            });
+        }
 
         function configurarInteratividade(historia) {
             const timelineContainer = document.getElementById('timeline');
@@ -112,7 +68,39 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        function configurarInteratividadeKPIs(dados) {
+            const painelDetalhe = document.getElementById('painel-detalhe-content');
+            const kpisClicaveis = document.querySelectorAll('.kpi-clicavel');
+
+            kpisClicaveis.forEach(kpi => {
+                kpi.addEventListener('click', () => {
+                    const kpiId = kpi.dataset.kpi;
+                    const memoriaDeCalculo = dados.kpis[kpiId].memoriaDeCalculo;
+                    painelDetalhe.innerHTML = `<pre>${memoriaDeCalculo}</pre>`; 
+                });
+            });
+        }
+
+        // FUNÇÃO PRINCIPAL (executada ao carregar a página)
+        async function inicializarJornada() {
+            try {
+                const response = await fetch('dados.json');
+                if (!response.ok) { throw new Error('Erro ao carregar os dados da pesquisa.'); }
+                const dados = await response.json();
+                
+                preencherDashboard(dados);
+                preencherTimeline(dados.historia);
+                configurarInteratividade(historia);
+                configurarInteratividadeKPIs(dados);
+
+            } catch (error) {
+                console.error('Falha na inicialização:', error);
+                const painelTitulo = document.getElementById('painel-titulo-texto');
+                if(painelTitulo) painelTitulo.innerText = 'Erro ao carregar dados. Verifique o arquivo dados.json.';
+            }
+        }
+
+        // Inicia tudo
         inicializarJornada();
     }
-
 });
