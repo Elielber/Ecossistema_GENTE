@@ -54,6 +54,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 el.classList.toggle('active', el.dataset.id === id);
             });
         }
+		// NOVA FUNÇÃO para atualizar a imagem do cubo
+function atualizarCubo(progresso) {
+    const cuboImg = document.getElementById('cubo-pesquisa-img');
+    if (!cuboImg) return;
+
+    // Remove o '%' e converte para número
+    const percentual = parseInt(progresso); 
+    let imagemSrc = 'cubo-0.jpg'; // Imagem padrão
+
+    if (percentual >= 100) {
+        imagemSrc = 'cubo-100.jpg';
+    } else if (percentual >= 75) {
+        imagemSrc = 'cubo-75.jpg';
+    } else if (percentual >= 50) {
+        imagemSrc = 'cubo-50.jpg';
+    } else if (percentual > 0) {
+        imagemSrc = 'cubo-25.jpg';
+    }
+    
+    cuboImg.src = imagemSrc;
+}
 
         function configurarInteratividade(historia) {
             const timelineContainer = document.getElementById('timeline');
@@ -113,6 +134,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const dados = await response.json();
                 
                 preencherDashboard(dados);
+				atualizarCubo(dados.kpis.prazo.resumo);
                 preencherTimeline(dados.historia);
                 configurarInteratividade(dados.historia);
                 configurarInteratividadeKPIs(dados);
@@ -123,6 +145,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if(painelTitulo) painelTitulo.innerText = 'Erro ao carregar dados. Verifique o arquivo dados.json.';
             }
         }
+		
 
         // Inicia tudo
         inicializarJornada();
