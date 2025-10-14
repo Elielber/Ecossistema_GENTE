@@ -41,8 +41,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const evento = historia.find(e => e.id === id);
             if (!evento) return;
 
-            document.getElementById('painel-episodio-numero').innerText = `Episódio #${evento.id.replace('ep','')}`;
-            document.getElementById('painel-titulo-texto').innerText = evento.title;
+            document.getElementById('painel-summary-numero').innerText = `Episódio #${evento.id.replace('ep','')}`;
+            document.getElementById('painel-nome-texto').innerText = evento.title;
             document.getElementById('problema-content').innerText = evento.components.problema;
             document.getElementById('hipoteses-content').innerText = evento.components.hipoteses;
             document.getElementById('metodologia-content').innerText = evento.components.metodologia;
@@ -150,4 +150,5 @@ function atualizarCubo(progresso) {
         // Inicia tudo
         inicializarJornada();
     }
+
 });
