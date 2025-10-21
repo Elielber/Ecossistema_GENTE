@@ -81,16 +81,23 @@ document.addEventListener('DOMContentLoaded', function() {
         // ...
         
         // FUNÇÕES DE APOIO
-        function atualizarCubo(progresso) {
-            const cuboImg = document.getElementById('cubo-pesquisa-img');
-            if (!cuboImg) return;
-            const percentual = parseInt(progresso) || 0;
-            let imagemSrc = 'cubo-0.jpg';
-            if (percentual >= 100) imagemSrc = 'cubo-100.jpg';
-            else if (percentual >= 75) imagemSrc = 'cubo-75.jpg';
-            else if (percentual >= 50) imagemSrc = 'cubo-50.jpg';
-            else if (percentual > 0) imagemSrc = 'cubo-25.jpg';
-            cuboImg.src = imagemSrc;
+       function atualizarCubo(kpis) {
+            const cuboImg = document.getElementById('cubo-pesquisa-img'); // Busca a imagem na página da jornada
+            if (!cuboImg || !kpis || !kpis.cuboImagem) {
+                console.warn("KPIs ou nome da imagem do cubo não encontrados para este episódio.");
+                if(cuboImg) cuboImg.src = 'cubo-E1.jpg'; // Imagem padrão de fallback
+                return;
+            }
+
+            // Simplesmente lê o nome da imagem do JSON e define o src
+            cuboImg.src = kpis.cuboImagem;
+            
+             // Fallback simples se a imagem não carregar
+             cuboImg.onerror = () => { 
+                 console.error(`Imagem ${kpis.cuboImagem} não encontrada, usando fallback.`);
+                 cuboImg.src = 'cubo-E1.jpg'; // Ou cubo-0.jpg
+                 cuboImg.onerror = null; 
+             };
         }
 
         function configurarInteratividadeKPIs(kpis) {
