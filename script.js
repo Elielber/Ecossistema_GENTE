@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const cuboImg = document.getElementById('cubo-pesquisa-img'); // Busca a imagem na página da jornada
             if (!cuboImg || !kpis || !kpis.cuboImagem) {
                 console.warn("KPIs ou nome da imagem do cubo não encontrados para este episódio.");
-                if(cuboImg) cuboImg.src = 'cubo-E1.jpg'; // Imagem padrão de fallback
+                if(cuboImg) cuboImg.src = 'cubo-E1.png'; // Imagem padrão de fallback
                 return;
             }
 
@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function() {
              // Fallback simples se a imagem não carregar
              cuboImg.onerror = () => { 
                  console.error(`Imagem ${kpis.cuboImagem} não encontrada, usando fallback.`);
-                 cuboImg.src = 'cubo-E1.jpg'; // Ou cubo-0.jpg
+                 cuboImg.src = 'cubo-E1.png'; // Ou cubo-0.jpg
                  cuboImg.onerror = null; 
              };
         }
