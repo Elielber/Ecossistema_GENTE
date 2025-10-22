@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const cuboImg = document.getElementById('cubo-pesquisa-img'); // Busca a imagem na página da jornada
             if (!cuboImg || !kpis || !kpis.cuboImagem) {
                 console.warn("KPIs ou nome da imagem do cubo não encontrados para este episódio.");
-                if(cuboImg) cuboImg.src = 'cubo-E1.png'; // Imagem padrão de fallback
+                if(cuboImg) cuboImg.src = 'cubo-E0.png'; // Imagem padrão de fallback
                 return;
             }
 
@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function() {
              // Fallback simples se a imagem não carregar
              cuboImg.onerror = () => { 
                  console.error(`Imagem ${kpis.cuboImagem} não encontrada, usando fallback.`);
-                 cuboImg.src = 'cubo-E1.png'; // Ou cubo-0.jpg
+                 cuboImg.src = 'cubo-E0.png'; // Ou cubo-0.png
                  cuboImg.onerror = null; 
              };
         }
@@ -107,7 +107,21 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.kpi-clicavel').forEach(kpiCard => {
                 kpiCard.onclick = () => {
                     const kpiId = kpiCard.dataset.kpi;
-                    modalText.innerHTML = `<pre>${kpis[kpiId].memoriaDeCalculo}</pre>`;
+                    const kpiData = kpis[kpiId];
+					let memoriaDeCalculo = "Memória de cálculo não disponível.";
+					if (kpiId === 'tolerancia') {
+						if (typeof kpiData === 'object' && kpiData !== null && kpiData.memoriaDeCalculo) {
+							memoriaDeCalculo = kpiData.memoriaDeCalculo; // Novo formato (com memória)
+							} else if (typeof kpiData === 'object' && kpiData !== null && kpiData.resumo) {
+								memoriaDeCalculo = kpiData.resumo; // Fallback para o resumo
+								} else if (typeof kpiData === 'number') {
+									memoriaDeCalculo = `A tolerância para este episódio foi definida em ${ (kpiData * 100).toFixed(0) }%.`; // Formato antigo
+									}
+								} else if (kpiData && kpiData.memoriaDeCalculo) {
+									// Lógica original para os outros KPIs
+						memoriaDeCalculo = kpiData.memoriaDeCalculo;
+					}
+					modalText.innerHTML = `<pre>${memoriaDeCalculo}</pre>`;
                     modalOverlay.classList.add('visible');
                 };
             });
@@ -133,8 +147,17 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('kpi-viabilidade-resumo').innerText = evento.kpis.viabilidade.resumo;
             document.getElementById('kpi-prazo-resumo').innerText = evento.kpis.prazo.resumo;
             document.getElementById('kpi-publicidade-resumo').innerText = evento.kpis.publicidade.resumo;
+            const toleranciaKPI = evento.kpis.tolerancia;
+			const toleranciaEl = document.getElementById('kpi-tolerancia-resumo');
+			if (typeof toleranciaKPI === 'object' && toleranciaKPI !== null && toleranciaKPI.resumo) {
+				toleranciaEl.innerText = toleranciaKPI.resumo; // Novo formato (lê o resumo)
+				} else if (typeof toleranciaKPI === 'number') {
+					toleranciaEl.innerText = (toleranciaKPI * 100).toFixed(0) + '% (Definida)'; // Formato antigo
+					} else {
+						toleranciaEl.innerText = '--'; // Caso não exista
+						}
 
-            atualizarCubo(evento.kpis);
+			atualizarCubo(evento.kpis);
             configurarInteratividadeKPIs(evento.kpis);
 
             document.querySelectorAll('.timeline-event').forEach(el => {
