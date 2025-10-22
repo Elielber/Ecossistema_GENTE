@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('kpi-prazo-resumo').innerText = evento.kpis.prazo.resumo;
             document.getElementById('kpi-publicidade-resumo').innerText = evento.kpis.publicidade.resumo;
 
-            atualizarCubo(evento.kpis.prazo.resumo);
+            atualizarCubo(evento.kpis);
             configurarInteratividadeKPIs(evento.kpis);
 
             document.querySelectorAll('.timeline-event').forEach(el => {
