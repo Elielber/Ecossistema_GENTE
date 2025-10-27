@@ -189,12 +189,13 @@ async function inicializarJornada() {
         
         if (!dadosPesquisa || !dadosPesquisa.historia) throw new Error("JSON inválido");
         
-        // Ordena: os mais recentes primeiro
-        dadosPesquisa.historia.sort((a, b) => new Date(b.date) - new Date(a.date));
+        // --- MODIFICAÇÃO (Req 1) ---
+        // Ordena por data ASCENDENTE (a.date - b.date). 'ep00' no topo.
+        dadosPesquisa.historia.sort((a, b) => new Date(a.date) - new Date(b.date));
         
         setupTimeline(dadosPesquisa.historia);
         
-        // Exibe o primeiro da lista (o mais recente) por padrão
+        // Exibe o primeiro da lista (o mais antigo, ep00) por padrão
         if(dadosPesquisa.historia.length > 0) {
             displayEpisodio(dadosPesquisa.historia[0]);
         }
@@ -203,7 +204,6 @@ async function inicializarJornada() {
         document.getElementById('painel-nome-content').innerText = "Erro ao carregar dados.json.";
     }
 }
-
 function setupTimeline(historia) {
     const timelineContainer = document.getElementById('timeline');
     timelineContainer.innerHTML = ''; // Limpa
@@ -213,17 +213,24 @@ function setupTimeline(historia) {
         epElement.className = 'timeline-item';
         epElement.dataset.id = episodio.id; // Salva o ID
         
+        // --- MODIFICAÇÃO (Req 2) ---
+        // Altera a estrutura do HTML gerado
         epElement.innerHTML = `
-            <div class="timeline-date">${formatDataBR(parseDataISO(episodio.date))}</div>
-            <div class="timeline-dot"></div>
-            <div class="timeline-title">${episodio.id}: ${episodio.title}</div>
+            <div class="timeline-title-wrapper">
+                <span class="timeline-title">${episodio.title}</span>
+            </div>
+            <div class="timeline-meta-wrapper">
+                <div class="timeline-dot"></div>
+                <span class="timeline-date">${formatDataBR(parseDataISO(episodio.date))}</span>
+                <span class="timeline-id">(${episodio.id})</span>
+            </div>
         `;
         
         epElement.onclick = () => {
             displayEpisodio(episodio);
         };
         
-        // Marca o primeiro (mais recente) como ativo
+        // Marca o primeiro (mais antigo, ep00) como ativo
         if (index === 0) {
             epElement.classList.add('active');
         }
