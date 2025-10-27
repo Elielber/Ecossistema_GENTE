@@ -225,7 +225,8 @@ footer {
     text-align: center;
 }
 
-/* --- Estilos do Menu Lateral (Timeline) --- */
+/* --- Estilos da Timeline (Página Jornada) --- */
+/* (Estilos da timeline original mantidos) */
 #timeline-container {
     padding: 20px;
     background-color: #fff;
@@ -234,7 +235,6 @@ footer {
     position: sticky;
     top: 20px;
 }
-/* Posiciona o container da timeline na área "timeline" do grid */
 #timeline-container {
     grid-area: timeline;
     position: static; 
@@ -243,31 +243,59 @@ footer {
     text-align: left; margin-top: 0; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #e0e0e0;
 }
 #timeline {
-    display: flex; flex-direction: column; gap: 10px;
+    display: flex; flex-direction: column; gap: 5px; /* Reduzido o gap */
 }
-.timeline-event {
-    display: flex; align-items: center; padding: 10px; border-radius: 6px; cursor: pointer; border: 2px solid transparent; transition: background-color 0.3s, border-color 0.3s;
+
+/* --- ESTILO NOVO DA TIMELINE (pedido na resposta anterior) --- */
+.timeline-item { /* Renomeado de .timeline-event */
+    display: grid;
+    grid-template-columns: auto 1fr; /* Coluna para data, coluna para o resto */
+    align-items: center;
+    padding: 8px 10px; /* Mais compacto */
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid transparent; /* Borda transparente para manter o tamanho */
+    transition: background-color 0.3s, border-color 0.3s;
+    gap: 0 10px; /* Gap entre colunas */
 }
-.timeline-event:hover {
+.timeline-item:hover {
     background-color: #e9ecef;
 }
-.timeline-event.active {
-    background-color: #e7f3ff; border-color: var(--cor-principal);
+.timeline-item.active {
+    background-color: #e7f3ff; 
+    border-color: var(--cor-principal);
 }
+
+.timeline-date {
+    grid-column: 1;
+    grid-row: 1 / span 2; /* Ocupa 2 linhas */
+    font-size: 0.8em;
+    font-weight: 500;
+    color: #666;
+    margin-right: 5px; /* Pequeno espaço antes do ponto */
+}
+
 .timeline-dot {
-    width: 12px; height: 12px; background-color: #ccc; border-radius: 50%; margin-right: 15px; flex-shrink: 0;
+    grid-column: 2;
+    grid-row: 1 / span 2; /* Ocupa 2 linhas */
+    width: 10px; height: 10px; 
+    background-color: #ccc; 
+    border-radius: 50%;
+    margin-right: 10px;
 }
-.timeline-event.active .timeline-dot {
+.timeline-item.active .timeline-dot {
     background-color: var(--cor-principal);
 }
-.timeline-info {
-    display: flex; flex-direction: column;
+
+.timeline-title { /* Renomeado de .timeline-info */
+    grid-column: 3;
+    grid-row: 1 / span 2; /* Ocupa 2 linhas */
+    font-weight: 500; /* Menos negrito que o .timeline-info original */
+    font-size: 0.9em; /* Um pouco menor */
+    color: var(--cor-secundaria);
 }
-.timeline-title {
-    font-weight: bold; font-size: 1em;
-}
-.timeline-date {
-    font-size: 0.8em; color: #666;
+.timeline-item.active .timeline-title {
+    font-weight: 700;
 }
 
 
@@ -348,9 +376,9 @@ footer {
             "kpi-prazo"
             "kpi-publicidade"
 		      	"problema"
-            "hipoteses"
+            "hipoteses"
 			      "referencial"
-            "metodologia"
+            "metodologia"
 		      	"impacto"
             "produto";
     }
@@ -367,10 +395,17 @@ footer {
     justify-content: center;
     align-items: center;
     z-index: 2000; /* Garante que fique na frente de tudo */
+    
+    /* MODIFICADO: Adicionado para o script.js novo */
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
 }
 
+/* MODIFICADO: script.js novo usa 'display: flex' e 'opacity: 1' */
 .modal-overlay.visible {
-    display: flex; /* Classe que torna o modal visível */
+    display: flex;
+    opacity: 1;
 }
 
 .modal-content {
@@ -379,8 +414,10 @@ footer {
     border-radius: 8px;
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     width: 90%;
-    max-width: 600px;
+    max-width: 800px; /* Aumentado para o Gantt */
     position: relative;
+    max-height: 80vh; /* Altura máxima */
+    overflow-y: auto; /* Permite rolagem interna */
 }
 
 .modal-content h3 {
@@ -405,17 +442,149 @@ footer {
     color: #333;
 }
 
-/* Estilo para o conteúdo da memória de cálculo */
-#modal-text pre {
-    background-color: #f4f7f9;
-    padding: 15px;
-    border-radius: 5px;
-    white-space: pre-wrap; /* Garante a quebra de linha */
-    word-wrap: break-word;
-    font-family: monospace;
-    color: #333;
+/* --- ESTILOS NOVOS PARA O MODAL --- */
 
+/* Tabelas dentro do Modal */
+.modal-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    margin-bottom: 20px;
+    font-size: 0.9em;
 }
+.modal-content th, 
+.modal-content td {
+    border: 1px solid #e5e7eb;
+    padding: 8px 10px;
+    text-align: left;
+    white-space: nowrap; /* Impede que o conteúdo da tabela quebre linha */
+}
+.modal-content td:first-child, /* Coluna de Título/Item */
+.modal-content th:first-child {
+    white-space: normal; /* Permite que a primeira coluna quebre linha */
+}
+
+.modal-content th {
+    background-color: #f3f4f6;
+    font-weight: 600;
+}
+.modal-content tr:nth-child(even) {
+    background-color: #f9fafb;
+}
+
+/* Meta em Destaque */
+.modal-content .meta-destaque {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #1d4ed8;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+/* Bloco de Cálculo (para a memória de cálculo) */
+.modal-content .bloco-calculo {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f3f4f6;
+    border-radius: 6px;
+    font-family: 'Courier New', Courier, monospace;
+    white-space: pre-wrap; /* Mantém a formatação */
+    font-size: 0.85em;
+    border: 1px solid #e5e7eb;
+    max-height: 200px; /* Limita a altura */
+    overflow-y: auto; /* Adiciona rolagem se for muito grande */
+}
+.modal-content .bloco-calculo h4 {
+    margin: 0 0 10px 0;
+    font-family: 'Roboto', sans-serif; /* Volta à fonte normal */
+    color: #333;
+}
+
+/* --- ESTILOS PARA O GRÁFICO DE GANTT (Req. 2) --- */
+.gantt-container {
+    position: relative;
+    width: 100%;
+    margin-top: 20px;
+    border: 1px solid #d1d5db;
+    background-color: #f9fafb;
+    border-radius: 6px;
+    padding: 20px 10px 10px 10px;
+    overflow-x: auto; /* Permite rolagem se for muito denso */
+    min-height: 200px;
+    max-height: 300px; /* Limita altura do Gantt */
+}
+
+.gantt-tarefa {
+    display: flex; /* Alinha o rótulo e a barra */
+    align-items: center;
+    margin-bottom: 8px;
+    white-space: nowrap;
+}
+
+.gantt-rotulo {
+    width: 30%; /* Espaço para o nome da tarefa */
+    font-size: 0.85em;
+    padding-right: 10px;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0; /* Impede que o rótulo encolha */
+}
+
+.gantt-linha-tempo {
+    width: 70%;
+    position: relative;
+    height: 20px;
+    background-color: #e5e7eb; /* Fundo da linha do tempo */
+    border-radius: 4px;
+}
+
+.gantt-barra {
+    position: absolute;
+    height: 100%;
+    border-radius: 4px;
+    background-color: #60a5fa; /* Cor da barra (Aguardando/Default) */
+    opacity: 0.8;
+    box-sizing: border-box; /* Garante que a borda não aumente o tamanho */
+    min-width: 2px; /* Largura mínima para ser visível */
+}
+
+.gantt-barra.status-concluido {
+    background-color: #22c55e; /* Verde */
+}
+.gantt-barra.status-atrasado {
+    background-color: #ef4444; /* Vermelho */
+}
+.gantt-barra.status-andamento {
+    background-color: #f59e0b; /* Amarelo */
+}
+
+/* Tooltip (dica) da barra */
+.gantt-barra::after {
+    content: attr(data-tooltip); /* Mostra o texto do atributo */
+    position: absolute;
+    bottom: 120%; /* Acima da barra */
+    left: 0;
+    background-color: #333;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 10;
+    white-space: pre; /* Mantém as quebras de linha do tooltip */
+}
+.gantt-barra:hover::after {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* --- FIM DOS ESTILOS NOVOS --- */
+
+
 /* --- Estilos da Seção Comunidade WhatsApp --- */
 #comunidade-whatsapp {
     background-color: #fff;
