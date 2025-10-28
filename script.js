@@ -91,16 +91,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- LÓGICA DOS BOTÕES DE DOWNLOAD (index.html) ---
-    // (Mantida, mas verificando se os elementos existem)
-    const downloadButtons = document.querySelectorAll('.btn-download');
-    if (downloadButtons.length > 0) {
-        downloadButtons.forEach(button => {
+const downloadButtons = document.querySelectorAll('.btn-download');
+if (downloadButtons.length > 0) {
+    downloadButtons.forEach(button => {
+        
+        // VERIFICA SE O LINK É UM PLACEHOLDER (href="#")
+        if (button.getAttribute('href') === '#') {
+            
+            // Se for '#', adiciona o bloqueio e o alerta
             button.addEventListener('click', event => {
-                event.preventDefault();
+                event.preventDefault(); 
                 alert('Download disponível em breve!');
             });
-        });
-    }
+        }
+        // Se o href NÃO for '#', o script não faz nada
+        // e o link de download funciona normalmente.
+    });
+}
+
 
     // --- LÓGICA DA PÁGINA JORNADA ---
     // (Totalmente refeita)
