@@ -583,12 +583,36 @@ function renderGantt(entregas, dataEpisodioStr) {
     }
 
     // Adiciona uma "gordura" de 1 dia no fim para a barra não colar na borda
-    adicionarDias(maxDate, 1); 
+    adicionarDias(maxDate, 1);
 
     const diffTempoTotal = maxDate.getTime() - minDate.getTime();
     const diasTotaisProjeto = (diffTempoTotal / MS_POR_DIA);
 
     let ganttHTML = `<div class="gantt-container">`;
+
+    // --- NOVO: INÍCIO DA LINHA DO TEMPO "HOJE" ---
+    let hojeLinhaHTML = '';
+    // Verifica se a data do episódio está dentro do intervalo do projeto
+    if (hoje && hoje.getTime() >= minDate.getTime() && hoje.getTime() < maxDate.getTime()) {
+        // 1. Calcular a diferença de dias desde o início
+        const diffHoje = hoje.getTime() - minDate.getTime();
+        const diasOffsetHoje = (diffHoje / MS_POR_DIA);
+        
+        // 2. Calcular a posição percentual
+        const leftPercentHoje = (diasOffsetHoje / diasTotaisProjeto) * 100;
+        
+        // 3. Criar o HTML da linha (o estilo virá do CSS)
+        hojeLinhaHTML = `
+            <div class="gantt-hoje-linha" style="left: ${leftPercentHoje.toFixed(2)}%;">
+                <span class="gantt-hoje-rotulo">${formatDataBR(hoje)}</span>
+            </div>
+        `;
+    }
+    
+    // Adiciona a linha ao HTML do container
+    ganttHTML += hojeLinhaHTML;
+    // --- NOVO: FIM DA LINHA DO TEMPO "HOJE" ---
+
 
     // 2. Renderiza as barras
     tarefas.forEach(tarefa => {
