@@ -5,7 +5,7 @@
     const HASHES_CONHECIDOS = {
         "Aluga-ou-compra.html": {
             nomeAmigavel: "Ferramenta: Alugar ou Comprar v1",
-            hash: "b21d94cd6a54e321fcb51fc70d4cfe45d445bc7886fad825d072429b3e722c66" 
+            hash: "84d8b3f273675fa5067941733d0b30791676c8f227753296e7091f9d30888356" 
         },
         "CRITER-ANP.html": {
             nomeAmigavel: "Ferramenta: CRITER & ANP-Solver",
@@ -105,4 +105,5 @@
             processarArquivo(e.dataTransfer.files[0]);
         }
     });
+
 });
