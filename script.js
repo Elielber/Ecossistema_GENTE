@@ -574,31 +574,32 @@ function renderGantt(entregas, dataEpisodioStr) {
         return '<div class="gantt-container"><p>Não foi possível calcular o cronograma (verifique as datas de início e dependências).</p></div>';
     }
 
-    adicionarDias(maxDate, 1); 
+    adicionarDias(maxDate, 1);
 
     const diffTempoTotal = maxDate.getTime() - minDate.getTime();
     const diasTotaisProjeto = (diffTempoTotal / MS_POR_DIA);
 
     let ganttHTML = `<div class="gantt-container">`;
 
-    // --- NOVO: INÍCIO DA LINHA DO TEMPO "HOJE" ---
+    // --- INÍCIO DA LINHA DO TEMPO "HOJE" ---
     let hojeLinhaHTML = '';
     if (hoje && hoje.getTime() >= minDate.getTime() && hoje.getTime() < maxDate.getTime()) {
         const diffHoje = hoje.getTime() - minDate.getTime();
         const diasOffsetHoje = (diffHoje / MS_POR_DIA);
-        const leftPercentHoje = (diasOffsetHoje / diasTotaisProjeto) * 100;
         
-        // ================================================================
-        // --- ADICIONE OS CONSOLE.LOG ABAIXO PARA DEPURAR ---
-        // ================================================================
-        console.log("--- DEBUG GANTT ---");
-        console.log("Data Início (minDate):", minDate.toISOString());
-        console.log("Data Episódio (hoje):", hoje.toISOString());
-        console.log("Data Fim (maxDate):", maxDate.toISOString());
-        console.log("Offset (dias):", diasOffsetHoje, "Total (dias):", diasTotaisProjeto);
-        console.log("Posição da Linha (%):", leftPercentHoje);
-        console.log("---------------------");
-        // ================================================================
+        // --- CORREÇÃO APLICADA AQUI ---
+        // 1. Calcula a posição "pura" (os 33.8%)
+        const leftPercentHoje_raw = (diasOffsetHoje / diasTotaisProjeto) * 100;
+        
+        // 2. Busca os tamanhos das colunas do CSS
+        const espacoRotulo = 30; // 30% do CSS
+        const espacoGrafico = 70; // 70% do CSS
+        
+        // 3. Calcula o 'left' final: (30% do rótulo) + (70% do gráfico * 33.8%)
+        const leftPercentHoje = espacoRotulo + (espacoGrafico * (leftPercentHoje_raw / 100));
+        // --- FIM DA CORREÇÃO ---
+
+        // (Opcional: removemos os console.log de debug)
 
         hojeLinhaHTML = `
             <div class="gantt-hoje-linha" style="left: ${leftPercentHoje.toFixed(2)}%;">
@@ -607,19 +608,23 @@ function renderGantt(entregas, dataEpisodioStr) {
         `;
     }
     ganttHTML += hojeLinhaHTML;
-    // --- NOVO: FIM DA LINHA DO TEMPO "HOJE" ---
+    // --- FIM DA LINHA DO TEMPO "HOJE" ---
+
 
     // 2. Renderiza as barras
     tarefas.forEach(tarefa => {
-        // ... (resto da função permanece o mesmo) ...
-        if (!tarefa.inicio || !tarefa.fim) return; 
+        if (!tarefa.inicio || !tarefa.fim) return;
+
         const diffInicio = tarefa.inicio.getTime() - minDate.getTime();
         const diasOffset = (diffInicio / MS_POR_DIA);
+        
         const diffDuracao = tarefa.fim.getTime() - tarefa.inicio.getTime();
-        const diasDuracao = (diffDuracao / MS_POR_DIA) + 1; 
+        const diasDuracao = (diffDuracao / MS_POR_DIA) + 1;
+        
         const leftPercent = (diasOffset / diasTotaisProjeto) * 100;
         const widthPercent = (diasDuracao / diasTotaisProjeto) * 100;
-        let statusClass = 'status-aguardando'; 
+
+        let statusClass = 'status-aguardando';
         if (tarefa.situacao === 'Concluido') statusClass = 'status-concluido';
         if (tarefa.situacao === 'Atrasado') statusClass = 'status-atrasado';
         if (tarefa.situacao === 'Andamento') statusClass = 'status-andamento';
