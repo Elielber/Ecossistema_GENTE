@@ -538,27 +538,20 @@ function renderGantt(entregas, dataEpisodioStr) {
     
     const tarefas = []; // Array para armazenar dados processados
 
-    // 1. Processa todas as tarefas para encontrar datas de início, fim e o intervalo do projeto
+    // 1. Processa todas as tarefas...
     entregas.forEach(entrega => {
-        // Ignora linhas de resumo (sem ".")
         if (!String(entrega.id || '').includes('.')) {
             return;
         }
-
         const dataInicio = obterDataInicio(entrega, entregas);
         let dataFim = null;
         let situacao = "Aguardando";
-        
         if (dataInicio) {
             const duracao = entrega.duracao > 0 ? (entrega.duracao - 1) : 0;
             dataFim = new Date(dataInicio.getTime());
             adicionarDias(dataFim, duracao);
-
-            // Atualiza min/max do projeto
             if (!minDate || dataInicio.getTime() < minDate.getTime()) minDate = new Date(dataInicio.getTime());
             if (!maxDate || dataFim.getTime() > maxDate.getTime()) maxDate = new Date(dataFim.getTime());
-            
-            // Calcula situação
             if (entrega.conclusaoReal) {
                 situacao = "Concluido";
             } else if (dataFim.getTime() < hoje.getTime()) {
@@ -567,7 +560,6 @@ function renderGantt(entregas, dataEpisodioStr) {
                 situacao = "Andamento";
             }
         }
-        
         tarefas.push({
             id: entrega.id,
             nome: entrega.tarefa,
@@ -582,8 +574,7 @@ function renderGantt(entregas, dataEpisodioStr) {
         return '<div class="gantt-container"><p>Não foi possível calcular o cronograma (verifique as datas de início e dependências).</p></div>';
     }
 
-    // Adiciona uma "gordura" de 1 dia no fim para a barra não colar na borda
-    adicionarDias(maxDate, 1);
+    adicionarDias(maxDate, 1); 
 
     const diffTempoTotal = maxDate.getTime() - minDate.getTime();
     const diasTotaisProjeto = (diffTempoTotal / MS_POR_DIA);
@@ -592,42 +583,43 @@ function renderGantt(entregas, dataEpisodioStr) {
 
     // --- NOVO: INÍCIO DA LINHA DO TEMPO "HOJE" ---
     let hojeLinhaHTML = '';
-    // Verifica se a data do episódio está dentro do intervalo do projeto
     if (hoje && hoje.getTime() >= minDate.getTime() && hoje.getTime() < maxDate.getTime()) {
-        // 1. Calcular a diferença de dias desde o início
         const diffHoje = hoje.getTime() - minDate.getTime();
         const diasOffsetHoje = (diffHoje / MS_POR_DIA);
-        
-        // 2. Calcular a posição percentual
         const leftPercentHoje = (diasOffsetHoje / diasTotaisProjeto) * 100;
         
-        // 3. Criar o HTML da linha (o estilo virá do CSS)
+        // ================================================================
+        // --- ADICIONE OS CONSOLE.LOG ABAIXO PARA DEPURAR ---
+        // ================================================================
+        console.log("--- DEBUG GANTT ---");
+        console.log("Data Início (minDate):", minDate.toISOString());
+        console.log("Data Episódio (hoje):", hoje.toISOString());
+        console.log("Data Fim (maxDate):", maxDate.toISOString());
+        console.log("Offset (dias):", diasOffsetHoje, "Total (dias):", diasTotaisProjeto);
+        console.log("Posição da Linha (%):", leftPercentHoje);
+        console.log("---------------------");
+        // ================================================================
+
         hojeLinhaHTML = `
             <div class="gantt-hoje-linha" style="left: ${leftPercentHoje.toFixed(2)}%;">
                 <span class="gantt-hoje-rotulo">${formatDataBR(hoje)}</span>
             </div>
         `;
     }
-    
-    // Adiciona a linha ao HTML do container
     ganttHTML += hojeLinhaHTML;
     // --- NOVO: FIM DA LINHA DO TEMPO "HOJE" ---
 
-
     // 2. Renderiza as barras
     tarefas.forEach(tarefa => {
-        if (!tarefa.inicio || !tarefa.fim) return; // Não renderiza tarefas sem data
-
+        // ... (resto da função permanece o mesmo) ...
+        if (!tarefa.inicio || !tarefa.fim) return; 
         const diffInicio = tarefa.inicio.getTime() - minDate.getTime();
         const diasOffset = (diffInicio / MS_POR_DIA);
-        
         const diffDuracao = tarefa.fim.getTime() - tarefa.inicio.getTime();
-        const diasDuracao = (diffDuracao / MS_POR_DIA) + 1; // +1 para incluir o dia de início
-        
+        const diasDuracao = (diffDuracao / MS_POR_DIA) + 1; 
         const leftPercent = (diasOffset / diasTotaisProjeto) * 100;
         const widthPercent = (diasDuracao / diasTotaisProjeto) * 100;
-
-        let statusClass = 'status-aguardando'; // Classe padrão (azul)
+        let statusClass = 'status-aguardando'; 
         if (tarefa.situacao === 'Concluido') statusClass = 'status-concluido';
         if (tarefa.situacao === 'Atrasado') statusClass = 'status-atrasado';
         if (tarefa.situacao === 'Andamento') statusClass = 'status-andamento';
