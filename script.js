@@ -382,8 +382,14 @@ function renderModalViabilidade(episodio) {
     const meta = episodio.kpis?.metaCusto || 0;
     const itens = kpi?.itens || [];
 
+    // --- CÁLCULO DA APURAÇÃO ---
+    const apuracao = itens.reduce((sum, item) => sum + (item.valor || 0), 0);
+    const kpiResumo = kpi?.resumo || '--';
+
     let tabelaHTML = `
-        <div class="meta-destaque">Meta de Custo: R$ ${meta.toFixed(2)}</div>
+        <div class="meta-destaque">
+            Apuração: R$ ${apuracao.toFixed(2)} / Meta: R$ ${meta.toFixed(2)} = <strong>${kpiResumo}</strong>
+        </div>
         <table>
             <thead>
                 <tr>
@@ -430,8 +436,16 @@ function renderModalPublicidade(episodio) {
     const meta = episodio.kpis?.metaPublicacao || 0;
     const publicacoes = kpi?.publicacoes || [];
 
+    // --- CÁLCULO DA APURAÇÃO ---
+    const apuracao = publicacoes.filter(p => 
+        p.status === 'Aceita' || p.status === 'Publicada'
+    ).length;
+    const kpiResumo = kpi?.resumo || '--';
+
     let tabelaHTML = `
-        <div class="meta-destaque">Meta de Publicação: ${meta} (Aceitas/Publicadas)</div>
+        <div class="meta-destaque">
+             Apuração: ${apuracao} / Meta: ${meta} = <strong>${kpiResumo}</strong>
+        </div>
         <table>
             <thead>
                 <tr>
@@ -473,7 +487,6 @@ function renderModalPublicidade(episodio) {
     `;
     return tabelaHTML;
 }
-
 /**
  * (Req 4) Gera o HTML para o modal de TOLERÂNCIA
  */
@@ -511,7 +524,30 @@ function renderModalPrazo(episodio) {
     const entregas = kpi?.entregas || [];
     const dataEpisodio = episodio.date; // Data de "hoje"
     
-    let html = `<div class="meta-destaque">Meta de Progresso: ${meta}%</div>`;
+    // --- LÓGICA DA APURAÇÃO E KPI ---
+    const kpiResumoStr = kpi?.resumo || '--';
+    let apuracao = '--';
+    let kpiStatus = kpiResumoStr; // Default é a string inteira
+
+    // Tenta extrair "70%" de "70% (No Prazo)"
+    const match = kpiResumoStr.match(/(\d+\.?\d*%\s*)/); 
+    if (match) {
+        apuracao = match[1].trim(); // Ex: "70%"
+        // Pega o que vem *depois* da porcentagem, se houver
+        let statusPart = kpiResumoStr.replace(match[0], '').trim(); // Ex: "(No Prazo)"
+        // Limpa parênteses
+        if (statusPart.startsWith('(') && statusPart.endsWith(')')) {
+            statusPart = statusPart.substring(1, statusPart.length - 1); // Ex: "No Prazo"
+        }
+        if (statusPart) kpiStatus = statusPart; // Usa "No Prazo"
+        else kpiStatus = apuracao; // Se for SÓ "70%", o status é a própria %
+    }
+    
+    let html = `
+        <div class="meta-destaque">
+            Apuração: ${apuracao} / Meta: ${meta}% = <strong>${kpiStatus}</strong>
+        </div>
+    `;
     
     if (entregas.length === 0) {
         html += '<p>Nenhum cronograma cadastrado.</p>';
