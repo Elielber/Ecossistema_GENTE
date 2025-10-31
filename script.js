@@ -295,8 +295,7 @@ function displayEpisodio(episodio) {
     setContent('kpi-publicidade-resumo', kpiPublicidade);
     
     // --- TOLERÂNCIA ---
-    // (A lógica de tolerância já mostra o "resumo" - ex: "Equilibrado", 
-    // que é o status desejado para este card, então mantemos)
+   
     const toleranciaKPI = episodio.kpis.tolerancia;
     const toleranciaEl = document.getElementById('kpi-tolerancia-resumo');
     if (typeof toleranciaKPI === 'object' && toleranciaKPI !== null && toleranciaKPI.resumo) {
@@ -430,7 +429,7 @@ function calcularKpiPublicidade(episodio) {
     const publicacoes = kpi?.publicacoes || [];
 
     const apuracao = publicacoes.filter(p => 
-        p.status === 'Aceita' || p.status === 'Publicada'
+        p.status === 'Aceito' || p.status === 'Publicado'
     ).length;
 
     let kpiResultadoString = 'N/A';
