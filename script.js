@@ -275,12 +275,28 @@ function displayEpisodio(episodio) {
     setContent('impacto-content', episodio.components?.impacto);
     setContent('produto-content', episodio.components?.produto);
 
-    // Resumos dos KPIs
-    setContent('kpi-viabilidade-resumo', episodio.kpis?.viabilidade?.resumo);
-    setContent('kpi-prazo-resumo', episodio.kpis?.prazo?.resumo);
-    setContent('kpi-publicidade-resumo', episodio.kpis?.publicidade?.resumo);
+    // --- INÍCIO DO BLOCO SUBSTITUÍDO ---
+
+    // Resumos dos KPIs (Modificado para usar as funções de cálculo)
     
-    // Lógica de Tolerância (compatível com formato antigo e novo)
+    // --- VIABILIDADE ---
+    // Chama a função que retorna o KPI (ex: "100%")
+    const kpiViabilidade = calcularKpiViabilidade(episodio);
+    setContent('kpi-viabilidade-resumo', kpiViabilidade);
+
+    // --- PRAZO ---
+    // Chama a função que retorna o KPI (ex: "97%")
+    const kpiPrazo = calcularKpiPrazo(episodio);
+    setContent('kpi-prazo-resumo', kpiPrazo);
+
+    // --- PUBLICIDADE ---
+    // Chama a função que retorna o KPI (ex: "100%")
+    const kpiPublicidade = calcularKpiPublicidade(episodio);
+    setContent('kpi-publicidade-resumo', kpiPublicidade);
+    
+    // --- TOLERÂNCIA ---
+    // (A lógica de tolerância já mostra o "resumo" - ex: "Equilibrado", 
+    // que é o status desejado para este card, então mantemos)
     const toleranciaKPI = episodio.kpis.tolerancia;
     const toleranciaEl = document.getElementById('kpi-tolerancia-resumo');
     if (typeof toleranciaKPI === 'object' && toleranciaKPI !== null && toleranciaKPI.resumo) {
@@ -291,6 +307,7 @@ function displayEpisodio(episodio) {
         toleranciaEl.innerText = '--';
     }
 
+    
     // Imagem do Cubo
     const cuboImg = document.getElementById('cubo-pesquisa-img');
     if (cuboImg) {
@@ -374,6 +391,93 @@ function showKpiModal(kpiType, episodio) {
     abrirModal();
 }
 
+// --- INÍCIO DAS NOVAS FUNÇÕES HELPER DE CÁLCULO ---
+
+/**
+ * Calcula o KPI percentual de Viabilidade (Custo)
+ * @param {object} episodio - O objeto do episódio atual
+ * @returns {string} - O KPI formatado (ex: "100%") ou "N/A"
+ */
+function calcularKpiViabilidade(episodio) {
+    const kpi = episodio.kpis?.viabilidade;
+    const meta = episodio.kpis?.metaCusto || 0;
+    const itens = kpi?.itens || [];
+    
+    const apuracao = itens.reduce((sum, item) => sum + (item.valor || 0), 0);
+
+    let kpiResultadoString = 'N/A';
+    if (meta > 0) {
+        const kpiValor = (apuracao / meta) * 100;
+        kpiResultadoString = `${kpiValor.toFixed(1)}%`;
+    } else {
+        if (apuracao === 0) {
+            kpiResultadoString = '100%';
+        } else {
+            kpiResultadoString = 'N/A (Meta 0)';
+        }
+    }
+    return kpiResultadoString;
+}
+
+/**
+ * Calcula o KPI percentual de Publicidade
+ * @param {object} episodio - O objeto do episódio atual
+ * @returns {string} - O KPI formatado (ex: "100%") ou "N/A"
+ */
+function calcularKpiPublicidade(episodio) {
+    const kpi = episodio.kpis?.publicidade;
+    const meta = episodio.kpis?.metaPublicacao || 0;
+    const publicacoes = kpi?.publicacoes || [];
+
+    const apuracao = publicacoes.filter(p => 
+        p.status === 'Aceita' || p.status === 'Publicada'
+    ).length;
+
+    let kpiResultadoString = 'N/A';
+    if (meta > 0) {
+        const kpiValor = (apuracao / meta) * 100;
+        kpiResultadoString = `${kpiValor.toFixed(1)}%`;
+    } else {
+        if (apuracao === 0) {
+            kpiResultadoString = '100%'; 
+        } else {
+            kpiResultadoString = 'N/A (Meta 0)';
+        }
+    }
+    return kpiResultadoString;
+}
+
+/**
+ * Calcula o KPI percentual de Prazo
+ * @param {object} episodio - O objeto do episódio atual
+ * @returns {string} - O KPI formatado (ex: "97%") ou "N/A"
+ */
+function calcularKpiPrazo(episodio) {
+    const kpi = episodio.kpis?.prazo;
+    const meta = episodio.kpis?.metaPrazo || 0; // Ex: 35
+    const kpiResumoStr = kpi?.resumo || '--'; // Ex: "34.0% (No Prazo)"
+    
+    let apuracaoValor = 0;
+    const match = kpiResumoStr.match(/(\d+\.?\d*)\s*%/);
+    
+    if (match && match[1]) {
+        apuracaoValor = parseFloat(match[1]); // apuracaoValor = 34.0
+        
+        if (meta > 0) {
+            const kpiValor = (apuracaoValor / meta) * 100; // Ex: (34.0 / 35) * 100 = 97.14...
+            // Arredonda para 0 casas decimais (ex: "97%")
+            return `${kpiValor.toFixed(1)}%`;
+        } else {
+            return 'N/A'; // Evita divisão por zero
+        }
+    } else {
+        // Se não achou % (ex: "Concluído" ou "--")
+        return kpiResumoStr; // Retorna o próprio status, ex: "Concluído"
+    }
+}
+
+// --- FIM DAS NOVAS FUNÇÕES HELPER DE CÁLCULO ---
+
 /**
  * (Req 1) Gera o HTML para o modal de VIABILIDADE
  */
@@ -384,13 +488,36 @@ function renderModalViabilidade(episodio) {
 
     // --- CÁLCULO DA APURAÇÃO ---
     const apuracao = itens.reduce((sum, item) => sum + (item.valor || 0), 0);
-    const kpiResumo = kpi?.resumo || '--';
+    // const kpiResumo = kpi?.resumo || '--'; // <-- Esta linha não é mais usada para o cálculo
+
+    // --- INÍCIO DA CORREÇÃO ---
+    let kpiResultadoString = 'N/A';
+    
+    if (meta > 0) {
+        // Calcula o KPI: (Custo Real / Custo Meta) * 100
+        const kpiValor = (apuracao / meta) * 100;
+        // Arredonda para 0 casas decimais, conforme seu exemplo (100.00 / 100.01 = 100%)
+        kpiResultadoString = `${kpiValor.toFixed(0)}%`;
+    } else {
+        // Se a meta é 0...
+        if (apuracao === 0) {
+            // ...e o gasto é 0, o KPI é 100% (atingiu a meta de não gastar)
+            kpiResultadoString = '100%';
+        } else {
+            // ...mas houve gasto, o KPI é 'N/A' (divisão por zero)
+            kpiResultadoString = 'N/A (Meta 0)';
+        }
+    }
+    // --- FIM DA CORREÇÃO ---
 
     let tabelaHTML = `
         <div class="meta-destaque">
-            Apuração: R$ ${apuracao.toFixed(2)} / Meta: R$ ${meta.toFixed(2)} = <strong>${kpiResumo}</strong>
+            Apuração: R$ ${apuracao.toFixed(2)} / Meta: R$ ${meta.toFixed(2)} = <strong>${kpiResultadoString}</strong>
         </div>
         <table>
+    `;
+
+    tabelaHTML += `
             <thead>
                 <tr>
                     <th>Item</th>
@@ -434,18 +561,40 @@ function renderModalViabilidade(episodio) {
 function renderModalPublicidade(episodio) {
     const kpi = episodio.kpis?.publicidade;
     const meta = episodio.kpis?.metaPublicacao || 0;
+    
+    // --- INÍCIO DA CORREÇÃO ---
+    
+    // 1. Pega a lista de publicações do episódio atual.
+    // (Conforme sua confirmação, esta lista já está acumulada no JSON).
     const publicacoes = kpi?.publicacoes || [];
 
-    // --- CÁLCULO DA APURAÇÃO ---
+    // 2. Calcula a Apuração (contando 'Aceita' ou 'Publicada')
     const apuracao = publicacoes.filter(p => 
         p.status === 'Aceita' || p.status === 'Publicada'
     ).length;
-    const kpiResumo = kpi?.resumo || '--';
+
+    // 3. Calcula o KPI (Apuração / Meta)
+    let kpiResultadoString = 'N/A';
+    if (meta > 0) {
+        const kpiValor = (apuracao / meta) * 100;
+        kpiResultadoString = `${kpiValor.toFixed(0)}%`; // Ex: "100%"
+    } else {
+        // Se a meta é 0, e a apuração também é 0, considera 100%
+        if (apuracao === 0) {
+            kpiResultadoString = '100%'; 
+        } else {
+            kpiResultadoString = 'N/A (Meta 0)';
+        }
+    }
 
     let tabelaHTML = `
         <div class="meta-destaque">
-             Apuração: ${apuracao} / Meta: ${meta} = <strong>${kpiResumo}</strong>
+             Apuração: ${apuracao} / Meta: ${meta} = <strong>${kpiResultadoString}</strong>
         </div>
+    `;
+    // --- FIM DA CORREÇÃO ---
+    
+    tabelaHTML += `
         <table>
             <thead>
                 <tr>
@@ -463,6 +612,7 @@ function renderModalPublicidade(episodio) {
     if (publicacoes.length === 0) {
         tabelaHTML += '<tr><td colspan="6">Nenhuma publicação cadastrada.</td></tr>';
     } else {
+        // Itera sobre a lista de publicações (que veio do episódio atual)
         publicacoes.forEach(pub => {
             tabelaHTML += `
                 <tr>
@@ -492,20 +642,40 @@ function renderModalPublicidade(episodio) {
  */
 function renderModalTolerancia(episodio) {
     const kpi = episodio.kpis?.tolerancia;
-    // Lógica para lidar com os dois formatos (número ou objeto)
-    let valor = 0;
-    let memoria = "Análise não disponível.";
+    
+    // --- LÓGICA DE APURAÇÃO/META ---
+    let kpiResumo = '--';
+    let metaLabel = 'N/D';
+    let memoria = "Análise não disponível."; // Default
     
     if (typeof kpi === 'object' && kpi !== null) {
-        valor = kpi.valor || 0;
+        kpiResumo = kpi.resumo || '--'; // Ex: "Equilibrado"
+        metaLabel = `${((kpi.valor || 0) * 100).toFixed(0)}%`; // Ex: "20%"
         memoria = kpi.memoriaDeCalculo || "Análise não disponível.";
     } else if (typeof kpi === 'number') {
-        valor = kpi;
-        memoria = `A tolerância para este episódio foi definida em ${(valor * 100).toFixed(0)}%. (Formato antigo)`;
+        metaLabel = `${(kpi * 100).toFixed(0)}%`;
+        kpiResumo = `${metaLabel} (Definida)`;
+        memoria = `A tolerância para este episódio foi definida em ${metaLabel}. (Formato antigo)`;
     }
 
+    // --- INÍCIO DA NOVA MODIFICAÇÃO ---
+    // 1. Calcula os KPIs dos outros módulos
+    const kpiCustoStr = calcularKpiViabilidade(episodio);
+    const kpiPrazoStr = calcularKpiPrazo(episodio);
+    const kpiPubStr = calcularKpiPublicidade(episodio);
+
+    // 2. Injeta os KPIs na string da memória de cálculo
+    // O regex (\[.*?\] Custo:) captura "[OK] Custo:", "[ALERTA] Custo:", etc.
+    // e o substitui por "[OK] Custo: KPI 100%"
+    memoria = memoria.replace(/(\[.*?\] Custo:)/g, `$1 KPI ${kpiCustoStr}`);
+    memoria = memoria.replace(/(\[.*?\] Prazo:)/g, `$1 KPI ${kpiPrazoStr}`);
+    memoria = memoria.replace(/(\[.*?\] Publicidade:)/g, `$1 KPI ${kpiPubStr}`);
+    // --- FIM DA NOVA MODIFICAÇÃO ---
+
     let html = `
-        <div class="meta-destaque">Tolerância Definida: ${(valor * 100).toFixed(0)}%</div>
+        <div class="meta-destaque">
+            Resultado: <strong>${kpiResumo}</strong> (Limite: ${metaLabel})
+        </div>
         <div class="bloco-calculo">
             <h4>Análise de Equilíbrio do Cubo</h4>
             ${memoria}
@@ -520,34 +690,50 @@ function renderModalTolerancia(episodio) {
  */
 function renderModalPrazo(episodio) {
     const kpi = episodio.kpis?.prazo;
-    const meta = episodio.kpis?.metaPrazo || 0;
+    const meta = episodio.kpis?.metaPrazo || 0; // Ex: 35
     const entregas = kpi?.entregas || [];
     const dataEpisodio = episodio.date; // Data de "hoje"
     
-    // --- LÓGICA DA APURAÇÃO E KPI ---
-    const kpiResumoStr = kpi?.resumo || '--';
-    let apuracao = '--';
-    let kpiStatus = kpiResumoStr; // Default é a string inteira
+    // --- INÍCIO DA CORREÇÃO ---
+    const kpiResumoStr = kpi?.resumo || '--'; // Ex: "34.0% (No Prazo)"
+    
+    let apuracaoString = '--';       // String para "Apuração" (Ex: "34.0%")
+    let kpiResultadoString = kpiResumoStr; // String para "KPI" (Default é a string original)
+    let apuracaoValor = 0;
 
-    // Tenta extrair "70%" de "70% (No Prazo)"
-    const match = kpiResumoStr.match(/(\d+\.?\d*%\s*)/); 
-    if (match) {
-        apuracao = match[1].trim(); // Ex: "70%"
-        // Pega o que vem *depois* da porcentagem, se houver
-        let statusPart = kpiResumoStr.replace(match[0], '').trim(); // Ex: "(No Prazo)"
-        // Limpa parênteses
-        if (statusPart.startsWith('(') && statusPart.endsWith(')')) {
-            statusPart = statusPart.substring(1, statusPart.length - 1); // Ex: "No Prazo"
+    // Regex modificado para capturar SÓ o número (Ex: "34.0")
+    const match = kpiResumoStr.match(/(\d+\.?\d*)\s*%/); 
+    
+    if (match && match[1]) {
+        // --- Caminho 1: Encontrou uma porcentagem na string ---
+        
+        // 1. Pega o valor numérico da apuração
+        apuracaoValor = parseFloat(match[1]); // apuracaoValor = 34.0
+        
+        // 2. Formata a string da apuração para exibição
+        apuracaoString = `${apuracaoValor.toFixed(1)}%`; // apuracaoString = "34.0%"
+
+        // 3. Calcula o KPI (Apuração / Meta)
+        if (meta > 0) {
+            // Esta é a nova lógica solicitada
+            const kpiValor = (apuracaoValor / meta) * 100; // Ex: (34.0 / 35) * 100 = 97.14...
+            kpiResultadoString = `${kpiValor.toFixed(1)}%`; // kpiResultadoString = "97.1%"
+        } else {
+            kpiResultadoString = 'N/A'; // Evita divisão por zero
         }
-        if (statusPart) kpiStatus = statusPart; // Usa "No Prazo"
-        else kpiStatus = apuracao; // Se for SÓ "70%", o status é a própria %
+        
+    } else {
+        // --- Caminho 2: Não encontrou % (Ex: "--" ou "Concluído") ---
+        // apuracaoString permanece "--"
+        // kpiResultadoString permanece a string original (ex: "Concluído")
     }
     
     let html = `
         <div class="meta-destaque">
-            Apuração: ${apuracao} / Meta: ${meta}% = <strong>${kpiStatus}</strong>
+            Apuração: ${apuracaoString} / Meta: ${meta}% = <strong>${kpiResultadoString}</strong>
         </div>
     `;
+    // --- FIM DA CORREÇÃO ---
     
     if (entregas.length === 0) {
         html += '<p>Nenhum cronograma cadastrado.</p>';
@@ -564,8 +750,7 @@ function renderModalPrazo(episodio) {
     return html;
 }
 
-/**
- * (Req 2.1) Lógica de renderização do Gráfico de Gantt
+/** (Req 2.1) Lógica de renderização do Gráfico de Gantt
  */
 function renderGantt(entregas, dataEpisodioStr) {
     const hoje = parseDataISO(dataEpisodioStr);
@@ -576,9 +761,24 @@ function renderGantt(entregas, dataEpisodioStr) {
 
     // 1. Processa todas as tarefas...
     entregas.forEach(entrega => {
+        
+        // --- INÍCIO DA MODIFICAÇÃO (Detectar Fases) ---
+        // Se NÃO tiver ponto no ID (ex: "1", "2"), é um título de fase.
         if (!String(entrega.id || '').includes('.')) {
-            return;
+            tarefas.push({
+                id: entrega.id,
+                nome: entrega.tarefa,
+                inicio: null,
+                fim: null,
+                situacao: "Fase",
+                tooltip: `${entrega.tarefa} [${entrega.id}]`,
+                tipo: 'fase' // Novo campo para identificar o tipo
+            });
+            return; // Pula para a próxima entrega
         }
+        // --- FIM DA MODIFICAÇÃO ---
+
+        // Se chegou aqui, é uma TAREFA (lógica antiga)
         const dataInicio = obterDataInicio(entrega, entregas);
         let dataFim = null;
         let situacao = "Aguardando";
@@ -602,7 +802,8 @@ function renderGantt(entregas, dataEpisodioStr) {
             inicio: dataInicio,
             fim: dataFim,
             situacao: situacao,
-            tooltip: `${entrega.tarefa} [${entrega.id}]\nInício: ${formatDataBR(dataInicio)}\nFim: ${formatDataBR(dataFim) || 'N/A'}`
+            tooltip: `${entrega.tarefa} [${entrega.id}]\nInício: ${formatDataBR(dataInicio)}\nFim: ${formatDataBR(dataFim) || 'N/A'}`,
+            tipo: 'tarefa' // Novo campo para identificar o tipo
         });
     });
 
@@ -623,19 +824,11 @@ function renderGantt(entregas, dataEpisodioStr) {
         const diffHoje = hoje.getTime() - minDate.getTime();
         const diasOffsetHoje = (diffHoje / MS_POR_DIA);
         
-        // --- CORREÇÃO APLICADA AQUI ---
-        // 1. Calcula a posição "pura" (os 33.8%)
-        const leftPercentHoje_raw = (diasOffsetHoje / diasTotaisProjeto) * 100;
-        
-        // 2. Busca os tamanhos das colunas do CSS
         const espacoRotulo = 30; // 30% do CSS
         const espacoGrafico = 70; // 70% do CSS
         
-        // 3. Calcula o 'left' final: (30% do rótulo) + (70% do gráfico * 33.8%)
+        const leftPercentHoje_raw = (diasOffsetHoje / diasTotaisProjeto) * 100;
         const leftPercentHoje = espacoRotulo + (espacoGrafico * (leftPercentHoje_raw / 100));
-        // --- FIM DA CORREÇÃO ---
-
-        // (Opcional: removemos os console.log de debug)
 
         hojeLinhaHTML = `
             <div class="gantt-hoje-linha" style="left: ${leftPercentHoje.toFixed(2)}%;">
@@ -649,7 +842,20 @@ function renderGantt(entregas, dataEpisodioStr) {
 
     // 2. Renderiza as barras
     tarefas.forEach(tarefa => {
-        if (!tarefa.inicio || !tarefa.fim) return;
+        
+        // --- INÍCIO DA MODIFICAÇÃO (Renderizar Fases) ---
+        if (tarefa.tipo === 'fase') {
+            ganttHTML += `
+                <div class="gantt-fase" title="${tarefa.tooltip}">
+                    ${tarefa.nome} [${tarefa.id}]
+                </div>
+            `;
+            return; // Pula para a próxima tarefa
+        }
+        // --- FIM DA MODIFICAÇÃO ---
+
+        // Se chegou aqui, é uma TAREFA (lógica antiga)
+        if (!tarefa.inicio || !tarefa.fim) return; // Ignora tarefas sem data
 
         const diffInicio = tarefa.inicio.getTime() - minDate.getTime();
         const diasOffset = (diffInicio / MS_POR_DIA);
