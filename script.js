@@ -442,7 +442,7 @@ function calcularKpiPublicidade(episodio) {
     const publicacoes = kpi?.publicacoes || [];
 
     const apuracao = publicacoes.filter(p => 
-        p.status === 'Aceita' || p.status === 'Publicada'
+        p.status === 'Aceito' || p.status === 'Publicado'
     ).length;
 
     let kpiResultadoString = 'N/A';
