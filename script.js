@@ -682,9 +682,9 @@ function renderModalPublicidade(episodio) {
     // (Conforme sua confirmação, esta lista já está acumulada no JSON).
     const publicacoes = kpi?.publicacoes || [];
 
-    // 2. Calcula a Apuração (contando 'Aceita' ou 'Publicada')
+    // 2. Calcula a Apuração (contando 'Aceito' ou 'Publicado')
     const apuracao = publicacoes.filter(p => 
-        p.status === 'Aceita' || p.status === 'Publicada'
+        p.status === 'Aceito' || p.status === 'Publicado'
     ).length;
 
     // 3. Calcula o KPI (Apuração / Meta)
