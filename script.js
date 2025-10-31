@@ -295,26 +295,39 @@ function displayEpisodio(episodio) {
     setContent('kpi-publicidade-resumo', kpiPublicidade);
     
     // --- TOLERÂNCIA ---
-   
-    const toleranciaKPI = episodio.kpis.tolerancia;
-    const toleranciaEl = document.getElementById('kpi-tolerancia-resumo');
-    if (typeof toleranciaKPI === 'object' && toleranciaKPI !== null && toleranciaKPI.resumo) {
-        toleranciaEl.innerText = toleranciaKPI.resumo; // Novo formato
-    } else if (typeof toleranciaKPI === 'number') {
-        toleranciaEl.innerText = (toleranciaKPI * 100).toFixed(0) + '% (Definida)'; // Formato antigo
-    } else {
-        toleranciaEl.innerText = '--';
+    // (Modificado para mostrar o Viés de Inclinação)
+    const prefixoInclinacao = getInclinacaoCubo(episodio);
+    let textoTolerancia = 'Equilibrado'; // Padrão
+
+    switch (prefixoInclinacao) {
+        case 'V':
+            textoTolerancia = 'Paralisia por Análise';
+            break;
+        case 'T':
+            textoTolerancia = 'Executor Apressado';
+            break;
+        case 'P':
+            textoTolerancia = 'Acadêmico Teórico';
+            break;
+        case 'E':
+        default:
+            // Se 'E' (Equilibrado), usa o resumo original do JSON
+            const toleranciaKPI = episodio.kpis.tolerancia;
+            if (typeof toleranciaKPI === 'object' && toleranciaKPI !== null && toleranciaKPI.resumo) {
+                textoTolerancia = toleranciaKPI.resumo;
+            } else if (typeof toleranciaKPI === 'number') {
+                textoTolerancia = (toleranciaKPI * 100).toFixed(0) + '% (Definida)';
+            } else {
+                textoTolerancia = 'Equilibrado';
+            }
+            break;
     }
+    setContent('kpi-tolerancia-resumo', textoTolerancia);
 
     
-    // Imagem do Cubo
-    const cuboImg = document.getElementById('cubo-pesquisa-img');
-    if (cuboImg) {
-        const imgPath = episodio.kpis?.cuboImagem || 'cubo-E0.png';
-        cuboImg.src = imgPath;
-        cuboImg.onerror = () => { cuboImg.src = 'cubo-E0.png'; }; 
-    }
-    
+    // Imagem do Cubo e Alertas de Desequilíbrio
+    atualizarPainelCubo(episodio);
+	
     // ATUALIZA OS LISTENERS DE CLIQUE DO KPI
     setupKPIPanelListeners(episodio);
 }
@@ -429,7 +442,7 @@ function calcularKpiPublicidade(episodio) {
     const publicacoes = kpi?.publicacoes || [];
 
     const apuracao = publicacoes.filter(p => 
-        p.status === 'Aceito' || p.status === 'Publicado'
+        p.status === 'Aceita' || p.status === 'Publicada'
     ).length;
 
     let kpiResultadoString = 'N/A';
@@ -475,6 +488,108 @@ function calcularKpiPrazo(episodio) {
     }
 }
 
+
+/** Calcula o KPI percentual de Viabilidade (Custo) */
+function getKpiViabilidadeValor(episodio) {
+    const kpis = episodio.kpis;
+    const meta = kpis?.metaCusto || 0;
+    // 'valor' em viabilidade é o custo totalRealizado
+    const apuracao = kpis?.viabilidade?.valor || 0; 
+    
+    if (meta > 0) {
+        // (1 - (desvio / meta)) * 100
+        const kpi = (1 - (apuracao - meta) / meta) * 100;
+        return kpi;
+    }
+    if (apuracao === 0) return 100.0; // Meta 0, Apuracao 0 = 100%
+    return 0.0; // Meta 0, Apuracao > 0 = Falha
+}
+
+/** Calcula o KPI percentual de Publicidade */
+function getKpiPublicidadeValor(episodio) {
+    const kpis = episodio.kpis;
+    const meta = kpis?.metaPublicacao || 0;
+    // 'valor' em publicidade é o totalRelevante (aceitos/pub)
+    const apuracao = kpis?.publicidade?.valor || 0; 
+    if (meta > 0) return (apuracao / meta) * 100;
+    if (apuracao === 0) return 100.0; // Meta 0, Apuracao 0 = 100%
+    return 0.0; // Meta 0, Apuracao > 0 = Falha
+}
+
+/** Calcula o KPI percentual de Prazo */
+function getKpiPrazoValor(episodio) {
+    const kpis = episodio.kpis;
+    const meta = kpis?.metaPrazo || 0; // Ex: 20
+    // 'valor' em prazo é o progresso ponderado (ex: 33.96)
+    const apuracao = kpis?.prazo?.valor || 0; 
+    if (meta > 0) return (apuracao / meta) * 100; // Ex: (33.96 / 20) * 100 = 170%
+    if (apuracao === 0) return 100.0; // Meta 0, Apuracao 0 = 100%
+    return 0.0; // Meta 0, Apuracao > 0 = Falha
+}
+/**
+ * Calcula o prefixo de inclinação do Cubo (E, V, T, P)
+ * @param {object} episodio - O objeto do episódio atual
+ * @returns {string} - 'E', 'V', 'T', or 'P'
+ */
+function getInclinacaoCubo(episodio) {
+    const kpis = episodio.kpis;
+    if (!kpis) return 'E';
+
+    // 1. Get Tolerancia
+    const toleranciaObj = kpis.tolerancia;
+    let toleranciaPercent = 0;
+    if (typeof toleranciaObj === 'object' && toleranciaObj !== null) {
+        toleranciaPercent = (toleranciaObj.valor || 0) * 100;
+    } else if (typeof toleranciaObj === 'number') {
+        toleranciaPercent = toleranciaObj * 100;
+    }
+    // Fallback para evitar divisão por zero ou range 0
+    if (toleranciaPercent === 0) toleranciaPercent = 10; 
+
+    // 2. Calcula os 3 KPIs (%)
+    const kpiPrazo = getKpiPrazoValor(episodio);
+    const kpiPub = getKpiPublicidadeValor(episodio);
+    const kpiVib = getKpiViabilidadeValor(episodio);
+
+    // 3. Calcula o Range
+    const kpiArray = [kpiPrazo, kpiPub, kpiVib];
+    const kpiMax = Math.max(...kpiArray);
+    const kpiMin = Math.min(...kpiArray);
+    const kpiRange = kpiMax - kpiMin;
+
+    let prefixoInclinacao = 'E'; // Padrão
+
+    // 4. Verifica o desequilíbrio
+    if (kpiRange > toleranciaPercent) {
+        const kpiMedia = (kpiPrazo + kpiPub + kpiVib) / 3;
+        const desviosAcimaMedia = [
+            { kpi: 'T', desvio: kpiPrazo - kpiMedia }, // Prazo
+            { kpi: 'P', desvio: kpiPub - kpiMedia },  // Publicidade
+            { kpi: 'V', desvio: kpiVib - kpiMedia }   // Viabilidade
+        ];
+        const positivos = desviosAcimaMedia.filter(d => d.desvio > 0);
+        if (positivos.length > 0) {
+            positivos.sort((a, b) => b.desvio - a.desvio);
+            prefixoInclinacao = positivos[0].kpi;
+        }
+    }
+    return prefixoInclinacao;
+}
+/**
+ * Atualiza a imagem do cubo E exibe o texto de alerta de desequilíbrio.
+ */
+function atualizarPainelCubo(episodio) {
+    const kpis = episodio.kpis;
+    const cuboImg = document.getElementById('cubo-pesquisa-img');
+    
+    if (!kpis || !cuboImg) return;
+
+    // A imagem é lida diretamente do JSON (calculada pelo editor)
+    const imgPath = kpis.cuboImagem || 'cubo-E0.png';
+    cuboImg.src = imgPath;
+    cuboImg.onerror = () => { cuboImg.src = 'cubo-E0.png'; }; 
+}
+
 // --- FIM DAS NOVAS FUNÇÕES HELPER DE CÁLCULO ---
 
 /**
@@ -496,7 +611,7 @@ function renderModalViabilidade(episodio) {
         // Calcula o KPI: (Custo Real / Custo Meta) * 100
         const kpiValor = (apuracao / meta) * 100;
         // Arredonda para 0 casas decimais, conforme seu exemplo (100.00 / 100.01 = 100%)
-        kpiResultadoString = `${kpiValor.toFixed(0)}%`;
+        kpiResultadoString = `${kpiValor.toFixed(1)}%`;
     } else {
         // Se a meta é 0...
         if (apuracao === 0) {
@@ -576,7 +691,7 @@ function renderModalPublicidade(episodio) {
     let kpiResultadoString = 'N/A';
     if (meta > 0) {
         const kpiValor = (apuracao / meta) * 100;
-        kpiResultadoString = `${kpiValor.toFixed(0)}%`; // Ex: "100%"
+        kpiResultadoString = `${kpiValor.toFixed(1)}%`; // Ex: "100%"
     } else {
         // Se a meta é 0, e a apuração também é 0, considera 100%
         if (apuracao === 0) {
@@ -637,52 +752,146 @@ function renderModalPublicidade(episodio) {
     return tabelaHTML;
 }
 /**
- * (Req 4) Gera o HTML para o modal de TOLERÂNCIA
+ * (Req 4) Gera o HTML para o modal de TOLERÂNCIA (com diagnóstico de viés)
  */
 function renderModalTolerancia(episodio) {
     const kpi = episodio.kpis?.tolerancia;
     
-    // --- LÓGICA DE APURAÇÃO/META ---
+    // --- 1. Get Tolerancia Valor e Memoria (Lógica existente) ---
+    let toleranciaValorNum = 0; // Ex: 0.5
     let kpiResumo = '--';
     let metaLabel = 'N/D';
-    let memoria = "Análise não disponível."; // Default
-    
+    let memoria = "Análise não disponível.";
+    let memoriaOriginal = ""; 
+    let toleranciaPercent = 0; // Ex: 50
+
     if (typeof kpi === 'object' && kpi !== null) {
-        kpiResumo = kpi.resumo || '--'; // Ex: "Equilibrado"
-        metaLabel = `${((kpi.valor || 0) * 100).toFixed(0)}%`; // Ex: "20%"
+        toleranciaValorNum = kpi.valor || 0; 
+        kpiResumo = kpi.resumo || '--';
+        metaLabel = `${(toleranciaValorNum * 100).toFixed(0)}%`;
         memoria = kpi.memoriaDeCalculo || "Análise não disponível.";
+        memoriaOriginal = memoria; 
     } else if (typeof kpi === 'number') {
-        metaLabel = `${(kpi * 100).toFixed(0)}%`;
+        toleranciaValorNum = kpi;
+        metaLabel = `${(toleranciaValorNum * 100).toFixed(0)}%`;
         kpiResumo = `${metaLabel} (Definida)`;
         memoria = `A tolerância para este episódio foi definida em ${metaLabel}. (Formato antigo)`;
+        memoriaOriginal = memoria;
     }
+    toleranciaPercent = toleranciaValorNum * 100; // Converte 0.5 para 50
 
-    // --- INÍCIO DA NOVA MODIFICAÇÃO ---
-    // 1. Calcula os KPIs dos outros módulos
+    // --- 2. Calculate KPIs (Lógica existente) ---
     const kpiCustoStr = calcularKpiViabilidade(episodio);
     const kpiPrazoStr = calcularKpiPrazo(episodio);
     const kpiPubStr = calcularKpiPublicidade(episodio);
+    
+    // --- 3. Análise de Desvio (Lógica existente) ---
+    const regexDesvio = /Desvio de (-?\d+\.?\d*)\s*%/; 
+    let todosOK = true; 
 
-    // 2. Injeta os KPIs na string da memória de cálculo
-    // O regex (\[.*?\] Custo:) captura "[OK] Custo:", "[ALERTA] Custo:", etc.
-    // e o substitui por "[OK] Custo: KPI 100%"
-    memoria = memoria.replace(/(\[.*?\] Custo:)/g, `$1 KPI ${kpiCustoStr}`);
-    memoria = memoria.replace(/(\[.*?\] Prazo:)/g, `$1 KPI ${kpiPrazoStr}`);
-    memoria = memoria.replace(/(\[.*?\] Publicidade:)/g, `$1 KPI ${kpiPubStr}`);
-    // --- FIM DA NOVA MODIFICAÇÃO ---
+    const analisarLinha = (linhaKey, kpiStr) => {
+        const regexLinha = new RegExp(`(\\[.*?\\] ${linhaKey}[\\s\\S]*?)(?=\\[|Status:|$)`);
+        let linhaMatch = memoriaOriginal.match(regexLinha);
+        if (!linhaMatch || !linhaMatch[1]) {
+            return memoria.replace(/(\[.*?\] ${linhaKey}:)/g, `$1 KPI ${kpiStr}`);
+        }
+        let linhaTextoOriginal = linhaMatch[1].trim(); 
+        let desvioMatch = linhaTextoOriginal.match(regexDesvio);
+        if (!desvioMatch || !desvioMatch[1]) {
+            return memoria.replace(linhaTextoOriginal, `[OK] ${linhaKey}: KPI ${kpiStr} (Desvio não encontrado)`);
+        }
+        const desvioValor = parseFloat(desvioMatch[1]); 
+        const desvioAbsoluto = Math.abs(desvioValor); 
+        let novaLinhaTexto = "";
+        if (desvioAbsoluto <= toleranciaPercent) {
+            novaLinhaTexto = `[OK] ${linhaKey}: KPI ${kpiStr} Desvio de ${desvioValor.toFixed(1)}% está dentro da tolerância.`; 
+        } else {
+            novaLinhaTexto = `[FALHA] ${linhaKey}: KPI ${kpiStr} Desvio de ${desvioValor.toFixed(1)}% está FORA da tolerância de ${toleranciaPercent.toFixed(0)}%.`; 
+            todosOK = false; 
+        }
+        return memoria.replace(linhaTextoOriginal, novaLinhaTexto);
+    };
 
+    memoria = analisarLinha("Custo", kpiCustoStr);
+    memoriaOriginal = memoria; 
+    memoria = analisarLinha("Prazo", kpiPrazoStr);
+    memoriaOriginal = memoria; 
+    memoria = analisarLinha("Publicidade", kpiPubStr);
+    memoriaOriginal = memoria; 
+
+    if (todosOK) {
+        memoria = memoria.replace(/Status: .*/g, "Status: Equilibrado. Todos os KPIs estão dentro da margem de tolerância definida.");
+        if (kpiResumo.toLowerCase().includes("desequilibrado")) kpiResumo = "Equilibrado";
+    } else {
+        memoria = memoria.replace(/Status: .*/g, "Status: Desequilibrado. Pelo menos um KPI está fora da margem de tolerância.");
+        if (kpiResumo.toLowerCase().includes("equilibrado")) kpiResumo = "Desequilibrado";
+    }
+    
+    // --- 4. INÍCIO DA NOVA LÓGICA (Diagnóstico de Viés) ---
+    // (Esta lógica foi movida da função 'atualizarPainelCubo')
+
+    // 4.1. Calcula os KPIs %
+    const kpiPrazo = getKpiPrazoValor(episodio);
+    const kpiPub = getKpiPublicidadeValor(episodio);
+    const kpiVib = getKpiViabilidadeValor(episodio);
+
+    // 4.2. Calcula o Range e o Prefixo
+   const prefixoInclinacao = getInclinacaoCubo(episodio);
+
+    // 4.3. Define o Texto de Alerta
+    let textoAlertaHTML = ""; // Começa vazio
+    switch (prefixoInclinacao) {
+        case 'V': // Viés da "Paralisia por Análise"
+            textoAlertaHTML = `
+                <div class="bloco-alerta-viés">
+                    <strong>Diagnóstico (Alerta "V"): O Viés da "Paralisia por Análise"</strong>
+                    <p>O Pilar Dominante "Viabilidade" (recursos) está saudável, mas o projeto não avança na execução (Prazo e Publicação fracos).</p>
+                    <p><strong>Interpretação:</strong> O pesquisador, evitando tarefas de execução (Metodologia), tende a alocar esforço em atividades "seguras":</p>
+                    <ul>
+                        <li><strong>Favorece:</strong> "Referencial Teórico" (Face 3), em um ciclo de refinamento infinito; e "Impacto na Sociedade" (Face 5), teorizando sobre a relevância sem construir a solução.</li>
+                        <li><strong>Negligencia:</strong> "Hipóteses de Solução" (Face 2) e "Produto da Pesquisa" (Face 6), que exigem a execução prática.</li>
+                    </ul>
+                </div>`;
+            break;
+        case 'T': // Viés do "Executor Apressado"
+            textoAlertaHTML = `
+                <div class="bloco-alerta-viés">
+                    <strong>Diagnóstico (Alerta "T"): O Viés do "Executor Apressado"</strong>
+                    <p>O Pilar Dominante "Prazo" (progresso) está forte, mas o Custo pode estar estourado ou a Qualidade da Publicação baixa.</p>
+                    <p><strong>Interpretação:</strong> O pesquisador confunde "fazer" com "pesquisar". O foco obsessivo em avançar o cronograma leva à negligência do rigor científico e do controle de recursos.</p>
+                    <ul>
+                        <li><strong>Favorece:</strong> "Produto da Pesquisa" (Face 6), pois é a entrega tangível; e "Impacto na Sociedade" (Face 5), usado como justificativa para a pressa.</li>
+                        <li><strong>Negligencia:</strong> "Referencial Teórico" (Face 3), visto como "perda de tempo"; e "Hipóteses" (Face 2), que são implementadas sem validação rigorosa.</li>
+                    </ul>
+                </div>`;
+            break;
+        case 'P': // Viés do "Acadêmico Teórico"
+            textoAlertaHTML = `
+                <div class="bloco-alerta-viés">
+                    <strong>Diagnóstico (Alerta "P"): O Viés do "Acadêmico Teórico"</strong>
+                    <p>O Pilar Dominante "Publicação" (artigos) está forte, mas o Custo e o Prazo do projeto principal (tese/protótipo) estão comprometidos.</p>
+                    <p><strong>Interpretação:</strong> O pilar 'Publicação' é alimentado por "spin-offs" teóricos, e não pela execução do projeto central.</p>
+                    <ul>
+                        <li><strong>Favorece:</strong> "Referencial Teórico" (Face 3), resultando em revisões publicáveis; e "Hipóteses" (Face 2), gerando ensaios teóricos não testados.</li>
+                        <li><strong>Negligencia:</strong> "Produto da Pesquisa" (Face 6), que é o objetivo central e está atrasado; e "Impacto na Sociedade" (Face 5), pois o diálogo foca apenas nos pares acadêmicos.</li>
+                    </ul>
+                </div>`;
+            break;
+    }
+    // --- FIM DA NOVA LÓGICA ---
+
+    // 5. Monta o HTML final
     let html = `
         <div class="meta-destaque">
             Resultado: <strong>${kpiResumo}</strong> (Limite: ${metaLabel})
         </div>
-        <div class="bloco-calculo">
+        
+        ${textoAlertaHTML} <div class="bloco-calculo">
             <h4>Análise de Equilíbrio do Cubo</h4>
-            ${memoria}
-        </div>
+            ${memoria} </div>
     `;
     return html;
 }
-
 
 /**
  * (Req 2) Gera o HTML para o modal de PRAZO (Com Gantt)
