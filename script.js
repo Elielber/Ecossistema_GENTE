@@ -684,7 +684,7 @@ function renderModalPublicidade(episodio) {
 
     // 2. Calcula a Apuração
     const apuracao = publicacoes.filter(p => 
-        p.status === 'Aceita' || p.status === 'Publicada'
+        p.status === 'Aceito' || p.status === 'Publicado'
     ).length;
 
     // 3. Calcula o KPI (com o ajuste para toFixed(1))
