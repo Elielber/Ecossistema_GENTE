@@ -672,28 +672,27 @@ function renderModalViabilidade(episodio) {
 /**
  * (Req 3) Gera o HTML para o modal de PUBLICIDADE
  */
+/**
+ * (Req 3) Gera o HTML para o modal de PUBLICIDADE
+ */
 function renderModalPublicidade(episodio) {
     const kpi = episodio.kpis?.publicidade;
     const meta = episodio.kpis?.metaPublicacao || 0;
     
-    // --- INÍCIO DA CORREÇÃO ---
-    
     // 1. Pega a lista de publicações do episódio atual.
-    // (Conforme sua confirmação, esta lista já está acumulada no JSON).
     const publicacoes = kpi?.publicacoes || [];
 
-    // 2. Calcula a Apuração (contando 'Aceito' ou 'Publicado')
+    // 2. Calcula a Apuração
     const apuracao = publicacoes.filter(p => 
-        p.status === 'Aceito' || p.status === 'Publicado'
+        p.status === 'Aceita' || p.status === 'Publicada'
     ).length;
 
-    // 3. Calcula o KPI (Apuração / Meta)
+    // 3. Calcula o KPI (com o ajuste para toFixed(1))
     let kpiResultadoString = 'N/A';
     if (meta > 0) {
         const kpiValor = (apuracao / meta) * 100;
-        kpiResultadoString = `${kpiValor.toFixed(1)}%`; // Ex: "100%"
+        kpiResultadoString = `${kpiValor.toFixed(1)}%`; // Ajustado
     } else {
-        // Se a meta é 0, e a apuração também é 0, considera 100%
         if (apuracao === 0) {
             kpiResultadoString = '100%'; 
         } else {
@@ -701,14 +700,11 @@ function renderModalPublicidade(episodio) {
         }
     }
 
+    // --- MONTAGEM DO HTML (Parte 1: Tabela) ---
     let tabelaHTML = `
         <div class="meta-destaque">
              Apuração: ${apuracao} / Meta: ${meta} = <strong>${kpiResultadoString}</strong>
         </div>
-    `;
-    // --- FIM DA CORREÇÃO ---
-    
-    tabelaHTML += `
         <table>
             <thead>
                 <tr>
@@ -726,7 +722,6 @@ function renderModalPublicidade(episodio) {
     if (publicacoes.length === 0) {
         tabelaHTML += '<tr><td colspan="6">Nenhuma publicação cadastrada.</td></tr>';
     } else {
-        // Itera sobre a lista de publicações (que veio do episódio atual)
         publicacoes.forEach(pub => {
             tabelaHTML += `
                 <tr>
@@ -749,7 +744,42 @@ function renderModalPublicidade(episodio) {
             ${kpi?.memoriaDeCalculo || 'Cálculo não disponível.'}
         </div>
     `;
-    return tabelaHTML;
+
+    // --- INÍCIO DA ADIÇÃO (Parte 2: Detalhes) ---
+    
+    let detalhesHTML = `
+        <div class="bloco-detalhes-pub">
+            <h4>Detalhes das Publicações</h4>
+    `;
+
+    if (publicacoes.length === 0) {
+        detalhesHTML += '<p>Nenhuma publicação para detalhar.</p>';
+    } else {
+        publicacoes.forEach(pub => {
+            detalhesHTML += `
+                <article class="pub-detalhe">
+                    <strong>${pub.titulo || 'Artigo sem título'}</strong>
+            `;
+            
+            // 2. Autores (Aparecerá quando existir no JSON)
+            if (pub.autores) {
+                detalhesHTML += `<p class="pub-autores"><strong>Autores:</strong> ${pub.autores}</p>`;
+            }
+            
+            // 3. Resumo (Aparecerá quando existir no JSON)
+            if (pub.resumo) {
+                detalhesHTML += `<p class="pub-resumo">${pub.resumo}</p>`;
+            }
+            
+            detalhesHTML += `</article>`;
+        });
+    }
+    
+    detalhesHTML += `</div>`;
+    // --- FIM DA ADIÇÃO ---
+
+    // Retorna a Tabela + o Bloco de Cálculo + o Bloco de Detalhes
+    return tabelaHTML + detalhesHTML;
 }
 /**
  * (Req 4) Gera o HTML para o modal de TOLERÂNCIA (com diagnóstico de viés)
