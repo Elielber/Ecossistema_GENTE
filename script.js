@@ -276,6 +276,9 @@ function displayEpisodio(episodio) {
     });
 
     setContent('painel-nome-content', episodio.nome);
+// Atualiza o TÍTULO do card Episódio
+    const novoTituloEpisodio = `Episódio (${episodio.id || 'N/A'}): ${episodio.title || 'Sem Título'}`;
+    setContent('painel-summary-label', novoTituloEpisodio);
     setContent('painel-summary-content', episodio.summary);
 
     // Componentes
