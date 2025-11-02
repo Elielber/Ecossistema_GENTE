@@ -244,7 +244,7 @@ function setupTimeline(historia) {
                 const btn = document.getElementById('timeline-toggle-btn');
                 if (container && btn) {
                     container.classList.add('timeline-collapsed');
-                    btn.innerText = '...'; // Garante que o botão mostre "..."
+                    btn.innerText = '▼'; // Garante que o botão mostre "para baixo"
                 }
             }
         };
@@ -614,13 +614,13 @@ function setupTimelineToggle() {
     // Função para definir o estado inicial
     const setInitialState = () => {
         if (mediaQuery.matches) {
-            // Em mobile, começa recolhido
+           // Em mobile, começa recolhido
             container.classList.add('timeline-collapsed');
-            btn.innerText = '...'; // Mostra "..." (expandir)
+            btn.innerText = '▼'; // Mostra "para baixo" (expandir)
         } else {
             // Em desktop, começa expandido
             container.classList.remove('timeline-collapsed');
-            btn.innerText = '✕'; // Mostra "X" (recolher)
+            btn.innerText = '▲'; // Mostra "para cima" (recolher)
         }
     };
 
@@ -631,7 +631,7 @@ function setupTimelineToggle() {
     btn.onclick = () => {
         const isCollapsed = container.classList.toggle('timeline-collapsed');
         // Atualiza o texto do botão
-        btn.innerText = isCollapsed ? '...' : '✕';
+        btn.innerText = isCollapsed ? '▼' : '▲';
     };
 
     // Ouve mudanças no tamanho da tela (ex: virar o celular)
