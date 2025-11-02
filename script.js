@@ -202,6 +202,7 @@ async function inicializarJornada() {
         dadosPesquisa.historia.sort((a, b) => new Date(a.date) - new Date(b.date));
         
         setupTimeline(dadosPesquisa.historia);
+		setupTimelineToggle();
         
         // Exibe o primeiro da lista (o mais antigo, ep00) por padrão
         if(dadosPesquisa.historia.length > 0) {
@@ -236,6 +237,16 @@ function setupTimeline(historia) {
         
         epElement.onclick = () => {
             displayEpisodio(episodio);
+			// (Recolhe a timeline após o clique, SE estiver em mobile)
+            const mediaQuery = window.matchMedia('(max-width: 1000px)');
+            if (mediaQuery.matches) {
+                const container = document.getElementById('timeline-container');
+                const btn = document.getElementById('timeline-toggle-btn');
+                if (container && btn) {
+                    container.classList.add('timeline-collapsed');
+                    btn.innerText = '...'; // Garante que o botão mostre "..."
+                }
+            }
         };
         
         // Marca o primeiro (mais antigo, ep00) como ativo
@@ -588,6 +599,43 @@ function atualizarPainelCubo(episodio) {
     const imgPath = kpis.cuboImagem || 'cubo-E0.png';
     cuboImg.src = imgPath;
     cuboImg.onerror = () => { cuboImg.src = 'cubo-E0.png'; }; 
+}
+/**
+ * Configura o botão de recolher/expandir a timeline em modo mobile.
+ */
+function setupTimelineToggle() {
+    const container = document.getElementById('timeline-container');
+    const btn = document.getElementById('timeline-toggle-btn');
+    
+    if (!container || !btn) return;
+
+    const mediaQuery = window.matchMedia('(max-width: 1000px)');
+
+    // Função para definir o estado inicial
+    const setInitialState = () => {
+        if (mediaQuery.matches) {
+            // Em mobile, começa recolhido
+            container.classList.add('timeline-collapsed');
+            btn.innerText = '...'; // Mostra "..." (expandir)
+        } else {
+            // Em desktop, começa expandido
+            container.classList.remove('timeline-collapsed');
+            btn.innerText = '✕'; // Mostra "X" (recolher)
+        }
+    };
+
+    // Define o estado ao carregar a página
+    setInitialState();
+
+    // Adiciona o clique no botão
+    btn.onclick = () => {
+        const isCollapsed = container.classList.toggle('timeline-collapsed');
+        // Atualiza o texto do botão
+        btn.innerText = isCollapsed ? '...' : '✕';
+    };
+
+    // Ouve mudanças no tamanho da tela (ex: virar o celular)
+    mediaQuery.addEventListener('change', setInitialState);
 }
 
 // --- FIM DAS NOVAS FUNÇÕES HELPER DE CÁLCULO ---
