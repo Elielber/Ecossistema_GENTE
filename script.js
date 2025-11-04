@@ -167,7 +167,7 @@ function setupCarousel(sliderTrack) {
 
         function resetAutoPlay() {
             clearInterval(autoPlayInterval);
-            autoPlayInterval = setInterval(nextSlide, 10000); // Passa a cada 10 segundos
+            autoPlayInterval = setInterval(nextSlide, 15000); // Passa a cada 10 segundos
         }
 
         nextBtn.addEventListener('click', () => {
