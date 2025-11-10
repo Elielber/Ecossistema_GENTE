@@ -881,98 +881,38 @@ function renderModalPublicidade(episodio) {
 /**
  * (Req 4) Gera o HTML para o modal de TOLERÂNCIA (com diagnóstico de viés)
  */
+/**
+ * (Req 4) Gera o HTML para o modal de TOLERÂNCIA 
+ * Esta versão lê a memória de cálculo moderna e exibe o diagnóstico de viés.
+ */
 function renderModalTolerancia(episodio) {
     const kpi = episodio.kpis?.tolerancia;
     
-    // --- 1. Get Tolerancia Valor e Memoria (Lógica existente) ---
-    let toleranciaValorNum = 0; // Ex: 0.5
-    let kpiResumo = '--';
+    // 1. Get Tolerancia Valor e Memoria (Lógica simplificada)
     let metaLabel = 'N/D';
     let memoria = "Análise não disponível.";
-    let memoriaOriginal = ""; 
-    let toleranciaPercent = 0; // Ex: 50
+    let kpiResumo = '--';
 
     if (typeof kpi === 'object' && kpi !== null) {
-        toleranciaValorNum = kpi.valor || 0; 
-        kpiResumo = kpi.resumo || '--';
-        metaLabel = `${(toleranciaValorNum * 100).toFixed(0)}%`;
+        metaLabel = `${(kpi.valor || 0) * 100}%`;
         memoria = kpi.memoriaDeCalculo || "Análise não disponível.";
-        memoriaOriginal = memoria; 
-    } else if (typeof kpi === 'number') {
-        toleranciaValorNum = kpi;
-        metaLabel = `${(toleranciaValorNum * 100).toFixed(0)}%`;
+        kpiResumo = kpi.resumo || '--';
+    } else if (typeof kpi === 'number') { // Fallback para formato antigo
+        metaLabel = `${kpi * 100}%`;
         kpiResumo = `${metaLabel} (Definida)`;
-        memoria = `A tolerância para este episódio foi definida em ${metaLabel}. (Formato antigo)`;
-        memoriaOriginal = memoria;
+        memoria = `A tolerância para este episódio foi definida em ${metaLabel}.`;
     }
-    toleranciaPercent = toleranciaValorNum * 100; // Converte 0.5 para 50
 
-    // --- 2. Calculate KPIs (Lógica existente) ---
-    const kpiCustoStr = calcularKpiViabilidade(episodio);
-    const kpiPrazoStr = calcularKpiPrazo(episodio);
-    const kpiPubStr = calcularKpiPublicidade(episodio);
-    
-    // --- 3. Análise de Desvio (Lógica existente) ---
-    const regexDesvio = /Desvio de (-?\d+\.?\d*)\s*%/; 
-    let todosOK = true; 
-
-    const analisarLinha = (linhaKey, kpiStr) => {
-        const regexLinha = new RegExp(`(\\[.*?\\] ${linhaKey}[\\s\\S]*?)(?=\\[|Status:|$)`);
-        let linhaMatch = memoriaOriginal.match(regexLinha);
-        if (!linhaMatch || !linhaMatch[1]) {
-            return memoria.replace(/(\[.*?\] ${linhaKey}:)/g, `$1 KPI ${kpiStr}`);
-        }
-        let linhaTextoOriginal = linhaMatch[1].trim(); 
-        let desvioMatch = linhaTextoOriginal.match(regexDesvio);
-        if (!desvioMatch || !desvioMatch[1]) {
-            return memoria.replace(linhaTextoOriginal, `[OK] ${linhaKey}: KPI ${kpiStr} (Desvio não encontrado)`);
-        }
-        const desvioValor = parseFloat(desvioMatch[1]); 
-        const desvioAbsoluto = Math.abs(desvioValor); 
-        let novaLinhaTexto = "";
-        if (desvioAbsoluto <= toleranciaPercent) {
-            novaLinhaTexto = `[OK] ${linhaKey}: KPI ${kpiStr} Desvio de ${desvioValor.toFixed(1)}% está dentro da tolerância.`; 
-        } else {
-            novaLinhaTexto = `[FALHA] ${linhaKey}: KPI ${kpiStr} Desvio de ${desvioValor.toFixed(1)}% está FORA da tolerância de ${toleranciaPercent.toFixed(0)}%.`; 
-            todosOK = false; 
-        }
-        return memoria.replace(linhaTextoOriginal, novaLinhaTexto);
-    };
-
-    memoria = analisarLinha("Custo", kpiCustoStr);
-    memoriaOriginal = memoria; 
-    memoria = analisarLinha("Prazo", kpiPrazoStr);
-    memoriaOriginal = memoria; 
-    memoria = analisarLinha("Publicidade", kpiPubStr);
-    memoriaOriginal = memoria; 
-
-    if (todosOK) {
-        memoria = memoria.replace(/Status: .*/g, "Status: Equilibrado. Todos os KPIs estão dentro da margem de tolerância definida.");
-        if (kpiResumo.toLowerCase().includes("desequilibrado")) kpiResumo = "Equilibrado";
-    } else {
-        memoria = memoria.replace(/Status: .*/g, "Status: Desequilibrado. Pelo menos um KPI está fora da margem de tolerância.");
-        if (kpiResumo.toLowerCase().includes("equilibrado")) kpiResumo = "Desequilibrado";
-    }
-    
-    // --- 4. INÍCIO DA NOVA LÓGICA (Diagnóstico de Viés) ---
-    // (Esta lógica foi movida da função 'atualizarPainelCubo')
-
-    // 4.1. Calcula os KPIs %
-    const kpiPrazo = getKpiPrazoValor(episodio);
-    const kpiPub = getKpiPublicidadeValor(episodio);
-    const kpiVib = getKpiViabilidadeValor(episodio);
-
-    // 4.2. Calcula o Range e o Prefixo
-   const prefixoInclinacao = getInclinacaoCubo(episodio);
-
-    // 4.3. Define o Texto de Alerta
+    // 2. Diagnóstico de Viés
+    const prefixoInclinacao = getInclinacaoCubo(episodio); // Esta função já está correta
     let textoAlertaHTML = ""; // Começa vazio
+    
     switch (prefixoInclinacao) {
-        case 'V': // Viés da "Paralisia por Análise"
+        case 'V':
             textoAlertaHTML = `
                 <div class="bloco-alerta-viés">
                     <strong>Diagnóstico (Alerta "V"): O Viés da "Paralisia por Análise"</strong>
-                    <p>O Pilar Dominante "Viabilidade" (recursos) está saudável, mas o projeto não avança na execução (Prazo e Publicação fracos).</p>
+                    <p>O Pilar Dominante "Viabilidade" (recursos) está saudável, mas o projeto não avança na execução (Prazo e Publicidade fracos).</p>
                     <p><strong>Interpretação:</strong> O pesquisador, evitando tarefas de execução (Metodologia), tende a alocar esforço em atividades "seguras":</p>
                     <ul>
                         <li><strong>Favorece:</strong> "Referencial Teórico" (Face 3), em um ciclo de refinamento infinito; e "Impacto na Sociedade" (Face 5), teorizando sobre a relevância sem construir a solução.</li>
@@ -980,7 +920,7 @@ function renderModalTolerancia(episodio) {
                     </ul>
                 </div>`;
             break;
-        case 'T': // Viés do "Executor Apressado"
+        case 'T':
             textoAlertaHTML = `
                 <div class="bloco-alerta-viés">
                     <strong>Diagnóstico (Alerta "T"): O Viés do "Executor Apressado"</strong>
@@ -992,7 +932,7 @@ function renderModalTolerancia(episodio) {
                     </ul>
                 </div>`;
             break;
-        case 'P': // Viés do "Acadêmico Teórico"
+        case 'P':
             textoAlertaHTML = `
                 <div class="bloco-alerta-viés">
                     <strong>Diagnóstico (Alerta "P"): O Viés do "Acadêmico Teórico"</strong>
@@ -1005,17 +945,19 @@ function renderModalTolerancia(episodio) {
                 </div>`;
             break;
     }
-    // --- FIM DA NOVA LÓGICA ---
 
-    // 5. Monta o HTML final
+    // 3. Monta o HTML final (sem a lógica de parsing que causava o erro)
     let html = `
         <div class="meta-destaque">
             Resultado: <strong>${kpiResumo}</strong> (Limite: ${metaLabel})
         </div>
         
-        ${textoAlertaHTML} <div class="bloco-calculo">
+        ${textoAlertaHTML} 
+
+        <div class="bloco-calculo">
             <h4>Análise de Equilíbrio do Cubo</h4>
-            ${memoria} </div>
+            ${memoria}
+        </div>
     `;
     return html;
 }
