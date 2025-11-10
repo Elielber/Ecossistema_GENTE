@@ -598,10 +598,52 @@ function atualizarPainelCubo(episodio) {
     
     if (!kpis || !cuboImg) return;
 
-    // A imagem é lida diretamente do JSON (calculada pelo editor)
-    const imgPath = kpis.cuboImagem || 'cubo-E0.png';
-    cuboImg.src = imgPath;
-    cuboImg.onerror = () => { cuboImg.src = 'cubo-E0.png'; }; 
+    // 1. LÊ o nome do arquivo que o editor JÁ CALCULOU e SALVOU
+    // O editor salvou 'cubo-T75-cinza.png' no dados.json [cite: 91]
+    const nomeArquivo = kpis.cuboImagem || 'cubo-E1-azul.png'; // Ex: "cubo-T75-cinza.png"
+
+    // 2. Aplica a imagem
+    cuboImg.src = nomeArquivo; 
+    
+    // 3. Lógica de Fallback (Corrigida para PNG)
+    cuboImg.onerror = () => { 
+        // Extrai a base, ex: "cubo-T75"
+        const nomeBase = nomeArquivo.substring(0, nomeArquivo.lastIndexOf('-')) || "cubo-E0";
+        
+        // Fallback 1: Tenta a versão "azul" (padrão)
+        const fallbackCor = `${nomeBase}-azul.png`; // Tenta o azul (se o cinza falhar)
+        
+        if (cuboImg.src.endsWith(fallbackCor)) { // Se o azul já falhou...
+            cuboImg.onerror = () => {
+                 // Fallback 2: Tenta a imagem PNG original (sem cor)
+                 const fallbackPng = nomeBase + ".png";
+                 cuboImg.src = fallbackPng;
+                 kpis.cuboImagem = fallbackPng;
+                 cuboImg.onerror = () => {
+                    // Fallback 3: Tenta o PNG padrão de equilíbrio
+                    const fallbackFinal = 'cubo-E0.png';
+                    cuboImg.src = fallbackFinal; 
+                    kpis.cuboImagem = fallbackFinal;
+                    cuboImg.onerror = null; 
+                 }
+            }
+        } else {
+             // Tenta o azul primeiro
+             cuboImg.src = fallbackCor;
+             kpis.cuboImagem = fallbackCor; // Atualiza em memória (não salva)
+             cuboImg.onerror = () => { // Se o azul falhar...
+                 const fallbackPng = nomeBase + ".png";
+                 cuboImg.src = fallbackPng;
+                 kpis.cuboImagem = fallbackPng;
+                 cuboImg.onerror = () => {
+                    const fallbackFinal = 'cubo-E0.png';
+                    cuboImg.src = fallbackFinal; 
+                    kpis.cuboImagem = fallbackFinal;
+                    cuboImg.onerror = null; 
+                 }
+             }
+        }
+    };
 }
 /**
  * Configura o botão de recolher/expandir a timeline em modo mobile.
