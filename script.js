@@ -303,23 +303,34 @@ function displayEpisodio(episodio) {
     const pPercent = getKpiPublicidadeValor(episodio);
     setContent('kpi-publicidade-resumo', pPercent.toFixed(1) + '%');
     
-    // Tolerância (Diagnóstico de Viés)
+    // Tolerância (Diagnóstico de Viés E Coerência)
+    const kpis = episodio.kpis;
+    let textoBias = '';
+    let textoCoerencia = '';
+
+    // 1. Define o texto do Viés (Equilíbrio)
     const prefixoInclinacao = getInclinacaoCubo(episodio);
-    let textoTolerancia = 'Equilibrado'; 
     switch (prefixoInclinacao) {
-        case 'V': textoTolerancia = 'Viés: Paralisia por Análise'; break;
-        case 'T': textoTolerancia = 'Viés: Executor Apressado'; break;
-        case 'P': textoTolerancia = 'Viés: Acadêmico Teórico'; break;
+        case 'V': textoBias = 'Pesquisa com viés "V"'; break;
+        case 'T': textoBias = 'Pesquisa com viés "T"'; break;
+        case 'P': textoBias = 'Pesquisa com viés "P"'; break;
         case 'E':
         default:
-            const toleranciaKPI = episodio.kpis.tolerancia;
-            if (typeof toleranciaKPI === 'object' && toleranciaKPI !== null && toleranciaKPI.resumo) {
-                textoTolerancia = toleranciaKPI.resumo;
-            } else {
-                textoTolerancia = 'Equilibrado';
-            }
+            textoBias = 'Pesquisa equilibrada';
             break;
     }
+
+    // 2. Define o texto da Coerência (Cor)
+    const nomeImagem = kpis.cuboImagem || '';
+    if (nomeImagem.includes('-cinza')) {
+        textoCoerencia = "e conteúdo incoerente"; 
+    } else {
+        textoCoerencia = "e conteúdo coerente";
+    }
+
+    // 3. Combina os dois textos
+    const textoFinal = `${textoBias} ${textoCoerencia}`;
+    setContent('kpi-tolerancia-resumo', textoFinal);
     setContent('kpi-tolerancia-resumo', textoTolerancia);
     
     // Imagem do Cubo
@@ -887,8 +898,9 @@ function renderModalPublicidade(episodio) {
  */
 function renderModalTolerancia(episodio) {
     const kpi = episodio.kpis?.tolerancia;
-    
-    // 1. Get Tolerancia Valor e Memoria (Lógica simplificada)
+    const nomeImagem = episodio.kpis?.cuboImagem || '';
+
+    // 1. Get Tolerancia Valor e Memoria
     let metaLabel = 'N/D';
     let memoria = "Análise não disponível.";
     let kpiResumo = '--';
@@ -897,62 +909,75 @@ function renderModalTolerancia(episodio) {
         metaLabel = `${(kpi.valor || 0) * 100}%`;
         memoria = kpi.memoriaDeCalculo || "Análise não disponível.";
         kpiResumo = kpi.resumo || '--';
-    } else if (typeof kpi === 'number') { // Fallback para formato antigo
+    } else if (typeof kpi === 'number') {
         metaLabel = `${kpi * 100}%`;
         kpiResumo = `${metaLabel} (Definida)`;
         memoria = `A tolerância para este episódio foi definida em ${metaLabel}.`;
     }
 
-    // 2. Diagnóstico de Viés
-    const prefixoInclinacao = getInclinacaoCubo(episodio); // Esta função já está correta
-    let textoAlertaHTML = ""; // Começa vazio
+    // 2. NOVO: Diagnóstico de Coerência (Cor)
+    let textoAlertaCoerencia = ""; // Começa vazio
+    if (nomeImagem.includes('-cinza')) {
+        textoAlertaCoerencia = `
+            <div class="bloco-alerta-viés" style="border-color: #fca5a5; background-color: #fef2f2; color: #991b1b;">
+                <strong style="color: #b91c1c;">Alerta de Incoerência Metodológica</strong>
+                <p>O Cubo está cinza porque o conteúdo das 6 faces não está alinhado ou não foi totalmente classificado.</p>
+                <p><strong>Ação:</strong> Abra o <strong>editor-dados.html</strong>, carregue este projeto e verifique a "Cadeia de Coerência" (✅, ⚠️, ❌) no Orientador Metodológico.</p>
+                <ul>
+                    <li>Verifique se todas as 6 faces possuem uma classificação selecionada.</li>
+                    <li>Verifique se alguma seleção está marcada com "❌" (Incoerente).</li>
+                </ul>
+            </div>`;
+    }
+
+    // 3. Diagnóstico de Viés (Inclinação)
+    const prefixoInclinacao = getInclinacaoCubo(episodio);
+    let textoAlertaVies = ""; // Começa vazio
     
     switch (prefixoInclinacao) {
         case 'V':
-            textoAlertaHTML = `
+            textoAlertaVies = `
                 <div class="bloco-alerta-viés">
                     <strong>Diagnóstico (Alerta "V"): O Viés da "Paralisia por Análise"</strong>
                     <p>O Pilar Dominante "Viabilidade" (recursos) está saudável, mas o projeto não avança na execução (Prazo e Publicidade fracos).</p>
-                    <p><strong>Interpretação:</strong> O pesquisador, evitando tarefas de execução (Metodologia), tende a alocar esforço em atividades "seguras":</p>
                     <ul>
-                        <li><strong>Favorece:</strong> "Referencial Teórico" (Face 3), em um ciclo de refinamento infinito; e "Impacto na Sociedade" (Face 5), teorizando sobre a relevância sem construir a solução.</li>
-                        <li><strong>Negligencia:</strong> "Hipóteses de Solução" (Face 2) e "Produto da Pesquisa" (Face 6), que exigem a execução prática.</li>
+                        <li><strong>Favorece:</strong> "Referencial Teórico" (Face 3) e "Impacto na Sociedade" (Face 5).</li>
+                        <li><strong>Negligencia:</strong> "Hipóteses de Solução" (Face 2) e "Produto da Pesquisa" (Face 6).</li>
                     </ul>
                 </div>`;
             break;
         case 'T':
-            textoAlertaHTML = `
+            textoAlertaVies = `
                 <div class="bloco-alerta-viés">
                     <strong>Diagnóstico (Alerta "T"): O Viés do "Executor Apressado"</strong>
-                    <p>O Pilar Dominante "Prazo" (progresso) está forte, mas o Custo pode estar estourado ou a Qualidade da Publicação baixa.</p>
-                    <p><strong>Interpretação:</strong> O pesquisador confunde "fazer" com "pesquisar". O foco obsessivo em avançar o cronograma leva à negligência do rigor científico e do controle de recursos.</p>
+                    <p>O Pilar Dominante "Prazo" (progresso) está forte, mas o Custo ou a Qualidade (Publicação) estão baixos.</p>
                     <ul>
-                        <li><strong>Favorece:</strong> "Produto da Pesquisa" (Face 6), pois é a entrega tangível; e "Impacto na Sociedade" (Face 5), usado como justificativa para a pressa.</li>
-                        <li><strong>Negligencia:</strong> "Referencial Teórico" (Face 3), visto como "perda de tempo"; e "Hipóteses" (Face 2), que são implementadas sem validação rigorosa.</li>
+                        <li><strong>Favorece:</strong> "Produto da Pesquisa" (Face 6) e "Impacto na Sociedade" (Face 5).</li>
+                        <li><strong>Negligencia:</strong> "Referencial Teórico" (Face 3) e "Hipóteses" (Face 2).</li>
                     </ul>
                 </div>`;
             break;
         case 'P':
-            textoAlertaHTML = `
+            textoAlertaVies = `
                 <div class="bloco-alerta-viés">
                     <strong>Diagnóstico (Alerta "P"): O Viés do "Acadêmico Teórico"</strong>
-                    <p>O Pilar Dominante "Publicação" (artigos) está forte, mas o Custo e o Prazo do projeto principal (tese/protótipo) estão comprometidos.</p>
-                    <p><strong>Interpretação:</strong> O pilar 'Publicação' é alimentado por "spin-offs" teóricos, e não pela execução do projeto central.</p>
+                    <p>O Pilar Dominante "Publicação" (artigos) está forte, mas o Custo e o Prazo do projeto principal estão comprometidos.</p>
                     <ul>
-                        <li><strong>Favorece:</strong> "Referencial Teórico" (Face 3), resultando em revisões publicáveis; e "Hipóteses" (Face 2), gerando ensaios teóricos não testados.</li>
-                        <li><strong>Negligencia:</strong> "Produto da Pesquisa" (Face 6), que é o objetivo central e está atrasado; e "Impacto na Sociedade" (Face 5), pois o diálogo foca apenas nos pares acadêmicos.</li>
+                        <li><strong>Favorece:</strong> "Referencial Teórico" (Face 3) e "Hipóteses" (Face 2).</li>
+                        <li><strong>Negligencia:</strong> "Produto da Pesquisa" (Face 6) e "Impacto na Sociedade" (Face 5).</li>
                     </ul>
                 </div>`;
             break;
     }
 
-    // 3. Monta o HTML final (sem a lógica de parsing que causava o erro)
+    // 4. Monta o HTML final
     let html = `
         <div class="meta-destaque">
             Resultado: <strong>${kpiResumo}</strong> (Limite: ${metaLabel})
         </div>
         
-        ${textoAlertaHTML} 
+        ${textoAlertaCoerencia} 
+        ${textoAlertaVies} 
 
         <div class="bloco-calculo">
             <h4>Análise de Equilíbrio do Cubo</h4>
