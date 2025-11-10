@@ -261,6 +261,7 @@ function setupTimeline(historia) {
 /**
  * Exibe os dados de um episódio específico no painel
  */
+
 function displayEpisodio(episodio) {
     if (!episodio) return;
 
@@ -276,7 +277,6 @@ function displayEpisodio(episodio) {
     });
 
     setContent('painel-nome-content', episodio.nome);
-// Atualiza o TÍTULO do card Episódio
     const novoTituloEpisodio = `Episódio (${episodio.id || 'N/A'}): ${episodio.title || 'Sem Título'}`;
     setContent('painel-summary-label', novoTituloEpisodio);
     setContent('painel-summary-content', episodio.summary);
@@ -289,57 +289,40 @@ function displayEpisodio(episodio) {
     setContent('impacto-content', episodio.components?.impacto);
     setContent('produto-content', episodio.components?.produto);
 
-    // --- INÍCIO DO BLOCO SUBSTITUÍDO ---
-
-    // Resumos dos KPIs (Modificado para usar as funções de cálculo)
+    // --- Resumos dos KPIs (Agora usa as funções getKpi...Valor) ---
     
-    // --- VIABILIDADE ---
-    // Chama a função que retorna o KPI (ex: "100%")
-    const kpiViabilidade = calcularKpiViabilidade(episodio);
-    setContent('kpi-viabilidade-resumo', kpiViabilidade);
+    // Viabilidade (V%)
+    const vPercent = getKpiViabilidadeValor(episodio);
+    setContent('kpi-viabilidade-resumo', vPercent.toFixed(1) + '%');
 
-    // --- PRAZO ---
-    // Chama a função que retorna o KPI (ex: "97%")
-    const kpiPrazo = calcularKpiPrazo(episodio);
-    setContent('kpi-prazo-resumo', kpiPrazo);
+    // Prazo (T%)
+    const tPercent = getKpiPrazoValor(episodio);
+    setContent('kpi-prazo-resumo', tPercent.toFixed(1) + '%');
 
-    // --- PUBLICIDADE ---
-    // Chama a função que retorna o KPI (ex: "100%")
-    const kpiPublicidade = calcularKpiPublicidade(episodio);
-    setContent('kpi-publicidade-resumo', kpiPublicidade);
+    // Publicidade (P%)
+    const pPercent = getKpiPublicidadeValor(episodio);
+    setContent('kpi-publicidade-resumo', pPercent.toFixed(1) + '%');
     
-    // --- TOLERÂNCIA ---
-    // (Modificado para mostrar o Viés de Inclinação)
+    // Tolerância (Diagnóstico de Viés)
     const prefixoInclinacao = getInclinacaoCubo(episodio);
-    let textoTolerancia = 'Equilibrado'; // Padrão
-
+    let textoTolerancia = 'Equilibrado'; 
     switch (prefixoInclinacao) {
-        case 'V':
-            textoTolerancia = 'Paralisia por Análise';
-            break;
-        case 'T':
-            textoTolerancia = 'Executor Apressado';
-            break;
-        case 'P':
-            textoTolerancia = 'Acadêmico Teórico';
-            break;
+        case 'V': textoTolerancia = 'Viés: Paralisia por Análise'; break;
+        case 'T': textoTolerancia = 'Viés: Executor Apressado'; break;
+        case 'P': textoTolerancia = 'Viés: Acadêmico Teórico'; break;
         case 'E':
         default:
-            // Se 'E' (Equilibrado), usa o resumo original do JSON
             const toleranciaKPI = episodio.kpis.tolerancia;
             if (typeof toleranciaKPI === 'object' && toleranciaKPI !== null && toleranciaKPI.resumo) {
                 textoTolerancia = toleranciaKPI.resumo;
-            } else if (typeof toleranciaKPI === 'number') {
-                textoTolerancia = (toleranciaKPI * 100).toFixed(0) + '% (Definida)';
             } else {
                 textoTolerancia = 'Equilibrado';
             }
             break;
     }
     setContent('kpi-tolerancia-resumo', textoTolerancia);
-
     
-    // Imagem do Cubo e Alertas de Desequilíbrio
+    // Imagem do Cubo
     atualizarPainelCubo(episodio);
 	
     // ATUALIZA OS LISTENERS DE CLIQUE DO KPI
@@ -424,121 +407,64 @@ function showKpiModal(kpiType, episodio) {
  * @param {object} episodio - O objeto do episódio atual
  * @returns {string} - O KPI formatado (ex: "100%") ou "N/A"
  */
-function calcularKpiViabilidade(episodio) {
-    const kpi = episodio.kpis?.viabilidade;
-    const meta = episodio.kpis?.metaCusto || 0;
-    const itens = kpi?.itens || [];
-    
-    const apuracao = itens.reduce((sum, item) => sum + (item.valor || 0), 0);
-
-    let kpiResultadoString = 'N/A';
-    if (meta > 0) {
-        const kpiValor = (apuracao / meta) * 100;
-        kpiResultadoString = `${kpiValor.toFixed(1)}%`;
-    } else {
-        if (apuracao === 0) {
-            kpiResultadoString = '100%';
-        } else {
-            kpiResultadoString = 'N/A (Meta 0)';
-        }
-    }
-    return kpiResultadoString;
-}
-
 /**
- * Calcula o KPI percentual de Publicidade
- * @param {object} episodio - O objeto do episódio atual
- * @returns {string} - O KPI formatado (ex: "100%") ou "N/A"
+ * Calcula o KPI percentual de Viabilidade (V%)
+ * USA A NOVA LÓGICA IVId (Índice de Viabilidade Dinâmico)
  */
-function calcularKpiPublicidade(episodio) {
-    const kpi = episodio.kpis?.publicidade;
-    const meta = episodio.kpis?.metaPublicacao || 0;
-    const publicacoes = kpi?.publicacoes || [];
-
-    const apuracao = publicacoes.filter(p => 
-        p.status === 'Aceito' || p.status === 'Publicado'
-    ).length;
-
-    let kpiResultadoString = 'N/A';
-    if (meta > 0) {
-        const kpiValor = (apuracao / meta) * 100;
-        kpiResultadoString = `${kpiValor.toFixed(1)}%`;
-    } else {
-        if (apuracao === 0) {
-            kpiResultadoString = '100%'; 
-        } else {
-            kpiResultadoString = 'N/A (Meta 0)';
-        }
-    }
-    return kpiResultadoString;
-}
-
-/**
- * Calcula o KPI percentual de Prazo
- * @param {object} episodio - O objeto do episódio atual
- * @returns {string} - O KPI formatado (ex: "97%") ou "N/A"
- */
-function calcularKpiPrazo(episodio) {
-    const kpi = episodio.kpis?.prazo;
-    const meta = episodio.kpis?.metaPrazo || 0; // Ex: 35
-    const kpiResumoStr = kpi?.resumo || '--'; // Ex: "34.0% (No Prazo)"
-    
-    let apuracaoValor = 0;
-    const match = kpiResumoStr.match(/(\d+\.?\d*)\s*%/);
-    
-    if (match && match[1]) {
-        apuracaoValor = parseFloat(match[1]); // apuracaoValor = 34.0
-        
-        if (meta > 0) {
-            const kpiValor = (apuracaoValor / meta) * 100; // Ex: (34.0 / 35) * 100 = 97.14...
-            // Arredonda para 0 casas decimais (ex: "97%")
-            return `${kpiValor.toFixed(1)}%`;
-        } else {
-            return 'N/A'; // Evita divisão por zero
-        }
-    } else {
-        // Se não achou % (ex: "Concluído" ou "--")
-        return kpiResumoStr; // Retorna o próprio status, ex: "Concluído"
-    }
-}
-
-
-/** Calcula o KPI percentual de Viabilidade (Custo) */
 function getKpiViabilidadeValor(episodio) {
-    const kpis = episodio.kpis;
-    const meta = kpis?.metaCusto || 0;
-    // 'valor' em viabilidade é o custo totalRealizado
-    const apuracao = kpis?.viabilidade?.valor || 0; 
+    // 1. Obter as Estimativas Estratégicas
+    const est = episodio.viabilidade_estimativas || { B5_impacto: 0, B6_produto: 0, C1_problema: 0, CV_solucao: 0 };
+    const B5 = est.B5_impacto || 0;     // Benefício (Impacto Face 5)
+    const B6 = est.B6_produto || 0;    // Benefício (Produto Face 6)
+    const C1 = est.C1_problema || 0;   // Custo (Problema Face 1)
+    const CV = est.CV_solucao || 0;  // Custo (Solução Eixo V)
+
+    // 2. Obter a Maturidade (M) do Progresso das Fases (Eixo T)
+    const prog = episodio.kpis?.prazo?.progresso_fases || { fase1: 0, fase2: 0, fase3: 0, fase4: 0, fase5: 0 };
+    const M1 = prog.fase1 || 0;  // Maturidade do Custo do Problema (Fase 1)
+    const MV = prog.fase2 || 0;  // Maturidade do Custo da Solução (Fase 2)
+    const M6 = prog.fase3 || 0;  // Maturidade do Benefício do Produto (Fase 3)
     
-    if (meta > 0) {
-        // (1 - (desvio / meta)) * 100
-        const kpi = (1 - (apuracao - meta) / meta) * 100;
-        return kpi;
+    // Maturidade do Benefício de Impacto (Média Fases 4 e 5)
+    const M5 = ((prog.fase4 || 0) + (prog.fase5 || 0)) / 2;
+
+    // 3. Calcular os Termos Ponderados
+    const beneficioPonderado = (B5 * M5) + (B6 * M6);
+    const custoPonderado = (C1 * M1) + (CV * MV);
+
+    // 4. Calcular o IVId e retornar o V(%)
+    let eixoV_percent = 0;
+
+    if (custoPonderado > 0) {
+        // IVId (Ratio) = Benefício Ponderado / Custo Ponderado
+        const ivid_ratio = beneficioPonderado / custoPonderado;
+        // Converte a razão para percentual
+        eixoV_percent = ivid_ratio * 100;
+    } else if (beneficioPonderado > 0) {
+        eixoV_percent = 999; // Valor alto para indicar benefício sem custo
     }
-    if (apuracao === 0) return 100.0; // Meta 0, Apuracao 0 = 100%
-    return 0.0; // Meta 0, Apuracao > 0 = Falha
+    
+    return eixoV_percent;
 }
 
 /** Calcula o KPI percentual de Publicidade */
 function getKpiPublicidadeValor(episodio) {
     const kpis = episodio.kpis;
     const meta = kpis?.metaPublicacao || 0;
-    // 'valor' em publicidade é o totalRelevante (aceitos/pub)
     const apuracao = kpis?.publicidade?.valor || 0; 
     if (meta > 0) return (apuracao / meta) * 100;
-    if (apuracao === 0) return 100.0; // Meta 0, Apuracao 0 = 100%
-    return 0.0; // Meta 0, Apuracao > 0 = Falha
+    if (apuracao === 0) return 100.0;
+    return 0.0; 
 }
 
 /** Calcula o KPI percentual de Prazo */
 function getKpiPrazoValor(episodio) {
     const kpis = episodio.kpis;
-    const meta = kpis?.metaPrazo || 0; // Ex: 20
-    // 'valor' em prazo é o progresso ponderado (ex: 33.96)
+    const meta = kpis?.metaPrazo || 0;
     const apuracao = kpis?.prazo?.valor || 0; 
-    if (meta > 0) return (apuracao / meta) * 100; // Ex: (33.96 / 20) * 100 = 170%
-    if (apuracao === 0) return 100.0; // Meta 0, Apuracao 0 = 100%
-    return 0.0; // Meta 0, Apuracao > 0 = Falha
+    if (meta > 0) return (apuracao / meta) * 100;
+    if (apuracao === 0) return 100.0;
+    return 0.0;
 }
 /**
  * Calcula o prefixo de inclinação do Cubo (E, V, T, P)
@@ -688,59 +614,137 @@ function setupTimelineToggle() {
 /**
  * (Req 1) Gera o HTML para o modal de VIABILIDADE
  */
+// SUBSTITUA a função 'renderModalViabilidade' (linhas 556-628) por esta:
+/**
+ * Gera o HTML para o modal de VIABILIDADE (V%)
+ * Agora mostra o cálculo ESTRATÉGICO (IVId)
+ */
 function renderModalViabilidade(episodio) {
-    const kpi = episodio.kpis?.viabilidade;
-    const meta = episodio.kpis?.metaCusto || 0;
-    const itens = kpi?.itens || [];
+    // 1. Obter as Estimativas Estratégicas
+    const est = episodio.viabilidade_estimativas || { B5_impacto: 0, B6_produto: 0, C1_problema: 0, CV_solucao: 0 };
+    const B5 = est.B5_impacto || 0;
+    const B6 = est.B6_produto || 0;
+    const C1 = est.C1_problema || 0;
+    const CV = est.CV_solucao || 0;
 
-    // --- CÁLCULO DA APURAÇÃO ---
-    const apuracao = itens.reduce((sum, item) => sum + (item.valor || 0), 0);
-    // const kpiResumo = kpi?.resumo || '--'; // <-- Esta linha não é mais usada para o cálculo
+    // 2. Obter a Maturidade (M) do Progresso das Fases (Eixo T)
+    const prog = episodio.kpis?.prazo?.progresso_fases || { fase1: 0, fase2: 0, fase3: 0, fase4: 0, fase5: 0 };
+    const M1 = (prog.fase1 || 0) * 100; // Converte 0.8 para 80%
+    const MV = (prog.fase2 || 0) * 100;
+    const M6 = (prog.fase3 || 0) * 100;
+    const M5 = (((prog.fase4 || 0) + (prog.fase5 || 0)) / 2) * 100;
 
-    // --- INÍCIO DA CORREÇÃO ---
-    let kpiResultadoString = 'N/A';
-    
-    if (meta > 0) {
-        // Calcula o KPI: (Custo Real / Custo Meta) * 100
-        const kpiValor = (apuracao / meta) * 100;
-        // Arredonda para 0 casas decimais, conforme seu exemplo (100.00 / 100.01 = 100%)
-        kpiResultadoString = `${kpiValor.toFixed(1)}%`;
-    } else {
-        // Se a meta é 0...
-        if (apuracao === 0) {
-            // ...e o gasto é 0, o KPI é 100% (atingiu a meta de não gastar)
-            kpiResultadoString = '100%';
-        } else {
-            // ...mas houve gasto, o KPI é 'N/A' (divisão por zero)
-            kpiResultadoString = 'N/A (Meta 0)';
-        }
+    // 3. Calcular os Termos Ponderados
+    const beneficioPonderado = (B5 * (M5/100)) + (B6 * (M6/100));
+    const custoPonderado = (C1 * (M1/100)) + (CV * (MV/100));
+
+    // 4. Calcular o IVId e o V(%)
+    let eixoV_percent = 0;
+    let ivid_ratio = 0;
+    if (custoPonderado > 0) {
+        ivid_ratio = beneficioPonderado / custoPonderado;
+        eixoV_percent = ivid_ratio * 100;
+    } else if (beneficioPonderado > 0) {
+        eixoV_percent = 999; 
     }
-    // --- FIM DA CORREÇÃO ---
 
-    let tabelaHTML = `
+    // 5. Montar o HTML
+    let html = `
         <div class="meta-destaque">
-            Apuração: R$ ${apuracao.toFixed(2)} / Meta: R$ ${meta.toFixed(2)} = <strong>${kpiResultadoString}</strong>
+            Índice de Viabilidade (V%): <strong>${eixoV_percent.toFixed(1)}%</strong>
         </div>
-        <table>
-    `;
+        
+        <p style="font-size: 0.9em; text-align: center; color: #555;">
+            O Eixo V é um KPI estratégico que compara Benefícios Ponderados vs. Custos Ponderados.<br>
+            Um valor > 100% indica que os benefícios superam os custos, na maturidade atual.
+        </p>
 
-    tabelaHTML += `
+        <table>
             <thead>
                 <tr>
-                    <th>Item</th>
-                    <th>Tipo</th>
-                    <th>Data</th>
-                    <th>Valor (R$)</th>
+                    <th>Componente</th>
+                    <th>Valor Estimado (R$)</th>
+                    <th>Maturidade (M%)</th>
+                    <th>Valor Ponderado (R$)</th>
                 </tr>
             </thead>
             <tbody>
-    `;
+                <tr style="background-color: #f0fdf4;">
+                    <td>(B5) Benefício - Impacto (Face 5)</td>
+                    <td>R$ ${B5.toFixed(2)}</td>
+                    <td>${M5.toFixed(1)}%</td>
+                    <td>R$ ${(B5 * (M5/100)).toFixed(2)}</td>
+                </tr>
+                <tr style="background-color: #f0fdf4; font-weight: bold;">
+                    <td>(B6) Benefício - Produto (Face 6)</td>
+                    <td>R$ ${B6.toFixed(2)}</td>
+                    <td>${M6.toFixed(1)}%</td>
+                    <td>R$ ${(B6 * (M6/100)).toFixed(2)}</td>
+                </tr>
+                <tr style="font-weight: bold; background-color: #dcfce7;">
+                    <td colspan="3" style="text-align: right;">Total Benefício Ponderado:</td>
+                    <td>R$ ${beneficioPonderado.toFixed(2)}</td>
+                </tr>
 
-    if (itens.length === 0) {
-        tabelaHTML += '<tr><td colspan="4">Nenhum item de custo cadastrado.</td></tr>';
-    } else {
-        itens.forEach(item => {
-            tabelaHTML += `
+                <tr style="background-color: #fef2f2;">
+                    <td>(C1) Custo - Problema (Face 1)</td>
+                    <td>R$ ${C1.toFixed(2)}</td>
+                    <td>${M1.toFixed(1)}%</td>
+                    <td>R$ ${(C1 * (M1/100)).toFixed(2)}</td>
+                </tr>
+                <tr style="background-color: #fef2f2; font-weight: bold;">
+                    <td>(CV) Custo - Solução (Eixo V)</td>
+                    <td>R$ ${CV.toFixed(2)}</td>
+                    <td>${MV.toFixed(1)}%</td>
+                    <td>R$ ${(CV * (MV/100)).toFixed(2)}</td>
+                </tr>
+                <tr style="font-weight: bold; background-color: #fee2e2;">
+                    <td colspan="3" style="text-align: right;">Total Custo Ponderado:</td>
+                    <td>R$ ${custoPonderado.toFixed(2)}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="bloco-calculo">
+            <h4>Memória de Cálculo (IVId)</h4>
+            1. Benefício Ponderado = (B5 * M5) + (B6 * M6)
+               = (R$ ${B5.toFixed(2)} * ${M5.toFixed(1)}%) + (R$ ${B6.toFixed(2)} * ${M6.toFixed(1)}%)
+               = R$ ${beneficioPonderado.toFixed(2)}
+            <br>
+            2. Custo Ponderado = (C1 * M1) + (CV * MV)
+               = (R$ ${C1.toFixed(2)} * ${M1.toFixed(1)}%) + (R$ ${CV.toFixed(2)} * ${MV.toFixed(1)}%)
+               = R$ ${custoPonderado.toFixed(2)}
+            <br>
+            3. IVId (Ratio) = Benefício Ponderado / Custo Ponderado
+               = R$ ${beneficioPonderado.toFixed(2)} / R$ ${custoPonderado.toFixed(2)}
+               = ${ivid_ratio.toFixed(3)}
+            <br>
+            4. V% (KPI) = IVId * 100
+               = <strong>${eixoV_percent.toFixed(1)}%</strong>
+        </div>
+    `;
+    
+    // Adiciona o modal tático (que estava antes)
+    const kpi_tatico = episodio.kpis?.viabilidade;
+    const itens_taticos = kpi_tatico?.itens || [];
+    if (itens_taticos.length > 0) {
+         html += `
+            <h4 style="margin-top: 25px; border-top: 1px solid #ccc; padding-top: 15px;">
+                Controle Orçamentário (Tático)
+            </h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Tipo</th>
+                        <th>Data</th>
+                        <th>Valor (R$)</th>
+                    </tr>
+                </thead>
+                <tbody>
+         `;
+         itens_taticos.forEach(item => {
+            html += `
                 <tr>
                     <td>${item.item || ''}</td>
                     <td>${item.tipo || ''}</td>
@@ -748,18 +752,18 @@ function renderModalViabilidade(episodio) {
                     <td>R$ ${(item.valor || 0).toFixed(2)}</td>
                 </tr>
             `;
-        });
+         });
+         html += `
+                </tbody>
+            </table>
+            <div class="bloco-calculo">
+                <h4>Resumo do Cálculo (Tático)</h4>
+                ${kpi_tatico?.memoriaDeCalculo || 'Cálculo não disponível.'}
+            </div>
+         `;
     }
 
-    tabelaHTML += `
-            </tbody>
-        </table>
-        <div class="bloco-calculo">
-            <h4>Resumo do Cálculo</h4>
-            ${kpi?.memoriaDeCalculo || 'Cálculo não disponível.'}
-        </div>
-    `;
-    return tabelaHTML;
+    return html;
 }
 
 /**
@@ -1019,52 +1023,34 @@ function renderModalTolerancia(episodio) {
 /**
  * (Req 2) Gera o HTML para o modal de PRAZO (Com Gantt)
  */
+// SUBSTITUA a função 'renderModalPrazo' (linhas 860-911) por esta:
+/**
+ * (Req 2) Gera o HTML para o modal de PRAZO (Com Gantt)
+ */
 function renderModalPrazo(episodio) {
     const kpi = episodio.kpis?.prazo;
     const meta = episodio.kpis?.metaPrazo || 0; // Ex: 35
     const entregas = kpi?.entregas || [];
     const dataEpisodio = episodio.date; // Data de "hoje"
     
-    // --- INÍCIO DA CORREÇÃO ---
-    const kpiResumoStr = kpi?.resumo || '--'; // Ex: "34.0% (No Prazo)"
+    // --- LÓGICA DE CÁLCULO ATUALIZADA ---
+    const apuracaoValor = kpi?.valor || 0; // Ex: 33.96
+    const apuracaoString = `${apuracaoValor.toFixed(1)}%`; // Ex: "34.0%"
     
-    let apuracaoString = '--';       // String para "Apuração" (Ex: "34.0%")
-    let kpiResultadoString = kpiResumoStr; // String para "KPI" (Default é a string original)
-    let apuracaoValor = 0;
-
-    // Regex modificado para capturar SÓ o número (Ex: "34.0")
-    const match = kpiResumoStr.match(/(\d+\.?\d*)\s*%/); 
-    
-    if (match && match[1]) {
-        // --- Caminho 1: Encontrou uma porcentagem na string ---
-        
-        // 1. Pega o valor numérico da apuração
-        apuracaoValor = parseFloat(match[1]); // apuracaoValor = 34.0
-        
-        // 2. Formata a string da apuração para exibição
-        apuracaoString = `${apuracaoValor.toFixed(1)}%`; // apuracaoString = "34.0%"
-
-        // 3. Calcula o KPI (Apuração / Meta)
-        if (meta > 0) {
-            // Esta é a nova lógica solicitada
-            const kpiValor = (apuracaoValor / meta) * 100; // Ex: (34.0 / 35) * 100 = 97.14...
-            kpiResultadoString = `${kpiValor.toFixed(1)}%`; // kpiResultadoString = "97.1%"
-        } else {
-            kpiResultadoString = 'N/A'; // Evita divisão por zero
-        }
-        
-    } else {
-        // --- Caminho 2: Não encontrou % (Ex: "--" ou "Concluído") ---
-        // apuracaoString permanece "--"
-        // kpiResultadoString permanece a string original (ex: "Concluído")
+    let kpiResultadoString = 'N/A';
+    if (meta > 0) {
+        const kpiValor = (apuracaoValor / meta) * 100; // Ex: (33.96 / 35) * 100 = 97.0
+        kpiResultadoString = `${kpiValor.toFixed(1)}%`;
+    } else if (apuracaoValor === 0) {
+        kpiResultadoString = '100%';
     }
+    // --- FIM DA LÓGICA ATUALIZADA ---
     
     let html = `
         <div class="meta-destaque">
             Apuração: ${apuracaoString} / Meta: ${meta}% = <strong>${kpiResultadoString}</strong>
         </div>
     `;
-    // --- FIM DA CORREÇÃO ---
     
     if (entregas.length === 0) {
         html += '<p>Nenhum cronograma cadastrado.</p>';
