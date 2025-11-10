@@ -331,8 +331,7 @@ function displayEpisodio(episodio) {
     // 3. Combina os dois textos
     const textoFinal = `${textoBias} ${textoCoerencia}`;
     setContent('kpi-tolerancia-resumo', textoFinal);
-    setContent('kpi-tolerancia-resumo', textoTolerancia);
-    
+      
     // Imagem do Cubo
     atualizarPainelCubo(episodio);
 	
