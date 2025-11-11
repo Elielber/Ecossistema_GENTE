@@ -934,10 +934,11 @@ function renderModalTolerancia(episodio) {
             textoAlertaVies = `
                 <div class="bloco-alerta-viés">
                     <strong>Diagnóstico (Alerta "V"): O Viés da "Paralisia por Análise"</strong>
-                    <p>O Pilar Dominante "Viabilidade" (recursos) está saudável, mas o projeto não avança na execução (Prazo e Publicidade fracos).</p>
+                    <p>O Pilar Dominante "Viabilidade" (recursos) está saudável, mas o projeto não avança na execução (Prazo e Publicação fracos).</p>
+                    <p><strong>Interpretação:</strong> O pesquisador, evitando tarefas de execução (Metodologia), tende a alocar esforço em atividades "seguras":</p>
                     <ul>
-                        <li><strong>Favorece:</strong> "Referencial Teórico" (Face 3) e "Impacto na Sociedade" (Face 5).</li>
-                        <li><strong>Negligencia:</strong> "Hipóteses de Solução" (Face 2) e "Produto da Pesquisa" (Face 6).</li>
+                        <li><strong>Favorece:</strong> "Referencial Teórico" (Face 3), em um ciclo de refinamento infinito; e "Impacto na Sociedade" (Face 5), teorizando sobre a relevância sem construir a solução.</li>
+                        <li><strong>Negligencia:</strong> "Hipóteses de Solução" (Face 2) e "Produto da Pesquisa" (Face 6), que exigem a execução prática.</li>
                     </ul>
                 </div>`;
             break;
@@ -945,10 +946,11 @@ function renderModalTolerancia(episodio) {
             textoAlertaVies = `
                 <div class="bloco-alerta-viés">
                     <strong>Diagnóstico (Alerta "T"): O Viés do "Executor Apressado"</strong>
-                    <p>O Pilar Dominante "Prazo" (progresso) está forte, mas o Custo ou a Qualidade (Publicação) estão baixos.</p>
+                   <p>O Pilar Dominante "Prazo" (progresso) está forte, mas o Custo pode estar estourado ou a Qualidade da Publicação baixa.</p>
+                    <p><strong>Interpretação:</strong> O pesquisador confunde "fazer" com "pesquisar". O foco obsessivo em avançar o cronograma leva à negligência do rigor científico e do controle de recursos.</p>
                     <ul>
-                        <li><strong>Favorece:</strong> "Produto da Pesquisa" (Face 6) e "Impacto na Sociedade" (Face 5).</li>
-                        <li><strong>Negligencia:</strong> "Referencial Teórico" (Face 3) e "Hipóteses" (Face 2).</li>
+                        <li><strong>Favorece:</strong> "Produto da Pesquisa" (Face 6), pois é a entrega tangível; e "Impacto na Sociedade" (Face 5), usado como justificativa para a pressa.</li>
+                        <li><strong>Negligencia:</strong> "Referencial Teórico" (Face 3), visto como "perda de tempo"; e "Hipóteses" (Face 2), que são implementadas sem validação rigorosa.</li>
                     </ul>
                 </div>`;
             break;
@@ -956,10 +958,11 @@ function renderModalTolerancia(episodio) {
             textoAlertaVies = `
                 <div class="bloco-alerta-viés">
                     <strong>Diagnóstico (Alerta "P"): O Viés do "Acadêmico Teórico"</strong>
-                    <p>O Pilar Dominante "Publicação" (artigos) está forte, mas o Custo e o Prazo do projeto principal estão comprometidos.</p>
+                   <p>O Pilar Dominante "Publicação" (artigos) está forte, mas o Custo e o Prazo do projeto principal (tese/protótipo) estão comprometidos.</p>
+                    <p><strong>Interpretação:</strong> O pilar 'Publicação' é alimentado por "spin-offs" teóricos, e não pela execução do projeto central.</p>
                     <ul>
-                        <li><strong>Favorece:</strong> "Referencial Teórico" (Face 3) e "Hipóteses" (Face 2).</li>
-                        <li><strong>Negligencia:</strong> "Produto da Pesquisa" (Face 6) e "Impacto na Sociedade" (Face 5).</li>
+                        <li><strong>Favorece:</strong> "Referencial Teórico" (Face 3), resultando em revisões publicáveis; e "Hipóteses" (Face 2), gerando ensaios teóricos não testados.</li>
+                        <li><strong>Negligencia:</strong> "Produto da Pesquisa" (Face 6), que é o objetivo central e está atrasado; e "Impacto na Sociedade" (Face 5), pois o diálogo foca apenas nos pares acadêmicos.</li>
                     </ul>
                 </div>`;
             break;
