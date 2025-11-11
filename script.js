@@ -276,7 +276,7 @@ function displayEpisodio(episodio) {
         item.classList.toggle('active', item.dataset.id === episodio.id);
     });
 
-    setContent('label-diagnostico', `Diagnóstico: ${episodio.nome || 'Sem Título'}`);
+    setContent('label-diagnostico', `Diagnóstico da pesquisa: ${episodio.nome || 'Sem Título'}`);
     
     const novoTituloEpisodio = `Episódio (${episodio.id || 'N/A'}): ${episodio.title || 'Sem Título'}`;
     setContent('painel-summary-label', novoTituloEpisodio);
