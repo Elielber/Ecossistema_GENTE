@@ -455,22 +455,33 @@ function getKpiPublicidadeValor(episodio) {
     const kpis = episodio.kpis;
     const meta = kpis?.metaPublicacao || 0;
     const apuracao = kpis?.publicidade?.valor || 0; 
-    if (meta > 0) return (apuracao / meta) * 100;
-    if (apuracao === 0) return 100.0;
-    return 0.0; 
+    
+    if (meta > 0) {
+        return (apuracao / meta) * 100;
+    }
+    // Se meta === 0:
+    if (apuracao > 0) {
+        return 100.0; // Fez mais que a meta (ou meta era 0)
+    }
+    // Se meta === 0 E apuracao === 0:
+    return 0.0; // Nada esperado, nada feito = 0%
 }
 
 /** Calcula o KPI percentual de Prazo */
 function getKpiPrazoValor(episodio) {
     const kpis = episodio.kpis;
-    // Usa a metaPrazo (calculada pelo editor) em vez da meta manual
     const meta = kpis?.prazo?.metaPrazo || 0; 
     const apuracao = kpis?.prazo?.valor || 0; 
-    if (meta > 0) return (apuracao / meta) * 100;
-    // Se a meta é 0 (projeto não começou), e apuração tb é 0, está 100% "em dia"
-    if (apuracao === 0) return 100.0;
-    // Se a meta é 0 mas a apuração > 0 (trabalho adiantado), retorna valor alto
-    return 999.0;
+    
+    if (meta > 0) {
+        return (apuracao / meta) * 100;
+    }
+    // Se meta === 0:
+    if (apuracao > 0) {
+        return 100.0; // Trabalho adiantado (feito sem meta)
+    }
+    // Se meta === 0 E apuracao === 0:
+    return 0.0; // Nada esperado, nada feito = 0%
 }
 /**
  * Calcula o prefixo de inclinação do Cubo (E, V, T, P)

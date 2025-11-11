@@ -1,0 +1,2017 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor Offline - dados.json</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 15px; background-color: #f4f7f9; color: #333; }
+        .editor-section { background-color: #fff; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .editor-section h3 { margin-top: 0; border-bottom: 1px solid #e5e7eb; padding-bottom: 10px; color: #111827; }
+        label { display: block; margin-top: 12px; font-weight: 600; font-size: 0.9em; color: #4b5563; }
+        input[type="text"], input[type="date"], select, textarea.small { 
+            width: calc(100% - 20px); 
+            padding: 10px; 
+            margin-top: 5px; 
+            border: 1px solid #d1d5db; 
+            border-radius: 6px; 
+            font-size: 0.95em;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        select { width: 100%; } /* Select deve ter 100% */
+        input:focus, textarea:focus, select:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4); outline: none; }
+        textarea.small { min-height: 80px; resize: vertical; }
+        button { padding: 10px 20px; background-color: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 1em; margin-top: 10px; margin-right: 8px; transition: background-color 0.2s; }
+        button:hover { background-color: #2563eb; }
+        button.secondary { background-color: #6b7280; }
+        button.secondary:hover { background-color: #4b5563; }
+        button.danger { background-color: #ef4444; }
+        button.danger:hover { background-color: #dc2626; }
+        .episodio-editor { border: 1px solid #e5e7eb; padding: 20px; margin-bottom: 20px; border-radius: 8px; position: relative; background-color: #fafafa; }
+        .episodio-editor h4 { margin-top: 0; color: #1d4ed8; }
+        .remove-btn { position: absolute; top: 15px; right: 15px; }
+        #loading-message { font-style: italic; color: #4b5563; margin-top: 10px; transition: color 0.3s; }
+        .kpi-table-container { margin-top: 10px; max-height: 300px; overflow-y: auto; border: 1px solid #d1d5db; padding: 5px; background-color: #fff; border-radius: 6px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9em;}
+        th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
+        th { background-color: #f3f4f6; font-weight: 600; }
+        td input, td select { width: 95%; padding: 5px; border: 1px solid #d1d5db; border-radius: 4px; }
+		
+        /* --- ESTILOS SANFONA (MANTIDOS) --- */
+        .episodio-header { cursor: pointer; padding: 10px 15px; background-color: #e9ecef; border-radius: 6px; margin: -20px -20px 0 -20px; position: relative; transition: background-color 0.2s; }
+        .episodio-header:hover { background-color: #dee2e6; }
+        .episodio-header h4 { margin: 0; color: #495057; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: 95%; }
+        .episodio-header h4 .ep-id { grid-column: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .episodio-header h4 .ep-title { grid-column: 2; text-align: center; }
+        .episodio-header h4 small { font-weight: normal; color: #6c757d; font-size: 0.8em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .episodio-header::after { content: '+'; font-size: 1.5em; font-weight: bold; color: #6c757d; transition: transform 0.3s ease-out; margin-right: 5px; }
+        .episodio-editor.active .episodio-header::after { content: '−'; transform: rotate(180deg); }
+        .episodio-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out, padding 0.4s ease-out; padding-top: 0; padding-bottom: 0; border-top: 1px solid transparent; }
+        .episodio-editor.active .episodio-content { max-height: 10000px; /* Aumentado */ padding-top: 20px; padding-bottom: 10px; border-top: 1px solid #e5e7eb; }
+        .episodio-editor { padding: 20px; background-color: #fff; transition: background-color 0.2s; }
+         .episodio-editor.active { background-color: #fff; box-shadow: 0 6px 15px rgba(0,0,0,0.1); }
+		
+         /* --- ESTILOS TABELAS (MANTIDOS) --- */
+        tr.summary-row { background-color: #f3f4f6; font-weight: bold; }
+        tr.summary-row td { border-bottom: 2px solid #d1d5db; }
+        tr.summary-row input { font-weight: bold; }
+		tr.pub-details-row td { background-color: #f9fafb; padding: 10px 15px; border-bottom: 2px solid #d1d5db; }
+        tr.pub-details-row label { margin-top: 5px; }
+
+        /* --- NOVOS ESTILOS - ORIENTADOR METODOLÓGICO --- */
+        .orientador-container {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-top: 15px;
+            background-color: #fdfdfd;
+        }
+        .orientador-header {
+            padding: 10px 15px;
+            background-color: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .orientador-header label {
+            margin: 0;
+            font-size: 1em;
+            color: #111827;
+        }
+        .orientador-body {
+            padding: 15px;
+            display: grid;
+            grid-template-columns: 1fr; /* Coluna única por padrão */
+            gap: 15px;
+        }
+        /* Em telas maiores, divide o corpo em 2 colunas */
+        @media (min-width: 768px) {
+            .orientador-body {
+                grid-template-columns: 1fr 1fr; /* 2 colunas */
+            }
+        }
+        .orientador-ajuda {
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            color: #4b5563;
+            /* Começa escondido */
+            display: none;
+            margin-top: 5px;
+        }
+        .orientador-ajuda strong {
+            display: block;
+            color: #1d4ed8;
+            margin-bottom: 5px;
+        }
+        .orientador-ajuda p {
+            margin: 0;
+            line-height: 1.5;
+        }
+        .orientador-ajuda code {
+            font-size: 0.9em;
+            color: #111827;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Editor Offline do dados.json</h1>
+
+    <div class="editor-section">
+        <h3>1. Arquivo</h3>
+        <button onclick="document.getElementById('load-file-input').click();">Carregar dados.json</button>
+		<button onclick="iniciarNovoJson()">Criar Novo dados.json</button>
+        <button id="save-button" class="secondary" onclick="salvarJson()" style="display:none;">Salvar dados.json</button>
+        <input type="file" id="load-file-input" class="hidden" accept=".json" style="display: none;">
+        <p id="loading-message">Nenhum arquivo carregado.</p>
+    </div>
+
+    <div id="editor-form" class="editor-section" style="display:none;"> 
+        <h3>2. Editor de Episódios</h3>
+        <div id="episodios-container"></div>
+        <button onclick="adicionarNovoEpisodio()">+ Adicionar Novo Episódio</button>
+    </div>
+
+    <script>
+    // SUBSTITUA o bloco 'orientadorData' existente por este:
+const orientadorData = {
+  "faces": {
+    "problema": {
+      "titulo": "1- Problema de Pesquisa",
+      "classificacoes": [
+        { "id": "", "nome": "-- Selecione uma Classificação --", "exemplo": "Selecione uma classificação para ver o modelo e a referência.", "template": "" },
+        {
+          "id": "p1",
+          "nome": "Exploratório",
+          "exemplo": "Busca entender 'quais' são os fatores, explorar um fenômeno pouco conhecido ou identificar construtos.",
+          "autor": "Creswell, J. W.",
+          "referencia": "Creswell, J. W., & Creswell, J. D. (2018). Research design: Qualitative, quantitative, and mixed methods approaches.",
+          "template": "[O fenômeno/contexto] é pouco compreendido. Esta pesquisa busca explorar [quais são os fatores/barreiras/percepções] que influenciam [o resultado/processo]."
+        },
+        {
+          "id": "p2",
+          "nome": "Descritivo",
+          "exemplo": "Busca mapear 'como' um processo funciona, 'quais' as características de um grupo ou 'quantificar' a frequência de algo.",
+          "autor": "Hair Jr., J. F.",
+          "referencia": "Hair Jr., J. F., et al. (2019). Multivariate Data Analysis.",
+          "template": "Esta pesquisa visa descrever [o processo/as características/a frequência] de [o fenômeno] em [o contexto], mapeando [como ele opera/quem são os agentes]."
+        },
+        {
+          "id": "p3",
+          "nome": "Causal (Explicativo)",
+          "exemplo": "Busca verificar se a variável 'X' tem efeito (causa ou impacto) sobre a variável 'Y'.",
+          "autor": "Shadish, Cook, & Campbell",
+          "referencia": "Shadish, W. R., Cook, T. D., & Campbell, D. T. (2002). Experimental and Quasi-Experimental Designs for Generalized Causal Inference.",
+          "template": "Existe uma lacuna na compreensão se [Variável X] tem efeito sobre [Variável Y] em [o contexto]. Esta pesquisa testará a hipótese de que [X impacta positivamente/negativamente Y]."
+        },
+        {
+          "id": "p4",
+          "nome": "Prescritivo (DSR)",
+          "exemplo": "Busca 'construir e avaliar' um artefato (método, software, framework) para resolver um problema prático.",
+          "autor": "Hevner, A. R.",
+          "referencia": "Hevner, A. R., et al. (2004). Design Science in Information Systems Research. MIS Quarterly.",
+          "template": "O problema de [descreva o problema] carece de uma solução prática/artefatual. Portanto, esta pesquisa aplicará a metodologia Design Science Research (DSR) para [projetar/construir/avaliar] um [framework/software/método] capaz de [o que o artefato fará]."
+        },
+        {
+          "id": "p5",
+          "nome": "Otimização",
+          "exemplo": "Busca encontrar a 'melhor' solução ou alocação de recursos dadas certas restrições.",
+          "autor": "Hillier, F. S. & Lieberman, G. J.",
+          "referencia": "Hillier, F. S., & Lieberman, G. J. (2021). Introduction to Operations Research.",
+          "template": "Diante da necessidade de [maximizar/minimizar] [a métrica, ex: custos] e dadas as restrições de [ex: orçamento/tempo], esta pesquisa busca encontrar a solução ótima para [o problema de alocação/decisão]."
+        },
+        {
+          "id": "p6",
+          "nome": "Preditivo",
+          "exemplo": "Busca 'prever' um comportamento ou resultado futuro com base em dados passados.",
+          "autor": "Shmueli, G.",
+          "referencia": "Shmueli, G. (2010). To Explain or to Predict? Statistical Science.",
+          "template": "Esta pesquisa visa desenvolver um modelo capaz de prever [o resultado, ex: a demanda futura/a probabilidade de falha] com base em [os dados de entrada]."
+        }
+      ]
+    },
+    "hipoteses": {
+      "titulo": "2- Hipóteses de Solução",
+      "classificacoes": [
+        { "id": "", "nome": "-- Selecione uma Classificação --", "exemplo": "A classificação do 'Problema' definirá as opções aqui.", "template": "" },
+        {
+          "id": "h1",
+          "nome": "Hipótese Estatística (H1/H0)",
+          "exemplo": "Uma afirmação formal e testável sobre a relação entre duas ou mais variáveis (usada em pesquisa Causal/Descritiva).",
+          "autor": "Popper, K.",
+          "referencia": "Popper, K. (1959). The Logic of Scientific Discovery.",
+          "template": "H1: [A Variável Independente X] tem um efeito [positivo/negativo/significativo] sobre [a Variável Dependente Y].\nH0: Não há efeito significativo."
+        },
+        {
+          "id": "h2",
+          "nome": "Proposição (Qualitativa)",
+          "exemplo": "Uma declaração teórica que guia a investigação (usada em pesquisa Exploratória). Não é testada estatisticamente.",
+          "autor": "Yin, R. K.",
+          "referencia": "Yin, R. K. (2018). Case Study Research and Applications: Design and Methods.",
+          "template": "Com base no referencial, propõe-se que [Constructo A] está [positiva/negativamente] relacionado a [Constructo B] pois [breve justificativa teórica]."
+        },
+        {
+          "id": "h3",
+          "nome": "Requisito de Design (DSR)",
+          "exemplo": "Uma declaração de que o artefato a ser construído deve resolver o problema.",
+          "autor": "Hevner, A. R.",
+          "referencia": "Hevner, A. R., et al. (2004). Design Science in Information Systems Research. MIS Quarterly.",
+          "template": "Para resolver o problema, o artefato a ser desenvolvido deve atender aos seguintes requisitos:\nR1: [Requisito funcional 1, ex: ser mais eficaz que o método atual].\nR2: [Requisito não-funcional 1, ex: ser utilizável por gestores sem treino]."
+        },
+        {
+          "id": "h4",
+          "nome": "Função Objetivo",
+          "exemplo": "Uma declaração matemática formal a ser maximizada ou minimizada.",
+          "autor": "Hillier, F. S. & Lieberman, G. J.",
+          "referencia": "Hillier, F. S., & Lieberman, G. J. (2021). Introduction to Operations Research.",
+          "template": "O objetivo é [Maximizar/Minimizar] Z = [função, ex: 3x + 2y], sujeito às seguintes restrições:\n1. [Restrição 1, ex: x + y <= 100].\n2. [Restrição 2, ex: x >= 0]."
+        }
+      ]
+    },
+    "referencial": {
+      "titulo": "3- Referencial Teórico",
+      "classificacoes": [
+        { "id": "", "nome": "-- Selecione uma Classificação --", "exemplo": "A classificação da 'Hipótese' definirá as opções aqui.", "template": "" },
+        {
+          "id": "r1",
+          "nome": "Revisão Sistemática (RSL)",
+          "exemplo": "O próprio referencial É o método. Busca sintetizar 'todo' o conhecimento existente sobre um tópico de forma protocolar e replicável.",
+          "autor": "Tranfield, D. & Denyer, D.",
+          "referencia": "Tranfield, D., Denyer, D., & Smart, P. (2003). Towards a Methodology for Developing Evidence-Informed Management Knowledge... British Journal of Management.",
+          "template": "Será conduzida uma Revisão Sistemática da Literatura (RSL), seguindo o protocolo [ex: PRISMA], para sintetizar todo o conhecimento existente sobre [o tópico] nas bases [ex: Scopus, WoS]. O objetivo é responder à pergunta de revisão: [Pergunta da RSL]."
+        },
+        {
+          "id": "r2",
+          "nome": "Framework Conceitual",
+          "exemplo": "O referencial 'constrói' um mapa de construtos e suas relações, que será testado ou usado para guiar a análise.",
+          "autor": "Miles, Huberman, & Saldaña",
+          "referencia": "Miles, M. B., Huberman, A. M., & Saldaña, J. (2020). Qualitative Data Analysis: A Methods Sourcebook.",
+          "template": "Com base em [Teoria A] e [Teoria B], esta pesquisa propõe um framework conceitual que integra os construtos [Constructo 1], [Constructo 2] e [Constructo 3] para explicar [o fenômeno]."
+        },
+        {
+          "id": "r3",
+          "nome": "Teoria de Base (Lente)",
+          "exemplo": "O referencial 'usa' uma teoria consolidada (ex: Teoria da Agência, Teoria dos Jogos) como uma lente para explicar o problema.",
+          "autor": "Eisenhardt, K. M.",
+          "referencia": "Eisenhardt, K. M. (1989). Building Theories from Case Study Research. Academy of Management Review.",
+          "template": "Esta pesquisa utilizará a [Nome da Teoria, ex: Teoria da Agência] como lente teórica para analisar [o problema/fenômeno]. Os principais conceitos desta teoria que serão mobilizados são [Conceito 1] e [Conceito 2]."
+        },
+        {
+          "id": "r4",
+          "nome": "Revisão Narrativa/Crítica",
+          "exemplo": "O referencial 'discute' as principais teorias e autores de forma mais ampla, sem um protocolo de busca e extração tão rígido quanto a RSL.",
+          "autor": "Boote, D. N. & Beile, P.",
+          "referencia": "Boote, D. N., & Beile, P. (2005). Scholars Before Researchers: On the Centrality of the Dissertation Literature Review. Educational Researcher.",
+          "template": "Será realizada uma revisão narrativa da literatura para discutir os principais conceitos e autores sobre [Tópico 1] e [Tópico 2]. O objetivo é identificar as principais lacunas, correntes de pensamento e debates na área."
+        }
+      ]
+    },
+    "metodologia": {
+      "titulo": "4- Metodologia",
+      "classificacoes": [
+        { "id": "", "nome": "-- Selecione uma Classificação --", "exemplo": "A classificação da 'Hipótese' (ou 'Problema') definirá as opções aqui.", "template": "" },
+        {
+          "id": "m1",
+          "nome": "Estudo de Caso",
+          "exemplo": "Análise profunda de um ou mais casos (pessoa, empresa, projeto) em seu contexto real.",
+          "autor": "Yin, R. K.",
+          "referencia": "Yin, R. K. (2018). Case Study Research and Applications: Design and Methods.",
+          "template": "Será conduzido um estudo de caso [único/múltiplo] em [a organização/contexto] para [explorar/descrever] [o fenômeno]. Os dados serão coletados por [ex: entrevistas semiestruturadas, análise documental] e analisados por [ex: análise de conteúdo]."
+        },
+        {
+          "id": "m2",
+          "nome": "Survey (Levantamento)",
+          "exemplo": "Coleta de dados em larga escala (via questionários) para descrever características ou testar correlações e causas.",
+          "autor": "Dillman, D. A.",
+          "referencia": "Dillman, D. A., Smyth, J. D., & Christian, L. M. (2014). Internet, Phone, Mail, and Mixed-Mode Surveys: The Tailored Design Method.",
+          "template": "Será aplicado um survey (questionário) a uma amostra de [a população-alvo]. Os dados serão coletados [online/presencialmente] e analisados estatisticamente com [técnica, ex: regressão linear] para [descrever/testar as relações] entre as variáveis."
+        },
+        {
+          "id": "m3",
+          "nome": "Pesquisa-Ação",
+          "exemplo": "O pesquisador intervém ativamente na realidade em ciclos de 'planejar, agir e observar' para resolver um problema local.",
+          "autor": "Reason, P. & Bradbury, H.",
+          "referencia": "Reason, P., & Bradbury, H. (eds.) (2008). The SAGE Handbook of Action Research.",
+          "template": "Será aplicada a Pesquisa-Ação em [o local]. O pesquisador atuará como facilitador em [N] ciclos de [planejamento, ação, observação e reflexão] junto com [os participantes] para resolver [o problema local]."
+        },
+        {
+          "id": "m4",
+          "nome": "Design Science Research (DSR)",
+          "exemplo": "Método focado na 'construção' e 'avaliação' de um artefato inovador para resolver um problema prático.",
+          "autor": "Hevner, A. R.",
+          "referencia": "Hevner, A. R., et al. (2004). Design Science in Information Systems Research. MIS Quarterly.",
+          "template": "Seguindo a metodologia DSR, o artefato será [1. Projetado] com base nos requisitos da Face 2, [2. Desenvolvido] usando [tecnologia/método] e [3. Avaliado] através de [ex: estudo de caso, experimento] para verificar sua utilidade."
+        },
+        {
+          "id": "m5",
+          "nome": "Modelagem / Otimização",
+          "exemplo": "Uso de métodos matemáticos ou computacionais (ex: AHP, Knapsack, Simulação) para encontrar uma solução ótima.",
+          "autor": "Law, A. M.",
+          "referencia": "Law, A. M. (2015). Simulation Modeling and Analysis.",
+          "template": "O problema será modelado matematicamente usando [o método, ex: AHP, Programação Linear]. Os dados de entrada para o modelo (variáveis e restrições) serão obtidos de [fontes de dados]. O modelo será resolvido/simulado usando [o software/técnica]."
+        },
+        {
+          "id": "m6",
+          "nome": "Grounded Theory",
+          "exemplo": "Método indutivo para 'construir' uma nova teoria a partir dos dados, sem um framework pré-definido.",
+          "autor": "Charmaz, K.",
+          "referencia": "Charmaz, K. (2014). Constructing Grounded Theory.",
+          "template": "Seguindo a abordagem da Grounded Theory, os dados de [ex: entrevistas em profundidade] serão coletados e analisados iterativamente (codificação aberta, axial e seletiva) até a saturação teórica, visando construir uma teoria emergente sobre [o fenômeno]."
+        },
+        {
+          "id": "m7",
+          "nome": "Experimento",
+          "exemplo": "Manipulação de variáveis (X) em ambiente controlado para observar o efeito em outras (Y).",
+          "autor": "Shadish, Cook, & Campbell",
+          "referencia": "Shadish, W. R., Cook, T. D., & Campbell, D. T. (2002). Experimental and Quasi-Experimental Designs for Generalized Causal Inference.",
+          "template": "Será realizado um experimento [de laboratório/campo] com [N] participantes. Os participantes serão aleatoriamente divididos em um grupo de controle (que [receberá o placebo]) e um grupo experimental (que [receberá a intervenção X]) para testar o efeito sobre [a variável Y]."
+        },
+        {
+          "id": "m8",
+          "nome": "Métodos Mistos (Quali+Quanti)",
+          "exemplo": "Combina de forma sequencial ou concorrente métodos qualitativos e quantitativos.",
+          "autor": "Creswell, J. W., & Plano Clark, V. L.",
+          "referencia": "Creswell, J. W., & Plano Clark, V. L. (2018). Designing and Conducting Mixed Methods Research.",
+          "template": "Será utilizada uma abordagem de métodos mistos [Sequencial (ex: QUAL->QUAN) / Concorrente]. A Etapa 1 ([Quali/Quanti]) [descreverá/explorará...] através de [método]. A Etapa 2 ([Quali/Quanti]) [testará/aprofundará...] usando [método] para [objetivo da integração]."
+        },
+        {
+          "id": "m9",
+          "nome": "Análise de Conteúdo / Documental",
+          "exemplo": "Análise sistemática de textos, documentos, imagens ou vídeos para identificar padrões.",
+          "autor": "Bardin, L.",
+          "referencia": "Bardin, L. (2016). Análise de Conteúdo.",
+          "template": "Será realizada uma Análise de Conteúdo [qualitativa/quantitativa] em [o corpus, ex: relatórios anuais, entrevistas]. As categorias de análise serão [definidas a priori / emergirão dos dados] e a codificação seguirá as etapas de [autor, ex: Bardin]."
+        }
+      ]
+    },
+    "impacto": {
+      "titulo": "5- Impacto na Sociedade",
+      "classificacoes": [
+        { "id": "", "nome": "-- Selecione uma Classificação --", "exemplo": "A classificação do 'Problema' e 'Produto' definirá as opções aqui.", "template": "" },
+        {
+          "id": "i1",
+          "nome": "Contribuição Teórica",
+          "exemplo": "Avança o debate acadêmico. O produto é um novo modelo, uma crítica a uma teoria existente ou um framework conceitual.",
+          "autor": "Whetten, D. A.",
+          "referencia": "Whetten, D. A. (1989). What Constitutes a Theoretical Contribution? Academy of Management Review.",
+          "template": "A principal contribuição teórica desta pesquisa é [um novo framework conceitual / a crítica de uma teoria existente / a validação de um construto] que avança o conhecimento sobre [o campo], preenchendo a lacuna de [descrever a lacuna]."
+        },
+        {
+          "id": "i2",
+          "nome": "Contribuição Prática/Gerencial",
+          "exemplo": "Resolve um problema do 'mundo real'. O produto é uma ferramenta, um método ou um diagnóstico que gestores podem usar.",
+          "autor": "Van de Ven, A. H.",
+          "referencia": "Van de Ven, A. H. (2007). Engaged Scholarship: A Guide for Organizational and Social Research.",
+          "template": "A contribuição prática desta pesquisa é [o artefato/método/diagnóstico] que permitirá aos [gestores/profissionais] em [o contexto] [fazer algo melhor/mais rápido/mais barato, ex: tomar decisões mais informadas]."
+        },
+        {
+          "id": "i3",
+          "nome": "Contribuição Social/Pública",
+          "exemplo": "Gera benefício para a sociedade em geral, informa políticas públicas ou promove o engajamento com o público.",
+          "autor": "Grégoire, D. A., et al.",
+          "referencia": "Grégoire, D. A., Fischer, E., & Nolan, L. J. (2021). Assessing the Societal Impact of Research: The Relational Engagement Approach.",
+          "template": "A contribuição social desta pesquisa é [a promoção do engajamento / a informação para políticas públicas / a disponibilização de dados abertos] sobre [o tema]. O objetivo é beneficiar [o público-alvo, ex: a comunidade local, estudantes] através de [a ação, ex: da plataforma Jornada da Pesquisa]."
+        }
+      ]
+    },
+    "produto": {
+      "titulo": "6- Produto da Pesquisa",
+      "classificacoes": [
+        { "id": "", "nome": "-- Selecione uma Classificação --", "exemplo": "A classificação da 'Metodologia' definirá as opções aqui.", "template": "" },
+        {
+          "id": "pd1",
+          "nome": "Artefato (Framework/Software)",
+          "exemplo": "Um produto tangível ou intangível (constructo, modelo, método, software) criado pela pesquisa.",
+          "autor": "Hevner, A. R.",
+          "referencia": "Hevner, A. R., et al. (2004). Design Science in Information Systems Research. MIS Quarterly.",
+          "template": "O produto final é um [software/framework/método] funcional, chamado [Nome do Produto]. Este artefato será entregue com [ex: manual de usuário, código-fonte, artigo de design] e foi avaliado em [o contexto de avaliação]."
+        },
+        {
+          "id": "pd2",
+          "nome": "Modelo Teórico / Conceitual",
+          "exemplo": "O principal resultado é um 'mapa' que explica um fenômeno, muitas vezes derivado de uma RSL ou Estudo de Caso.",
+          "autor": "Whetten, D. A.",
+          "referencia": "Whetten, D. A. (1989). What Constitutes a Theoretical Contribution? Academy of Management Review.",
+          "template": "O produto final é um [modelo/framework] conceitual novo e validado que explica [o fenômeno]. Este modelo é apresentado na dissertação e em um artigo científico submetido a [nome do periódico/congresso]."
+        },
+        {
+          "id": "pd3",
+          "nome": "Diagnóstico / Mapeamento",
+          "exemplo": "O produto é um 'raio-x' detalhado de um processo, um 'Estudo de Caso' profundo ou uma 'Survey' descritiva.",
+          "autor": "Yin, R. K.",
+          "referencia": "Yin, R. K. (2018). Case Study Research and Applications: Design and Methods.",
+          "template": "O produto final é um relatório de diagnóstico [ou Estudo de Caso] que mapeia detalhadamente [o processo/contexto], identificando [gargalos/características]. Este produto será entregue a [a organização] e também documentado na dissertação."
+        },
+        {
+          "id": "pd4",
+          "nome": "Artigo Científico / Dissertação",
+          "exemplo": "O produto final é o próprio texto acadêmico (Tese, Dissertação ou Artigo) que documenta os achados.",
+          "autor": "American Psychological Association",
+          "referencia": "APA. (2020). Publication Manual of the American Psychological Association (7th ed.).",
+          "template": "O produto final é a dissertação [ou um conjunto de artigos científicos] que documenta os achados da pesquisa [Exploratória/Descritiva/Causal] e sua contribuição teórica para [o campo]."
+        },
+        {
+          "id": "pd5",
+          "nome": "Relatório Técnico / Diagnóstico Organizacional",
+          "exemplo": "Um documento focado na solução de um problema interno da organização, com recomendações práticas (foco gerencial).",
+          "autor": "Van de Ven, A. H.",
+          "referencia": "Van de Ven, A. H. (2007). Engaged Scholarship: A Guide for Organizational and Social Research.",
+          "template": "O produto final é um Relatório Técnico [confidencial] para [a Organização X]. Este relatório detalha o diagnóstico e apresenta um plano de ação com recomendações práticas para solucionar [o problema interno]."
+        },
+        {
+          "id": "pd6",
+          "nome": "Plano de Negócio / Produto",
+          "exemplo": "Um documento estruturado que detalha a viabilidade (mercadológica, técnica, financeira) de um novo produto ou serviço.",
+          "autor": "Osterwalder, A. & Pigneur, Y.",
+          "referencia": "Osterwalder, A. & Pigneur, Y. (2010). Business Model Generation.",
+          "template": "O produto final é um Plano de Negócio que detalha a viabilidade mercadológica, técnica e financeira do [novo produto/serviço]. O plano inclui [ex: análise de mercado, modelo de receita, projeções financeiras]."
+        }
+      ]
+    }
+  },
+  "regras_coerencia": {
+    "hipoteses_vs_problema": {
+      "p1": { "recomenda": ["h2"], "alerta": [], "incoerente": ["h1", "h3", "h4"] },
+      "p2": { "recomenda": ["h1", "h2"], "alerta": [], "incoerente": ["h3", "h4"] },
+      "p3": { "recomenda": ["h1"], "alerta": [], "incoerente": ["h2", "h3", "h4"] },
+      "p4": { "recomenda": ["h3"], "alerta": ["h2"], "incoerente": ["h1", "h4"] },
+      "p5": { "recomenda": ["h4"], "alerta": [], "incoerente": ["h1", "h2", "h3"] },
+      "p6": { "recomenda": ["h1"], "alerta": [], "incoerente": ["h2", "h3", "h4"] }
+    },
+    "referencial_vs_hipoteses": {
+      "h1": { "recomenda": ["r2", "r3"], "alerta": ["r1", "r4"], "incoerente": [] },
+      "h2": { "recomenda": ["r3", "r2"], "alerta": ["r4"], "incoerente": ["r1"] },
+      "h3": { "recomenda": ["r1", "r4"], "alerta": ["r2"], "incoerente": ["r3"] },
+      "h4": { "recomenda": ["r4"], "alerta": ["r1"], "incoerente": ["r2", "r3"] }
+    },
+    "metodologia_vs_hipoteses": {
+      "h1": { "recomenda": ["m2", "m7", "m8"], "alerta": ["m1", "m9"], "incoerente": ["m3", "m4", "m5", "m6"] },
+      "h2": { "recomenda": ["m1", "m6", "m9", "m8"], "alerta": ["m3"], "incoerente": ["m2", "m4", "m5", "m7"] },
+      "h3": { "recomenda": ["m4"], "alerta": ["m1", "m3", "m8"], "incoerente": ["m2", "m5", "m6", "m7", "m9"] },
+      "h4": { "recomenda": ["m5"], "alerta": ["m4"], "incoerente": ["m1", "m2", "m3", "m6", "m7", "m8", "m9"] }
+    },
+    "produto_vs_metodologia": {
+      "m1": { "recomenda": ["pd3", "pd2", "pd5"], "alerta": ["pd4"], "incoerente": ["pd1", "pd6"] },
+      "m2": { "recomenda": ["pd3", "pd4"], "alerta": ["pd2", "pd5"], "incoerente": ["pd1", "pd6"] },
+      "m3": { "recomenda": ["pd5", "pd1"], "alerta": ["pd3"], "incoerente": ["pd2", "pd6"] },
+      "m4": { "recomenda": ["pd1"], "alerta": ["pd6", "pd5"], "incoerente": ["pd2", "pd3"] },
+      "m5": { "recomenda": ["pd1", "pd5"], "alerta": ["pd2"], "incoerente": ["pd3", "pd6"] },
+      "m6": { "recomenda": ["pd2"], "alerta": ["pd4"], "incoerente": ["pd1", "pd3", "pd5", "pd6"] },
+      "m7": { "recomenda": ["pd4"], "alerta": ["pd2"], "incoerente": ["pd1", "pd3", "pd5", "pd6"] },
+      "m8": { "recomenda": ["pd1", "pd2", "pd3", "pd5"], "alerta": ["pd4", "pd6"], "incoerente": [] },
+      "m9": { "recomenda": ["pd3", "pd2"], "alerta": ["pd4"], "incoerente": ["pd1", "pd5", "pd6"] }
+    },
+    "impacto_vs_produto": {
+      "pd1": { "recomenda": ["i2"], "alerta": ["i3"], "incoerente": ["i1"] },
+      "pd2": { "recomenda": ["i1"], "alerta": [], "incoerente": ["i2", "i3"] },
+      "pd3": { "recomenda": ["i2"], "alerta": ["i1"], "incoerente": ["i3"] },
+      "pd4": { "recomenda": ["i1"], "alerta": ["i3"], "incoerente": ["i2"] },
+      "pd5": { "recomenda": ["i2"], "alerta": [], "incoerente": ["i1", "i3"] },
+      "pd6": { "recomenda": ["i2"], "alerta": ["i3"], "incoerente": ["i1"] }
+    }
+  }
+};
+/* Verifica a coerência de todas as 6 faces do episódio.
+ * Retorna 'true' se for coerente (AZUL) ou 'false' se houver
+ * ausência de classificação ou incoerência (CINZA).
+ */
+function verificarCoerencia(episodio) {
+    const c = episodio.components || {};
+
+    // 1. Verificação de Ausência (TODAS as 6 devem estar classificadas)
+    // Se qualquer classificação estiver vazia (""), retorna 'false'.
+    if (!c.problema_classificacao || !c.hipoteses_classificacao || 
+        !c.referencial_classificacao || !c.metodologia_classificacao ||
+        !c.impacto_classificacao || !c.produto_classificacao) 
+    {
+        return false; // Cinza (Ausência)
+    }
+
+    // 2. Verificação de Incoerência (Baseado nas regras)
+    try {
+        const r = orientadorData.regras_coerencia;
+
+        // Regra 1: Hipótese vs Problema
+        const r_h_p = r.hipoteses_vs_problema[c.problema_classificacao];
+        if (r_h_p && r_h_p.incoerente && r_h_p.incoerente.includes(c.hipoteses_classificacao)) {
+            return false; // Cinza (Incoerente)
+        }
+
+        // Regra 2: Referencial vs Hipótese
+        const r_r_h = r.referencial_vs_hipoteses[c.hipoteses_classificacao];
+        if (r_r_h && r_r_h.incoerente && r_r_h.incoerente.includes(c.referencial_classificacao)) {
+            return false; // Cinza (Incoerente)
+        }
+
+        // Regra 3: Metodologia vs Hipótese
+        const r_m_h = r.metodologia_vs_hipoteses[c.hipoteses_classificacao];
+        if (r_m_h && r_m_h.incoerente && r_m_h.incoerente.includes(c.metodologia_classificacao)) {
+            return false; // Cinza (Incoerente)
+        }
+
+        // Regra 4: Produto vs Metodologia
+        const r_pd_m = r.produto_vs_metodologia[c.metodologia_classificacao];
+        if (r_pd_m && r_pd_m.incoerente && r_pd_m.incoerente.includes(c.produto_classificacao)) {
+            return false; // Cinza (Incoerente)
+        }
+        
+        // Regra 5: Impacto vs Produto
+        const r_i_pd = r.impacto_vs_produto[c.produto_classificacao];
+        if (r_i_pd && r_i_pd.incoerente && r_i_pd.incoerente.includes(c.impacto_classificacao)) {
+            return false; // Cinza (Incoerente)
+        }
+
+    } catch (e) {
+        console.error("Erro ao verificar coerência:", e);
+        return false; // Cinza (Erro)
+    }
+
+    // Se passou por tudo
+    return true; // Azul (Coerente)
+}
+    // --- 1. ESTADO GLOBAL ---
+    let dadosPesquisa = { historia: [] };
+    const loadFileInput = document.getElementById('load-file-input');
+    const editorForm = document.getElementById('editor-form');
+    const saveButton = document.getElementById('save-button');
+    const loadingMessage = document.getElementById('loading-message');
+    
+    // --- 2. FUNÇÕES AUXILIARES DE RENDERIZAÇÃO (createField MANTIDO PARA OUTRAS PARTES) ---
+    
+    /**
+     * Cria um conjunto de Label + Input/Textarea/Select. (Função antiga)
+     */
+    function createField(parent, labelText, options = {}, onUpdate) {
+        const { type = 'text', value = '', className = '', step, min, max, options: selectOptions } = options;
+        
+        const label = document.createElement('label');
+        label.textContent = labelText + ':';
+        parent.appendChild(label);
+
+        let input;
+        if (type === 'textarea') {
+            input = document.createElement('textarea');
+            input.className = className || 'small';
+        } else if (type === 'select') {
+            input = document.createElement('select');
+            input.className = className || '';
+            (selectOptions || []).forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.text = opt.text;
+                if (value === opt.value) option.selected = true;
+                input.appendChild(option);
+            });
+        } else {
+            input = document.createElement('input');
+            input.type = type;
+            if (className) input.className = className;
+            if (step !== undefined) input.step = step;
+            if (min !== undefined) input.min = min;
+            if (max !== undefined) input.max = max;
+        }
+        
+        input.value = value !== null && value !== undefined ? value : ''; 
+        
+        const eventType = (type === 'text' || type === 'textarea') ? 'oninput' : 'onchange';
+        input[eventType] = (e) => onUpdate(e.target.value);
+        
+        parent.appendChild(input);
+        return input; 
+    }
+
+    // --- 3. FUNÇÕES DE MANIPULAÇÃO DE DADOS GERAIS ---
+    function atualizarCampo(index, campo, valor) {
+        if (dadosPesquisa.historia[index]) {
+            dadosPesquisa.historia[index][campo] = valor;
+        }
+    }
+
+    function atualizarCampoAninhado(index, objPai, chave1, chave2, valor) {
+         if (!dadosPesquisa.historia[index]) return;
+         if (!dadosPesquisa.historia[index][objPai]) dadosPesquisa.historia[index][objPai] = {};
+         if (chave2) {
+            if (!dadosPesquisa.historia[index][objPai][chave1]) dadosPesquisa.historia[index][objPai][chave1] = {};
+            dadosPesquisa.historia[index][objPai][chave1][chave2] = valor;
+         } else {
+            dadosPesquisa.historia[index][objPai][chave1] = valor;
+         }
+    }
+   function atualizarEstimativa(index, campo, subcampo, valor) {
+        if (!dadosPesquisa.historia[index]) return;
+        if (!dadosPesquisa.historia[index].viabilidade_estimativas) {
+            dadosPesquisa.historia[index].viabilidade_estimativas = {};
+        }
+        // Garante que a estrutura de objeto exista
+        if (typeof dadosPesquisa.historia[index].viabilidade_estimativas[campo] !== 'object' || 
+            dadosPesquisa.historia[index].viabilidade_estimativas[campo] === null) {
+            dadosPesquisa.historia[index].viabilidade_estimativas[campo] = { valor: 0, just: "" };
+        }
+        
+        // Salva o valor no subcampo correto
+        if (subcampo === 'valor') {
+            dadosPesquisa.historia[index].viabilidade_estimativas[campo][subcampo] = parseFloat(valor) || 0;
+        } else {
+            dadosPesquisa.historia[index].viabilidade_estimativas[campo][subcampo] = valor;
+        }
+        
+        // Recalcula o cubo IMEDIATAMENTE, pois o V(%) mudou
+        atualizarCubo(index);
+        atualizarResumoTolerancia(index);
+    }
+    
+	function adicionarNovoEpisodio() {
+        let ultimoEpisodio = null;
+        if (dadosPesquisa.historia.length > 0) {
+            ultimoEpisodio = dadosPesquisa.historia[dadosPesquisa.historia.length - 1];
+        }
+
+        const deepCopy = (obj) => obj ? JSON.parse(JSON.stringify(obj)) : null;
+
+        let entregasCopiadas = deepCopy(ultimoEpisodio?.kpis?.prazo?.entregas) || [];
+        
+        const novoEpisodio = {
+            id: ultimoEpisodio ? `ep${(parseInt(ultimoEpisodio.id.replace('ep','')) + 1).toString().padStart(2, '0')}` : 'ep00', 
+            date: new Date().toISOString().split('T')[0],
+            title: ultimoEpisodio ? `Continuação: ${ultimoEpisodio.title}` : "Novo Episódio",
+            summary: ultimoEpisodio ? ultimoEpisodio.summary : "",
+            nome: ultimoEpisodio ? ultimoEpisodio.nome : "",
+            kpis: { 
+			    tolerancia: deepCopy(ultimoEpisodio?.kpis?.tolerancia) || { valor: 0.1, resumo: "N/A", memoriaDeCalculo: "N/A" },
+                metaPrazo: ultimoEpisodio?.kpis?.metaPrazo !== undefined ? ultimoEpisodio.kpis.metaPrazo : 0, // Será calculado dinamicamente
+                // metaCusto foi removida
+                metaPublicacao: ultimoEpisodio?.kpis?.metaPublicacao !== undefined ? ultimoEpisodio.kpis.metaPublicacao : 0,
+                cuboImagem: ultimoEpisodio?.kpis?.cuboImagem || "cubo-E1-cinza.png", 
+                viabilidade: deepCopy(ultimoEpisodio?.kpis?.viabilidade) || { itens: [] }, // Orçamento Tático
+                prazo: { 
+                    entregas: entregasCopiadas, 
+                    resumo: "0%", valor: 0, memoriaDeCalculo: "Calculando...",
+                    progresso_fases: deepCopy(ultimoEpisodio?.kpis?.prazo?.progresso_fases) || { fase1: 0, fase2: 0, fase3: 0, fase4: 0, fase5: 0 }
+                }, 
+                publicidade: deepCopy(ultimoEpisodio?.kpis?.publicidade) || { publicacoes: [] } 
+            },
+            components: deepCopy(ultimoEpisodio?.components) || {
+                problema: "", problema_classificacao: "",
+                hipoteses: "", hipoteses_classificacao: "",
+                referencial: "", referencial_classificacao: "",
+                metodologia: "", metodologia_classificacao: "",
+                impacto: "", impacto_classificacao: "",
+                produto: "", produto_classificacao: ""
+            },
+            // ATUALIZADO: Estrutura de estimativas com 'valor' e 'just'
+            viabilidade_estimativas: deepCopy(ultimoEpisodio?.viabilidade_estimativas) || {
+                B5_impacto: { valor: 0, just: "" },
+                B6_produto: { valor: 0, just: "" },
+                C1_problema: { valor: 0, just: "" },
+                CV_solucao: { valor: 0, just: "" }
+            }
+        };
+        
+        dadosPesquisa.historia.push(novoEpisodio);
+        renderizarFormulario(); 
+        
+        const ultimoEpisodioElement = document.querySelector('.episodio-editor:last-child');
+        if (ultimoEpisodioElement) {
+             toggleEpisodio(ultimoEpisodioElement); 
+             setTimeout(() => { 
+                 ultimoEpisodioElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                 ultimoEpisodioElement.style.transition = 'background-color 0.5s ease-out';
+                 ultimoEpisodioElement.style.backgroundColor = '#e0f2fe'; 
+                 setTimeout(() => {
+                      if(ultimoEpisodioElement) ultimoEpisodioElement.style.backgroundColor = '';
+                 }, 1500);
+             }, 450); 
+        }
+    }
+
+    function removerEpisodio(index) {
+        if (confirm(`Tem certeza que deseja remover o Episódio ${dadosPesquisa.historia[index]?.id || index}?`)) {
+            dadosPesquisa.historia.splice(index, 1);
+            renderizarFormulario();
+        }
+    }
+
+
+    // --- 4.0 FUNÇÕES HELPER DE CÁLCULO DE KPI (para o Cubo) ---
+    // (Todas as funções de cálculo de Viabilidade, Prazo, Publicidade, Tolerância e Cubo (getKpi..., atualizarCubo, etc.) permanecem EXATAMENTE AS MESMAS de antes)
+
+    /**
+     * Calcula o KPI percentual de Viabilidade (V%)
+     * USA A NOVA LÓGICA IVId (Índice de Viabilidade Dinâmico)
+     */
+    function getKpiViabilidadeValor(episodio) {
+        // 1. Obter as Estimativas Estratégicas
+        const est = episodio.viabilidade_estimativas || {};
+        const B5 = est.B5_impacto?.valor || 0;
+        const B6 = est.B6_produto?.valor || 0;
+        const C1 = est.C1_problema?.valor || 0;
+        const CV = est.CV_solucao?.valor || 0;
+
+        // 2. Calcular Totais
+        const beneficioTotal = B5 + B6;
+        const custoTotal = C1 + CV;
+
+        // 3. Calcular o IVId e retornar o V(%)
+        let eixoV_percent = 0;
+        if (custoTotal > 0) {
+            const ivid_ratio = beneficioTotal / custoTotal;
+            eixoV_percent = ivid_ratio * 100;
+        } else if (beneficioTotal > 0) {
+            eixoV_percent = 999; 
+        }
+        
+        return eixoV_percent;
+    }
+
+    /** Calcula o KPI percentual de Publicidade */
+    function getKpiPublicidadeValor(episodio) {
+        const kpis = episodio.kpis;
+        const meta = kpis?.metaPublicacao || 0;
+        const apuracao = kpis?.publicidade?.valor || 0; 
+        
+        if (meta > 0) {
+            return (apuracao / meta) * 100;
+        }
+        // Se meta === 0:
+        if (apuracao > 0) {
+            return 100.0; // Fez mais que a meta (ou meta era 0)
+        }
+        // Se meta === 0 E apuracao === 0:
+        return 0.0; // Nada esperado, nada feito = 0%
+    }
+
+    /** Calcula o KPI percentual de Prazo */
+    function getKpiPrazoValor(episodio) {
+        const kpis = episodio.kpis;
+        const meta = kpis?.prazo?.metaPrazo || 0; 
+        const apuracao = kpis?.prazo?.valor || 0; 
+        
+        if (meta > 0) {
+            return (apuracao / meta) * 100;
+        }
+        // Se meta === 0:
+        if (apuracao > 0) {
+            return 100.0; // Trabalho adiantado (feito sem meta)
+        }
+        // Se meta === 0 E apuracao === 0:
+        return 0.0; // Nada esperado, nada feito = 0%
+    }
+
+    // --- 4.1 Funções do CUBO e TOLERÂNCIA ---
+    function obterStatusKPIs(kpis) {
+        const tolerancia = kpis?.tolerancia?.valor !== undefined ? kpis.tolerancia.valor : (typeof kpis?.tolerancia === 'number' ? kpis.tolerancia : 0.1);
+        const prazoAtual = kpis?.prazo?.valor || 0;
+        const prazoMeta = kpis?.metaPrazo !== undefined ? kpis.metaPrazo : 100; 
+        const custoAtual = kpis?.viabilidade?.valor || 0;
+        const custoMeta = kpis?.metaCusto !== undefined ? kpis.metaCusto : 0; 
+        const pubAtual = kpis?.publicidade?.valor || 0;
+        const pubMeta = kpis?.metaPublicacao !== undefined ? kpis.metaPublicacao : 0; 
+
+        let desvioPrazo = prazoMeta > 0 ? (prazoAtual / prazoMeta) - 1 : (prazoAtual > 0 ? 1 : 0);
+        let desvioCusto = custoMeta > 0 ? (custoAtual / custoMeta) - 1 : (custoAtual > 0 ? 1 : 0);
+        let desvioPub = pubMeta > 0 ? (pubAtual / pubMeta) - 1 : (pubAtual > 0 ? 1 : 0);
+        
+        const prazoFora = Math.abs(desvioPrazo) > tolerancia;
+        const custoFora = Math.abs(desvioCusto) > tolerancia;
+        const pubFora = Math.abs(desvioPub) > tolerancia;
+        
+        const inclinacaoCusto = desvioCusto > tolerancia;
+        const inclinacaoPrazo = desvioPrazo < -tolerancia;
+        const inclinacaoPub = desvioPub < -tolerancia;
+
+        let inclinacao = 'E'; 
+        if (inclinacaoCusto && !inclinacaoPrazo && !inclinacaoPub) inclinacao = 'V'; 
+        if (inclinacaoPrazo && !inclinacaoCusto && !inclinacaoPub) inclinacao = 'P';
+        if (inclinacaoPub && !inclinacaoCusto && !inclinacaoPrazo) inclinacao = 'T'; 
+        
+        return { prazoFora, custoFora, pubFora, inclinacao, desvioPrazo, desvioCusto, desvioPub, tolerancia };
+    }
+
+   // SUBSTITUA a função 'atualizarCubo' existente por esta:
+   function atualizarCubo(episodioIndex) {
+        const episodio = dadosPesquisa.historia[episodioIndex];
+        const kpis = episodio?.kpis;
+        const cuboImg = document.getElementById(`cubo-pesquisa-img-${episodioIndex}`); 
+        if (!cuboImg || !kpis) return;
+
+        // 1. Lógica do Viés (Inclinação) - (Lógica antiga mantida)
+        const toleranciaObj = kpis?.tolerancia;
+        let toleranciaPercent = 0;
+        if (typeof toleranciaObj === 'object' && toleranciaObj !== null) {
+            toleranciaPercent = (toleranciaObj.valor || 0) * 100;
+        } else if (typeof toleranciaObj === 'number') {
+            toleranciaPercent = toleranciaObj * 100;
+        }
+        if (toleranciaPercent === 0) toleranciaPercent = 10; 
+
+        const kpiPrazo = getKpiPrazoValor(episodio);
+        const kpiPub = getKpiPublicidadeValor(episodio);
+        const kpiVib = getKpiViabilidadeValor(episodio);
+
+        const kpiArray = [kpiPrazo, kpiPub, kpiVib];
+        const kpiMax = Math.max(...kpiArray);
+        const kpiMin = Math.min(...kpiArray);
+        const kpiRange = kpiMax - kpiMin;
+
+        let prefixoInclinacao = 'E';
+
+        if (kpiRange > toleranciaPercent) {
+            const kpiMedia = (kpiPrazo + kpiPub + kpiVib) / 3;
+            const desviosAcimaMedia = [
+                { kpi: 'T', desvio: kpiPrazo - kpiMedia },
+                { kpi: 'P', desvio: kpiPub - kpiMedia },
+                { kpi: 'V', desvio: kpiVib - kpiMedia }
+            ];
+            const positivos = desviosAcimaMedia.filter(d => d.desvio > 0);
+            if (positivos.length > 0) {
+                positivos.sort((a, b) => b.desvio - a.desvio);
+                prefixoInclinacao = positivos[0].kpi;
+            }
+        }
+        
+        // 2. Lógica do Volume (Progresso) - (Lógica antiga mantida)
+        const percentualPrazoApuracao = kpis.prazo?.valor || 0; 
+        let sufixoProgresso = '1';
+        if (percentualPrazoApuracao >= 90) sufixoProgresso = '100';
+        else if (percentualPrazoApuracao >= 65) sufixoProgresso = '75';
+        else if (percentualPrazoApuracao >= 40) sufixoProgresso = '50';
+        else if (percentualPrazoApuracao >= 15) sufixoProgresso = '25';
+        
+        const nomeBase = `cubo-${prefixoInclinacao}${sufixoProgresso}`;
+
+        // 3. NOVA LÓGICA DA COR (Coerência)
+        // (Usa a nova função de verificação)
+        const corSufixo = verificarCoerencia(episodio) ? "azul" : "cinza";
+        const nomeArquivo = `${nomeBase}-${corSufixo}.png`; // Ex: cubo-T75-cinza.png
+
+        // 4. Salva e aplica a imagem
+        kpis.cuboImagem = nomeArquivo; // Salva o nome novo no JSON
+        cuboImg.src = nomeArquivo; 
+        
+        // 5. Lógica de Fallback ATUALIZADA
+        cuboImg.onerror = () => { 
+            // Fallback 1: Tenta a versão "azul" (padrão)
+            const fallbackCor = `${nomeBase}-azul.png`;
+            if (cuboImg.src.endsWith(fallbackCor)) { // Evita loop se o azul tbm falhar
+                cuboImg.onerror = () => {
+                     // Fallback 2: Tenta a imagem PNG original (sem cor)
+                     const fallbackPng = `${nomeBase}.png`;
+                     cuboImg.src = fallbackPng;
+                     kpis.cuboImagem = fallbackPng;
+                     cuboImg.onerror = () => {
+                        // Fallback 3: Tenta o PNG padrão de equilíbrio
+                        const fallbackFinal = 'cubo-E1.png';
+                        cuboImg.src = fallbackFinal; 
+                        kpis.cuboImagem = fallbackFinal; 
+                        cuboImg.onerror = null; 
+                     }
+                }
+            } else {
+                 cuboImg.src = fallbackCor;
+                 kpis.cuboImagem = fallbackCor;
+            }
+        };
+    }
+	
+    function atualizarResumoTolerancia(episodioIndex) {
+        const kpis = dadosPesquisa.historia[episodioIndex]?.kpis;
+        if (!kpis) return;
+        
+        if (typeof kpis.tolerancia !== 'object' || kpis.tolerancia === null) {
+            kpis.tolerancia = { valor: (typeof kpis.tolerancia === 'number' ? kpis.tolerancia : 0.1), resumo: "", memoriaDeCalculo: "" };
+        }
+
+        const status = obterStatusKPIs(kpis); 
+        let pontosAtencao = [];
+        let memoria = "Análise de Tolerância (Configurada em: " + (status.tolerancia * 100).toFixed(0) + "%)\n\n";
+        
+        // --- LÓGICA DE CÁLCULO DE DESVIO KPI (Nova) ---
+        // A "Memória" do Cubo deve usar os KPIs (0-100+) e não os desvios antigos
+        const kpiPrazo = getKpiPrazoValor(dadosPesquisa.historia[episodioIndex]);
+        const kpiPub = getKpiPublicidadeValor(dadosPesquisa.historia[episodioIndex]);
+        const kpiVib = getKpiViabilidadeValor(dadosPesquisa.historia[episodioIndex]);
+        const kpiArray = [kpiPrazo, kpiPub, kpiVib];
+        const kpiMax = Math.max(...kpiArray);
+        const kpiMin = Math.min(...kpiArray);
+        const kpiRange = kpiMax - kpiMin;
+        
+        memoria += `[KPI] Custo: ${kpiVib.toFixed(1)}%\n`;
+        memoria += `[KPI] Prazo: ${kpiPrazo.toFixed(1)}%\n`;
+        memoria += `[KPI] Publicidade: ${kpiPub.toFixed(1)}%\n\n`;
+        memoria += `Range (Max-Min): ${kpiMax.toFixed(1)}% - ${kpiMin.toFixed(1)}% = ${kpiRange.toFixed(1)}%\n`;
+        memoria += `Tolerância (Limite): ${ (status.tolerancia * 100).toFixed(0) }%\n\n`;
+
+        let resumoFinal;
+        if (kpiRange <= (status.tolerancia * 100)) {
+            resumoFinal = "KPIs dentro da tolerância.";
+            memoria += "Status: Equilibrado. O Range está dentro da margem de tolerância definida.";
+        } else {
+            // Usa o prefixo do cubo para o resumo
+            const prefixo = kpis.cuboImagem.substring(5, 6) || 'N/A';
+            resumoFinal = `Desequilíbrio (Viés: ${prefixo}). Range ${kpiRange.toFixed(0)}% > Tolerância ${ (status.tolerancia * 100).toFixed(0) }%.`;
+            memoria += "Status: Desequilibrado. O Range excede a margem de tolerância.";
+        }
+        
+        kpis.tolerancia.resumo = resumoFinal;
+        kpis.tolerancia.memoriaDeCalculo = memoria;
+
+        const spanResumo = document.getElementById(`tolerancia-resumo-${episodioIndex}`);
+        if (spanResumo) spanResumo.innerText = resumoFinal;
+    }
+	
+	
+	
+    // --- 4.2 Funções do PRAZO ---
+    
+    function atualizarEntregaPrazo(episodioIndex, entregaIndex, campo, valor) {
+        const entregas = dadosPesquisa.historia[episodioIndex]?.kpis?.prazo?.entregas;
+        if (entregas?.[entregaIndex]) {
+             if (campo === 'duracao') valor = parseInt(valor) || 0;
+             if (campo === 'conclusaoReal') {
+                 const dataObj = parseDataBR(valor);
+                 valor = formatDataISO(dataObj);
+             }
+             entregas[entregaIndex][campo] = valor;
+             if (['duracao', 'conclusaoReal'].includes(campo)) {
+                calcularEExibirPrazoTotal(episodioIndex);
+             }
+             if (['anterior', 'duracao', 'conclusaoReal'].includes(campo)) {
+                renderizarTabelaPrazo(episodioIndex); 
+             }
+        }
+    }
+
+    function adicionarEntregaPrazo(episodioIndex) {
+         const prazoKPI = dadosPesquisa.historia[episodioIndex]?.kpis?.prazo;
+         if (prazoKPI) {
+             const novaEntrega = { id: "1.1", anterior: "", tarefa: "Nova Tarefa", duracao: 1, conclusaoReal: null };
+             if (!prazoKPI.entregas) prazoKPI.entregas = [];
+             prazoKPI.entregas.push(novaEntrega); 
+             renderizarTabelaPrazo(episodioIndex);
+             calcularEExibirPrazoTotal(episodioIndex);
+         }
+    }
+	function inserirEntregaPrazo(episodioIndex, afterIndex) {
+         const prazoKPI = dadosPesquisa.historia[episodioIndex]?.kpis?.prazo;
+         if (prazoKPI && prazoKPI.entregas) {
+             const novaEntrega = { id: "?.?", anterior: "", tarefa: "Nova Tarefa Inserida", duracao: 1, conclusaoReal: null };
+             // Insere o novo item *após* o índice clicado
+             prazoKPI.entregas.splice(afterIndex + 1, 0, novaEntrega); 
+             renderizarTabelaPrazo(episodioIndex);
+             calcularEExibirPrazoTotal(episodioIndex);
+         }
+    }
+
+    function removerEntregaPrazo(episodioIndex, entregaIndex) {
+         const prazoKPI = dadosPesquisa.historia[episodioIndex]?.kpis?.prazo;
+         if (prazoKPI?.entregas?.[entregaIndex]) {
+             if (confirm(`Remover "${prazoKPI.entregas[entregaIndex].tarefa || ''}"?`)) {
+                 prazoKPI.entregas.splice(entregaIndex, 1);
+                 renderizarTabelaPrazo(episodioIndex);
+                 calcularEExibirPrazoTotal(episodioIndex);
+             }
+         }
+    }
+
+    function calcularSituacaoTarefa(entrega, dataEpisodio, dataInicio) {
+        if (entrega.conclusaoReal) {
+            return "Concluído";
+        }
+        if (!dataInicio) {
+             return "Aguardando"; 
+        }
+        try {
+            const hoje = parseDataISO(dataEpisodio); 
+            if (!hoje) throw new Error("Data do episódio inválida");
+            if (dataInicio.getTime() > hoje.getTime()) {
+                return "Aguardando";
+            }
+            const duracao = entrega.duracao || 0;
+            const dataFim = new Date(dataInicio.getTime());
+            adicionarDias(dataFim, (duracao > 0 ? duracao - 1 : 0)); 
+            if (dataFim.getTime() < hoje.getTime()) {
+                 return "Atrasado";
+            }
+            return "Em andamento";
+        } catch (e) {
+            return "Aguardando (Erro)";
+        }
+    }
+
+    function calcularEExibirPrazoTotal(episodioIndex) {
+        const episodio = dadosPesquisa.historia[episodioIndex];
+        const prazoKPI = episodio.kpis?.prazo;
+        const entregas = prazoKPI?.entregas;
+        const dataEpisodio = parseDataISO(episodio.date); // Data de "Hoje"
+
+        if (!entregas || !prazoKPI || !dataEpisodio) return;
+        
+        let totalDuracao = 0;
+        let duracaoConcluida = 0; // Realizado
+        let duracaoPlanejada = 0; // Meta
+        
+        let fases = {
+            '1': { total: 0, compl: 0 }, '2': { total: 0, compl: 0 },
+            '3': { total: 0, compl: 0 }, '4': { total: 0, compl: 0 },
+            '5': { total: 0, compl: 0 }
+        };
+        
+        let memoriaCalculo = "Cálculo baseado na duração das tarefas concluídas (excluindo linhas de resumo):\n\n";
+
+        entregas.forEach(entrega => {
+            const duracao = entrega.duracao || 0;
+            const isSummary = !String(entrega.id || '').includes('.');
+            
+            if (duracao > 0 && !isSummary) {
+                const faseId = String(entrega.id || '0.0').split('.')[0];
+                
+                totalDuracao += duracao;
+                memoriaCalculo += `- [${entrega.id}] ${entrega.tarefa} (${duracao} dias): `;
+                
+                if (fases[faseId]) {
+                    fases[faseId].total += duracao;
+                }
+
+                // Cálculo do REALIZADO (Valor)
+                if (entrega.conclusaoReal) {
+                    duracaoConcluida += duracao;
+                    memoriaCalculo += "Concluído\n";
+                    if (fases[faseId]) {
+                        fases[faseId].compl += duracao;
+                    }
+                } else {
+                    memoriaCalculo += "Pendente\n";
+                }
+
+                // Cálculo do PLANEJADO (Meta)
+                const dataInicio = obterDataInicio(entrega, entregas);
+                if (dataInicio) {
+                    const dataFim = new Date(dataInicio.getTime());
+                    adicionarDias(dataFim, (duracao > 0 ? duracao - 1 : 0));
+                    
+                    // Se a data de fim planejada for anterior ou igual à data do episódio
+                    if (dataFim.getTime() <= dataEpisodio.getTime()) {
+                        duracaoPlanejada += duracao;
+                    }
+                }
+            }
+        });
+        
+        // 1. Calcula o Progresso Total (Realizado)
+        const valorFinal = (totalDuracao > 0) ? (duracaoConcluida / totalDuracao) * 100 : 0;
+        
+        // 2. Calcula a Meta Total (Planejado)
+        const metaCalculada = (totalDuracao > 0) ? (duracaoPlanejada / totalDuracao) * 100 : 0;
+        
+        memoriaCalculo += `\nDuração Concluída (Realizado): ${duracaoConcluida} dias`;
+        memoriaCalculo += `\nDuração Planejada (Meta p/ Hoje): ${duracaoPlanejada} dias`;
+        memoriaCalculo += `\nDuração Total (Projeto): ${totalDuracao} dias`;
+        memoriaCalculo += `\n\nProgresso Realizado (Valor): ${valorFinal.toFixed(1)}%`;
+        memoriaCalculo += `\nProgresso Planejado (Meta): ${metaCalculada.toFixed(1)}%`;
+
+        const spanResultado = document.getElementById(`prazo-calculado-${episodioIndex}`);
+        if (spanResultado) spanResultado.innerText = `${valorFinal.toFixed(1)}% (Meta: ${metaCalculada.toFixed(1)}%)`;
+        
+        prazoKPI.valor = valorFinal; // Salva o Realizado
+        prazoKPI.metaPrazo = metaCalculada; // Salva a Meta Dinâmica
+        prazoKPI.resumo = `${valorFinal.toFixed(1)}% de ${metaCalculada.toFixed(1)}%`;
+        prazoKPI.memoriaDeCalculo = memoriaCalculo;
+
+        // 3. Calcula o Progresso POR FASE (para o IVId)
+        if (!prazoKPI.progresso_fases) prazoKPI.progresso_fases = {};
+        for (const id in fases) {
+            const prog = (fases[id].total > 0) ? (fases[id].compl / fases[id].total) : 0;
+            prazoKPI.progresso_fases['fase' + id] = prog;
+        }
+        
+        // 4. Atualiza o Cubo
+        atualizarCubo(episodioIndex); 
+		atualizarResumoTolerancia(episodioIndex);
+    }
+	
+    // --- 4.3 Funções da VIABILIDADE ---
+    function atualizarViabilidadeItem(episodioIndex, itemIndex, campo, valor) {
+        const itens = dadosPesquisa.historia[episodioIndex]?.kpis?.viabilidade?.itens;
+        if (itens?.[itemIndex]) {
+             if (campo === 'valor') valor = Math.max(0, parseFloat(valor) || 0);
+             if (campo === 'data') {
+                 const dataObj = parseDataBR(valor);
+                 valor = formatDataISO(dataObj);
+             }
+             itens[itemIndex][campo] = valor;
+             calcularEExibirViabilidadeTotal(episodioIndex);
+        }
+    }
+    function adicionarViabilidadeItem(episodioIndex) {
+        const viabilidadeKPI = dadosPesquisa.historia[episodioIndex]?.kpis?.viabilidade;
+        if (viabilidadeKPI) {
+            const novoItem = { item: "Novo", tipo: "Realizado", valor: 0, data: formatDataISO(new Date()) };
+            if (!viabilidadeKPI.itens) viabilidadeKPI.itens = [];
+            viabilidadeKPI.itens.push(novoItem);
+            renderizarTabelaViabilidade(episodioIndex);
+            calcularEExibirViabilidadeTotal(episodioIndex);
+        }
+    }
+    function removerViabilidadeItem(episodioIndex, itemIndex) {
+        const viabilidadeKPI = dadosPesquisa.historia[episodioIndex]?.kpis?.viabilidade;
+        if (viabilidadeKPI?.itens?.[itemIndex]) {
+            if (confirm(`Remover "${viabilidadeKPI.itens[itemIndex].item || ''}"?`)) {
+                viabilidadeKPI.itens.splice(itemIndex, 1);
+                renderizarTabelaViabilidade(episodioIndex);
+                calcularEExibirViabilidadeTotal(episodioIndex);
+            }
+        }
+    }
+    function calcularEExibirViabilidadeTotal(episodioIndex) {
+        const viabilidadeKPI = dadosPesquisa.historia[episodioIndex]?.kpis?.viabilidade;
+        const itens = viabilidadeKPI?.itens;
+        if (!itens || !viabilidadeKPI) return;
+
+        let totalPrevisto = 0, totalRealizado = 0;
+        let memoriaCalculo = "Detalhes de Custos (Previsto vs Realizado):\n\n";
+        itens.forEach(item => {
+             const valor = item.valor || 0;
+             if (item.tipo === 'Previsto') { totalPrevisto += valor; memoriaCalculo += `- (P) ${item.item}: R$ ${valor.toFixed(2)}\n`; } 
+             else { totalRealizado += valor; memoriaCalculo += `- (R) ${item.item}: R$ ${valor.toFixed(2)}\n`; }
+        });
+        const percentualGasto = totalPrevisto > 0 ? (totalRealizado / totalPrevisto) * 100 : 0;
+        const resumo = `R$ ${totalRealizado.toFixed(2)} Gastos`;
+        memoriaCalculo += `\nTotal Previsto: R$ ${totalPrevisto.toFixed(2)}`;
+        memoriaCalculo += `\nTotal Realizado: R$ ${totalRealizado.toFixed(2)}`;
+        if(totalPrevisto > 0) memoriaCalculo += `\n% Orçamento Utilizado: ${percentualGasto.toFixed(1)}%`;
+        
+        const spanResultado = document.getElementById(`viabilidade-calculado-${episodioIndex}`);
+        if (spanResultado) spanResultado.innerText = resumo + (totalRealizado > totalPrevisto && totalPrevisto > 0 ? ' (Acima Previsto!)' : '');
+        
+        viabilidadeKPI.valor = totalRealizado;
+        viabilidadeKPI.resumo = resumo;
+        viabilidadeKPI.memoriaDeCalculo = memoriaCalculo;
+       
+    }
+
+     // --- 4.4 Funções da PUBLICIDADE ---
+     function atualizarPublicacao(episodioIndex, pubIndex, campo, valor) {
+        const publicacoes = dadosPesquisa.historia[episodioIndex]?.kpis?.publicidade?.publicacoes;
+        if (publicacoes?.[pubIndex]) {
+            if (['dataSubmissao', 'dataFinal'].includes(campo)) {
+                 const dataObj = parseDataBR(valor);
+                 valor = formatDataISO(dataObj);
+            } else {
+                 valor = valor || null;
+            }
+            publicacoes[pubIndex][campo] = valor;
+            calcularEExibirPublicidadeTotal(episodioIndex);
+        }
+    }
+    function adicionarPublicacao(episodioIndex) {
+        const publicidadeKPI = dadosPesquisa.historia[episodioIndex]?.kpis?.publicidade;
+        if (publicidadeKPI) {
+            const novaPub = { tipo: "", titulo: "", status: "Em Preparação", local: "", dataSubmissao: null, dataFinal: null, autores: "", resumo: "" };
+            if (!publicidadeKPI.publicacoes) publicidadeKPI.publicacoes = [];
+            publicidadeKPI.publicacoes.push(novaPub);
+            renderizarTabelaPublicidade(episodioIndex);
+            calcularEExibirPublicidadeTotal(episodioIndex);
+        }
+    }
+    function removerPublicacao(episodioIndex, pubIndex) {
+        const publicidadeKPI = dadosPesquisa.historia[episodioIndex]?.kpis?.publicidade;
+        if (publicidadeKPI?.publicacoes?.[pubIndex]) {
+             if (confirm(`Remover "${publicidadeKPI.publicacoes[pubIndex].titulo || ''}"?`)) {
+                 publicidadeKPI.publicacoes.splice(pubIndex, 1);
+                 renderizarTabelaPublicidade(episodioIndex);
+                 calcularEExibirPublicidadeTotal(episodioIndex);
+             }
+        }
+    }
+     function calcularEExibirPublicidadeTotal(episodioIndex) {
+        const publicidadeKPI = dadosPesquisa.historia[episodioIndex]?.kpis?.publicidade;
+        const publicacoes = publicidadeKPI?.publicacoes;
+        if (!publicacoes || !publicidadeKPI) return;
+
+        let aceitos = 0, publicados = 0, emRevisao = 0, submetidos = 0, emPreparacao = 0;
+        let memoriaCalculo = "Status das publicações:\n\n";
+        publicacoes.forEach(pub => {
+             memoriaCalculo += `- ${pub.titulo || '(S/ Título)'}: ${pub.status}\n`;
+             switch(pub.status) {
+                 case 'Aceito': aceitos++; break; case 'Publicado': publicados++; break;
+                 case 'Em Revisão': emRevisao++; break; case 'Submetido': submetidos++; break;
+                 case 'Em Preparação': emPreparacao++; break;
+             }
+        });
+        const totalRelevante = aceitos + publicados;
+        let resumo = `${totalRelevante} Aceita(s)/Pub.`;
+        if(totalRelevante === 0 && submetidos + emRevisao > 0) resumo = `${submetidos + emRevisao} Sub./Rev.`;
+        else if (totalRelevante === 0 && emPreparacao > 0) resumo = `${emPreparacao} Em Prep.`;
+        
+        memoriaCalculo += `\nResumo: ${publicados} Pub, ${aceitos} Aceitas, ${emRevisao} Rev, ${submetidos} Sub, ${emPreparacao} Prep.`;
+        
+        const spanResultado = document.getElementById(`publicidade-calculado-${episodioIndex}`);
+        if (spanResultado) spanResultado.innerText = resumo;
+        
+        publicidadeKPI.valor = totalRelevante;
+        publicidadeKPI.resumo = resumo;
+        publicidadeKPI.memoriaDeCalculo = memoriaCalculo;
+        atualizarCubo(episodioIndex);
+        atualizarResumoTolerancia(episodioIndex);
+    }
+
+    // --- 5. FUNÇÕES DE RENDERIZAÇÃO DAS TABELAS ---
+    
+   function renderizarTabelaPrazo(episodioIndex) {
+        const episodio = dadosPesquisa.historia[episodioIndex];
+        const tableContainer = document.getElementById(`prazo-tabela-${episodioIndex}`);
+        if (!tableContainer) return;
+        tableContainer.innerHTML = ''; 
+        const table = document.createElement('table');
+        const thead = table.createTHead(); const tbody = table.createTBody();
+        const headerRow = thead.insertRow();
+        
+        ['ID', 'Anterior (Início)', 'Tarefa', 'Duração', 'Conclusão Prevista', 'Conclusão Real', 'Situação', 'Ação'].forEach(text => {
+            const th = document.createElement('th'); th.textContent = text; headerRow.appendChild(th);
+        });
+
+        const dataEpisodio = episodio.date; 
+        const todasEntregas = episodio.kpis?.prazo?.entregas || []; 
+
+        todasEntregas.forEach((entrega, entregaIndex) => {
+            const row = tbody.insertRow();
+            
+            const isSummary = !String(entrega.id || '').includes('.');
+            if (isSummary) row.className = 'summary-row';
+
+            const dataInicio = obterDataInicio(entrega, todasEntregas);
+            let conclusaoPrevistaStr = '---';
+            
+            if (dataInicio) {
+                try {
+                    const duracao = entrega.duracao || 0;
+                    const dataFim = new Date(dataInicio.getTime());
+                    adicionarDias(dataFim, (duracao > 0 ? duracao - 1 : 0));
+                    conclusaoPrevistaStr = formatDataBR(dataFim); 
+                } catch(e) { 
+                    conclusaoPrevistaStr = "ErroData";
+                }
+            }
+            
+            const situacao = calcularSituacaoTarefa(entrega, dataEpisodio, dataInicio); 
+            const conclusaoRealObj = parseDataISO(entrega.conclusaoReal);
+            const conclusaoRealStr = formatDataBR(conclusaoRealObj);
+
+            // Adiciona botões [+] e [X] na célula de Ação
+            row.innerHTML = `
+                <td><input type="text" value="${entrega.id || ''}" style="width: 60px;" oninput="atualizarEntregaPrazo(${episodioIndex}, ${entregaIndex}, 'id', this.value)"></td>
+                <td><input type="text" value="${entrega.anterior || ''}" placeholder="DD/MM/AAAA ou ID" onchange="atualizarEntregaPrazo(${episodioIndex}, ${entregaIndex}, 'anterior', this.value)"></td>
+                <td><input type="text" value="${entrega.tarefa || ''}" oninput="atualizarEntregaPrazo(${episodioIndex}, ${entregaIndex}, 'tarefa', this.value)"></td>
+                <td><input type="number" min="0" value="${entrega.duracao || 0}" style="width: 60px;" onchange="atualizarEntregaPrazo(${episodioIndex}, ${entregaIndex}, 'duracao', this.value)"></td>
+                <td style="text-align: center;">${conclusaoPrevistaStr}</td>
+                <td><input type="text" placeholder="DD/MM/AAAA" value="${conclusaoRealStr}" onchange="atualizarEntregaPrazo(${episodioIndex}, ${entregaIndex}, 'conclusaoReal', this.value)"></td>
+                <td style="font-weight: 600; text-align: center;">${situacao}</td>
+                <td style="white-space: nowrap;">
+                    <button class="secondary" style="padding: 2px 5px; font-size: 0.8em; margin: 2px;" onclick="inserirEntregaPrazo(${episodioIndex}, ${entregaIndex})">+</button>
+                    <button class="danger" style="padding: 2px 5px; font-size: 0.8em; margin: 2px;" onclick="removerEntregaPrazo(${episodioIndex}, ${entregaIndex})">X</button>
+                </td>
+            `;
+        });
+        tableContainer.appendChild(table);
+        const addButton = document.createElement('button');
+        addButton.className = 'secondary'; addButton.style.marginTop = '10px'; addButton.textContent = '+ Adicionar Tarefa (no final)';
+        addButton.onclick = () => adicionarEntregaPrazo(episodioIndex);
+        tableContainer.appendChild(addButton);
+    }
+	
+    function parseDataBR(str) {
+        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(str)) return null;
+        const [dia, mes, ano] = str.split('/').map(Number);
+        if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+        try {
+            const data = new Date(Date.UTC(ano, mes - 1, dia));
+            if (data.getUTCFullYear() === ano && data.getUTCMonth() === (mes - 1) && data.getUTCDate() === dia) {
+                return data;
+            }
+            return null;
+        } catch (e) { return null; }
+    }
+
+    function formatDataBR(dateObj) {
+        if (!dateObj || !(dateObj instanceof Date) || isNaN(dateObj.getTime())) return '';
+        const dia = String(dateObj.getUTCDate()).padStart(2, '0');
+        const mes = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+        const ano = dateObj.getUTCFullYear();
+        return `${dia}/${mes}/${ano}`;
+    }
+    
+    function parseDataISO(str) {
+         if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return null;
+         try {
+            const data = new Date(str + 'T00:00:00Z');
+            if (isNaN(data.getTime())) return null;
+            return data;
+         } catch(e) { return null; }
+    }
+    
+    function formatDataISO(dateObj) {
+        if (!dateObj || !(dateObj instanceof Date) || isNaN(dateObj.getTime())) return null;
+        return dateObj.toISOString().split('T')[0];
+    }
+    
+    function adicionarDias(dateObj, dias) {
+         dateObj.setUTCDate(dateObj.getUTCDate() + dias);
+         return dateObj;
+    }
+
+    function obterDataInicio(tarefa, todasEntregas, visitados = new Set()) {
+        if (!tarefa) return null;
+        if (visitados.has(tarefa.id)) {
+            console.warn(`Dependência circular detectada em: ${tarefa.id}`);
+            return null; 
+        }
+        if (tarefa.id) visitados.add(tarefa.id); 
+
+        const anterior = tarefa.anterior || '';
+        let dataInicio = parseDataBR(anterior);
+        if (dataInicio) return dataInicio;
+        dataInicio = parseDataISO(anterior);
+        if (dataInicio) return dataInicio;
+
+        const tarefaAnterior = todasEntregas.find(t => t.id === anterior);
+        if (tarefaAnterior) {
+            const inicioTarefaAnterior = obterDataInicio(tarefaAnterior, todasEntregas, new Set(visitados));
+            if (!inicioTarefaAnterior) return null; 
+            const duracaoAnterior = tarefaAnterior.duracao > 0 ? (tarefaAnterior.duracao - 1) : 0;
+            const dataConclusaoAnterior = new Date(inicioTarefaAnterior.getTime());
+            adicionarDias(dataConclusaoAnterior, duracaoAnterior);
+            adicionarDias(dataConclusaoAnterior, 1);
+            return dataConclusaoAnterior;
+        }
+        return null;
+    }
+
+    function renderizarTabelaViabilidade(episodioIndex) {
+        const episodio = dadosPesquisa.historia[episodioIndex];
+        const tableContainer = document.getElementById(`viabilidade-tabela-${episodioIndex}`);
+        if (!tableContainer) return;
+        tableContainer.innerHTML = ''; 
+        const table = document.createElement('table');
+        const thead = table.createTHead(); const tbody = table.createTBody();
+        const headerRow = thead.insertRow();
+        ['Item', 'Tipo', 'Valor (R$)', 'Data', 'Ação'].forEach(text => {
+            const th = document.createElement('th'); th.textContent = text; headerRow.appendChild(th);
+        });
+        episodio.kpis?.viabilidade?.itens?.forEach((item, itemIndex) => {
+            const row = tbody.insertRow();
+            row.innerHTML = `
+                <td><input type="text" value="${item.item || ''}" oninput="atualizarViabilidadeItem(${episodioIndex}, ${itemIndex}, 'item', this.value)"></td>
+                <td>
+                    <select onchange="atualizarViabilidadeItem(${episodioIndex}, ${itemIndex}, 'tipo', this.value)">
+                        <option value="Previsto" ${item.tipo === 'Previsto' ? 'selected' : ''}>Previsto</option>
+                        <option value="Realizado" ${item.tipo === 'Realizado' ? 'selected' : ''}>Realizado</option>
+                    </select>
+                </td>
+                <td><input type="number" step="0.01" min="0" value="${item.valor || 0}" style="width: 100px;" onchange="atualizarViabilidadeItem(${episodioIndex}, ${itemIndex}, 'valor', this.value)"></td>
+                <td><input type="text" placeholder="DD/MM/AAAA" value="${formatDataBR(parseDataISO(item.data))}" onchange="atualizarViabilidadeItem(${episodioIndex}, ${itemIndex}, 'data', this.value)"></td>
+                <td><button class="danger" style="padding: 2px 5px; font-size: 0.8em;" onclick="removerViabilidadeItem(${episodioIndex}, ${itemIndex})">X</button></td>
+            `;
+        });
+        tableContainer.appendChild(table);
+        const addButton = document.createElement('button');
+        addButton.className = 'secondary'; addButton.style.marginTop = '10px'; addButton.textContent = '+ Adicionar Item Custo';
+        addButton.onclick = () => adicionarViabilidadeItem(episodioIndex);
+        tableContainer.appendChild(addButton);
+    }
+
+    function renderizarTabelaPublicidade(episodioIndex) {
+        const episodio = dadosPesquisa.historia[episodioIndex];
+        const tableContainer = document.getElementById(`publicidade-tabela-${episodioIndex}`);
+        if (!tableContainer) return;
+        tableContainer.innerHTML = ''; 
+        const table = document.createElement('table');
+        const thead = table.createTHead(); const tbody = table.createTBody();
+        const headerRow = thead.insertRow();
+        
+        ['Tipo', 'Título', 'Status', 'Local', 'Submissão', 'Final', 'Ação'].forEach(text => {
+            const th = document.createElement('th'); th.textContent = text; headerRow.appendChild(th);
+        });
+        
+        episodio.kpis?.publicidade?.publicacoes?.forEach((pub, pubIndex) => {
+            const row = tbody.insertRow();
+            row.innerHTML = `
+                <td><input type="text" value="${pub.tipo || ''}" oninput="atualizarPublicacao(${episodioIndex}, ${pubIndex}, 'tipo', this.value)"></td>
+                <td><input type="text" value="${pub.titulo || ''}" oninput="atualizarPublicacao(${episodioIndex}, ${pubIndex}, 'titulo', this.value)"></td>
+                <td>
+                    <select onchange="atualizarPublicacao(${episodioIndex}, ${pubIndex}, 'status', this.value)">
+                        <option value="Em Preparação" ${pub.status === 'Em Preparação' ? 'selected' : ''}>Em Preparação</option>
+                        <option value="Submetido" ${pub.status === 'Submetido' ? 'selected' : ''}>Submetido</option>
+                        <option value="Em Revisão" ${pub.status === 'Em Revisão' ? 'selected' : ''}>Em Revisão</option>
+                        <option value="Aceito" ${pub.status === 'Aceito' ? 'selected' : ''}>Aceito</option>
+                        <option value="Publicado" ${pub.status === 'Publicado' ? 'selected' : ''}>Publicado</option>
+                        <option value="Rejeitado" ${pub.status === 'Rejeitado' ? 'selected' : ''}>Rejeitado</option>
+                    </select>
+                </td>
+                <td><input type="text" value="${pub.local || ''}" oninput="atualizarPublicacao(${episodioIndex}, ${pubIndex}, 'local', this.value)"></td>
+                <td><input type="text" placeholder="DD/MM/AAAA" value="${formatDataBR(parseDataISO(pub.dataSubmissao))}" onchange="atualizarPublicacao(${episodioIndex}, ${pubIndex}, 'dataSubmissao', this.value)"></td>
+                <td><input type="text" placeholder="DD/MM/AAAA" value="${formatDataBR(parseDataISO(pub.dataFinal))}" onchange="atualizarPublicacao(${episodioIndex}, ${pubIndex}, 'dataFinal', this.value)"></td>
+                <td><button class="danger" style="padding: 2px 5px; font-size: 0.8em;" onclick="removerPublicacao(${episodioIndex}, ${pubIndex})">X</button></td>
+            `;
+
+            const detailsRow = tbody.insertRow();
+            detailsRow.className = 'pub-details-row'; 
+            const detailsCell = detailsRow.insertCell();
+            detailsCell.colSpan = 7;
+            
+            detailsCell.innerHTML = `
+                <label>Autores:</label>
+                <input type="text" value="${pub.autores || ''}" 
+                       oninput="atualizarPublicacao(${episodioIndex}, ${pubIndex}, 'autores', this.value)" 
+                       style="width: 98%;">
+                
+                <label>Resumo:</label>
+                <textarea class="small" 
+                          oninput="atualizarPublicacao(${episodioIndex}, ${pubIndex}, 'resumo', this.value)" 
+                          style="width: 98%; min-height: 60px;">${pub.resumo || ''}</textarea>
+            `;
+        });
+        
+        tableContainer.appendChild(table);
+        const addButton = document.createElement('button');
+        addButton.className = 'secondary'; addButton.style.marginTop = '10px'; addButton.textContent = '+ Adicionar Publicação';
+        addButton.onclick = () => adicionarPublicacao(episodioIndex);
+        tableContainer.appendChild(addButton);
+    }
+    // --- 6. FUNÇÃO PRINCIPAL DE RENDERIZAÇÃO DO FORMULÁRIO ---
+   
+   function renderizarFormulario() {
+        const container = document.getElementById('episodios-container');
+        container.innerHTML = '';
+        
+        dadosPesquisa.historia.forEach((episodio, index) => {
+            const divEpisodio = document.createElement('div');
+            divEpisodio.className = 'episodio-editor';
+            
+            const header = document.createElement('div');
+            header.className = 'episodio-header';
+            header.innerHTML = `<h4><span class="ep-id">Episódio ID: ${episodio.id || `(Novo ${index+1})`}</span> <span class="ep-title"><small>(${episodio.title || 'Novo Título'})</small></span></h4>`;
+            header.onclick = () => toggleEpisodio(divEpisodio);
+            divEpisodio.appendChild(header);
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'episodio-content';
+            divEpisodio.appendChild(contentDiv);
+
+            const removeButton = document.createElement('button');
+            removeButton.className = 'danger remove-btn';
+            removeButton.textContent = 'Remover Episódio';
+            removeButton.style.float = 'right';
+            removeButton.style.marginBottom = '15px';
+            removeButton.onclick = (e) => { e.stopPropagation(); removerEpisodio(index); };
+            contentDiv.appendChild(removeButton);
+
+            // Campos Principais
+            createField(contentDiv, 'ID', { value: episodio.id }, val => atualizarCampo(index, 'id', val));
+            
+            const dataEpisodioLabel = document.createElement('label');
+            dataEpisodioLabel.textContent = 'Data (DD/MM/AAAA) - Define a "Meta de Prazo"';
+            contentDiv.appendChild(dataEpisodioLabel);
+            
+            const dataEpisodioInput = document.createElement('input');
+            dataEpisodioInput.type = 'text';
+            dataEpisodioInput.placeholder = 'DD/MM/AAAA';
+            const dataObj = parseDataISO(episodio.date); 
+            dataEpisodioInput.value = formatDataBR(dataObj);
+            
+            dataEpisodioInput.onchange = (e) => {
+                 const dataObjParsed = parseDataBR(e.target.value); 
+                 const dataISO = formatDataISO(dataObjParsed);
+                 if (dataISO) { 
+                     atualizarCampo(index, 'date', dataISO); 
+                     renderizarTabelaPrazo(index);
+                     calcularEExibirPrazoTotal(index); // Recalcula a meta
+                 }
+            };
+            contentDiv.appendChild(dataEpisodioInput);
+            
+            createField(contentDiv, 'Title', { value: episodio.title }, val => atualizarCampo(index, 'title', val));
+            createField(contentDiv, 'Summary', { type: 'textarea', value: episodio.summary, className: 'small' }, val => atualizarCampo(index, 'summary', val));
+            createField(contentDiv, 'Nome', { value: episodio.nome }, val => atualizarCampo(index, 'nome', val));
+
+            // KPIs e Parâmetros
+            const kpisHeader = document.createElement('h5'); kpisHeader.textContent = 'KPIs e Parâmetros do Cubo'; contentDiv.appendChild(kpisHeader);
+			createField(contentDiv, 'Tolerância (0-1)', { type:'number', value: episodio.kpis?.tolerancia?.valor !== undefined ? episodio.kpis.tolerancia.valor : (typeof episodio.kpis?.tolerancia === 'number' ? episodio.kpis.tolerancia : 0.1), step:0.01, min:0, max:1 }, val => { 
+			    const n=parseFloat(val)||0; 
+				    if (typeof episodio.kpis.tolerancia !== 'object' || episodio.kpis.tolerancia === null) episodio.kpis.tolerancia = { valor: 0, resumo: '' };
+					    episodio.kpis.tolerancia.valor = n;
+						    atualizarCubo(index); 
+							    atualizarResumoTolerancia(index); 
+								});
+								
+			const toleranciaResumoP = document.createElement('p');
+			toleranciaResumoP.innerHTML = `<strong>Resumo Automático:</strong> <span id="tolerancia-resumo-${index}" style="font-style: italic; color: #4b5563;">--</span>`;
+			contentDiv.appendChild(toleranciaResumoP);
+            // REMOVIDO: createField para Meta Prazo
+            // REMOVIDO: createField para Meta Custo
+            createField(contentDiv, 'Meta Publicação (#)', { type:'number', value: episodio.kpis?.metaPublicacao !== undefined ? episodio.kpis.metaPublicacao : 0, min:0 }, val => { const n=parseInt(val)||0; atualizarCampoAninhado(index, 'kpis', 'metaPublicacao', null, n); atualizarCubo(index); atualizarResumoTolerancia(index); });
+            
+            const cuboDiv = document.createElement('div'); cuboDiv.style.textAlign = 'center'; cuboDiv.style.marginTop = '15px';
+            const cuboImg = document.createElement('img'); cuboImg.id = `cubo-pesquisa-img-${index}`; cuboImg.alt = "Cubo da Pesquisa"; cuboImg.style.maxWidth = '150px'; cuboImg.style.height = 'auto';
+            cuboDiv.appendChild(cuboImg); contentDiv.appendChild(cuboDiv);
+
+            const hr = document.createElement('hr'); hr.style.margin = '20px 0'; contentDiv.appendChild(hr);
+
+            // --- PAINEL DE VIABILIDADE ESTRATÉGICA ATUALIZADO ---
+            const estFieldset = document.createElement('fieldset');
+            estFieldset.style.border = "1px solid #3b82f6";
+            estFieldset.style.borderRadius = "8px";
+            estFieldset.style.padding = "15px";
+            estFieldset.style.marginBottom = "20px";
+            
+            const estLegend = document.createElement('legend');
+            estLegend.textContent = "Eixo Viabilidade (V) - Estimativas Estratégicas";
+            estLegend.style.fontWeight = "bold";
+            estLegend.style.color = "#3b82f6";
+            estFieldset.appendChild(estLegend);
+            
+            estFieldset.innerHTML += `<p style="font-size: 0.9em; margin-top: 0; color: #4b5563;">Insira os valores totais estimados e suas justificativas. O Eixo V% é o (Benefício Total / Custo Total).</p>`;
+            
+            const estDiv = document.createElement('div');
+            estDiv.style.display = "grid";
+            estDiv.style.gridTemplateColumns = "1fr 1fr";
+            estDiv.style.gap = "10px 15px";
+            estFieldset.appendChild(estDiv);
+            
+            const estInputs = [
+                { id: 'B5_impacto', label: 'Benefício: (Face 5) Impacto (R$)' },
+                { id: 'B6_produto', label: 'Benefício: (Face 6) Produto (R$)' },
+                { id: 'C1_problema', label: 'Custo: (Face 1) Problema (R$)' },
+                { id: 'CV_solucao', label: 'Custo: (Eixo V) Solução (R$)' }
+            ];
+
+            const estimativas = episodio.viabilidade_estimativas || {};
+
+            estInputs.forEach(item => {
+                // Garante que a estrutura {valor, just} exista
+                if (typeof estimativas[item.id] !== 'object' || estimativas[item.id] === null) {
+                    estimativas[item.id] = { valor: 0, just: "" };
+                }
+
+                const itemDiv = document.createElement('div');
+                itemDiv.style.gridColumn = "1 / -1"; // Ocupa as 2 colunas
+                itemDiv.style.display = "grid";
+                itemDiv.style.gridTemplateColumns = "120px 1fr"; // Label pequena, input grande
+                itemDiv.style.gap = "5px 10px";
+                itemDiv.style.alignItems = "center";
+
+                const itemLabel = document.createElement('label');
+                itemLabel.textContent = item.label;
+                itemLabel.style.fontSize = "0.85em";
+                itemLabel.style.textAlign = "right";
+                itemLabel.style.margin = "0";
+                
+                const itemInput = document.createElement('input');
+                itemInput.type = "number";
+                itemInput.step = "100";
+                itemInput.min = "0";
+                itemInput.value = estimativas[item.id].valor || 0;
+                itemInput.style.width = "calc(100% - 20px)";
+                itemInput.onchange = (e) => atualizarEstimativa(index, item.id, 'valor', e.target.value);
+                
+                itemDiv.appendChild(itemLabel);
+                itemDiv.appendChild(itemInput);
+
+                const justLabel = document.createElement('label');
+                justLabel.textContent = "Justificativa:";
+                justLabel.style.fontSize = "0.85em";
+                justLabel.style.textAlign = "right";
+                justLabel.style.margin = "0";
+
+                const justInput = document.createElement('input');
+                justInput.type = "text";
+                justInput.placeholder = "Justifique este valor...";
+                justInput.value = estimativas[item.id].just || "";
+                justInput.style.width = "calc(100% - 20px)";
+                justInput.onchange = (e) => atualizarEstimativa(index, item.id, 'just', e.target.value);
+
+                itemDiv.appendChild(justLabel);
+                itemDiv.appendChild(justInput);
+
+                estDiv.appendChild(itemDiv);
+            });
+            contentDiv.appendChild(estFieldset);
+            // --- FIM DO PAINEL DE VIABILIDADE ---
+
+            // Placeholders KPIs e Tabelas (Restantes)
+            const prazoLabel = document.createElement('label'); prazoLabel.textContent = 'Eixo Prazo (T) - Cronograma e Fases:'; contentDiv.appendChild(prazoLabel);
+            const prazoTableContainer = document.createElement('div'); prazoTableContainer.id = `prazo-tabela-${index}`; prazoTableContainer.className = 'kpi-table-container'; contentDiv.appendChild(prazoTableContainer);
+            const prazoTotalP = document.createElement('p'); prazoTotalP.innerHTML = `<strong>Progresso:</strong> <span id="prazo-calculado-${index}">--%</span>`; contentDiv.appendChild(prazoTotalP);
+
+            const publicidadeLabel = document.createElement('label'); publicidadeLabel.textContent = 'Eixo Publicidade (P) - Produção:'; contentDiv.appendChild(publicidadeLabel);
+            const publicidadeTableContainer = document.createElement('div'); publicidadeTableContainer.id = `publicidade-tabela-${index}`; publicidadeTableContainer.className = 'kpi-table-container'; contentDiv.appendChild(publicidadeTableContainer);
+            const publicidadeTotalP = document.createElement('p'); publicidadeTotalP.innerHTML = `<strong>Status Geral:</strong> <span id="publicidade-calculado-${index}">--</span>`; contentDiv.appendChild(publicidadeTotalP);
+
+            const viabilidadeLabel = document.createElement('label'); 
+            viabilidadeLabel.textContent = 'Controle Orçamentário (Tático - Log):'; 
+            viabilidadeLabel.style.color = "#6b7280";
+            contentDiv.appendChild(viabilidadeLabel);
+            
+            const viabilidadeTableContainer = document.createElement('div'); viabilidadeTableContainer.id = `viabilidade-tabela-${index}`; viabilidadeTableContainer.className = 'kpi-table-container'; contentDiv.appendChild(viabilidadeTableContainer);
+            const viabilidadeTotalP = document.createElement('p'); viabilidadeTotalP.innerHTML = `<strong>Status Financeiro:</strong> <span id="viabilidade-calculado-${index}">--</span>`; contentDiv.appendChild(viabilidadeTotalP);
+
+
+            // --- Components (Orientador Metodológico) ---
+            const componentsHeader = document.createElement('h5'); componentsHeader.textContent = 'Components (Orientador Metodológico)'; contentDiv.appendChild(componentsHeader);
+            
+            createOrientadorField(contentDiv, index, 'problema');
+            createOrientadorField(contentDiv, index, 'hipoteses'); 
+            createOrientadorField(contentDiv, index, 'referencial');
+            createOrientadorField(contentDiv, index, 'metodologia'); 
+            createOrientadorField(contentDiv, index, 'impacto');
+            createOrientadorField(contentDiv, index, 'produto');
+            
+            container.appendChild(divEpisodio);
+            
+            renderizarTabelaPrazo(index);
+            calcularEExibirPrazoTotal(index); 
+            renderizarTabelaViabilidade(index); 
+            calcularEExibirViabilidadeTotal(index); 
+            renderizarTabelaPublicidade(index); 
+            calcularEExibirPublicidadeTotal(index); 
+            
+            recarregarOpcoesDependentes(index, null);
+        });
+    }
+
+    // --- 7. FUNÇÃO SANFONA ---
+    function toggleEpisodio(episodioElement) {
+        const isActive = episodioElement.classList.contains('active');
+        document.querySelectorAll('.episodio-editor.active').forEach(activeEp => {
+             if (activeEp !== episodioElement) activeEp.classList.remove('active');
+        });
+        if (!isActive) {
+            episodioElement.classList.add('active');
+             // Não rola mais automaticamente, deixa o usuário controlar
+             // setTimeout(() => { episodioElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 100); 
+        } else {
+             episodioElement.classList.remove('active');
+        }
+    }
+
+    // --- 8. FUNÇÕES DE CARREGAMENTO E SALVAMENTO ---
+    loadFileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) { loadingMessage.innerText = 'Nenhum arquivo selecionado.'; return; }
+        loadingMessage.innerText = `Carregando ${file.name}...`; loadingMessage.style.color = '#4b5563';
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                dadosPesquisa = JSON.parse(e.target.result);
+                if (!dadosPesquisa || !Array.isArray(dadosPesquisa.historia)) throw new Error("Estrutura JSON inválida.");
+                editorForm.style.display = 'block';
+                saveButton.style.display = 'inline-block';
+                loadingMessage.innerText = `${file.name} carregado!`; loadingMessage.style.color = '#16a34a';
+                renderizarFormulario();
+            } catch (error) {
+                loadingMessage.innerText = `Falha: ${error.message}`; loadingMessage.style.color = '#ef4444';
+                editorForm.style.display = 'none'; saveButton.style.display = 'none';
+            }
+        };
+        reader.onerror = () => { loadingMessage.innerText = 'Erro ao ler arquivo.'; loadingMessage.style.color = '#ef4444'; };
+        reader.readAsText(file);
+        event.target.value = '';
+    });
+	
+	function iniciarNovoJson() {
+        dadosPesquisa = { historia: [] }; 
+        editorForm.style.display = 'block';
+        saveButton.style.display = 'inline-block';
+        loadingMessage.innerText = 'Criando novo arquivo. Adicione episódios e salve.';
+        loadingMessage.style.color = '#3b82f6';
+        renderizarFormulario();
+    }
+
+    function salvarJson() {
+        try {
+            const jsonAtualizado = JSON.stringify(dadosPesquisa, null, 2);
+            const blob = new Blob([jsonAtualizado], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url; link.download = 'dados.json'; link.click();
+            URL.revokeObjectURL(url);
+            loadingMessage.innerText = '"dados.json" salvo!'; loadingMessage.style.color = '#16a34a';
+        } catch (e) {
+            loadingMessage.innerText = `Erro ao salvar: ${e.message}`; loadingMessage.style.color = '#ef4444';
+        }
+    }
+    
+    // --- 9. NOVAS FUNÇÕES DO ORIENTADOR METODOLÓGICO ---
+
+    /**
+     * Cria o campo interativo completo para uma face do Cubo.
+     * @param {HTMLElement} parent - O elemento pai (contentDiv).
+     * @param {number} episodioIndex - O índice do episódio.
+     * @param {string} faceKey - A chave da face (ex: "problema", "metodologia").
+     */
+    
+	// SUBSTITUA a função createOrientadorField existente por esta:
+function createOrientadorField(parent, episodioIndex, faceKey) {
+    const episodio = dadosPesquisa.historia[episodioIndex];
+    const faceConfig = orientadorData.faces[faceKey];
+    if (!faceConfig) return;
+
+    const container = document.createElement('div');
+    container.className = 'orientador-container';
+
+    // 1. Cabeçalho (igual)
+    const header = document.createElement('div');
+    header.className = 'orientador-header';
+    const label = document.createElement('label');
+    label.textContent = faceConfig.titulo;
+    header.appendChild(label);
+    container.appendChild(header);
+
+    // 2. Corpo (igual)
+    const body = document.createElement('div');
+    body.className = 'orientador-body';
+    container.appendChild(body);
+
+    // --- Coluna 1: Classificação e Conteúdo (ORDEM INVERTIDA) ---
+    const col1 = document.createElement('div');
+    body.appendChild(col1);
+
+    // 2a. Select (AGORA VEM PRIMEIRO)
+    const selectLabel = document.createElement('label');
+    selectLabel.textContent = "1. Classifique sua Face:";
+    col1.appendChild(selectLabel);
+    
+    const select = document.createElement('select');
+    select.id = `select-${episodioIndex}-${faceKey}`;
+    select.onchange = (e) => {
+        // Delega toda a lógica (incluindo confirmação) para a nova função
+        handleOrientadorSelectChange(e.target, episodioIndex, faceKey);
+    };
+    col1.appendChild(select);
+    
+    // 2b. Textarea (AGORA VEM DEPOIS)
+    const textLabel = document.createElement('label');
+    textLabel.textContent = "2. Personalize o Conteúdo:";
+    col1.appendChild(textLabel);
+    
+    const textarea = document.createElement('textarea');
+    textarea.className = 'small';
+    textarea.id = `text-${episodioIndex}-${faceKey}`;
+    textarea.value = episodio.components?.[faceKey] || '';
+    
+    // Começa desabilitado se não houver classificação salva
+    if (!episodio.components?.[`${faceKey}_classificacao`]) {
+         textarea.placeholder = "Selecione uma classificação acima para ativar a edição e carregar um modelo...";
+         textarea.readOnly = true; // Bloqueado
+         textarea.style.backgroundColor = '#f3f4f6'; // Cinza
+    }
+
+    textarea.oninput = (e) => {
+        atualizarCampoAninhado(episodioIndex, 'components', faceKey, null, e.target.value);
+    };
+    col1.appendChild(textarea);
+
+    // --- Coluna 2: Painel de Ajuda (igual) ---
+    const col2 = document.createElement('div');
+    body.appendChild(col2);
+
+    const ajudaDiv = document.createElement('div');
+    ajudaDiv.className = 'orientador-ajuda';
+    ajudaDiv.id = `ajuda-${episodioIndex}-${faceKey}`;
+    ajudaDiv.innerHTML = `<p>Selecione uma classificação para ver exemplos e referências.</p>`;
+    col2.appendChild(ajudaDiv);
+
+    parent.appendChild(container);
+}
+// ADICIONE estas duas novas funções ao seu script
+
+/**
+ * Verifica se um texto é idêntico a um dos templates conhecidos.
+ * @param {string} text - O texto no textarea.
+ * @returns {boolean} - True se for um template, false se for texto do usuário.
+ */
+function isTemplate(text) {
+    if (!text) return true; // Vazio é considerado "template"
+    const templates = new Set();
+    Object.values(orientadorData.faces).forEach(face => {
+        face.classificacoes.forEach(c => {
+            if (c.template) templates.add(c.template);
+        });
+    });
+    return templates.has(text.trim());
+}
+
+/**
+ * Lógica principal de mudança do Select do Orientador.
+ * Lida com a confirmação, injeção de template e desbloqueio do textarea.
+ */
+
+function handleOrientadorSelectChange(selectElement, episodioIndex, faceKey) {
+    const episodio = dadosPesquisa.historia[episodioIndex];
+    const selectedId = selectElement.value;
+    const classificacaoSalva = episodio.components?.[`${faceKey}_classificacao`] || "";
+    const textarea = document.getElementById(`text-${episodioIndex}-${faceKey}`);
+    const conteudoAtual = textarea.value || "";
+    
+    // 1. Verifica se o usuário já digitou algo
+    const hasUserContent = conteudoAtual.trim() !== "" && !isTemplate(conteudoAtual);
+
+    if (hasUserContent && selectedId !== classificacaoSalva) {
+        if (!confirm("Você alterou a classificação. Deseja substituir seu texto atual pelo novo modelo?\n\n(Se cancelar, sua seleção será revertida.)")) {
+            selectElement.value = classificacaoSalva;
+            return; 
+        }
+    }
+
+    // 2. Injeta o novo template
+    const classificacao = orientadorData.faces[faceKey].classificacoes.find(c => c.id === selectedId);
+    if (classificacao && classificacao.template) {
+        textarea.value = classificacao.template;
+        atualizarCampoAninhado(episodioIndex, 'components', faceKey, null, classificacao.template);
+    } else {
+        textarea.value = "";
+        atualizarCampoAninhado(episodioIndex, 'components', faceKey, null, "");
+    }
+    
+    // 3. Atualiza o estado
+    atualizarCampoAninhado(episodioIndex, 'components', `${faceKey}_classificacao`, null, selectedId);
+    
+    // 4. Desbloqueia ou bloqueia o textarea
+    if (selectedId) {
+        textarea.readOnly = false;
+        textarea.style.backgroundColor = '#fff';
+        textarea.placeholder = "Personalize o modelo...";
+    } else {
+        textarea.readOnly = true;
+        textarea.style.backgroundColor = '#f3f4f6';
+        textarea.placeholder = "Selecione uma classificação acima para ativar a edição e carregar um modelo...";
+    }
+
+    // 5. Mostra a ajuda e recarrega a cascata
+    mostrarAjudaOrientador(episodioIndex, faceKey, selectedId);
+    recarregarOpcoesDependentes(episodioIndex, faceKey);
+    
+    // 6. Atualiza a imagem do Cubo (cor, inclinação, etc.)
+    atualizarCubo(episodioIndex);
+}
+
+    /**
+     * Mostra o painel de ajuda para uma classificação selecionada.
+     */
+    function mostrarAjudaOrientador(episodioIndex, faceKey, selectedId) {
+        const ajudaDiv = document.getElementById(`ajuda-${episodioIndex}-${faceKey}`);
+        const faceConfig = orientadorData.faces[faceKey];
+        if (!ajudaDiv || !faceConfig) return;
+
+        const classificacao = faceConfig.classificacoes.find(c => c.id === selectedId);
+
+        if (classificacao && classificacao.id) {
+            ajudaDiv.innerHTML = `
+                <strong>${classificacao.nome}</strong>
+                <p>${classificacao.exemplo}</p>
+                <p style="margin-top: 10px;"><strong>Fonte:</strong> <code>${classificacao.autor}</code></p>
+            `;
+            ajudaDiv.style.display = 'block';
+        } else {
+            ajudaDiv.innerHTML = `<p>Selecione uma classificação para ver exemplos e referências.</p>`;
+            ajudaDiv.style.display = 'none';
+        }
+    }
+
+    /**
+     * Recarrega todos os dropdowns de um episódio, aplicando as regras de coerência.
+     * Chamado ao renderizar e ao alterar uma dependência.
+     */
+   // SUBSTITUA a função recarregarOpcoesDependentes por esta:
+/**
+ * ATUALIZADA: Gerencia a cascata de atualizações dos dropdowns.
+ */
+function recarregarOpcoesDependentes(episodioIndex, faceAlterada) {
+    // Se faceAlterada é null, é a carga inicial -> carrega TUDO em ordem
+    if (faceAlterada === null) {
+        recarregarOpcoesDropdown(episodioIndex, 'problema');
+        recarregarOpcoesDropdown(episodioIndex, 'hipoteses');
+        recarregarOpcoesDropdown(episodioIndex, 'referencial');
+        recarregarOpcoesDropdown(episodioIndex, 'metodologia');
+        recarregarOpcoesDropdown(episodioIndex, 'produto');
+        recarregarOpcoesDropdown(episodioIndex, 'impacto');
+        return;
+    }
+
+    // Se uma face específica foi alterada, atualiza suas dependentes
+    switch (faceAlterada) {
+        case 'problema':
+            // Problema afeta Hipóteses, Metodologia e Impacto
+            recarregarOpcoesDropdown(episodioIndex, 'hipoteses');
+            recarregarOpcoesDropdown(episodioIndex, 'metodologia');
+            recarregarOpcoesDropdown(episodioIndex, 'impacto');
+            break;
+        case 'hipoteses':
+            // Hipóteses afeta Referencial e (agora) Metodologia
+            recarregarOpcoesDropdown(episodioIndex, 'referencial');
+            recarregarOpcoesDropdown(episodioIndex, 'metodologia'); // Atualiza metodologia também
+            break;
+        case 'metodologia':
+            // Metodologia afeta Produto
+            recarregarOpcoesDropdown(episodioIndex, 'produto');
+            break;
+        case 'produto':
+            // Produto afeta Impacto
+            recarregarOpcoesDropdown(episodioIndex, 'impacto');
+            break;
+        // 'referencial' e 'impacto' não afetam ninguém por enquanto
+    }
+}
+
+
+// SUBSTITUA a função recarregarOpcoesDropdown por esta:
+/**
+ * ATUALIZADA: Preenche as opções de um dropdown, aplicando regras de coerência.
+ */
+function recarregarOpcoesDropdown(episodioIndex, faceKey) {
+    const episodio = dadosPesquisa.historia[episodioIndex];
+    const select = document.getElementById(`select-${episodioIndex}-${faceKey}`);
+    const faceConfig = orientadorData.faces[faceKey];
+    if (!select || !faceConfig) return;
+
+    const valorSalvo = episodio.components?.[`${faceKey}_classificacao`] || "";
+    select.innerHTML = ''; // Limpa opções antigas
+
+    // 1. Determina as regras de coerência para esta face
+    let rules = null;
+    let dependencyValue = null;
+    
+    if (faceKey === 'hipoteses') {
+        dependencyValue = episodio.components?.['problema_classificacao'];
+        if (dependencyValue) rules = orientadorData.regras_coerencia['hipoteses_vs_problema']?.[dependencyValue];
+    
+    } else if (faceKey === 'referencial') {
+        dependencyValue = episodio.components?.['hipoteses_classificacao'];
+        if (dependencyValue) rules = orientadorData.regras_coerencia['referencial_vs_hipoteses']?.[dependencyValue];
+    
+    } else if (faceKey === 'metodologia') {
+        // Metodologia agora depende da HIPÓTESE, que é mais forte
+        dependencyValue = episodio.components?.['hipoteses_classificacao'];
+        if (dependencyValue) {
+            rules = orientadorData.regras_coerencia['metodologia_vs_hipoteses']?.[dependencyValue];
+        } else {
+            // Fallback: se hipótese não foi escolhida, usa o problema
+            dependencyValue = episodio.components?.['problema_classificacao'];
+            if (dependencyValue) rules = orientadorData.regras_coerencia['metodologia_vs_problema']?.[dependencyValue];
+        }
+    
+    } else if (faceKey === 'produto') {
+        dependencyValue = episodio.components?.['metodologia_classificacao'];
+        if (dependencyValue) rules = orientadorData.regras_coerencia['produto_vs_metodologia']?.[dependencyValue];
+
+    } else if (faceKey === 'impacto') {
+        // Impacto depende do PRODUTO
+        dependencyValue = episodio.components?.['produto_classificacao'];
+        if (dependencyValue) rules = orientadorData.regras_coerencia['impacto_vs_produto']?.[dependencyValue];
+    }
+    // 'problema' não tem dependências
+
+    // 2. Preenche as opções do dropdown
+    faceConfig.classificacoes.forEach(classificacao => {
+        const option = document.createElement('option');
+        option.value = classificacao.id;
+        
+        let prefixo = "";
+        let className = "";
+        
+        if (rules && classificacao.id) {
+            if (rules.recomenda?.includes(classificacao.id)) {
+                prefixo = "✅ ";
+                className = "coerencia-recomenda";
+            } else if (rules.alerta?.includes(classificacao.id)) {
+                prefixo = "⚠️ ";
+                className = "coerencia-alerta";
+            } else if (rules.incoerente?.includes(classificacao.id)) {
+                prefixo = "❌ ";
+                className = "coerencia-incoerente";
+            }
+        }
+        
+        option.text = prefixo + classificacao.nome;
+        if (className) option.className = className;
+
+        if (classificacao.id === valorSalvo) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    });
+    
+    // 3. Mostra o painel de ajuda para o valor que já estava salvo
+    // (Apenas se o textarea estiver vazio ou for um template, 
+    // para não sobrescrever a ajuda se o usuário estiver digitando)
+    const textarea = document.getElementById(`text-${episodioIndex}-${faceKey}`);
+    if (!textarea.value || isTemplate(textarea.value)) {
+         mostrarAjudaOrientador(episodioIndex, faceKey, valorSalvo);
+    }
+}
+    
+    // --- INICIALIZAÇÃO ---
+    console.log("Editor pronto.");
+
+    </script>
+</body>
+</html>
