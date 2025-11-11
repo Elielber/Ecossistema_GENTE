@@ -331,7 +331,8 @@ function displayEpisodio(episodio) {
     // 3. Combina os dois textos
     const textoFinal = `${textoBias} ${textoCoerencia}`;
     setContent('kpi-tolerancia-resumo', textoFinal);
-      
+    setContent('kpi-tolerancia-resumo', textoTolerancia);
+    
     // Imagem do Cubo
     atualizarPainelCubo(episodio);
 	
@@ -423,35 +424,27 @@ function showKpiModal(kpiType, episodio) {
  */
 function getKpiViabilidadeValor(episodio) {
     // 1. Obter as Estimativas Estratégicas
-    const est = episodio.viabilidade_estimativas || { B5_impacto: 0, B6_produto: 0, C1_problema: 0, CV_solucao: 0 };
-    const B5 = est.B5_impacto || 0;     // Benefício (Impacto Face 5)
-    const B6 = est.B6_produto || 0;    // Benefício (Produto Face 6)
-    const C1 = est.C1_problema || 0;   // Custo (Problema Face 1)
-    const CV = est.CV_solucao || 0;  // Custo (Solução Eixo V)
+    const est = episodio.viabilidade_estimativas || {};
+    // Lê o valor de dentro do objeto {valor, just}
+    const B5 = est.B5_impacto?.valor || 0;
+    const B6 = est.B6_produto?.valor || 0;
+    const C1 = est.C1_problema?.valor || 0;
+    const CV = est.CV_solucao?.valor || 0;
 
-    // 2. Obter a Maturidade (M) do Progresso das Fases (Eixo T)
-    const prog = episodio.kpis?.prazo?.progresso_fases || { fase1: 0, fase2: 0, fase3: 0, fase4: 0, fase5: 0 };
-    const M1 = prog.fase1 || 0;  // Maturidade do Custo do Problema (Fase 1)
-    const MV = prog.fase2 || 0;  // Maturidade do Custo da Solução (Fase 2)
-    const M6 = prog.fase3 || 0;  // Maturidade do Benefício do Produto (Fase 3)
-    
-    // Maturidade do Benefício de Impacto (Média Fases 4 e 5)
-    const M5 = ((prog.fase4 || 0) + (prog.fase5 || 0)) / 2;
+    // 2. Calcular Totais (Lógica Proativa)
+    const beneficioTotal = B5 + B6;
+    const custoTotal = C1 + CV;
 
-    // 3. Calcular os Termos Ponderados
-    const beneficioPonderado = (B5 * M5) + (B6 * M6);
-    const custoPonderado = (C1 * M1) + (CV * MV);
-
-    // 4. Calcular o IVId e retornar o V(%)
+    // 3. Calcular o IVId e retornar o V(%)
     let eixoV_percent = 0;
-
-    if (custoPonderado > 0) {
-        // IVId (Ratio) = Benefício Ponderado / Custo Ponderado
-        const ivid_ratio = beneficioPonderado / custoPonderado;
+    if (custoTotal > 0) {
+        // IVId (Ratio) = Benefício Total / Custo Total
+        const ivid_ratio = beneficioTotal / custoTotal;
         // Converte a razão para percentual
         eixoV_percent = ivid_ratio * 100;
-    } else if (beneficioPonderado > 0) {
-        eixoV_percent = 999; // Valor alto para indicar benefício sem custo
+    } else if (beneficioTotal > 0) {
+        // Se o custo é zero mas o benefício não é, retorna um valor alto
+        eixoV_percent = 999; 
     }
     
     return eixoV_percent;
@@ -470,11 +463,14 @@ function getKpiPublicidadeValor(episodio) {
 /** Calcula o KPI percentual de Prazo */
 function getKpiPrazoValor(episodio) {
     const kpis = episodio.kpis;
-    const meta = kpis?.metaPrazo || 0;
+    // Usa a metaPrazo (calculada pelo editor) em vez da meta manual
+    const meta = kpis?.prazo?.metaPrazo || 0; 
     const apuracao = kpis?.prazo?.valor || 0; 
     if (meta > 0) return (apuracao / meta) * 100;
+    // Se a meta é 0 (projeto não começou), e apuração tb é 0, está 100% "em dia"
     if (apuracao === 0) return 100.0;
-    return 0.0;
+    // Se a meta é 0 mas a apuração > 0 (trabalho adiantado), retorna valor alto
+    return 999.0;
 }
 /**
  * Calcula o prefixo de inclinação do Cubo (E, V, T, P)
@@ -631,31 +627,22 @@ function setupTimelineToggle() {
  */
 function renderModalViabilidade(episodio) {
     // 1. Obter as Estimativas Estratégicas
-    const est = episodio.viabilidade_estimativas || { B5_impacto: 0, B6_produto: 0, C1_problema: 0, CV_solucao: 0 };
-    const B5 = est.B5_impacto || 0;
-    const B6 = est.B6_produto || 0;
-    const C1 = est.C1_problema || 0;
-    const CV = est.CV_solucao || 0;
+    const est = episodio.viabilidade_estimativas || {};
+    // Garante que a estrutura {valor, just} exista
+    const B5 = est.B5_impacto || { valor: 0, just: "" };
+    const B6 = est.B6_produto || { valor: 0, just: "" };
+    const C1 = est.C1_problema || { valor: 0, just: "" };
+    const CV = est.CV_solucao || { valor: 0, just: "" };
 
-    // 2. Obter a Maturidade (M) do Progresso das Fases (Eixo T)
-    const prog = episodio.kpis?.prazo?.progresso_fases || { fase1: 0, fase2: 0, fase3: 0, fase4: 0, fase5: 0 };
-    const M1 = (prog.fase1 || 0) * 100; // Converte 0.8 para 80%
-    const MV = (prog.fase2 || 0) * 100;
-    const M6 = (prog.fase3 || 0) * 100;
-    const M5 = (((prog.fase4 || 0) + (prog.fase5 || 0)) / 2) * 100;
+    // 2. Calcular Totais
+    const beneficioTotal = B5.valor + B6.valor;
+    const custoTotal = C1.valor + CV.valor;
 
-    // 3. Calcular os Termos Ponderados
-    const beneficioPonderado = (B5 * (M5/100)) + (B6 * (M6/100));
-    const custoPonderado = (C1 * (M1/100)) + (CV * (MV/100));
-
-    // 4. Calcular o IVId e o V(%)
-    let eixoV_percent = 0;
+    // 3. Calcular o IVId e o V(%)
+    const eixoV_percent = getKpiViabilidadeValor(episodio); // Usa a função global
     let ivid_ratio = 0;
-    if (custoPonderado > 0) {
-        ivid_ratio = beneficioPonderado / custoPonderado;
-        eixoV_percent = ivid_ratio * 100;
-    } else if (beneficioPonderado > 0) {
-        eixoV_percent = 999; 
+    if (custoTotal > 0) {
+        ivid_ratio = beneficioTotal / custoTotal;
     }
 
     // 5. Montar o HTML
@@ -665,8 +652,8 @@ function renderModalViabilidade(episodio) {
         </div>
         
         <p style="font-size: 0.9em; text-align: center; color: #555;">
-            O Eixo V é um KPI estratégico que compara Benefícios Ponderados vs. Custos Ponderados.<br>
-            Um valor > 100% indica que os benefícios superam os custos, na maturidade atual.
+            O Eixo V é o KPI estratégico (Benefício Total / Custo Total).<br>
+            Um valor > 100% indica um "business case" saudável.
         </p>
 
         <table>
@@ -674,59 +661,56 @@ function renderModalViabilidade(episodio) {
                 <tr>
                     <th>Componente</th>
                     <th>Valor Estimado (R$)</th>
-                    <th>Maturidade (M%)</th>
-                    <th>Valor Ponderado (R$)</th>
+                    <th>Justificativa</th>
                 </tr>
             </thead>
             <tbody>
                 <tr style="background-color: #f0fdf4;">
                     <td>(B5) Benefício - Impacto (Face 5)</td>
-                    <td>R$ ${B5.toFixed(2)}</td>
-                    <td>${M5.toFixed(1)}%</td>
-                    <td>R$ ${(B5 * (M5/100)).toFixed(2)}</td>
+                    <td>R$ ${B5.valor.toFixed(2)}</td>
+                    <td style="white-space: normal;">${B5.just || 'N/A'}</td>
                 </tr>
                 <tr style="background-color: #f0fdf4; font-weight: bold;">
                     <td>(B6) Benefício - Produto (Face 6)</td>
-                    <td>R$ ${B6.toFixed(2)}</td>
-                    <td>${M6.toFixed(1)}%</td>
-                    <td>R$ ${(B6 * (M6/100)).toFixed(2)}</td>
+                    <td>R$ ${B6.valor.toFixed(2)}</td>
+                    <td style="white-space: normal;">${B6.just || 'N/A'}</td>
                 </tr>
                 <tr style="font-weight: bold; background-color: #dcfce7;">
-                    <td colspan="3" style="text-align: right;">Total Benefício Ponderado:</td>
-                    <td>R$ ${beneficioPonderado.toFixed(2)}</td>
+                    <td style="text-align: right;">Total Benefício Estimado:</td>
+                    <td>R$ ${beneficioTotal.toFixed(2)}</td>
+                    <td></td>
                 </tr>
 
                 <tr style="background-color: #fef2f2;">
                     <td>(C1) Custo - Problema (Face 1)</td>
-                    <td>R$ ${C1.toFixed(2)}</td>
-                    <td>${M1.toFixed(1)}%</td>
-                    <td>R$ ${(C1 * (M1/100)).toFixed(2)}</td>
+                    <td>R$ ${C1.valor.toFixed(2)}</td>
+                    <td style="white-space: normal;">${C1.just || 'N/A'}</td>
                 </tr>
                 <tr style="background-color: #fef2f2; font-weight: bold;">
                     <td>(CV) Custo - Solução (Eixo V)</td>
-                    <td>R$ ${CV.toFixed(2)}</td>
-                    <td>${MV.toFixed(1)}%</td>
-                    <td>R$ ${(CV * (MV/100)).toFixed(2)}</td>
+                    <td>R$ ${CV.valor.toFixed(2)}</td>
+                    <td style="white-space: normal;">${CV.just || 'N/A'}</td>
                 </tr>
                 <tr style="font-weight: bold; background-color: #fee2e2;">
-                    <td colspan="3" style="text-align: right;">Total Custo Ponderado:</td>
-                    <td>R$ ${custoPonderado.toFixed(2)}</td>
+                    <td style="text-align: right;">Total Custo Estimado:</td>
+                    <td>R$ ${custoTotal.toFixed(2)}</td>
+                    <td></td>
                 </tr>
             </tbody>
         </table>
 
         <div class="bloco-calculo">
             <h4>Memória de Cálculo (IVId)</h4>
-            1. Benefício Ponderado = (B5 * M5) + (B6 * M6)
-               = (R$ ${B5.toFixed(2)} * ${M5.toFixed(1)}%) + (R$ ${B6.toFixed(2)} * ${M6.toFixed(1)}%)
-               = R$ ${beneficioPonderado.toFixed(2)}
+            1. Benefício Total = (B5 + B6)
+               = (R$ ${B5.valor.toFixed(2)}) + (R$ ${B6.valor.toFixed(2)})
+               = R$ ${beneficioTotal.toFixed(2)}
             <br>
-            2. Custo Ponderado = (C1 * M1) + (CV * MV)
-               = (R$ ${C1.toFixed(2)} * ${M1.toFixed(1)}%) + (R$ ${CV.toFixed(2)} * ${MV.toFixed(1)}%)
-               = R$ ${custoPonderado.toFixed(2)}
+            2. Custo Total = (C1 + CV)
+               = (R$ ${C1.valor.toFixed(2)}) + (R$ ${CV.valor.toFixed(2)})
+               = R$ ${custoTotal.toFixed(2)}
             <br>
-            3. IVId (Ratio) = Benefício Ponderado / Custo Ponderado
-               = R$ ${beneficioPonderado.toFixed(2)} / R$ ${custoPonderado.toFixed(2)}
+            3. IVId (Ratio) = Benefício Total / Custo Total
+               = R$ ${beneficioTotal.toFixed(2)} / R$ ${custoTotal.toFixed(2)}
                = ${ivid_ratio.toFixed(3)}
             <br>
             4. V% (KPI) = IVId * 100
@@ -734,13 +718,13 @@ function renderModalViabilidade(episodio) {
         </div>
     `;
     
-    // Adiciona o modal tático (que estava antes)
+    // Adiciona o modal tático (log de orçamento)
     const kpi_tatico = episodio.kpis?.viabilidade;
     const itens_taticos = kpi_tatico?.itens || [];
     if (itens_taticos.length > 0) {
          html += `
             <h4 style="margin-top: 25px; border-top: 1px solid #ccc; padding-top: 15px;">
-                Controle Orçamentário (Tático)
+                Controle Orçamentário (Tático - Log)
             </h4>
             <table>
                 <thead>
@@ -995,26 +979,28 @@ function renderModalTolerancia(episodio) {
  */
 function renderModalPrazo(episodio) {
     const kpi = episodio.kpis?.prazo;
-    const meta = episodio.kpis?.metaPrazo || 0; // Ex: 35
+    // Usa a meta calculada dinamicamente
+    const meta = kpi?.metaPrazo || 0; 
     const entregas = kpi?.entregas || [];
-    const dataEpisodio = episodio.date; // Data de "hoje"
+    const dataEpisodio = episodio.date;
     
-    // --- LÓGICA DE CÁLCULO ATUALIZADA ---
-    const apuracaoValor = kpi?.valor || 0; // Ex: 33.96
-    const apuracaoString = `${apuracaoValor.toFixed(1)}%`; // Ex: "34.0%"
+    const apuracaoValor = kpi?.valor || 0; 
+    const apuracaoString = `${apuracaoValor.toFixed(1)}%`;
+    const metaString = `${meta.toFixed(1)}%`; // Formata a meta
     
     let kpiResultadoString = 'N/A';
     if (meta > 0) {
-        const kpiValor = (apuracaoValor / meta) * 100; // Ex: (33.96 / 35) * 100 = 97.0
+        const kpiValor = (apuracaoValor / meta) * 100;
         kpiResultadoString = `${kpiValor.toFixed(1)}%`;
     } else if (apuracaoValor === 0) {
         kpiResultadoString = '100%';
+    } else {
+        kpiResultadoString = '999%'; // Adiantado
     }
-    // --- FIM DA LÓGICA ATUALIZADA ---
     
     let html = `
         <div class="meta-destaque">
-            Apuração: ${apuracaoString} / Meta: ${meta}% = <strong>${kpiResultadoString}</strong>
+            Apuração: ${apuracaoString} / Meta (Planejada): ${metaString} = <strong>${kpiResultadoString}</strong>
         </div>
     `;
     
