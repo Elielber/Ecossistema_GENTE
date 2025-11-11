@@ -276,10 +276,10 @@ function displayEpisodio(episodio) {
         item.classList.toggle('active', item.dataset.id === episodio.id);
     });
 
-    setContent('painel-nome-content', episodio.nome);
+    setContent('label-diagnostico', `Diagnóstico: ${episodio.nome || 'Sem Título'}`);
+    
     const novoTituloEpisodio = `Episódio (${episodio.id || 'N/A'}): ${episodio.title || 'Sem Título'}`;
     setContent('painel-summary-label', novoTituloEpisodio);
-    setContent('painel-summary-content', episodio.summary);
 
     // Componentes
     setContent('problema-content', episodio.components?.problema);
