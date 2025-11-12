@@ -84,38 +84,69 @@ const MS_POR_DIA = 1000 * 60 * 60 * 24;
 document.addEventListener('DOMContentLoaded', () => {
     
     // --- LÓGICA DO CARROSSEL (index.html) ---
-    // (Mantida, mas verificando se os elementos existem)
     const sliderTrack = document.querySelector('.slider-track');
     if (sliderTrack) {
         setupCarousel(sliderTrack);
     }
 
-    // --- LÓGICA DOS BOTÕES DE DOWNLOAD (index.html) ---
-const downloadButtons = document.querySelectorAll('.btn-download');
-if (downloadButtons.length > 0) {
-    downloadButtons.forEach(button => {
-        
-        // VERIFICA SE O LINK É UM PLACEHOLDER (href="#")
-        if (button.getAttribute('href') === '#') {
-            
-            // Se for '#', adiciona o bloqueio e o alerta
-            button.addEventListener('click', event => {
-                event.preventDefault(); 
-                alert('Download disponível em breve!');
-            });
-        }
-        // Se o href NÃO for '#', o script não faz nada
-        // e o link de download funciona normalmente.
-    });
-}
+    // --- LÓGICA DO MODAL DE DOWNLOAD (Página Inicial) ---
+     // 1. Encontra TODOS os botões que abrem modais
+    const allOpenButtons = document.querySelectorAll('.open-modal-btn');
+    
+    // 2. Encontra TODOS os botões de fechar
+    const allCloseButtons = document.querySelectorAll('.modal-close');
+    
+    // 3. Encontra TODOS os overlays (fundos)
+    const allModals = document.querySelectorAll('.modal-overlay');
 
+    // Função para abrir um modal específico
+    const openModal = (modal) => {
+        if (modal == null) return;
+        modal.style.display = 'flex';
+        setTimeout(() => modal.style.opacity = '1', 10);
+    };
+
+    // Função para fechar um modal específico
+    const closeModal = (modal) => {
+        if (modal == null) return;
+        modal.style.opacity = '0';
+        setTimeout(() => modal.style.display = 'none', 300);
+    };
+
+    // Adiciona o clique a CADA botão de abrir
+    allOpenButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.preventDefault(); // Impede o link de pular a página
+            const modalId = button.getAttribute('data-target'); // Ex: "#cubo-download-modal"
+            const modal = document.querySelector(modalId);
+            openModal(modal);
+        });
+    });
+
+    // Adiciona o clique a CADA botão de fechar
+    allCloseButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const modal = button.closest('.modal-overlay'); // Encontra o modal "pai"
+            closeModal(modal);
+        });
+    });
+
+    // Adiciona o clique a CADA fundo de modal
+    allModals.forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            // Se o clique foi no fundo (o próprio overlay)
+            if (e.target === modal) {
+                closeModal(modal);
+            }
+        });
+    });
 
     // --- LÓGICA DA PÁGINA JORNADA ---
     // (Totalmente refeita)
     if (document.body.contains(document.getElementById('timeline'))) {
         inicializarJornada();
     }
-});
+}); // <-- FIM DO ÚNICO 'DOMContentLoaded'
 
 /**
  * Configura o carrossel da página inicial
@@ -213,7 +244,6 @@ async function inicializarJornada() {
         
         if (!dadosPesquisa || !dadosPesquisa.historia) throw new Error("JSON inválido");
         
-        // --- MODIFICAÇÃO (Req 1) ---
         // Ordena por data ASCENDENTE (a.date - b.date). 'ep00' no topo.
         dadosPesquisa.historia.sort((a, b) => new Date(a.date) - new Date(b.date));
         
