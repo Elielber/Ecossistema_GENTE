@@ -190,6 +190,22 @@ function setupCarousel(sliderTrack) {
 
 async function inicializarJornada() {
     setupModalListeners(); // Configura os botões do modal (fechar, etc.)
+	const legendaBtn = document.getElementById('cubo-legenda-btn');
+    if (legendaBtn) {
+        legendaBtn.onclick = (e) => {
+            e.preventDefault(); // Impede o link de pular a página
+            const modalText = document.getElementById('modal-text');
+            
+            // Rejeita o clique no painel pai
+            e.stopPropagation(); 
+            
+            // Renderiza o conteúdo da legenda
+            modalText.innerHTML = renderModalLegenda();
+            
+            // Abre o modal
+            abrirModal();
+        };
+    }
     try {
         const response = await fetch('dados.json');
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -637,6 +653,34 @@ function setupTimelineToggle() {
  * Gera o HTML para o modal de VIABILIDADE (V%)
  * Agora mostra o cálculo ESTRATÉGICO (IVId)
  */
+/**
+ * Gera o HTML com a legenda dos diagnósticos visuais do Cubo.
+ */
+function renderModalLegenda() {
+    let html = `
+        <h3 style="margin-top:0;">Como Ler o Cubo da Pesquisa</h3>
+        <p>O Cubo oferece três diagnósticos visuais simultâneos para avaliar a saúde da pesquisa:</p>
+        
+        <h4 style="color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px;">1. A INCLINAÇÃO (O Viés de Gestão)</h4>
+        <p>Baseado na <strong>Abordagem Apreciativa</strong>, o Cubo "inclina" na direção do KPI (Eixo) que está com <strong>desempenho dominante</strong>, alertando para um possível viés:</p>
+        <ul>
+            <li><strong>Alerta V (Viabilidade):</strong> "Viés da Paralisia por Análise". Muitos recursos, pouco avanço.</li>
+            <li><strong>Alerta T (Prazo):</strong> "Viés do Executor Apressado". Avanço rápido, mas com risco de baixo rigor.</li>
+            <li><strong>Alerta P (Publicação):</strong> "Viés do Acadêmico Teórico". Alta produção de artigos, mas o projeto central não avança.</li>
+        </ul>
+
+        <h4 style="color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px;">2. A COR (O Rigor Metodológico)</h4>
+        <p>A cor do Cubo avalia o alinhamento das 6 faces (Problema, Hipótese, Método, etc.), usando o <strong>Orientador Metodológico</strong>:</p>
+        <ul>
+            <li><strong style="color: #2980b9;">CUBO AZUL:</strong> Coerente. O seu Problema, Método e Produto estão alinhados.</li>
+            <li><strong style="color: #777;">CUBO CINZA:</strong> Incoerente. Existe uma quebra lógica na sua cadeia metodológica (ex: um Problema Exploratório com um Método Experimental).</li>
+        </ul>
+
+        <h4 style="color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px;">3. O VOLUME (O Progresso Físico)</h4>
+        <p>O "preenchimento" visual do Cubo (de 1% a 100%) representa o <strong>Progresso Ponderado</strong> (Apurado) do seu Eixo Prazo. Ele mostra o quanto do cronograma total já foi fisicamente concluído.</p>
+    `;
+    return html;
+}
 function renderModalViabilidade(episodio) {
     // 1. Obter as Estimativas Estratégicas
     const est = episodio.viabilidade_estimativas || {};
