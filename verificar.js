@@ -7,6 +7,14 @@
             nomeAmigavel: "Ferramenta: Alugar ou Comprar v1",
             hash: "84d8b3f273675fa5067941733d0b30791676c8f227753296e7091f9d30888356" 
         },
+         "jornadaoff.html": {
+            nomeAmigavel: "Ferramenta: Jornada da Pesquisa",
+            hash: "d871d258069a686f3886984c42444f0342b266e1425903170430a0f312e2a1c1" 
+        },
+         "editor-dados.html": {
+            nomeAmigavel: "Ferramenta: Editor de dados",
+            hash: "4eb4213d459d6ac80e9d62cdc7c2044d432d7ed1422323ec38bc0d558000f61f" 
+        },
         "CRITER-ANP.html": {
             nomeAmigavel: "Ferramenta: CRITER & ANP-Solver",
             hash: "SEU_HASH_DO_CRITER_HTML_VAI_AQUI"
@@ -107,4 +115,5 @@
     });
 
 });
+
 
