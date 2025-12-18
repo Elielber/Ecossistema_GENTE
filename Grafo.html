@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grafo - Gerador de Ícones</title>
+    <!-- Tailwind CSS para o design -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React e Babel para a lógica -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        const App = () => {
+            const [image, setImage] = useState(null);
+            const [base64Uri, setBase64Uri] = useState('');
+            const [copied, setCopied] = useState(false);
+            const canvasRef = useRef(null);
+            const fileInputRef = useRef(null);
+
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        setImage(reader.result);
+                        processImage(reader.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const processImage = (imgSrc, size = 32) => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = size;
+                    canvas.height = size;
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+                    const minDim = Math.min(img.width, img.height);
+                    const startX = (img.width - minDim) / 2;
+                    const startY = (img.height - minDim) / 2;
+                    ctx.clearRect(0, 0, size, size);
+                    ctx.drawImage(img, startX, startY, minDim, minDim, 0, 0, size, size);
+                    setBase64Uri(canvas.toDataURL('image/png'));
+                };
+                img.src = imgSrc;
+            };
+
+            const copyCode = () => {
+                const code = `<link rel="icon" type="image/png" href="${base64Uri}">`;
+                const textArea = document.createElement("textarea");
+                textArea.value = code;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            };
+
+            const downloadImage = (size) => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = size;
+                    canvas.height = size;
+                    const minDim = Math.min(img.width, img.height);
+                    const startX = (img.width - minDim) / 2;
+                    const startY = (img.height - minDim) / 2;
+                    ctx.drawImage(img, startX, startY, minDim, minDim, 0, 0, size, size);
+                    const link = document.createElement('a');
+                    link.download = `favicon-${size}x${size}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                };
+                img.src = image;
+            };
+
+            return (
+                <div className="p-4 md:p-12 flex flex-col items-center">
+                    <div className="max-w-3xl w-full bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-slate-200">
+                        {/* Header */}
+                        <div className="p-8 bg-indigo-700 text-white text-center relative overflow-hidden">
+                            <h1 className="text-3xl font-extrabold relative z-10">Favicon Pro Studio</h1>
+                            <p className="text-indigo-100 mt-2 relative z-10 font-medium">Converta sua logo para código HTML cravado.</p>
+                        </div>
+
+                        <div className="p-8 space-y-8">
+                            {!image ? (
+                                <div 
+                                    onClick={() => fileInputRef.current.click()}
+                                    className="border-4 border-dashed border-slate-100 rounded-[2rem] p-16 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-200 hover:bg-indigo-50/50 transition-all duration-300"
+                                >
+                                    <div className="w-16 h-16 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mb-4">
+                                        <i data-lucide="upload"></i>
+                                    </div>
+                                    <h2 className="text-xl font-bold text-slate-700">Clique para carregar a imagem</h2>
+                                    <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+                                </div>
+                            ) : (
+                                <div className="space-y-8">
+                                    {/* Preview Area */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center bg-slate-50 p-6 rounded-3xl">
+                                        <div className="flex flex-col items-center gap-4">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Visualização</span>
+                                            <div className="flex gap-4 items-end">
+                                                <div className="bg-white p-2 rounded-lg border shadow-sm">
+                                                    <img src={base64Uri} className="w-8 h-8 object-contain" />
+                                                </div>
+                                                <div className="bg-white p-3 rounded-xl border shadow-md">
+                                                    <img src={base64Uri} className="w-12 h-12 object-contain" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-center">
+                                            <button onClick={() => setImage(null)} className="text-sm font-bold text-red-500 hover:bg-red-50 px-4 py-2 rounded-full transition-colors">
+                                                Trocar Imagem
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Code Block */}
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center px-1">
+                                            <span className="text-xs font-bold text-slate-500 flex items-center gap-2">
+                                                <i data-lucide="code" className="w-4 h-4 text-indigo-500"></i> Código para o seu &lt;head&gt;
+                                            </span>
+                                            <button 
+                                                onClick={copyCode}
+                                                className={`text-xs font-bold px-4 py-2 rounded-xl transition-all ${copied ? 'bg-green-500 text-white' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
+                                            >
+                                                {copied ? 'Copiado!' : 'Copiar Código'}
+                                            </button>
+                                        </div>
+                                        <div className="bg-slate-900 text-indigo-300 p-6 rounded-3xl font-mono text-[10px] break-all h-32 overflow-y-auto border border-slate-800 shadow-inner">
+                                            {`<link rel="icon" type="image/png" href="${base64Uri}">`}
+                                        </div>
+                                    </div>
+
+                                    {/* Download Buttons */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <button onClick={() => downloadImage(32)} className="bg-white border-2 border-slate-100 hover:border-indigo-100 py-4 rounded-2xl font-bold text-slate-700 transition-all flex items-center justify-center gap-2">
+                                            <i data-lucide="download" className="w-4 h-4"></i> PNG 32px
+                                        </button>
+                                        <button onClick={() => downloadImage(48)} className="bg-white border-2 border-slate-100 hover:border-indigo-100 py-4 rounded-2xl font-bold text-slate-700 transition-all flex items-center justify-center gap-2">
+                                            <i data-lucide="download" className="w-4 h-4"></i> PNG 48px
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Info Box */}
+                            <div className="bg-indigo-50 rounded-3xl p-6 flex gap-4 border border-indigo-100">
+                                <i data-lucide="info" className="w-6 h-6 text-indigo-500 shrink-0"></i>
+                                <div className="text-sm text-indigo-900 leading-relaxed">
+                                    <strong>O que é este código?</strong><br/>
+                                    Ao usar o formato "Base64" (esse texto longo), você não precisa hospedar a imagem separadamente. O ícone fica "embutido" diretamente no seu arquivo HTML.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+
+        // Inicializa ícones Lucide após render
+        setTimeout(() => lucide.createIcons(), 500);
+    </script>
+</body>
+</html>
