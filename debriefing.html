@@ -534,43 +534,66 @@
     }
 
     function submitForm() {
-        document.getElementById('input_papel').value = state.role;
-        document.getElementById('input_ferramentas').value = state.tools.map(t => t.name).join(', ');
-        document.getElementById('input_fases').value = state.phases.join(', ');
-        document.getElementById('input_tempo').value = state.totalMinutes;
+        // 1. Feedback visual imediato
+        const btn = document.getElementById('nextBtn');
+        btn.innerText = "Enviando...";
+        btn.disabled = true;
+
+        // 2. Prepara os dados do Estado para envio
+        const params = new URLSearchParams();
         
-        // Formata detalhe: "PLAN: 30min; Peixe: 15min"
+        // Mapeamento Chave (Planilha) -> Valor (Estado)
+        params.append('Papel_Usuario', state.role || "Não informado");
+        params.append('Ferramentas', state.tools.map(t => t.name).join(', ') || "Nenhuma");
+        params.append('Fases_Abordadas', state.phases.join(', ') || "Nenhuma");
+        params.append('Tempo_Total_Minutos', state.totalMinutes || "0");
+        
+        // Detalhe do tempo
         let detail = [];
         state.tools.forEach(t => {
             let time = state.toolTimes[t.name] || 0;
             detail.push(`${t.name}: ${time}m`);
         });
-        document.getElementById('input_detalhe_tempo').value = detail.join('; ');
+        params.append('Detalhe_Tempo_Ferramentas', detail.join('; '));
 
-        document.getElementById('input_comparacao').value = state.answers.comparacao;
-        document.getElementById('input_cognitivo').value = state.answers.cognitivo;
-        document.getElementById('input_seguranca').value = state.answers.seguranca || "Indiferente";
-        document.getElementById('input_efetividade').value = state.answers.efetividade;
-        document.getElementById('input_feedback').value = document.getElementById('feedbackText').value;
-        document.getElementById('input_data').value = new Date().toLocaleString('pt-BR');
+        params.append('Comparacao', state.answers.comparacao || "");
+        params.append('Carga_Cognitiva', state.answers.cognitivo || "");
+        params.append('Seguranca_Dados', state.answers.seguranca || "Indiferente");
+        params.append('Veredito_Efetividade', state.answers.efetividade || "");
+        params.append('Feedback_Texto', document.getElementById('feedbackText').value || "");
+        params.append('Data', new Date().toLocaleString('pt-BR'));
 
-        const form = document.getElementById('realForm');
-        document.getElementById('nextBtn').innerText = "Enviando...";
-        
-        fetch(form.action, { method: 'POST', body: new FormData(form), mode: 'no-cors' })
+        // 3. Pega a URL do formulário oculto
+        const formUrl = document.getElementById('realForm').action;
+
+        // 4. Envia usando URLSearchParams (Formato nativo que o Google ama)
+        console.log("Enviando dados:", params.toString());
+
+        fetch(formUrl, {
+            method: 'POST',
+            body: params, // <--- AQUI MUDOU (Não é mais JSON)
+            mode: 'no-cors'
+        })
         .then(() => {
+            console.log("Sucesso (No-CORS)!");
+            // Avança para a tela de agradecimento
             currentStep = 6;
             updateUI();
         })
-        .catch(() => alert("Erro ao enviar."));
+        .catch((error) => {
+            console.error("Erro no envio:", error);
+            alert("Houve um erro técnico no envio. Tente novamente.");
+            btn.innerText = "Enviar Avaliação";
+            btn.disabled = false;
+        });
     }
-
     updateUI();
 </script>
 
 </body>
 
 </html>
+
 
 
 
