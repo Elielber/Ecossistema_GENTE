@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debriefing Inteligente - Ecossistema GENTE</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #2980b9;
+            --success: #27ae60;
+            --bg: #f0f2f5;
+            --text: #333;
+            
+            /* CORES DAS FASES */
+            --f1-color: #7f8c8d; /* 1. Planejamento (Cinza) */
+            --f2-color: #c0392b; /* 2. Táticas (Vermelho) */
+            --f3-color: #e67e22; /* 3. Tarefas (Coral) */
+            --f4-color: #27ae60; /* 4. Desempenho (Verde) */
+            --f5-color: #2980b9; /* 5. Resultados (Azul) */
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            color: var(--text);
+        }
+
+        #chat-container {
+            background: white;
+            width: 100%;
+            max-width: 800px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+            position: relative;
+            height: 800px; 
+            display: flex;
+            flex-direction: column;
+        }
+
+        .progress-bar { height: 6px; background: #e0e0e0; width: 100%; flex-shrink: 0;}
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.4s ease; }
+
+        .content-area {
+            flex-grow: 1;
+            position: relative;
+            overflow-y: auto;
+        }
+
+        .step-content {
+            padding: 40px 50px;
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            box-sizing: border-box;
+            animation: fadeIn 0.4s ease;
+        }
+        .step-content.active { display: flex; }
+        .step-content.final-step { text-align: center; justify-content: center; align-items: center; }
+
+        h2 { color: var(--primary); margin-top: 0; margin-bottom: 10px; font-size: 1.6rem; }
+        p.desc { color: #666; margin-bottom: 25px; line-height: 1.5; font-size: 1.05rem; }
+
+        /* GRID DE FERRAMENTAS */
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            width: 100%;
+        }
+
+        .tool-card {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border-top-width: 5px; 
+            border-top-style: solid;
+        }
+
+        /* Cores das Bordas */
+        .border-f1 { border-top-color: var(--f1-color); }
+        .border-f2 { border-top-color: var(--f2-color); }
+        .border-f3 { border-top-color: var(--f3-color); }
+        .border-f4 { border-top-color: var(--f4-color); }
+        .border-f5 { border-top-color: var(--f5-color); }
+
+        .tool-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .tool-card.selected { background: #f4f9fd; border-left: 1px solid var(--accent); border-right: 1px solid var(--accent); border-bottom: 1px solid var(--accent); }
+        .tool-card.selected::after {
+            content: '✓'; position: absolute; bottom: 10px; right: 15px;
+            color: var(--accent); font-weight: bold; font-size: 1.4rem;
+        }
+
+        .tool-name { font-weight: 700; font-size: 1rem; color: #34495e; margin-bottom: 2px; }
+        .tool-phase-name { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;}
+
+        /* ESTILOS ESPECÍFICOS PARA O PASSO DE TEMPO (STEP 3) */
+        .time-breakdown-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .time-row {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 12px;
+            border-left-width: 5px; /* Cor da fase vai aqui */
+            border-left-style: solid;
+        }
+
+        .time-tool-title { font-weight: 600; color: #444; margin-bottom: 8px; font-size: 0.95rem; }
+
+        .time-options { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        .time-pill {
+            padding: 6px 12px;
+            background: #f1f1f1;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+        .time-pill:hover { background: #e0e0e0; }
+        .time-pill.selected { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .total-time-display {
+            background: #e8f4fd;
+            color: var(--accent);
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            text-align: center;
+            font-size: 1.1rem;
+            margin-bottom: 25px;
+            border: 1px solid #b3d7f2;
+        }
+
+        /* Options Simple (Genérico) */
+        .options-list { display: flex; flex-direction: column; gap: 12px; }
+        .option-simple {
+            padding: 18px; border: 1px solid #ddd; border-radius: 8px;
+            cursor: pointer; display: flex; align-items: center; gap: 15px;
+            transition: 0.2s; font-size: 1rem;
+        }
+        .option-simple:hover { background: #f9f9f9; border-color: #bbb; transform: translateX(5px); }
+        .option-simple.selected { background: var(--primary); color: white; border-color: var(--primary); }
+
+        /* Inputs */
+        input, textarea {
+            width: 100%; padding: 15px; border: 1px solid #ccc;
+            border-radius: 8px; box-sizing: border-box; font-family: inherit; font-size: 1rem;
+        }
+
+        .nav-buttons {
+            padding: 25px 50px; border-top: 1px solid #eee;
+            display: flex; justify-content: space-between; background: #fff;
+            flex-shrink: 0; 
+        }
+        button.nav-btn {
+            padding: 12px 30px; border: none; border-radius: 6px;
+            cursor: pointer; font-weight: bold; font-size: 1rem; transition: background 0.3s;
+        }
+        .btn-next { background: var(--primary); color: white; }
+        .btn-prev { background: transparent; color: #777; }
+        .btn-next:disabled { background: #ccc; cursor: not-allowed; }
+        
+        .success-icon { font-size: 5rem; color: var(--success); margin-bottom: 20px; animation: popIn 0.6s; }
+        .btn-close { background: var(--success); color: white; padding: 15px 40px; border: none; border-radius: 30px; cursor: pointer; margin-top: 30px; font-size: 1.1rem; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes popIn { 0% { transform: scale(0); } 80% { transform: scale(1.1); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+<div id="chat-container">
+    <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+
+   <form id="realForm" action="https://script.google.com/macros/s/AKfycbzvWY6RctHRMJBsbxDhohAGVm3Yd3mYiJMTfKyve4n7ODDdd6aOftOCiPhdiFHEC4wU/exec" method="POST" style="display:none;">
+        <input type="hidden" name="Papel_Usuario" id="input_papel">
+        <input type="hidden" name="Ferramentas" id="input_ferramentas">
+        <input type="hidden" name="Fases_Abordadas" id="input_fases">
+        <input type="hidden" name="Tempo_Total_Minutos" id="input_tempo">
+        <input type="hidden" name="Detalhe_Tempo_Ferramentas" id="input_detalhe_tempo"> <input type="hidden" name="Comparacao" id="input_comparacao">
+        <input type="hidden" name="Carga_Cognitiva" id="input_cognitivo">
+        <input type="hidden" name="Seguranca_Dados" id="input_seguranca">
+        <input type="hidden" name="Veredito_Efetividade" id="input_efetividade">
+        <input type="hidden" name="Feedback_Texto" id="input_feedback">
+        <input type="hidden" name="Data" id="input_data">
+    </form>
+
+    <div class="content-area">
+
+        <div class="step-content active" data-step="1">
+            <h2>Quem é você na operação? 🕵️</h2>
+            <p class="desc">Para personalizar as perguntas, selecione o papel que melhor descreve sua atuação hoje:</p>
+            <div class="options-list">
+                <div class="option-simple" onclick="selectRole(this, 'Lideranca_Projetos')">🚧 <strong>Liderança de Projetos</strong></div>
+                <div class="option-simple" onclick="selectRole(this, 'Gestao_Pessoas')">👥 <strong>Gestão de Pessoas</strong></div>
+                <div class="option-simple" onclick="selectRole(this, 'Gestao_Estrategica')">♟️ <strong>Gestão Estratégica</strong></div>
+                <div class="option-simple" onclick="selectRole(this, 'Gestao_Educacional')">🎓 <strong>Gestão Educacional/Pesquisa</strong></div>
+                <div class="option-simple" onclick="selectRole(this, 'Operacao_Tecnica')">⚙️ <strong>Operação Técnica</strong></div>
+            </div>
+        </div>
+
+        <div class="step-content" data-step="2">
+            <h2>O que você utilizou? 🧰</h2>
+            <p class="desc">As ferramentas estão identificadas pela cor da fase estratégica:</p>
+            
+            <div class="tools-grid">
+                <div class="tool-card border-f1" onclick="toggleTool(this, 'Peixe-Voador', 'f1', '#7f8c8d')">
+                    <span class="tool-name">🐟 Peixe-Voador</span><span class="tool-phase-name" style="color:var(--f1-color)">1. Planejamento Ágil</span>
+                </div>
+                <div class="tool-card border-f1" onclick="toggleTool(this, 'PLAYS', 'f1', '#7f8c8d')">
+                    <span class="tool-name">🎭 PLAYS</span><span class="tool-phase-name" style="color:var(--f1-color)">1. Planejamento Ágil</span>
+                </div>
+                <div class="tool-card border-f1" onclick="toggleTool(this, 'CRITER_ANP', 'f1', '#7f8c8d')">
+                    <span class="tool-name">⚖️ CRITER & ANP</span><span class="tool-phase-name" style="color:var(--f1-color)">1. Planejamento Ágil</span>
+                </div>
+                <div class="tool-card border-f1" onclick="toggleTool(this, 'AlugarOuComprar', 'f1', '#7f8c8d')">
+                    <span class="tool-name">🚗 Alugar ou Comprar</span><span class="tool-phase-name" style="color:var(--f1-color)">1. Planejamento Ágil</span>
+                </div>
+
+                <div class="tool-card border-f2" onclick="toggleTool(this, 'PLAN', 'f2', '#c0392b')">
+                    <span class="tool-name">📝 PLAN</span><span class="tool-phase-name" style="color:var(--f2-color)">2. Táticas Controle</span>
+                </div>
+                <div class="tool-card border-f2" onclick="toggleTool(this, 'MON', 'f2', '#c0392b')">
+                    <span class="tool-name">💰 MON</span><span class="tool-phase-name" style="color:var(--f2-color)">2. Táticas Controle</span>
+                </div>
+                <div class="tool-card border-f2" onclick="toggleTool(this, 'PN', 'f2', '#c0392b')">
+                    <span class="tool-name">🎚️ PN</span><span class="tool-phase-name" style="color:var(--f2-color)">2. Táticas Controle</span>
+                </div>
+
+                <div class="tool-card border-f3" onclick="toggleTool(this, 'GED', 'f3', '#e67e22')">
+                    <span class="tool-name">📋 GED-1 & GED-2</span><span class="tool-phase-name" style="color:var(--f3-color)">3. Gestão Tarefas</span>
+                </div>
+
+                <div class="tool-card border-f4" onclick="toggleTool(this, 'RH', 'f4', '#27ae60')">
+                    <span class="tool-name">🏆 RH</span><span class="tool-phase-name" style="color:var(--f4-color)">4. Gestão Desempenho</span>
+                </div>
+
+                <div class="tool-card border-f5" onclick="toggleTool(this, 'COCKPIT', 'f5', '#2980b9')">
+                    <span class="tool-name">📊 COCKPIT</span><span class="tool-phase-name" style="color:var(--f5-color)">5. Resultados/Negócio</span>
+                </div>
+                <div class="tool-card border-f5" onclick="toggleTool(this, 'Cubo', 'f5', '#2980b9')">
+                    <span class="tool-name">🎲 Cubo da Pesquisa</span><span class="tool-phase-name" style="color:var(--f5-color)">5. Resultados/Negócio</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="step-content" data-step="3">
+            <h2>Eficiência e Tempo ⏱️</h2>
+            <p class="desc">Quanto tempo você dedicou a cada ferramenta selecionada?</p>
+            
+            <div id="time-tools-list" class="time-breakdown-list"></div>
+
+            <div class="total-time-display" id="totalTimeDisplay">
+                Tempo Total Estimado: 0 min
+            </div>
+
+            <p class="desc">Comparado à sua ferramenta anterior (Planilha/Software) para fazer o mesmo trabalho:</p>
+            <div class="options-list">
+                <div class="option-simple" onclick="selectSingleOption(this, 'comparacao', 'Muito Mais')">🐢 A antiga seria mais lenta</div>
+                <div class="option-simple" onclick="selectSingleOption(this, 'comparacao', 'Igual')">⚖️ Equivalente</div>
+                <div class="option-simple" onclick="selectSingleOption(this, 'comparacao', 'Menos')">🏎️ A antiga seria mais rápida</div>
+            </div>
+        </div>
+
+        <div class="step-content" data-step="4">
+            <h2>Experiência de Uso 🧠</h2>
+            <p class="desc">Qual o nível de esforço mental para operar o sistema?</p>
+            <div class="options-list">
+                <div class="option-simple" onclick="selectSingleOption(this, 'cognitivo', '5')">😌 Baixo esforço (Intuitivo)</div>
+                <div class="option-simple" onclick="selectSingleOption(this, 'cognitivo', '3')">😐 Médio esforço</div>
+                <div class="option-simple" onclick="selectSingleOption(this, 'cognitivo', '1')">🤯 Alto esforço (Confuso)</div>
+            </div>
+            <br>
+            <p class="desc" style="margin-top: 20px;">Sobre a segurança dos dados (Offline/Backendless):</p>
+            <div class="options-list">
+                <div class="option-simple" onclick="selectSingleOption(this, 'seguranca', 'Mais Seguro')">🛡️ Sinto mais segurança (Offline)</div>
+                <div class="option-simple" onclick="selectSingleOption(this, 'seguranca', 'Indiferente')">🤷 Indiferente</div>
+            </div>
+        </div>
+
+        <div class="step-content" data-step="5">
+            <h2 id="verdict-title">O Veredito 🔨</h2>
+            <p class="desc" id="verdict-desc">O resultado atendeu?</p>
+            <div class="options-list">
+                <div class="option-simple" onclick="selectSingleOption(this, 'efetividade', '5')">🚀 Sim, superou expectativas</div>
+                <div class="option-simple" onclick="selectSingleOption(this, 'efetividade', '4')">👍 Atendeu plenamente</div>
+                <div class="option-simple" onclick="selectSingleOption(this, 'efetividade', '2')">🚧 Atendeu parcialmente</div>
+                <div class="option-simple" onclick="selectSingleOption(this, 'efetividade', '1')">👎 Não atendeu</div>
+            </div>
+            <br>
+            <textarea id="feedbackText" rows="4" placeholder="Comentários, bugs ou sugestões para o Ecossistema..."></textarea>
+        </div>
+
+        <div class="step-content final-step" data-step="6">
+            <div class="success-icon">✓</div>
+            <h2>Obrigado!</h2>
+            <p class="desc">Seu feedback é essencial para o aprimoramento do Ecossistema GENTE.</p>
+            <button class="btn-close" onclick="location.href='index.html'">Voltar ao Início</button>
+        </div>
+    </div>
+
+    <div class="nav-buttons" id="navContainer">
+        <button class="nav-btn btn-prev" id="prevBtn" onclick="changeStep(-1)">Voltar</button>
+        <button class="nav-btn btn-next" id="nextBtn" onclick="changeStep(1)">Próximo</button>
+    </div>
+</div>
+
+<script>
+    let currentStep = 1;
+    const totalSteps = 5;
+    
+    // Estado
+    const state = {
+        role: null,
+        tools: [],     // { name: 'PLAN', color: '#c0392b' }
+        phases: [],
+        toolTimes: {}, // { 'PLAN': 30, 'Peixe': 15 }
+        totalMinutes: 0,
+        answers: {}
+    };
+
+    function updateUI() {
+        document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+        document.querySelector(`.step-content[data-step="${currentStep}"]`).classList.add('active');
+
+        let progress = ((currentStep - 1) / (totalSteps)) * 100;
+        if(currentStep > totalSteps) progress = 100;
+        document.querySelector('.progress-fill').style.width = `${progress}%`;
+
+        const navContainer = document.getElementById('navContainer');
+        if (currentStep > totalSteps) {
+            navContainer.style.display = 'none';
+        } else {
+            navContainer.style.display = 'flex';
+            document.getElementById('prevBtn').style.visibility = currentStep === 1 ? 'hidden' : 'visible';
+            const nextBtn = document.getElementById('nextBtn');
+            nextBtn.innerText = currentStep === totalSteps ? "Enviar Avaliação" : "Próximo";
+            nextBtn.style.background = currentStep === totalSteps ? "#27ae60" : "#2c3e50";
+        }
+    }
+
+    // STEP 1
+    function selectRole(el, role) {
+        el.parentNode.querySelectorAll('.option-simple').forEach(opt => opt.classList.remove('selected'));
+        el.classList.add('selected');
+        state.role = role;
+    }
+
+    // STEP 2
+    function toggleTool(el, toolName, phase, colorHex) {
+        el.classList.toggle('selected');
+        
+        // Verifica se já existe
+        const existingIndex = state.tools.findIndex(t => t.name === toolName);
+        if (existingIndex > -1) {
+            state.tools.splice(existingIndex, 1);
+            // Remove tempo se desmarcar
+            delete state.toolTimes[toolName];
+        } else {
+            state.tools.push({ name: toolName, phase: phase, color: colorHex });
+        }
+        recalcPhases();
+    }
+
+    function recalcPhases() {
+        state.phases = [...new Set(state.tools.map(t => t.phase))];
+    }
+
+    // STEP 3 - RENDERIZADOR DE TEMPO (NOVO)
+    function renderTimeStep() {
+        const container = document.getElementById('time-tools-list');
+        container.innerHTML = ''; // Limpa
+
+        if (state.tools.length === 0) {
+            container.innerHTML = '<p style="text-align:center; color:#999;">Nenhuma ferramenta selecionada.</p>';
+            return;
+        }
+
+        state.tools.forEach(tool => {
+            const row = document.createElement('div');
+            row.className = 'time-row';
+            row.style.borderLeftColor = tool.color;
+
+            const title = document.createElement('div');
+            title.className = 'time-tool-title';
+            title.innerText = tool.name;
+
+            const optionsDiv = document.createElement('div');
+            optionsDiv.className = 'time-options';
+
+            const times = [15, 30, 45, 60, 90]; // 90 representa >1h
+            const labels = ["15m", "30m", "45m", "1h", ">1h"];
+
+            times.forEach((timeVal, idx) => {
+                const pill = document.createElement('div');
+                pill.className = 'time-pill';
+                pill.innerText = labels[idx];
+                // Verifica se já estava selecionado
+                if (state.toolTimes[tool.name] === timeVal) pill.classList.add('selected');
+
+                pill.onclick = () => {
+                    // Remove seleção visual dos irmãos
+                    Array.from(optionsDiv.children).forEach(c => c.classList.remove('selected'));
+                    pill.classList.add('selected');
+                    // Salva estado
+                    state.toolTimes[tool.name] = timeVal;
+                    calcTotalTime();
+                };
+                optionsDiv.appendChild(pill);
+            });
+
+            row.appendChild(title);
+            row.appendChild(optionsDiv);
+            container.appendChild(row);
+        });
+        calcTotalTime();
+    }
+
+    function calcTotalTime() {
+        let total = 0;
+        Object.values(state.toolTimes).forEach(val => total += val);
+        state.totalMinutes = total;
+
+        const display = document.getElementById('totalTimeDisplay');
+        if (total === 0) {
+            display.innerText = "Tempo Total Estimado: 0 min";
+        } else {
+            let h = Math.floor(total / 60);
+            let m = total % 60;
+            let text = "";
+            if (h > 0) text += `${h}h `;
+            if (m > 0) text += `${m}min`;
+            display.innerText = `Tempo Total Estimado: ${text}`;
+        }
+    }
+
+    // GENÉRICO
+    function selectSingleOption(el, key, value) {
+        el.parentNode.querySelectorAll('.option-simple').forEach(opt => opt.classList.remove('selected'));
+        el.classList.add('selected');
+        state.answers[key] = value;
+    }
+
+    // STEP 5 - VEREDITO
+    function generateSmartVerdict() {
+        const titleEl = document.getElementById('verdict-title');
+        const descEl = document.getElementById('verdict-desc');
+        const role = state.role; 
+        const phases = state.phases;
+        let title = "O Veredito Final";
+        let desc = "Como você avalia o resultado?";
+
+        if (phases.length > 1) {
+            title = "Integração Sistêmica 🔗";
+            if (role === 'Gestao_Estrategica') desc = "A conexão entre as ferramentas te deu uma visão holística para decidir?";
+            else desc = "A combinação das ferramentas gerou uma solução completa para seu problema?";
+        } 
+        else if (phases.includes('f1')) { 
+            title = "Clareza Estratégica 🎯";
+            desc = "A ferramenta reduziu a incerteza do planejamento?";
+        }
+        else if (phases.includes('f2')) {
+            title = "Viabilidade Tática 🛠️";
+            desc = "O plano gerado é realista e viável?";
+        }
+        else if (phases.includes('f3')) {
+            title = "Organização Operacional 📋";
+            desc = "A ferramenta organizou o caos e definiu prioridades?";
+        }
+        else if (phases.includes('f4')) {
+            title = "Mérito e Engajamento 🏆";
+            desc = "A avaliação de desempenho ficou transparente?";
+        }
+        else if (phases.includes('f5')) {
+            title = "Visão de Negócio 🦅";
+            desc = "Você conseguiu visualizar os KPIs que importam?";
+        }
+        titleEl.innerText = title;
+        descEl.innerText = desc;
+    }
+
+    // NAVEGAÇÃO
+    function changeStep(dir) {
+        if (dir === 1) {
+            if (currentStep === 1 && !state.role) return alert("Selecione seu papel.");
+            if (currentStep === 2 && state.tools.length === 0) return alert("Selecione ao menos uma ferramenta.");
+            
+            // Validação Step 3 (Tempo)
+            if (currentStep === 3) {
+                // Verifica se todas as ferramentas selecionadas têm tempo
+                const toolsWithTime = Object.keys(state.toolTimes).length;
+                if (toolsWithTime < state.tools.length) return alert("Por favor, estime o tempo para todas as ferramentas selecionadas.");
+                if (!state.answers.comparacao) return alert("Responda a comparação com a ferramenta antiga.");
+            }
+
+            if (currentStep === 4 && !state.answers.cognitivo) return alert("Avalie o esforço.");
+        }
+
+        const next = currentStep + dir;
+        
+        // Renderiza Step 3 se estiver indo pra lá
+        if (next === 3) renderTimeStep();
+        if (next === 5) generateSmartVerdict();
+
+        if (next > totalSteps) {
+            submitForm();
+        } else {
+            currentStep = next;
+            updateUI();
+        }
+    }
+
+    function submitForm() {
+        document.getElementById('input_papel').value = state.role;
+        document.getElementById('input_ferramentas').value = state.tools.map(t => t.name).join(', ');
+        document.getElementById('input_fases').value = state.phases.join(', ');
+        document.getElementById('input_tempo').value = state.totalMinutes;
+        
+        // Formata detalhe: "PLAN: 30min; Peixe: 15min"
+        let detail = [];
+        state.tools.forEach(t => {
+            let time = state.toolTimes[t.name] || 0;
+            detail.push(`${t.name}: ${time}m`);
+        });
+        document.getElementById('input_detalhe_tempo').value = detail.join('; ');
+
+        document.getElementById('input_comparacao').value = state.answers.comparacao;
+        document.getElementById('input_cognitivo').value = state.answers.cognitivo;
+        document.getElementById('input_seguranca').value = state.answers.seguranca || "Indiferente";
+        document.getElementById('input_efetividade').value = state.answers.efetividade;
+        document.getElementById('input_feedback').value = document.getElementById('feedbackText').value;
+        document.getElementById('input_data').value = new Date().toLocaleString('pt-BR');
+
+        const form = document.getElementById('realForm');
+        document.getElementById('nextBtn').innerText = "Enviando...";
+        
+        fetch(form.action, { method: 'POST', body: new FormData(form), mode: 'no-cors' })
+        .then(() => {
+            currentStep = 6;
+            updateUI();
+        })
+        .catch(() => alert("Erro ao enviar."));
+    }
+
+    updateUI();
+</script>
+
+</body>
+
+</html>
