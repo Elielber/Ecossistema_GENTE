@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Preço Bom - Super App</title>
+    <style>
+        :root {
+            --primary: #2c3e50; --secondary: #95a5a6; --accent: #e67e22;
+            --bg: #ecf0f1; --white: #ffffff; --danger: #e74c3c; --success: #27ae60;
+            --premium: #f1c40f; --cli-bg: #e3f2fd; --cli-accent: #1565c0;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; padding: 0; background-color: var(--bg); color: #333;
+            height: 100vh; overflow-x: hidden;
+        }
+
+        /* --- CONTROLE DE TELAS (FIX DE LAYOUT) --- */
+        .app-screen { display: none; width: 100%; min-height: 100vh; animation: fadeIn 0.3s; position: absolute; top:0; left:0; }
+        .app-screen.active { display: block; }
+        
+        /* TELA WELCOME */
+        #screen-welcome {
+            background: linear-gradient(135deg, var(--primary), #34495e);
+            color: white; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; text-align: center; padding: 20px;
+            z-index: 2000; /* Garante que fique acima se algo der errado */
+        }
+        .welcome-logo { font-size: 3.5rem; margin-bottom: 10px; text-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .welcome-btn {
+            background: white; color: var(--primary); border: none; padding: 20px;
+            border-radius: 15px; width: 100%; max-width: 320px; margin: 12px 0;
+            font-size: 1.1rem; font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: transform 0.2s;
+            display: flex; align-items: center; justify-content: flex-start; gap: 15px; padding-left: 30px;
+        }
+        .welcome-btn:active { transform: scale(0.98); }
+        .welcome-btn.btn-prestador { background: var(--accent); color: white; }
+
+        /* HEADER GERAL */
+        header {
+            color: white; padding: 15px; text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            position: fixed; top: 0; left: 0; width: 100%; z-index: 1000;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .header-content { width: 100%; position: relative; display: flex; align-items: center; justify-content: center;}
+        .btn-home { 
+            position: absolute; left: 0; background: rgba(255,255,255,0.2); border: none; color: white;
+            padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; cursor: pointer;
+        }
+        h1 { margin: 0; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* --- ESTILOS CLIENTE --- */
+        #screen-cliente { padding-top: 80px; padding-bottom: 20px; background-color: var(--cli-bg); }
+        #screen-cliente header { background: linear-gradient(135deg, var(--cli-accent), #1976d2); height: 70px; }
+        
+        .notification-card {
+            background: white; border-radius: 10px; padding: 15px; margin-bottom: 10px;
+            border-left: 5px solid var(--cli-accent); box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .badge { background: #eee; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
+        .badge-green { background: #d4edda; color: #155724; }
+
+        /* --- ESTILOS PRESTADOR --- */
+        #screen-prestador { padding-top: 155px; padding-bottom: 90px; background-color: var(--bg); }
+        #screen-prestador header { background: linear-gradient(135deg, var(--primary), #34495e); height: 95px; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; }
+
+        /* NAV PRESTADOR */
+        .nav-tabs {
+            display: flex; justify-content: space-between; background: white;
+            position: fixed; top: 90px; left: 10px; right: 10px; z-index: 999;
+            border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 5px;
+        }
+        .nav-btn { flex: 1; padding: 8px 5px; border: none; background: none; font-size: 0.75rem; color: #7f8c8d; border-radius: 8px; font-weight: 600; transition: 0.3s; display: flex; flex-direction: column; align-items: center; gap:3px;}
+        .nav-btn.active { background-color: #dff9fb; color: var(--primary); }
+        .nav-icon { font-size: 1.2rem; }
+        
+        /* Notificação (Bolinha vermelha) */
+        .notify-badge { position: absolute; top: 5px; right: 25px; background: red; color: white; border-radius: 50%; width: 16px; height: 16px; font-size: 0.6rem; display: flex; align-items: center; justify-content: center; }
+
+        /* CARDS DE OPORTUNIDADE (Prestador) */
+        .opp-card {
+            background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px;
+            border: 1px solid #eee; position: relative; border-left: 4px solid var(--accent);
+        }
+        .opp-card h4 { margin: 0 0 5px 0; color: var(--primary); }
+        .opp-meta { font-size: 0.8rem; color: #666; display: flex; gap: 10px; margin-bottom: 10px; }
+        .opp-desc { font-size: 0.9rem; color: #333; background: #f9f9f9; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+
+        /* COMPONENTES GERAIS */
+        .container { display: none; padding: 15px; animation: fadeIn 0.3s; }
+        .container.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 12px; position: relative; border-left: 5px solid var(--secondary); transition: 0.2s; }
+        .card.selected { border-left: 5px solid var(--success); background-color: #f0fdf4; }
+        
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .card-title { font-weight: bold; font-size: 1rem; color: var(--primary); margin-bottom: 5px; }
+        .card-subtitle { font-size: 0.75rem; color: #7f8c8d; }
+
+        .check-icon { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem; background: #eee; color: #ccc; }
+        .card.selected .check-icon { background: var(--success); color: white; }
+        
+        .form-group { margin-bottom: 15px; }
+        .label { display: block; font-size: 0.8rem; color: #7f8c8d; margin-bottom: 5px; font-weight: 600; }
+        .input { width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 8px; font-size: 1rem; background: #f9f9f9; }
+        .input:focus { border-color: var(--accent); outline: none; background: white;}
+        .row { display: flex; gap: 10px; }
+        .col { flex: 1; }
+        
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; margin-top: 10px; text-align: center;}
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-accent { background: var(--accent); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-outline { background: white; border: 1px solid #bdc3c7; color: #7f8c8d; }
+        .btn-danger { background: white; border: 1px solid var(--danger); color: var(--danger); }
+        .btn-premium { background: linear-gradient(45deg, #f1c40f, #f39c12); color: white; box-shadow: 0 2px 10px rgba(241, 196, 15, 0.4); }
+        .btn-sm { padding: 5px 10px; font-size: 0.8rem; width: auto; margin-top: 0; }
+        
+        /* FOOTER PRESTADOR */
+        .floating-footer { position: fixed; bottom: 0; left: 0; width: 100%; background: white; padding: 10px 15px; box-shadow: 0 -4px 10px rgba(0,0,0,0.1); display: flex; gap: 10px; align-items: center; z-index: 900; }
+        .total-box { flex: 1; display: flex; flex-direction: column; }
+        .total-val { font-size: 1.1rem; font-weight: bold; color: var(--primary); }
+        .btn-action { background-color: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 25px; font-weight: bold; font-size: 0.9rem; }
+        .btn-zap { background-color: #25D366; color: white; border: none; padding: 10px 15px; border-radius: 25px; font-weight: bold; display: flex; align-items: center; gap: 5px; font-size: 0.9rem; }
+        .btn-pix { background-color: #32a9ba; color: white; border: none; padding: 10px 15px; border-radius: 25px; font-weight: bold; display: flex; align-items: center; gap: 5px; font-size: 0.9rem; }
+
+        .list-item-row { display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; padding: 8px; border-radius: 6px; margin-bottom: 5px; border: 1px solid #eee; }
+        .qty-control { display: flex; align-items: center; gap: 5px; background: #eee; padding: 2px; border-radius: 5px; }
+        .qty-btn { width: 25px; height: 25px; border: none; background: white; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .tag { background: #dfe6e9; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; color: #2d3436; }
+
+        /* MODAL */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; display: none; align-items: flex-end; }
+        .modal-content { background: white; width: 100%; border-top-left-radius: 20px; border-top-right-radius: 20px; padding: 20px; max-height: 90vh; overflow-y: auto; animation: slideUp 0.3s; }
+        .pix-box { text-align: center; padding: 15px; background: #f8f9fa; border-radius: 10px; border: 1px dashed #ccc; margin-top: 10px; }
+        .pix-code { word-break: break-all; font-family: monospace; font-size: 0.8rem; background: #fff; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin: 10px 0; }
+        .qr-img { width: 150px; height: 150px; margin: 0 auto; display: block; }
+    </style>
+</head>
+<body>
+
+<div id="screen-welcome" class="app-screen active" style="display:flex;">
+    <div class="welcome-logo">🤝</div>
+    <h1 style="margin-bottom:10px;">Preço Bom</h1>
+    <p style="opacity:0.8; margin-bottom:40px; max-width:80%;">Conectando quem precisa com quem faz bem feito.</p>
+
+    <button class="welcome-btn" onclick="goToScreen('cliente')">
+        <span style="font-size:1.5rem">🏠</span> 
+        <div style="text-align:left">
+            <div style="font-size:0.8rem; opacity:0.7">PARA VOCÊ</div>
+            <div>Pedir um Serviço</div>
+        </div>
+    </button>
+    
+    <button class="welcome-btn btn-prestador" onclick="goToScreen('prestador')">
+        <span style="font-size:1.5rem">🛠️</span> 
+        <div style="text-align:left">
+            <div style="font-size:0.8rem; opacity:0.7">PARA PROFISSIONAIS</div>
+            <div>Sou Prestador</div>
+        </div>
+    </button>
+    <div style="margin-top:50px; font-size:0.7rem; opacity:0.5">Versão 9.4</div>
+</div>
+
+<div id="screen-cliente" class="app-screen">
+    <header>
+        <div class="header-content">
+            <button class="btn-home" onclick="goToScreen('welcome')">⬅ Início</button>
+            <h1>Cliente</h1>
+        </div>
+    </header>
+
+    <div style="padding: 15px;">
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+            <button class="btn btn-outline" style="margin:0; background:white; color:var(--cli-accent); border-color:var(--cli-accent)" onclick="toggleClientView('novo')" id="btn-cli-novo">➕ Novo Pedido</button>
+            <button class="btn btn-outline" style="margin:0;" onclick="toggleClientView('pedidos')" id="btn-cli-lista">📂 Meus Pedidos</button>
+        </div>
+
+        <div id="view-cli-novo" style="display:block; animation: fadeIn 0.3s;">
+            <div class="card">
+                <div class="form-group">
+                    <span class="label">Categoria do Profissional</span>
+                    <select id="req-cat" class="input">
+    <option value="">Selecione a Categoria...</option>
+</select>
+                </div>
+                <div class="form-group"><span class="label">Título do Serviço</span><input type="text" id="req-titulo" class="input" placeholder="Ex: Pintura da Sala..."></div>
+                <div class="form-group"><span class="label">Descrição Detalhada</span><textarea id="req-desc" class="input" rows="4" placeholder="Descreva o que precisa ser feito..."></textarea></div>
+                <div class="row">
+                    <div class="col"><span class="label">Seu Nome</span><input type="text" id="req-nome" class="input"></div>
+                    <div class="col"><span class="label">Bairro e Cidade</span><input type="text" id="req-cidade" class="input" placeholder="Ex: Centro - Rio de Janeiro"></div>
+                </div>
+                <div class="form-group" style="margin-top:10px;"><span class="label">WhatsApp</span><input type="tel" id="req-zap" class="input" placeholder="(00) 00000-0000"></div>
+                <div style="margin: 15px 0; background: #fff3cd; padding: 10px; border-radius: 8px; border: 1px solid #ffeeba;">
+                    <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; font-size: 0.8rem; color: #856404;">
+                        <input type="checkbox" id="chk-termos" style="margin-top:3px;">
+                        <span>Declaro que li e concordo que o <strong>Preço Bom</strong> é apenas uma ferramenta de conexão. A negociação e pagamento são de minha total responsabilidade.</span>
+                    </label>
+                </div>
+                <button class="btn btn-success" onclick="enviarDemanda()">🚀 Enviar para Profissionais</button>
+            </div>
+        </div>
+
+                <div id="view-cli-lista" style="display:none; animation: fadeIn 0.3s;">
+            
+            <div class="card" style="background:#e3f2fd; border:none;">
+                <span class="label">Para ver seus pedidos, digite seu WhatsApp:</span>
+                <div style="display:flex; gap:10px;">
+                    <input type="tel" id="cli-login-zap" class="input" placeholder="Seu número usado no pedido">
+                    <button class="btn btn-primary btn-sm" style="width:auto; margin:0;" onclick="carregarMeusPedidos()">🔍 Buscar</button>
+                </div>
+            </div>
+
+            <div id="lista-pedidos-cliente">
+                <div style="text-align:center; color:#999; margin-top:30px;">Digite seu número acima para consultar.</div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div id="screen-prestador" class="app-screen">
+    <header>
+        <div class="header-content">
+            <button class="btn-home" onclick="goToScreen('welcome')">⬅ Início</button>
+            <h1>Preço Bom Pro</h1>
+            <div style="font-size:0.8rem; opacity:0.9; margin-top:5px;" id="header-status">Versão 9.4</div>
+        </div>
+    </header>
+
+    <div class="nav-tabs">
+        <button class="nav-btn" onclick="nav('oportunidades')" style="position:relative;">
+            <span class="nav-icon">🔔</span>Feed
+            <div class="notify-badge" id="badge-opp" style="display:none">0</div>
+        </button>
+        <button class="nav-btn active" onclick="nav('catalogo')"><span class="nav-icon">📋</span>Serviços</button>
+        <button class="nav-btn" onclick="nav('carrinho')"><span class="nav-icon">🛒</span>Orçamento</button>
+        <button class="nav-btn" onclick="nav('gestao')"><span class="nav-icon">⚙️</span>Gestão</button>
+    </div>
+
+    <div id="tab-oportunidades" class="container">
+        <div style="background:#fff3cd; padding:10px; border-radius:8px; font-size:0.8rem; color:#856404; margin-bottom:15px;">
+            ⚠️ Pedidos compatíveis com a especialidade definida na aba Gestão.
+        </div>
+        <div id="lista-oportunidades"></div>
+    </div>
+
+    <div id="tab-catalogo" class="container active">
+        <div class="form-group">
+            <input type="text" class="input" placeholder="🔍 Buscar serviço..." onkeyup="filtrarCatalogo(this.value)">
+        </div>
+        <div id="lista-catalogo"></div>
+    </div>
+
+    <div id="tab-carrinho" class="container">
+        <div id="lista-carrinho-empty" style="text-align:center; color:#999; margin-top:50px;">Selecione os serviços na aba Serviços.</div>
+        <div id="lista-carrinho"></div>
+        <div id="acoes-carrinho" style="display:none; margin-top:20px;">
+            <div class="form-group" style="background:white; padding:10px; border-radius:8px;">
+                <label style="display:flex; align-items:center; gap:10px; font-weight:600;">
+                    <input type="checkbox" id="chk-materiais" checked onchange="renderCarrinho()"> Incluir Materiais/Taxas?
+                </label>
+            </div>
+            <button class="btn btn-outline" onclick="salvarModelo()">💾 Salvar Modelo <span class="premium-lock">💎</span></button>
+            <button class="btn btn-danger" onclick="limparCarrinho()">🗑️ Limpar</button>
+            <div style="margin-top:20px; border-top:1px solid #ddd; padding-top:10px;">
+                <h4 onclick="toggleModelos()" style="margin:0; color:var(--primary); cursor:pointer;">📂 Carregar Modelo (Ver)</h4>
+                <div id="area-modelos" style="display:none; margin-top:10px;"></div>
+            </div>
+        </div>
+        <div style="height:60px"></div>
+    </div>
+
+    <div id="tab-gestao" class="container">
+        <div id="banner-premium" style="background: linear-gradient(45deg, #2c3e50, #34495e); color:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center;">
+            <h3 style="margin:0">Seja PRO 💎</h3>
+            <p style="font-size:0.8rem; opacity:0.9">Desbloqueie backup e itens ilimitados.</p>
+            <button class="btn btn-premium" onclick="simularCompraPremium()">Simular Assinatura</button>
+        </div>
+
+        <div class="card" style="border-left-color: #32a9ba;">
+            <span class="card-title">💠 Configurações do Negócio</span>
+            <div class="form-group" style="margin-top:10px;">
+                <span class="label">Sua Especialidade Principal (Define Notificações)</span>
+                <select id="cfg-specialty" class="input" onchange="salvarConfig()">
+    <option value="Geral">Serviços Gerais</option>
+</select>
+            </div>
+            <div class="form-group">
+                <span class="label">Chave Pix (Para QR Code)</span>
+                <input type="text" id="cfg-pix-key" class="input" placeholder="CPF/CNPJ/Email..." onchange="salvarConfig()">
+            </div>
+            <div class="row">
+                <div class="col"><span class="label">Nome Pix</span><input type="text" id="cfg-pix-name" class="input" onchange="salvarConfig()"></div>
+                <div class="col"><span class="label">Cidade Pix</span><input type="text" id="cfg-pix-city" class="input" onchange="salvarConfig()"></div>
+            </div>
+        </div>
+        
+        <div class="card" style="border-left-color: var(--primary);">
+            <div class="card-header"><span class="card-title">👥 Equipe/Cargos</span> <button class="btn-sm btn-primary" onclick="addProfissionalPrompt()">+ Novo</button></div>
+            <div id="lista-profissionais"></div>
+        </div>
+
+        <div class="card" style="border-left-color: var(--warning);">
+            <span class="card-title">💰 Taxas Globais (Opcional)</span>
+            <div class="row" style="margin-top:10px;">
+                <div class="col"><span class="label">Gestão Compra (R$)</span><input type="number" id="cfg-taxa-compra" class="input" onchange="salvarConfig()"></div>
+                <div class="col"><span class="label">Visita/Desloc (R$)</span><input type="number" id="cfg-taxa-visita" class="input" onchange="salvarConfig()"></div>
+            </div>
+        </div>
+
+        <div class="card" style="border-left-color: var(--accent);">
+            <span class="card-title">🛠️ Editor de Catálogo</span>
+            <button class="btn btn-accent" onclick="abrirEditorServico()">+ Criar Novo Serviço</button>
+            <div style="margin-top:10px; max-height:200px; overflow-y:auto;" id="lista-gestao-servicos"></div>
+        </div>
+
+        <div class="card" style="border-left-color: #9b59b6;">
+            <span class="card-title">☁️ Backup & Restauração <span class="premium-lock">💎</span></span>
+            <div class="row">
+                <button class="btn btn-outline" onclick="exportarBackup()">⬇️ Baixar</button>
+                <button class="btn btn-outline" onclick="document.getElementById('input-restore').click()">⬆️ Restaurar</button>
+                <input type="file" id="input-restore" style="display:none" onchange="importarBackup(this)">
+            </div>
+        </div>
+        
+        <button class="btn btn-danger" onclick="resetFactory()">⚠️ Resetar Fábrica</button>
+        <div style="height:60px"></div>
+    </div>
+
+    <div class="floating-footer" id="footer-orcamento" style="display:none;">
+        <div class="total-box">
+            <span style="font-size:0.7rem; color:#7f8c8d;">TOTAL ESTIMADO</span>
+            <span class="total-val" id="txt-total">R$ 0,00</span>
+        </div>
+        <button class="btn-action" onclick="enviarOrcamentoFinal()">Enviar Pela Plataforma</button>
+        <button class="btn-pix" onclick="abrirModalPix()">Pix</button>
+        <button class="btn-zap" onclick="gerarZap()">WhatsApp</button>
+    </div>
+</div>
+<div id="modal-detalhes" class="modal-overlay" onclick="if(event.target.id==='modal-detalhes')this.style.display='none'">
+    <div class="modal-content" style="background:#f8f9fa;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+            <h3 style="margin:0; color:var(--primary)">Detalhes da Proposta</h3>
+            <button onclick="document.getElementById('modal-detalhes').style.display='none'" style="border:none; background:none; font-size:1.5rem;">&times;</button>
+        </div>
+        <div id="conteudo-detalhes"></div>
+        <button class="btn btn-primary" onclick="document.getElementById('modal-detalhes').style.display='none'">Fechar</button>
+    </div>
+</div>
+<div id="modal-pix" class="modal-overlay" onclick="if(event.target.id==='modal-pix')this.style.display='none'">
+    <div class="modal-content">
+        <h3>Receber com Pix</h3>
+        <p style="font-size:0.9rem; color:#666;">QR Code EMVCo (Padrão Banco Central).</p>
+		<div style="background:#ffebee; color:#c62828; font-size:0.75rem; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">
+         ⚠️ ATENÇÃO: Este pagamento vai DIRETAMENTE para a conta do prestador. O Preço Bom não intermedia valores e não realiza estornos.
+         </div>
+        <div id="pix-alert" style="color:red; display:none; margin-bottom:10px;">Configure sua Chave Pix na aba Gestão!</div>
+        <div id="pix-container" style="display:none;">
+            <img id="img-qr" class="qr-img" src="" alt="QR Code">
+            <div class="pix-box">
+                <span class="label">Copia e Cola</span>
+                <div id="txt-brcode" class="pix-code"></div>
+                <button class="btn btn-primary" onclick="copiarPix()">Copiar Código</button>
+            </div>
+            <div style="text-align:center; margin-top:15px; font-weight:bold; font-size:1.2rem; color:var(--success)">Valor: <span id="val-pix-display">R$ 0,00</span></div>
+        </div>
+        <button class="btn btn-outline" style="margin-top:15px;" onclick="document.getElementById('modal-pix').style.display='none'">Fechar</button>
+    </div>
+</div>
+<div id="modal-avaliacao" class="modal-overlay" onclick="if(event.target.id==='modal-avaliacao')this.style.display='none'">
+    <div class="modal-content" style="text-align:center;">
+        <h3>Confirmar Contratação</h3>
+        <p>Você fechou com <strong id="aval-prestador"></strong>?</p>
+        <p style="font-size:0.9rem; color:#666;">Avalie para encerrar este pedido:</p>
+        
+        <div style="font-size:2rem; margin:15px 0; cursor:pointer;" id="stars-container">
+            <span onclick="setStar(1)">⭐</span><span onclick="setStar(2)">⭐</span><span onclick="setStar(3)">⭐</span><span onclick="setStar(4)">⭐</span><span onclick="setStar(5)">⭐</span>
+        </div>
+        <input type="hidden" id="aval-nota" value="5">
+        <input type="hidden" id="aval-id-demanda">
+        <input type="hidden" id="aval-zap-prestador">
+
+        <button class="btn btn-primary" onclick="enviarAvaliacao()">✅ Confirmar e Encerrar</button>
+    </div>
+</div>
+<div id="modal-editor" class="modal-overlay" onclick="if(event.target.id==='modal-editor')this.style.display='none'">
+    <div class="modal-content">
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+            <h3 id="modal-title" style="margin:0">Editar</h3>
+            <button onclick="document.getElementById('modal-editor').style.display='none'" style="border:none; background:none; font-size:1.5rem;">&times;</button>
+        </div>
+        <div id="modal-body"></div>
+        <button class="btn btn-primary" id="btn-modal-save">Salvar</button>
+    </div>
+</div>
+
+<script>
+    // --- MOCK DATABASE ---
+    const mockDemandas = [
+        { id: 101, cat: "Pintura", titulo: "Pintar Fachada", desc: "Fachada de casa térrea, aprox 40m2. Já tenho tinta.", cidade: "São Paulo", data: "2025-08-28", cliente: "Maria" },
+        { id: 102, cat: "Elétrica", titulo: "Trocar Chuveiro", desc: "Fiação antiga derreteu.", cidade: "São Paulo", data: "2025-08-28", cliente: "Carlos" },
+        { id: 103, cat: "Pintura", titulo: "Pintura Quarto Bebê", desc: "Preciso de tinta antialérgica.", cidade: "Osasco", data: "2025-08-15", cliente: "Ana" }
+    ];
+
+    let state = {
+        isPremium: false,
+        config: { specialty: "Geral", taxaCompra: 0, taxaVisita: 0, pixKey: "", pixName: "", pixCity: "" },
+        profs: [{id: "p1", nome: "Mão de Obra", valor: 50}],
+        catalogo: [{ id: 1, nome: "Serviço Exemplo", cat: "Geral", ordem: 1, equipe: [{pid: "p1", h: 2}], mat: [] }],
+        carrinho: [],
+        modelos: []
+    };
+
+   window.onload = () => { 
+        loadData(); // Carrega o que já estava na memória
+        
+        // --- NOVO: DETECTOR DE KIT NA URL ---
+        const params = new URLSearchParams(window.location.search);
+        const kitUrl = params.get('kit');
+        
+        if (kitUrl) {
+            // Se tiver um link de kit, tenta baixar e instalar
+            const btnConfirm = confirm("Deseja carregar as configurações deste perfil profissional agora?");
+            if (btnConfirm) {
+                fetch(kitUrl)
+                .then(response => {
+                    if(!response.ok) throw new Error("Arquivo não encontrado");
+                    return response.json();
+                })
+                .then(data => {
+                    // Mescla ou substitui o estado atual
+                    state = { ...state, ...data };
+                    saveData(); // Salva na memória do celular
+                    alert("✅ Perfil Profissional Carregado com Sucesso!");
+                    
+                    // Limpa a URL para o usuário não recarregar o kit sem querer depois
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    
+                    // Recarrega a tela para aplicar mudanças
+                    location.reload(); 
+                })
+                .catch(err => {
+                    alert("Erro ao carregar kit: " + err.message);
+                });
+            }
+        }
+        // -------------------------------------
+
+        popularCategorias();
+        if(state.config.specialty) {
+            const el = document.getElementById('cfg-specialty');
+            if(el) el.value = state.config.specialty;
+        }
+    };
+ 
+const APP_VERSION = "9.5 - Conectado";
+// COLE AQUI SUA URL DO GOOGLE APPS SCRIPT
+const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6YbMKWK4kuO-fdexmhOp_4_dO_-oeDwyVtJazuiA3le5rcA/exec"; 
+
+
+    
+     // --- LISTA MESTRE DE CATEGORIAS ---
+    const CATEGORIAS_SERVICOS = [
+        "Construção Civil (Pedreiro)",
+		"Projeto e Construção (Empreiteiro)",
+        "Pintura e Acabamento",
+        "Elétrica e Iluminação",
+        "Hidráulica e Encanamento",
+        "Refrigeração (Ar Condicionado)",
+        "Gesso e Drywall",
+        "Marcenaria e Planejados",
+        "Serralheria e Portões",
+        "Vidraçaria e Box",
+        "Montagem de Móveis",
+        "Jardinagem e Paisagismo",
+        "Limpeza Pós-Obra/Faxina",
+        "Impermeabilização",
+        "Segurança Eletrônica (Câmeras)",
+		"Desenvolvimento de Software",
+        "Pequenos Reparos (Marido de Aluguel)",
+        "Telhados e Calhas",
+        "Piscina e Lazer",
+		"Buffet e Festas",
+		"Publicidade e Propaganda", 
+        "Automação Residencial",
+		"Cuidador e Acompanhante",
+		"Nutrição",
+		"Dentista",
+        "Outros Serviços"
+    ];
+
+    // Função para preencher os menus automaticamente
+    function popularCategorias() {
+        const selects = ['req-cat', 'cfg-specialty'];
+        
+        selects.forEach(id => {
+            const el = document.getElementById(id);
+            if(!el) return;
+            
+            // Mantém a primeira opção (Selecione...) se for o do cliente
+            const valorAtual = el.value; // Tenta preservar seleção se houver
+            
+            // Limpa (mantendo o header se for cliente)
+            if(id === 'req-cat') el.innerHTML = '<option value="">Selecione a Categoria...</option>';
+            else el.innerHTML = '<option value="Geral">Serviços Gerais</option>';
+
+            CATEGORIAS_SERVICOS.sort().forEach(cat => {
+                el.innerHTML += `<option value="${cat}">${cat}</option>`;
+            });
+
+            // Se for prestador e já tiver config salva, seleciona ela
+            if(id === 'cfg-specialty' && state.config.specialty) {
+                el.value = state.config.specialty;
+            }
+        });
+    }
+    function goToScreen(screen) {
+        // Esconde todas as telas
+        document.querySelectorAll('.app-screen').forEach(el => {
+            el.classList.remove('active');
+            el.style.display = 'none';
+        });
+        
+        const target = document.getElementById('screen-'+screen);
+        
+        // CORREÇÃO: Se for 'welcome', usa FLEX. Se for outras, usa BLOCK.
+        if (screen === 'welcome') {
+            target.style.display = 'flex';
+        } else {
+            target.style.display = 'block';
+        }
+        
+        // Pequeno delay para animação CSS funcionar
+        setTimeout(() => target.classList.add('active'), 10);
+
+        if(screen === 'prestador') {
+            renderOportunidades();
+            nav('oportunidades');
+        }
+    }
+
+
+    // --- PRESTADOR NAV ---
+    function nav(tab) {
+        document.querySelectorAll('.container').forEach(e => e.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(e => e.classList.remove('active'));
+        
+        document.getElementById('tab-'+tab).classList.add('active');
+        const map = {'oportunidades':0, 'catalogo':1, 'carrinho':2, 'gestao':3};
+        document.querySelectorAll('.nav-btn')[map[tab]].classList.add('active');
+        document.getElementById('footer-orcamento').style.display = tab === 'carrinho' ? 'flex' : 'none';
+    }
+
+    // --- CLIENTE ---
+    function toggleClientView(view) {
+        document.getElementById('view-cli-novo').style.display = view === 'novo' ? 'block' : 'none';
+        document.getElementById('view-cli-lista').style.display = view === 'pedidos' ? 'block' : 'none';
+        const btnNovo = document.getElementById('btn-cli-novo');
+        const btnLista = document.getElementById('btn-cli-lista');
+        if(view === 'novo') {
+            btnNovo.style.background = 'white'; btnNovo.style.color = 'var(--cli-accent)';
+            btnLista.style.background = 'none'; btnLista.style.color = '#7f8c8d';
+        } else {
+            btnLista.style.background = 'white'; btnLista.style.color = 'var(--cli-accent)';
+            btnNovo.style.background = 'none'; btnNovo.style.color = '#7f8c8d';
+        }
+    }
+
+    function enviarDemanda() {
+    const cat = document.getElementById('req-cat').value;
+    const tit = document.getElementById('req-titulo').value;
+    const desc = document.getElementById('req-desc').value;
+    const nome = document.getElementById('req-nome').value;
+    const cid = document.getElementById('req-cidade').value;
+    const zap = document.getElementById('req-zap').value;
+    
+    // 1. LIMPEZA E VALIDAÇÃO PRÉVIA 
+    
+    const zapLimpo = zap.replace(/\D/g, ''); 
+    
+    // Se tiver menos de 10 dígitos (ex: faltou DDD ou número), avisa agora
+    if (zapLimpo.length < 10) {
+        alert("⚠️ Telefone inválido! Digite o DDD + Número (Mínimo 10 dígitos).");
+        return; // Para aqui e não envia pro servidor
+    }
+    
+    // VALIDAÇÃO JURÍDICA
+    const termos = document.getElementById('chk-termos');
+    if(!termos || !termos.checked) {
+        alert("⚠️ Por favor, aceite os termos de responsabilidade para continuar.");
+        return;
+    }
+    
+    if(!cat || !tit || !nome || !zap) { alert("Preencha os campos obrigatórios!"); return; }
+
+    const btn = document.querySelector('#view-cli-novo .btn-success');
+    const txtOriginal = btn.innerText;
+    btn.innerText = "Enviando e Protegendo...";
+    btn.disabled = true;
+
+    const payload = {
+        categoria: cat, 
+        titulo: tit, 
+        descricao: desc,
+        nome: nome, 
+        cidade: cid, 
+        zap: zap
+    };
+
+    fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify(payload),
+        mode: "no-cors"
+    })
+    .then(() => {
+        alert(`✅ Sucesso! Sua demanda foi registrada.\n\nAviso: Nunca faça pagamentos antecipados sem conhecer o profissional.`);
+        document.getElementById('req-titulo').value = "";
+        document.getElementById('req-desc').value = "";
+        
+        toggleClientView('pedidos');
+        const lista = document.getElementById('lista-pedidos-cliente');
+        lista.innerHTML = `
+            <div class="notification-card" style="border-left-color: orange;">
+                <div style="display:flex; justify-content:space-between;">
+                    <strong>${tit}</strong>
+                    <span class="badge">Enviado</span>
+                </div>
+                <div style="font-size:0.8rem; color:#666; margin-top:5px;">Aguarde orçamentos no WhatsApp</div>
+            </div>` + lista.innerHTML;
+            
+        btn.innerText = txtOriginal;
+        btn.disabled = false;
+    })
+    .catch(err => {
+        alert("Erro de conexão. Tente novamente.");
+        btn.innerText = txtOriginal;
+        btn.disabled = false;
+    });
+}
+
+    // Variável global para guardar os orçamentos carregados e podermos clicar em "Ver Detalhes"
+    let cacheOrcamentosCliente = [];
+
+  function carregarMeusPedidos() {
+        const zap = document.getElementById('cli-login-zap').value;
+        if(!zap) { alert("Digite seu telefone!"); return; }
+        localStorage.setItem('cli_zap', zap);
+
+        const div = document.getElementById('lista-pedidos-cliente');
+        div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando...</div>";
+
+        fetch(API_URL + "?acao=BUSCAR_MEUS_PEDIDOS&zap=" + zap)
+        .then(res => res.json())
+        .then(demandas => {
+            div.innerHTML = "";
+            cacheOrcamentosCliente = demandas; // Salva no cache
+
+            if(demandas.length === 0) {
+                div.innerHTML = "<div style='text-align:center;'>Nenhum pedido encontrado.</div>";
+                return;
+            }
+
+            // ORDENAÇÃO: Abertas primeiro, Fechadas por último
+            demandas.sort((a, b) => {
+                if (a.status === 'ABERTA' && b.status === 'FECHADO') return -1;
+                if (a.status === 'FECHADO' && b.status === 'ABERTA') return 1;
+                return new Date(b.data) - new Date(a.data); // Desempate por data
+            });
+
+            demandas.forEach((d, indexDemanda) => {
+                // VERIFICA SE ESTÁ FECHADO
+                const isFechado = d.status === 'FECHADO';
+                
+                // ESTILO DO CARD (Se fechado: cinza e opaco / Se aberto: branco e normal)
+                const cardStyle = isFechado 
+                    ? "background:#f4f4f4; border-left:5px solid #7f8c8d; opacity:0.8; filter: grayscale(100%);" 
+                    : "border-left:5px solid var(--cli-accent);";
+
+                const badgeStatus = isFechado
+                    ? `<span class="badge" style="background:#7f8c8d; color:white;">🔒 CONCLUÍDO</span>`
+                    : `<span class="badge badge-green">ABERTA</span>`;
+
+                let htmlOrcamentos = "";
+                
+                if(d.orcamentos.length > 0) {
+                    d.orcamentos.forEach((o, indexOrc) => {
+                        // Verifica se este prestador foi o vencedor
+                        // (d.vencedor vem do backend preenchido quando fecha)
+                        const isVencedor = isFechado && d.vencedor && d.vencedor.toString() === o.zapPrestador.toString();
+                        
+                        // Link do Zap
+                        const msgZap = `Olá, estou retomando o contato sobre o serviço: ${d.titulo}.`;
+                        const linkZap = `https://wa.me/${o.zapPrestador}?text=${encodeURIComponent(msgZap)}`;
+
+                        // Lógica de Reputação (Visual)
+                        let corBorda = "#ddd";
+                        if(o.reputacao && o.reputacao.includes("Ouro")) corBorda = "#f1c40f"; 
+                        else if(o.reputacao && o.reputacao.includes("Prata")) corBorda = "#bdc3c7"; 
+                        else if(o.reputacao && o.reputacao.includes("Bronze")) corBorda = "#cd7f32";
+
+                        // Estrelas
+                        let htmlEstrelas = (!o.estrelas || o.estrelas === "Novato") ? "🆕" : `⭐ ${o.estrelas}`;
+
+                        // Se estiver fechado, esconde orçamentos PERDEDORES para limpar a tela
+                        // (Ou mostra de forma bem discreta). Aqui optei por mostrar só o vencedor ou todos discretos.
+                        // Vamos manter todos, mas destacar o vencedor.
+                        
+                        let estiloOrc = isVencedor 
+                            ? "background:#d4edda; border:2px solid #28a745;" // Vencedor ganha verde
+                            : `background:white; border:1px solid ${corBorda}; border-left: 5px solid ${corBorda};`;
+
+                        htmlOrcamentos += `
+                        <div style="${estiloOrc} padding:12px; border-radius:8px; margin-top:8px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                                <div>
+                                    <div style="font-weight:bold; color:var(--primary)">
+                                        ${isVencedor ? '🏆 ' : '👷 '}${o.prestador}
+                                    </div>
+                                    <div style="font-size:0.75rem; color:#666; margin-top:2px;">
+                                        ${o.seloVolume || ''} • ${htmlEstrelas}
+                                    </div>
+                                </div>
+                                <div style="font-weight:bold; font-size:1.1rem; color:var(--success)">${o.valor}</div>
+                            </div>
+                            
+                            <div style="display:flex; gap:10px; margin-top:10px;">
+                                <button class="btn btn-outline btn-sm" style="flex:1;" onclick="verDetalhesOrcamento(${indexDemanda}, ${indexOrc})">👁️ Ver</button>
+                                
+                                <a href="${linkZap}" target="_blank" class="btn btn-success btn-sm" style="flex:1; text-decoration:none; display:flex; align-items:center; justify-content:center; ${isFechado ? 'background:#ccc; border-color:#ccc;' : ''}">
+                                    ${isFechado ? 'Ver Zap' : '💬 Negociar'}
+                                </a>
+                                
+                                ${!isFechado ? 
+                                  `<button class="btn btn-outline btn-sm" style="flex:1; border-color:#f1c40f; color:#d35400;" onclick="abrirModalAvaliacao('${d.id}', '${o.prestador}', '${o.zapPrestador}')">🏆 Contratar</button>` 
+                                  : ''}
+                            </div>
+                        </div>`;
+                    });
+                } else {
+                    htmlOrcamentos = "<div style='font-size:0.8rem; color:#999; margin-top:5px;'>Aguardando orçamentos...</div>";
+                }
+
+                div.innerHTML += `
+                <div class="notification-card" style="${cardStyle}">
+                    <div style="display:flex; justify-content:space-between;">
+                        <strong>${d.titulo}</strong>
+                        <div>${badgeStatus} <span class="badge">${d.orcamentos.length} Props</span></div>
+                    </div>
+                    <div style="font-size:0.8rem; color:#666; margin-top:5px;">Data: ${new Date(d.data).toLocaleDateString('pt-BR')}</div>
+                    
+                    ${isFechado && d.nota ? `<div style="font-size:0.8rem; color:#e67e22; margin-top:5px;">⭐ Sua avaliação: ${d.nota}</div>` : ''}
+
+                    <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+                    ${htmlOrcamentos}
+                </div>`;
+            });
+        });
+    }
+
+    // Função Nova: Popula e abre o modal
+   function verDetalhesOrcamento(idxDemanda, idxOrc) {
+        const dadosBrutos = cacheOrcamentosCliente[idxDemanda].orcamentos[idxOrc];
+        const div = document.getElementById('conteudo-detalhes');
+        
+        // Tratamento de compatibilidade (Versão antiga vs Nova)
+        let itens = [];
+        let taxas = 0;
+        
+        // Se for o formato novo (Objeto), extrai. Se for antigo (Array), usa direto.
+        if (dadosBrutos.itens && !Array.isArray(dadosBrutos.itens) && dadosBrutos.itens.lista) {
+            itens = dadosBrutos.itens.lista;
+            taxas = dadosBrutos.itens.taxas || 0;
+        } else {
+            itens = dadosBrutos.itens || []; // Legado
+        }
+
+        let html = `<div style="margin-bottom:15px; color:#666">Profissional: <strong>${dadosBrutos.prestador}</strong></div>`;
+        
+        // Agrupamento por Fases (Igual ao Zap)
+        const grupos = {};
+        itens.forEach(item => {
+            if(!grupos[item.ordem]) grupos[item.ordem] = [];
+            grupos[item.ordem].push(item);
+        });
+        const ordens = Object.keys(grupos).sort((a,b) => a-b);
+
+        if(ordens.length === 0) {
+            html += "<em>Sem detalhes disponíveis.</em>";
+        } else {
+            ordens.forEach(ordem => {
+                const listaDaFase = grupos[ordem];
+                const nomeFase = listaDaFase[0].cat ? listaDaFase[0].cat.toUpperCase() : "ETAPA";
+                
+                // Cabeçalho da Fase
+                html += `<div style="background:#eee; padding:5px 10px; font-weight:bold; margin-top:10px; border-radius:5px;">${ordem}. ${nomeFase}</div>`;
+                
+                let subTotal = 0;
+
+                listaDaFase.forEach(item => {
+                    const custoItem = (item._fixoMO || 0) + (item._fixoMat || 0);
+                    subTotal += custoItem;
+                    
+                    html += `<div style="padding:8px; border-bottom:1px solid #f1f1f1; display:flex; justify-content:space-between;">
+                                <div>
+                                    <div style="font-weight:600">${item.nome}</div>
+                                    <div style="font-size:0.75rem; color:#888">${item.qtd}x un.</div>
+                                </div>
+                                ${custoItem > 0 ? `<div>R$ ${custoItem.toFixed(2)}</div>` : ''}
+                             </div>`;
+                    
+                    // Lista Materiais (se houver custo neles)
+                    if(item._fixoMat > 0 && item.mat) {
+                        item.mat.forEach(m => {
+                           html += `<div style="padding-left:15px; font-size:0.7rem; color:#666">• ${m.q * item.qtd}x ${m.n}</div>`;
+                        });
+                    }
+                });
+                
+                // Subtotal da Fase
+                if(subTotal > 0) {
+                    html += `<div style="text-align:right; font-size:0.8rem; font-weight:bold; color:#555; padding:5px;">Subtotal Fase: R$ ${subTotal.toFixed(2)}</div>`;
+                }
+            });
+        }
+
+        // Taxas Extras
+        if (taxas > 0) {
+            html += `<div style="margin-top:10px; padding:10px; border-top:2px dashed #ddd; display:flex; justify-content:space-between;">
+                        <span>🚚 Deslocamento/Taxas</span>
+                        <strong>R$ ${taxas.toFixed(2)}</strong>
+                     </div>`;
+        }
+
+        // Total Final
+        html += `<div style="background:var(--success); color:white; padding:10px; text-align:center; font-size:1.2rem; font-weight:bold; border-radius:8px; margin-top:15px;">
+                    Total: ${dadosBrutos.valor}
+                 </div>`;
+
+        div.innerHTML = html;
+        document.getElementById('modal-detalhes').style.display = 'flex';
+    }
+
+    // Auto-preencher se já tiver logado antes
+    const zapSalvo = localStorage.getItem('cli_zap');
+    if(zapSalvo) document.getElementById('cli-login-zap').value = zapSalvo;
+
+    // --- OPORTUNIDADES ---
+        // Variável para guardar os dados vindos da planilha
+    let listaDemandasCache = [];
+
+    function renderOportunidades() {
+        const div = document.getElementById('lista-oportunidades');
+        const badge = document.getElementById('badge-opp');
+        const area = state.config.specialty;
+        
+        div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando oportunidades...</div>";
+
+        // BUSCA REAL NA PLANILHA (GET)
+        fetch(API_URL) 
+        .then(response => response.json())
+        .then(data => {
+            listaDemandasCache = data; // Salva o que veio da nuvem
+            filtrarERenderizar(div, area, badge);
+        })
+        .catch(err => {
+            console.error(err);
+            // Se der erro, tenta mostrar o cache ou mensagem de erro
+            if(listaDemandasCache.length > 0) filtrarERenderizar(div, area, badge);
+            else div.innerHTML = "<div style='text-align:center; color:red'>Erro de conexão. Verifique a internet.</div>";
+        });
+    }
+
+    function filtrarERenderizar(divElement, areaEspecialidade, badgeElement) {
+        divElement.innerHTML = "";
+        let count = 0;
+        const hoje = new Date();
+
+        listaDemandasCache.forEach(d => {
+            // 1. Filtro de Categoria (Prestador só vê o que sabe fazer)
+            if(d.cat !== areaEspecialidade && areaEspecialidade !== 'Geral') return;
+
+            // 2. Filtro de Data (Ignora pedidos com mais de 10 dias)
+            const dataDemanda = new Date(d.data);
+            const diffDays = Math.ceil(Math.abs(hoje - dataDemanda) / (1000 * 60 * 60 * 24)); 
+            
+            if(!isNaN(diffDays) && diffDays > 10) return;
+
+            count++;
+            
+            // Formata data e protege o título contra aspas que quebram o botão
+            const dataFormatada = !isNaN(dataDemanda) ? dataDemanda.toLocaleDateString('pt-BR') : 'Hoje';
+                     
+            const tituloSafe = d.titulo.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            
+            divElement.innerHTML += `
+            <div class="opp-card">
+                <div style="display:flex; justify-content:space-between">
+                    <h4>${d.titulo}</h4>
+                    <span class="badge badge-green">${d.cidade}</span>
+                </div>
+                <div class="opp-meta"> 📅 ${dataFormatada} • 👤 ${d.cliente} 
+               <span style="background:#e3f2fd; color:#1565c0; padding:2px 6px; border-radius:4px; font-size:0.7rem; margin-left:5px;"> ${d.reputacaoCliente || 'Novo'} </span>
+               </div>
+                <div class="opp-desc">${d.desc}</div>
+                <button class="btn btn-primary btn-sm" onclick="iniciarOrcamento('${d.id}', '${tituloSafe}', '${d.cliente}')">📝 Criar Orçamento</button>
+            </div>`;
+
+        });
+
+        if(count === 0) divElement.innerHTML = "<div style='text-align:center; padding:20px; color:#999'>Nenhuma demanda recente para "+areaEspecialidade+"</div>";
+        
+        badgeElement.innerText = count;
+        badgeElement.style.display = count > 0 ? 'flex' : 'none';
+    }
+
+            function iniciarOrcamento(idDemanda, titulo, nomeCliente) {
+        if(confirm(`Iniciar orçamento para: ${titulo}?`)) {
+            state.carrinho = [];
+            // SALVA O CONTEXTO DO ORÇAMENTO ATUAL
+            state.demandaAtiva = { id: idDemanda, cliente: nomeCliente, titulo: titulo };
+            saveData(); 
+            nav('catalogo');
+            alert("Carrinho limpo! Monte o orçamento e clique em Enviar no final.");
+        }
+    }
+
+      function enviarOrcamentoFinal() {
+        if(state.carrinho.length === 0) { alert("Carrinho vazio!"); return; }
+        if(!state.demandaAtiva || !state.demandaAtiva.id) { 
+            alert("Erro: Nenhuma demanda selecionada."); nav('oportunidades'); return; 
+        }
+        
+        const prestadorNome = state.config.pixName || "Profissional";
+        let zapInput = prompt("Seu WhatsApp (DDD + Número):", "") || "";
+        zapInput = zapInput.replace(/\D/g, ''); 
+        if (zapInput.length >= 10 && zapInput.length <= 11) zapInput = "55" + zapInput;
+        
+        // --- NOVO: ENRIQUECER ITENS COM CÁLCULOS FIXOS ---
+        // O cliente não tem sua tabela de preços, então calculamos agora e salvamos o valor fixo.
+        const itensCalculados = state.carrinho.map(item => {
+            let custoMOUnit = 0;
+            item.equipe.forEach(e => {
+                const p = state.profs.find(x => x.id === e.pid);
+                if(p) custoMOUnit += (p.valor * e.h);
+            });
+            const custoMatUnit = item.mat.reduce((acc, m) => acc + (m.q * (m.p||0)), 0);
+            
+            return {
+                ...item,
+                _fixoMO: custoMOUnit * item.qtd,   // Valor R$ total MO deste item
+                _fixoMat: custoMatUnit * item.qtd  // Valor R$ total Mat deste item
+            };
+        });
+
+        // Calcular Taxas Extras
+        let valorTaxas = 0;
+        const usaMat = document.getElementById('chk-materiais').checked;
+        if (usaMat) {
+            valorTaxas = (parseFloat(state.config.taxaCompra)||0) + (parseFloat(state.config.taxaVisita)||0);
+        }
+
+        const totalVal = document.getElementById('txt-total').innerText;
+        const btn = document.querySelector('#footer-orcamento .btn-action');
+        const txtOriginal = btn.innerText;
+        btn.innerText = "Enviando..."; btn.disabled = true;
+
+        // PACOTE ROBUSTO (Wrapper)
+        const pacoteDados = {
+            versao: 2, // Para identificar estrutura nova
+            lista: itensCalculados,
+            taxas: valorTaxas,
+            usaMateriais: usaMat
+        };
+
+        const payload = {
+            tipo: "NOVO_ORCAMENTO",
+            idDemanda: state.demandaAtiva.id,
+            prestadorNome: prestadorNome,
+            prestadorZap: zapInput,
+            valorTotal: totalVal,
+            itens: pacoteDados // Enviamos o objeto completo agora, não só a lista
+        };
+
+        fetch(API_URL, { method: "POST", body: JSON.stringify(payload), mode: "no-cors" })
+        .then(() => {
+            alert("✅ Orçamento detalhado enviado!");
+            const txt = `Olá ${state.demandaAtiva.cliente}! Enviei o orçamento de *${payload.valorTotal}* na plataforma.\nConfira lá!`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
+            state.carrinho = []; state.demandaAtiva = null; saveData(); renderCarrinho(); nav('oportunidades');
+            btn.innerText = txtOriginal; btn.disabled = false;
+        })
+        .catch(err => { btn.innerText = txtOriginal; btn.disabled = false; });
+    }
+
+
+
+    // --- LÓGICA PRINCIPAL (CATALOGO/CARRINHO/GESTÃO) ---
+    function loadData() {
+        const localData = localStorage.getItem('orcaFacilApp_v94');
+        if (localData) state = { ...state, ...JSON.parse(localData) };
+        
+        // Popula config
+        document.getElementById('cfg-specialty').value = state.config.specialty || "Geral";
+        document.getElementById('cfg-taxa-compra').value = state.config.taxaCompra;
+        document.getElementById('cfg-taxa-visita').value = state.config.taxaVisita;
+        document.getElementById('cfg-pix-key').value = state.config.pixKey || "";
+        document.getElementById('cfg-pix-name').value = state.config.pixName || "";
+        document.getElementById('cfg-pix-city').value = state.config.pixCity || "";
+        
+        updatePremiumUI();
+        renderAll();
+    }
+    
+    function saveData() {
+        localStorage.setItem('orcaFacilApp_v94', JSON.stringify(state));
+        renderAll();
+    }
+    
+    function renderAll() { renderCatalogo(); renderCarrinho(); renderGestao(); }
+
+    // --- CATÁLOGO ---
+    function renderCatalogo(filtro = "") {
+        const div = document.getElementById('lista-catalogo'); div.innerHTML = "";
+        const grupos = {};
+        
+        state.catalogo.forEach(s => {
+            if (s.nome.toLowerCase().includes(filtro.toLowerCase())) {
+                if (!grupos[s.cat]) grupos[s.cat] = [];
+                grupos[s.cat].push(s);
+            }
+        });
+
+        for (let cat in grupos) {
+            div.innerHTML += `<div class="label" style="margin-top:15px; font-size:0.9rem; color:var(--primary)">${cat}</div>`;
+            grupos[cat].forEach(s => {
+                let custoMO = 0; let t = 0;
+                s.equipe.forEach(m => { const p = state.profs.find(x => x.id === m.pid); if(p) custoMO += (p.valor * m.h); t += m.h; });
+                const isInCart = state.carrinho.some(i => i.idRef === s.id);
+                const cardClass = isInCart ? "card selected" : "card";
+                const icon = isInCart ? "✓" : "+";
+                div.innerHTML += `
+                <div class="${cardClass}" onclick="toggleCart(${s.id})">
+                    <div class="card-header">
+                        <div><div class="card-title">${s.nome}</div><div class="card-subtitle">⏱️ ${t.toFixed(1)}h | MO: R$ ${custoMO.toFixed(0)}</div></div>
+                        <div class="check-icon">${icon}</div>
+                    </div>
+                </div>`;
+            });
+        }
+    }
+
+    function toggleCart(idRef) {
+        const idx = state.carrinho.findIndex(i => i.idRef === idRef);
+        if (idx > -1) state.carrinho.splice(idx, 1);
+        else {
+            if(!checkPremiumLimit()) return;
+            const s = state.catalogo.find(s => s.id === idRef);
+            state.carrinho.push({
+                uid: Date.now(), idRef: s.id, nome: s.nome, cat: s.cat, ordem: s.ordem, qtd: 1,
+                equipe: JSON.parse(JSON.stringify(s.equipe)), mat: JSON.parse(JSON.stringify(s.mat))
+            });
+        }
+        saveData();
+    }
+
+    // --- CARRINHO ---
+    function renderCarrinho() {
+        const div = document.getElementById('lista-carrinho'); div.innerHTML = "";
+        const empty = document.getElementById('lista-carrinho-empty');
+        const actions = document.getElementById('acoes-carrinho');
+        
+        if (state.carrinho.length === 0) {
+            empty.style.display = 'block'; actions.style.display = 'none'; updateTotal(0); return;
+        }
+        empty.style.display = 'none'; actions.style.display = 'block';
+
+        let totalGeral = 0;
+        const itensOrdenados = state.carrinho.sort((a,b) => a.ordem - b.ordem);
+
+        itensOrdenados.forEach((item, idx) => {
+            let custoMO = 0;
+            item.equipe.forEach(e => { const p = state.profs.find(x => x.id === e.pid); if(p) custoMO += (p.valor * e.h); });
+            custoMO = custoMO * item.qtd;
+            totalGeral += custoMO;
+
+            let htmlMat = ''; let custoMat = 0;
+            if (document.getElementById('chk-materiais').checked) {
+                item.mat.forEach(m => {
+                    const totalM = m.q * item.qtd;
+                    const val = totalM * (m.p || 0);
+                    custoMat += val;
+                    htmlMat += `<div class="list-item-row" style="background:#fff3cd; font-size:0.8rem;"><span>${totalM}x ${m.n}</span>${m.p > 0 ? `<span>R$ ${val.toFixed(2)}</span>` : ''}</div>`;
+                });
+            }
+            totalGeral += custoMat;
+
+            div.innerHTML += `
+            <div class="card" style="border-left-color: #3498db;">
+                <div class="card-header">
+                    <div><div class="tag" style="background:#3498db; color:white; display:inline-block; margin-bottom:5px;">Ordem: ${item.ordem}</div><div class="card-title">${item.nome}</div></div>
+                    <div style="text-align:right">
+                        <div class="total-val" style="font-size:1rem;">R$ ${custoMO.toFixed(2)}</div>
+                        <div class="qty-control"><button class="qty-btn" onclick="mudaQtd(${idx}, -1)">-</button><span>${item.qtd}</span><button class="qty-btn" onclick="mudaQtd(${idx}, 1)">+</button></div>
+                    </div>
+                </div>
+                ${htmlMat}
+                <div class="row" style="margin-top:10px;"><button class="btn btn-outline btn-sm" onclick="editCartItem(${idx})">✏️ Editar</button><button class="btn btn-danger btn-sm" onclick="rmCartItem(${idx})">🗑️</button></div>
+            </div>`;
+        });
+        updateTotal(totalGeral);
+    }
+    
+    function mudaQtd(idx, delta) {
+        state.carrinho[idx].qtd += delta;
+        if(state.carrinho[idx].qtd < 1) state.carrinho[idx].qtd = 1;
+        saveData();
+    }
+    function updateTotal(val) {
+        if (document.getElementById('chk-materiais').checked && state.carrinho.length > 0) {
+            val += (parseFloat(state.config.taxaCompra)||0) + (parseFloat(state.config.taxaVisita)||0);
+        }
+        document.getElementById('txt-total').innerText = val.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+        return val;
+    }
+
+    // --- GESTÃO & EDITOR ---
+    function salvarConfig() {
+        state.config.specialty = document.getElementById('cfg-specialty').value;
+        state.config.taxaCompra = parseFloat(document.getElementById('cfg-taxa-compra').value)||0;
+        state.config.taxaVisita = parseFloat(document.getElementById('cfg-taxa-visita').value)||0;
+        state.config.pixKey = document.getElementById('cfg-pix-key').value;
+        state.config.pixName = document.getElementById('cfg-pix-name').value;
+        state.config.pixCity = document.getElementById('cfg-pix-city').value;
+        saveData();
+    }
+    
+    function renderGestao(){
+        const dp=document.getElementById('lista-profissionais'); dp.innerHTML=""; state.profs.forEach((p,i)=>{ dp.innerHTML+=`<div class="list-item-row"><input type="text" class="input" style="width:50%" value="${p.nome}" onchange="updateProf(${i},'nome',this.value)"><input type="number" class="input" style="width:30%" value="${p.valor}" onchange="updateProf(${i},'valor',this.value)"><button style="border:none;background:none;color:red;" onclick="rmProf(${i})">×</button></div>`;});
+        const ds=document.getElementById('lista-gestao-servicos'); ds.innerHTML=""; state.catalogo.forEach((s,i)=>{ ds.innerHTML+=`<div class="list-item-row"><span>${s.nome}</span><div><button class="btn-sm btn-outline" onclick="abrirEditorServico(${i})">✏️</button><button class="btn-sm btn-danger" onclick="rmServico(${i})">×</button></div></div>`;});
+    }
+    function addProfissionalPrompt(){const n=prompt("Cargo:");if(n){state.profs.push({id:"c"+Date.now(),nome:n,valor:0});saveData();}}
+    function updateProf(i,f,v){state.profs[i][f]=f==='valor'?parseFloat(v):v;saveData();}
+    function rmProf(i){if(confirm("Remover?")){state.profs.splice(i,1);saveData();}}
+    function rmServico(i){if(confirm("Apagar?")){state.catalogo.splice(i,1);saveData();}}
+    function rmCartItem(i){state.carrinho.splice(i,1);saveData();}
+    function limparCarrinho(){if(confirm("Limpar?")){state.carrinho=[];saveData();}}
+    function resetFactory(){if(confirm("Resetar?")){localStorage.clear();location.reload();}}
+    
+    // EDITOR MODAL
+    let tempItem=null, editCtx='', editIdx=-1;
+    function abrirEditorServico(i=null){ editCtx='catalogo'; editIdx=i; tempItem=i===null?{id:Date.now(),nome:"Novo",cat:"Geral",ordem:1,equipe:[],mat:[]}:JSON.parse(JSON.stringify(state.catalogo[i])); renderModalBody(); document.getElementById('modal-editor').style.display='flex'; }
+    function editCartItem(i){ editCtx='carrinho'; editIdx=i; tempItem=JSON.parse(JSON.stringify(state.carrinho[i])); renderModalBody(); document.getElementById('modal-editor').style.display='flex'; }
+    function renderModalBody(){
+        const b=document.getElementById('modal-body'), opts=state.profs.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+        b.innerHTML=`<div class="form-group"><span class="label">Nome</span><input type="text" class="input" value="${tempItem.nome}" onchange="tempItem.nome=this.value"></div>
+        <div class="row"><div class="col"><span class="label">Categoria</span><input type="text" class="input" value="${tempItem.cat||'Geral'}" onchange="tempItem.cat=this.value"></div><div class="col"><span class="label">Ordem</span><input type="number" class="input" value="${tempItem.ordem}" onchange="tempItem.ordem=parseInt(this.value)"></div></div>
+        <div style="margin-top:10px;border-top:1px solid #ddd;padding-top:5px;"><span class="label">Equipe</span><div id="mod-eq"></div><div class="row"><select id="s-p" class="input">${opts}</select><button class="btn btn-accent btn-sm" style="width:auto" onclick="addEq()">+</button></div></div>
+        <div style="margin-top:10px;border-top:1px solid #ddd;padding-top:5px;"><span class="label">Materiais</span><div id="mod-mt"></div><div class="row"><input id="i-m" class="input" placeholder="Material"><button class="btn btn-accent btn-sm" style="width:auto" onclick="addMt()">+</button></div></div>`;
+        renderModLists();
+        document.getElementById('btn-modal-save').onclick=()=>{
+            if(editCtx==='catalogo'){if(editIdx===null)state.catalogo.push(tempItem);else state.catalogo[editIdx]=tempItem;}else state.carrinho[editIdx]=tempItem;
+            saveData(); document.getElementById('modal-editor').style.display='none';
+        }
+    }
+    function renderModLists(){
+        document.getElementById('mod-eq').innerHTML=tempItem.equipe.map((e,i)=>{const p=state.profs.find(x=>x.id===e.pid);return `<div class="list-item-row"><span>${p?.nome}</span><span><input type="number" value="${e.h}" style="width:50px" onchange="tempItem.equipe[${i}].h=parseFloat(this.value)">h <span style="color:red" onclick="tempItem.equipe.splice(${i},1);renderModLists()">x</span></span></div>`}).join('');
+        document.getElementById('mod-mt').innerHTML=tempItem.mat.map((m,i)=>`<div class="list-item-row"><span>${m.n}</span><span>Q:<input type="number" value="${m.q}" style="width:40px" onchange="tempItem.mat[${i}].q=parseFloat(this.value)"> R$:<input type="number" value="${m.p}" style="width:50px" onchange="tempItem.mat[${i}].p=parseFloat(this.value)"> <span style="color:red" onclick="tempItem.mat.splice(${i},1);renderModLists()">x</span></span></div>`).join('');
+    }
+    function addEq(){const pid=document.getElementById('s-p').value;if(pid){tempItem.equipe.push({pid:pid,h:1});renderModLists();}}
+    function addMt(){const n=document.getElementById('i-m').value;if(n){tempItem.mat.push({n:n,q:1,p:0});document.getElementById('i-m').value='';renderModLists();}}
+
+    // --- FREEMIUM ---
+    function simularCompraPremium() { if(confirm("Ativar PRO?")) { state.isPremium = true; saveData(); updatePremiumUI(); } }
+    function updatePremiumUI() {
+        const s = document.getElementById('header-status'), b = document.getElementById('banner-premium');
+        if(state.isPremium) { s.innerHTML = "💎 PRO Ativo"; s.style.color = "#f1c40f"; b.style.display = 'none'; } 
+        else { s.innerHTML = "Versão Grátis"; s.style.color = "#ccc"; b.style.display = 'block'; }
+    }
+    function checkPremiumLimit() { if(state.isPremium) return true; if(state.carrinho.length >= 3) { alert("Limite Grátis atingido! Vire PRO."); nav('gestao'); return false; } return true; }
+    function salvarModelo(){if(!state.isPremium){alert("Recurso PRO 💎");nav('gestao');return;}const n=prompt("Nome:");if(n){state.modelos.push({n:n,itens:state.carrinho});saveData();alert("Salvo!");}}
+    function toggleModelos(){const d=document.getElementById('area-modelos');d.style.display=d.style.display==='none'?'block':'none';d.innerHTML=state.modelos.map((m,i)=>`<div class="list-item-row"><strong>${m.n}</strong><button class="btn-sm btn-primary" onclick="if(confirm('Carregar?')){state.carrinho=JSON.parse(JSON.stringify(state.modelos[${i}].itens));saveData();}">Carregar</button><button onclick="state.modelos.splice(${i},1);saveData();toggleModelos();" style="color:red;border:none">x</button></div>`).join('');}
+    function exportarBackup(){if(!state.isPremium){alert("Recurso PRO 💎");nav('gestao');return;}const b=new Blob([JSON.stringify(state)],{type:"application/json"});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`backup.json`;a.click();}
+    function importarBackup(i){const f=new FileReader();f.onload=(e)=>{try{state=JSON.parse(e.target.result);saveData();alert("Restaurado!");location.reload();}catch(x){alert("Erro");}};f.readAsText(i.files[0]);}
+
+   // --- ZAP AVANÇADO (V9) ---
+    function gerarZap() {
+        const nomeCliente = prompt("Nome do Cliente:", "") || "Cliente";
+        const validade = 10;
+        const dataHoje = new Date().toLocaleDateString('pt-BR');
+        const usaMat = document.getElementById('chk-materiais').checked;
+        const especialidade = state.config.specialty ? state.config.specialty.toUpperCase() : "ORÇAMENTO";
+
+        let txt = `*ORÇAMENTO: ${especialidade}*\n`;
+        txt += `👤 Cliente: ${nomeCliente}\n`;
+        txt += `📅 ${dataHoje} (Validade: ${validade} dias)\n\n`;
+
+        let totalGeralMO = 0;
+        let totalGeralMat = 0;
+        let resumoEquipe = {}; 
+
+        // Agrupa por Ordem/Fase
+        const grupos = {};
+        state.carrinho.forEach(item => {
+            if(!grupos[item.ordem]) grupos[item.ordem] = [];
+            grupos[item.ordem].push(item);
+        });
+
+        const ordens = Object.keys(grupos).sort((a,b) => a-b);
+        if(ordens.length === 0) { alert("Carrinho vazio!"); return; }
+
+        ordens.forEach(ordem => {
+            const nomeFase = grupos[ordem][0].cat ? grupos[ordem][0].cat.toUpperCase() : "ETAPA";
+            txt += `🏗️ *${ordem}. ${nomeFase}*\n`;
+
+            let subFaseMO = 0;
+            let subFaseMat = 0;
+            let subFaseHoras = 0;
+
+            grupos[ordem].forEach(item => {
+                let itemHoras = 0;
+                let itemCustoMO = 0;
+
+                item.equipe.forEach(e => {
+                    const prof = state.profs.find(p => p.id === e.pid);
+                    if (prof) {
+                        const hTotal = e.h * item.qtd;
+                        itemHoras += hTotal;
+                        itemCustoMO += (prof.valor * hTotal);
+                        if (!resumoEquipe[prof.nome]) resumoEquipe[prof.nome] = 0;
+                        resumoEquipe[prof.nome] += hTotal;
+                    }
+                });
+
+                let txtMateriais = "";
+                if (usaMat) {
+                    item.mat.forEach(m => {
+                        const qTotal = m.q * item.qtd;
+                        const custoM = qTotal * (m.p || 0);
+                        subFaseMat += custoM;
+                        txtMateriais += `      • ${qTotal}x ${m.n}\n`;
+                    });
+                }
+
+                subFaseMO += itemCustoMO;
+                subFaseHoras += itemHoras;
+
+                txt += `   ✅ ${item.nome} (${itemHoras.toFixed(1)}h)\n`;
+                if(txtMateriais) txt += txtMateriais;
+            });
+
+            // Fechamento Fase
+            const totalFase = subFaseMO + subFaseMat;
+            txt += `   🔹 *Subtotal Fase: R$ ${totalFase.toFixed(2)}*\n`;
+            txt += `     _(Tempo: ${subFaseHoras.toFixed(1)}h | MO: ${subFaseMO.toFixed(2)} | Mat: ${subFaseMat.toFixed(2)})_\n\n`;
+
+            totalGeralMO += subFaseMO;
+            totalGeralMat += subFaseMat;
+        });
+
+        // Resumo
+        txt += `--------------------\n`;
+        txt += `📊 *RESUMO TÉCNICO*\n`;
+        txt += `👥 *Equipe Necessária:*\n`;
+        for (let cargo in resumoEquipe) {
+            txt += `   - ${cargo}: ${resumoEquipe[cargo].toFixed(1)}h\n`;
+        }
+
+        txt += `\n--------------------\n`;
+        txt += `💰 *RESUMO DO ORÇAMENTO*\n`;
+        
+        if (usaMat && totalGeralMat > 0) txt += `📦 Total Materiais: R$ ${totalGeralMat.toFixed(2)}\n`;
+        txt += `🛠️ *Total Mão de Obra: R$ ${totalGeralMO.toFixed(2)}*\n`;
+
+        let taxasExtras = 0;
+        if (usaMat) {
+            taxasExtras = (parseFloat(state.config.taxaCompra)||0) + (parseFloat(state.config.taxaVisita)||0);
+            if (taxasExtras > 0) txt += `🚚 Gestão/Deslocamento: R$ ${taxasExtras.toFixed(2)}\n`;
+        }
+
+        const grandTotal = totalGeralMO + totalGeralMat + taxasExtras;
+        txt += `\n💰 *VALOR TOTAL: R$ ${grandTotal.toFixed(2)}*\n`;
+        txt += `--------------------\n`;
+        
+        if (state.config.pixKey) {
+            txt += `💠 *Pagamento via Pix:*\nChave: ${state.config.pixKey}\nNome: ${state.config.pixName}\n--------------------\n`;
+        }
+        
+        txt += `🔒 Obs: Orçamento sujeito a confirmação técnica.`;
+        window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
+    }
+    
+    function crc16ccitt(str) { let crc=0xFFFF; for(let i=0;i<str.length;i++){ let c=str.charCodeAt(i); crc^=(c<<8); for(let j=0;j<8;j++){ if(crc&0x8000)crc=(crc<<1)^0x1021; else crc=crc<<1; } } return (crc&0xFFFF).toString(16).toUpperCase().padStart(4,'0'); }
+    function generatePixPayload(key,name,city,amount,txid="***"){ if(!key)return null; name=name.substring(0,25).normalize("NFD").replace(/[\u0300-\u036f]/g,""); city=city.substring(0,15).normalize("NFD").replace(/[\u0300-\u036f]/g,""); amount=amount.toFixed(2); const p=['000201','26'+(18+key.length+4).toString().padStart(2,'0')+'0014BR.GOV.BCB.PIX'+'01'+key.length.toString().padStart(2,'0')+key,'52040000','5303986','54'+amount.length.toString().padStart(2,'0')+amount,'5802BR','59'+name.length.toString().padStart(2,'0')+name,'60'+city.length.toString().padStart(2,'0')+city,'62'+(4+txid.length+4).toString().padStart(2,'0')+'05'+txid.length.toString().padStart(2,'0')+txid]; let pl=p.join('')+'6304'; pl+=crc16ccitt(pl); return pl; }
+    function abrirModalPix(){ const t=updateTotal(0); if(t<=0){alert("Zerado");return;} if(!state.config.pixKey){document.getElementById('pix-alert').style.display='block';document.getElementById('pix-container').style.display='none';} else { document.getElementById('pix-alert').style.display='none';document.getElementById('pix-container').style.display='block'; const pl=generatePixPayload(state.config.pixKey,state.config.pixName||"User",state.config.pixCity||"BR",t); document.getElementById('txt-brcode').innerText=pl; document.getElementById('val-pix-display').innerText=t.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); document.getElementById('img-qr').src=`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(pl)}`; } document.getElementById('modal-pix').style.display='flex'; }
+    function copiarPix(){ navigator.clipboard.writeText(document.getElementById('txt-brcode').innerText).then(()=>alert("Copiado!")); }
+	function abrirModalAvaliacao(idDemanda, nomePrestador, zapPrestador) {
+    document.getElementById('aval-id-demanda').value = idDemanda;
+    document.getElementById('aval-prestador').innerText = nomePrestador;
+    document.getElementById('aval-zap-prestador').value = zapPrestador;
+    setStar(5); // Começa com 5
+    document.getElementById('modal-avaliacao').style.display = 'flex';
+}
+
+function setStar(n) {
+    document.getElementById('aval-nota').value = n;
+    const spans = document.querySelectorAll('#stars-container span');
+    spans.forEach((s, i) => {
+        s.style.opacity = i < n ? "1" : "0.3"; // Acende as estrelas até N
+    });
+}
+
+function enviarAvaliacao() {
+    const id = document.getElementById('aval-id-demanda').value;
+    const zap = document.getElementById('aval-zap-prestador').value;
+    const nota = document.getElementById('aval-nota').value;
+
+    const btn = document.querySelector('#modal-avaliacao .btn-primary');
+    btn.innerText = "Enviando..."; btn.disabled = true;
+
+    fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({
+            tipo: "FECHAR_DEMANDA",
+            idDemanda: id,
+            zapVencedor: zap,
+            nota: nota
+        }),
+        mode: "no-cors"
+    })
+    .then(() => {
+        alert("Obrigado! Demanda encerrada com sucesso.");
+        document.getElementById('modal-avaliacao').style.display = 'none';
+        carregarMeusPedidos(); // Recarrega a lista para mostrar como FECHADO
+        btn.innerText = "✅ Confirmar e Encerrar"; btn.disabled = false;
+    });
+}
+</script>
+</body>
+</html>
