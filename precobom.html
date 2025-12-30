@@ -514,7 +514,39 @@
         modelos: [],
 		historico: []
     };
+    // --- SISTEMA DE SEGURANÇA (NOVO) ---
+    const Security = {
+        // 1. Gera ou recupera a "Impressão Digital" do navegador
+        getDeviceID: function() {
+            let id = localStorage.getItem('pb_device_id');
+            if (!id) {
+                // Cria um ID único aleatório (Ex: "dev_17249382_xy9z")
+                id = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                localStorage.setItem('pb_device_id', id);
+            }
+            return id;
+        },
 
+        // 2. Captura dados de rede (IP e Cidade) de forma silenciosa
+        getNetworkData: async function() {
+            try {
+                // Usa uma API pública gratuita para pegar o IP
+                const response = await fetch('https://ipapi.co/json/');
+                const data = await response.json();
+                return {
+                    ip: data.ip || 'Oculto',
+                    cidade: data.city || 'Desconhecida',
+                    estado: data.region_code || 'BR',
+                    provedor: data.org || 'Desconhecido'
+                };
+            } catch (e) {
+                console.warn("Rastreio IP falhou (Bloqueador de Anúncios?)");
+                return { ip: 'Erro', cidade: 'Erro', estado: '-', provedor: '-' };
+            }
+        }
+    };
+
+	
    window.onload = () => { 
         loadData(); // Carrega o que já estava na memória
         
@@ -1364,16 +1396,46 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
     }
 
     // --- GESTÃO & EDITOR ---
-    function salvarConfig() {
+        async function salvarConfig() {
+        // 1. Captura os dados do formulário (normal)
         state.config.specialty = document.getElementById('cfg-specialty').value;
         state.config.taxaCompra = parseFloat(document.getElementById('cfg-taxa-compra').value)||0;
         state.config.taxaVisita = parseFloat(document.getElementById('cfg-taxa-visita').value)||0;
         state.config.pixKey = document.getElementById('cfg-pix-key').value;
         state.config.pixName = document.getElementById('cfg-pix-name').value;
         state.config.pixCity = document.getElementById('cfg-pix-city').value;
+        
+        // 2. Salva localmente para não perder nada
         saveData();
+
+        // 3. CAMADA DE SEGURANÇA: Registra o dispositivo se houver Pix
+        if(state.config.pixKey.length > 3) {
+            // Feedback visual silencioso no console
+            console.log("🔒 Autenticando dispositivo...");
+            
+            const deviceID = Security.getDeviceID();
+            const netData = await Security.getNetworkData();
+            
+            // Monta o pacote de "Impressão Digital"
+            const payloadSeguranca = {
+                tipo: "REGISTRO_DISPOSITIVO",
+                zap: "PRESTADOR_DESCONHECIDO", // O backend pode tentar cruzar depois
+                pix: state.config.pixKey,
+                deviceID: deviceID,
+                ip: netData.ip,
+                geo: `${netData.cidade}/${netData.estado}`,
+                userAgent: navigator.userAgent // Modelo do celular/navegador
+            };
+
+            // Envia para o Google Sheets (Fire and Forget - não trava o app)
+            fetch(API_URL, {
+                method: "POST",
+                body: JSON.stringify(payloadSeguranca),
+                mode: "no-cors"
+            });
+        }
     }
-    
+
     function renderGestao() {
         // --- LÓGICA DO DASHBOARD (BI) ---
         const mesAtual = new Date().getMonth();
