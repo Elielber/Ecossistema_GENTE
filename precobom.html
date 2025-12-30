@@ -628,6 +628,77 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
         }
     }
 
+    // Função acionada pelo Select de Especialidade
+    async function carregarKitPorEspecialidade() {
+        const especialidade = document.getElementById('cfg-specialty').value;
+        const select = document.getElementById('cfg-specialty');
+        
+        // Guarda o texto original para restaurar depois
+        const textoOriginal = select.options[select.selectedIndex].text;
+        select.options[select.selectedIndex].text = "🔄 Buscando...";
+
+        // 1. Padronização do nome do arquivo (Slug)
+        // Transforma "Elétrica e Iluminação" em "eletrica_e_iluminacao"
+        // (Ajuste aqui se seus arquivos usam hífen '-' em vez de underline '_')
+        let slug = especialidade
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+            .toLowerCase();
+            
+        // Mapeamento manual para garantir compatibilidade com seus 28 arquivos
+        // Se seus arquivos tiverem nomes simples como "pedreiro.json", o slug automático pode falhar
+        // Exemplo: "Construção Civil (Pedreiro)" viraria "construcao_civil_pedreiro"
+        // Se o arquivo for só "pedreiro.json", você pode precisar de um mapa simples:
+        
+        /* DESCOMENTE E AJUSTE SE PRECISAR DE NOMES ESPECÍFICOS
+        const mapaArquivos = {
+            "Construção Civil (Pedreiro)": "pedreiro",
+            "Pintura e Acabamento": "pintor",
+            "Elétrica e Iluminação": "eletricista"
+        };
+        if (mapaArquivos[especialidade]) slug = mapaArquivos[especialidade];
+        else slug = slug.replace(/ /g, "_").replace(/[^a-z0-9_]/g, ""); 
+        */
+
+        // Padrão genérico (tenta cobrir a maioria): troca espaços por _ e remove parenteses
+        slug = slug.replace(/ /g, "_").replace(/[^a-z0-9_]/g, "");
+
+        // Monta o caminho relativo da sua pasta
+        const urlKit = `kits/${slug}.json`; 
+
+        console.log("Tentando carregar:", urlKit);
+
+        try {
+            const response = await fetch(urlKit);
+            
+            if (!response.ok) {
+                // Se der 404, silencia. O usuário só escolheu uma categoria sem kit.
+                throw new Error("Kit não encontrado."); 
+            }
+
+            const data = await response.json();
+            
+            // Pergunta se quer aplicar (igual o link faz)
+            if (confirm(`📦 Encontrei uma configuração pronta para "${especialidade}".\n\nDeseja aplicar os serviços e taxas sugeridos?`)) {
+                // Mescla com o estado atual (preservando o que não conflita)
+                state = { ...state, ...data };
+                
+                // Força a especialidade selecionada (caso o JSON traga outra)
+                state.config.specialty = especialidade;
+                
+                saveData();
+                renderAll();
+                alert("✅ Configurações aplicadas com sucesso!");
+            }
+
+        } catch (error) {
+            console.log("Nenhum kit automático para: " + slug);
+        } finally {
+            // Restaura o visual do select e salva a mudança básica de categoria
+            select.options[select.selectedIndex].text = textoOriginal;
+            state.config.specialty = especialidade; // Salva a escolha mesmo se não tiver kit
+            saveData();
+        }
+    }
 
     // --- PRESTADOR NAV ---
     function nav(tab) {
