@@ -238,12 +238,18 @@
 
         <div id="view-cli-novo" style="display:block; animation: fadeIn 0.3s;">
             <div class="card">
-                <div class="form-group">
-                    <span class="label">Categoria do Profissional</span>
-                    <select id="req-cat" class="input">
-    <option value="">Selecione a Categoria...</option>
-</select>
-                </div>
+               <div class="form-group">
+                <span class="label">O que você precisa? (Área)</span>
+                <select id="req-grupo" class="input" onchange="atualizarSubCategorias('req')">
+                    <option value="">Carregando...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <span class="label">Qual o serviço específico?</span>
+                <select id="req-cat" class="input" disabled>
+                    <option value="">Selecione a área acima primeiro</option>
+                </select>
+            </div>
                 <div class="form-group"><span class="label">Título do Serviço</span><input type="text" id="req-titulo" class="input" placeholder="Ex: Pintura da Sala..."></div>
                 <div class="form-group"><span class="label">Descrição Detalhada</span><textarea id="req-desc" class="input" rows="4" placeholder="Descreva o que precisa ser feito..."></textarea></div>
                 <div class="row">
@@ -375,12 +381,19 @@
 
   <div class="card" style="border-left-color: #32a9ba;">
             <span class="card-title">💠 Configurações do Negócio</span>
-        <div class="form-group" style="margin-top:10px;">
-           <span class="label">Sua Especialidade Principal (Carrega Kits Automáticos)</span>
-            <select id="cfg-specialty" class="input" onchange="carregarKitPorEspecialidade()">
-              <option value="Geral">Serviços Gerais</option>
-            </select>
-        </div>
+      <div class="form-group" style="margin-top:10px;">
+          <span class="label">Sua Área de Atuação</span>
+          <select id="cfg-grupo" class="input" onchange="atualizarSubCategorias('cfg')">
+        <option value="">Carregando...</option>
+          </select>
+      </div>
+      <div class="form-group">
+    <span class="label">Sua Especialidade Principal (Define Notificações & Kits)</span>
+    <select id="cfg-specialty" class="input" onchange="carregarKitPorEspecialidade()" disabled>
+        <option value="">Selecione a área acima primeiro</option>
+    </select>
+</div>
+
             <div class="form-group">
                 <span class="label">Chave Pix (Para QR Code)</span>
                 <input type="text" id="cfg-pix-key" class="input" placeholder="CPF/CNPJ/Email..." onchange="salvarConfig()">
@@ -642,35 +655,77 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
 
 
     
-     // --- LISTA MESTRE DE CATEGORIAS ---
-    const CATEGORIAS_SERVICOS = [
-        "Obra e Reforma",
-		"Construção Civil",
-        "Pintura e Acabamento",
-        "Elétrica e Iluminação",
-        "Hidráulica e Encanamento",
-        "Refrigeração",
-        "Gesso e Drywall",
-        "Marcenaria e Planejados",
-        "Serralheria e Portões",
-        "Vidraçaria e Box",
-        "Montagem de Móveis",
-        "Jardinagem e Paisagismo",
-        "Limpeza e Faxina",
-        "Impermeabilização",
-        "Segurança Eletrônica",
-		"Desenvolvimento de Software",
-        "Pequenos Reparos",
-        "Telhados e Calhas",
-        "Piscina e Lazer",
-		"Buffet e Festas",
-		"Publicidade e Propaganda", 
-        "Automação Residencial",
-		"Cuidador e Acompanhante",
-		"Nutrição",
-		"Dentista",
-        "Outros Serviços"
-    ];
+        // --- TAXONOMIA DE SERVIÇOS (NOVA ESTRUTURA) ---
+    const TAXONOMIA = {
+        "Reforma e Construção": [
+            "Construção Civil", "Obra e Reforma", "Pintura e Acabamento",
+            "Elétrica e Iluminação", "Hidráulica e Encanamento", "Gesso e Drywall",
+            "Serralheria e Portões", "Vidraçaria e Box", "Telhados e Calhas", "Impermeabilização"
+        ],
+        "Manutenção e Casa": [
+            "Pequenos Reparos", "Refrigeração", "Limpeza e Faxina",
+            "Jardinagem e Paisagismo", "Piscina e Lazer", "Montagem de Móveis",
+            "Marcenaria e Planejados"
+        ],
+        "Tecnologia e Segurança": [
+            "Segurança Eletrônica", "Automação Residencial", "Desenvolvimento de Software"
+        ],
+		"Manutenção automotiva": [
+            "Mecanico", "Eletricista", "Pintor"
+        ],
+        "Saúde e Bem-Estar": [
+            "Nutrição", "Dentista", "Cuidador e Acompanhante"
+        ],
+        "Negócios e Eventos": [
+            "Buffet e Festas", "Publicidade e Propaganda"
+        ],
+        "Outros": [
+            "Outros Serviços"
+        ]
+    };
+
+    // Função para iniciar os menus (Popula apenas o 1º nível: Grupos)
+    function popularCategorias() {
+        const grupos = Object.keys(TAXONOMIA);
+        const selectsGrupo = ['req-grupo', 'cfg-grupo'];
+
+        selectsGrupo.forEach(id => {
+            const el = document.getElementById(id);
+            if(!el) return;
+            el.innerHTML = '<option value="">Selecione a Área...</option>';
+            grupos.forEach(g => el.innerHTML += `<option value="${g}">${g}</option>`);
+        });
+    }
+
+    // Função que roda quando o usuário escolhe o Grupo (Popula o 2º nível)
+    function atualizarSubCategorias(prefixo, valorSalvo = null) {
+        const grupo = document.getElementById(prefixo + '-grupo').value;
+        const selectSub = document.getElementById(prefixo + (prefixo === 'req' ? '-cat' : '-specialty'));
+        
+        selectSub.innerHTML = '<option value="">Agora escolha o serviço...</option>';
+        
+        if (grupo && TAXONOMIA[grupo]) {
+            TAXONOMIA[grupo].sort().forEach(servico => {
+                selectSub.innerHTML += `<option value="${servico}">${servico}</option>`;
+            });
+            selectSub.disabled = false;
+        } else {
+            selectSub.disabled = true;
+        }
+
+        // Se tivermos um valor salvo (usado ao carregar dados), seleciona ele
+        if (valorSalvo) {
+            selectSub.value = valorSalvo;
+        }
+    }
+
+    // Função auxiliar para descobrir o grupo de um serviço salvo (Engenharia reversa)
+    function encontrarGrupoPorServico(servico) {
+        for (let grupo in TAXONOMIA) {
+            if (TAXONOMIA[grupo].includes(servico)) return grupo;
+        }
+        return "";
+    }
 
     // Função para preencher os menus automaticamente
     function popularCategorias() {
@@ -1282,12 +1337,25 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
 
 
     // --- LÓGICA PRINCIPAL (CATALOGO/CARRINHO/GESTÃO) ---
-    function loadData() {
+       function loadData() {
         const localData = localStorage.getItem('orcaFacilApp_v94');
         if (localData) state = { ...state, ...JSON.parse(localData) };
         
-        // Popula config
-        document.getElementById('cfg-specialty').value = state.config.specialty || "Geral";
+        // --- LÓGICA DE RECUPERAÇÃO DO MENU CASCATA ---
+        if (state.config.specialty) {
+            const servicoSalvo = state.config.specialty;
+            const grupoDoServico = encontrarGrupoPorServico(servicoSalvo);
+            
+            // 1. Define o Grupo
+            const elGrupo = document.getElementById('cfg-grupo');
+            if(elGrupo) {
+                elGrupo.value = grupoDoServico;
+                // 2. Força a atualização do segundo menu
+                atualizarSubCategorias('cfg', servicoSalvo);
+            }
+        }
+        // ---------------------------------------------
+
         document.getElementById('cfg-taxa-compra').value = state.config.taxaCompra;
         document.getElementById('cfg-taxa-visita').value = state.config.taxaVisita;
         document.getElementById('cfg-pix-key').value = state.config.pixKey || "";
@@ -1297,6 +1365,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
         updatePremiumUI();
         renderAll();
     }
+
     
     function saveData() {
         localStorage.setItem('orcaFacilApp_v94', JSON.stringify(state));
