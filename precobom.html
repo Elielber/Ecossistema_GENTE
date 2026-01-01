@@ -2034,7 +2034,7 @@ function enviarAvaliacao() {
 
 
     // 3. Salva e Valida
-    function salvarCadastroInicial() {
+        function salvarCadastroInicial() {
         const bio = document.getElementById('cad-bio').value;
         const pix = document.getElementById('cad-pix-key').value;
         const spec = document.getElementById('cad-specialty').value;
@@ -2050,27 +2050,35 @@ function enviarAvaliacao() {
             return;
         }
 
-        // Salva no State
+        // 1. Salva no State (Memória)
         state.config.bio = bio;
         state.config.pixKey = pix;
         state.config.pixName = nome;
         state.config.pixCity = city;
         state.config.specialty = spec;
 
-        // Dispara gatilhos existentes (Salvar, Kit, Segurança)
-        salvarConfig(); // Isso já chama a segurança e salva no localStorage
+        // 2. CORREÇÃO: Sincroniza com os campos da aba Gestão para evitar sobrescrita
+        const elPixKey = document.getElementById('cfg-pix-key');
+        const elPixName = document.getElementById('cfg-pix-name');
+        const elPixCity = document.getElementById('cfg-pix-city');
         
-        // Se for a primeira vez e tiver kit, carrega o kit da especialidade escolhida
+        if(elPixKey) elPixKey.value = pix;
+        if(elPixName) elPixName.value = nome;
+        if(elPixCity) elPixCity.value = city;
+
+        // 3. Agora é seguro chamar o salvarConfig (que aciona a segurança)
+        salvarConfig(); 
+        
+        // Se for a primeira vez e tiver kit, carrega o kit (lógica opcional existente)
         if (!state.catalogo || state.catalogo.length <= 1) {
-            // Pequeno hack: jogamos o valor num input hidden ou simulamos o select da gestão para reusar a função
-            // Mas para simplificar, vamos chamar direto se existir a lógica
-             // carregarKitPorEspecialidade() -> Adaptar se necessário, mas o salvarConfig já faz o grosso.
+             // carregarKitPorEspecialidade(); // (Se você usar essa função)
         }
 
         document.getElementById('modal-cadastro').style.display = 'none';
-        renderGestao(); // Atualiza a tela de gestão para o modo "Resumo"
+        renderGestao(); 
         alert("✅ Cadastro Concluído! Agora você pode montar orçamentos.");
     }
+
 
        // 4. Adaptador para carregar Kit dentro do Modal
     async function carregarKitNoCadastro() {
