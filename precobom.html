@@ -363,7 +363,15 @@
                 <div class="dash-label">Assertividade</div>
             </div>
         </div>
-        
+        <div id="card-agenda-pro" class="card" style="border-left-color: #9b59b6; display:none;">
+    <div class="card-header">
+        <span class="card-title">📅 Agenda de Compromissos</span>
+        <span class="badge" style="background:#9b59b6; color:white; font-size:0.6rem;">PRO</span>
+    </div>
+    <div id="lista-agenda" style="margin-top:10px;">
+        </div>
+</div>
+
         <div class="card" style="border-left-color: #34495e;">
             <div class="card-header">
                 <span class="card-title">📜 Histórico de Propostas</span>
@@ -1658,6 +1666,36 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
             document.getElementById('view-perfil-pendente').style.display = 'block';
             document.getElementById('btn-editar-perfil').style.display = 'none';
         }
+            // --- RENDERIZAR AGENDA (SÓ PRO) ---
+    const cardAgenda = document.getElementById('card-agenda-pro');
+    if (cardAgenda) {
+        if (state.isPremium) {
+            cardAgenda.style.display = 'block'; // Mostra o card
+            const divAgenda = document.getElementById('lista-agenda');
+            divAgenda.innerHTML = "";
+
+            // Filtra apenas os FECHADOS que têm DATA definida
+            const agendados = state.historico.filter(h => h.status === 'FECHADO' && h.dataAgendamento);
+
+            if (agendados.length === 0) {
+                divAgenda.innerHTML = "<div style='color:#999; font-size:0.8rem; text-align:center;'>Nenhum serviço agendado.<br>Feche um orçamento para definir a data.</div>";
+            } else {
+                // (Opcional) Tenta inverter a ordem para mostrar os últimos adicionados no topo ou ordenar
+                agendados.forEach(a => {
+                    divAgenda.innerHTML += `
+                    <div class="list-item-row" style="background:#f3e5f5; border:1px solid #e1bee7;">
+                        <div style="flex:1;">
+                            <div style="font-weight:bold; color:#8e44ad; font-size:1rem;">📅 ${a.dataAgendamento}</div>
+                            <div style="font-size:0.85rem; color:#333;">${a.cliente} • ${a.titulo}</div>
+                        </div>
+                        <a href="https://wa.me/?text=Olá ${a.cliente}, passando para confirmar nosso serviço (${a.titulo}) para ${a.dataAgendamento}." target="_blank" style="text-decoration:none; font-size:1.2rem;">📱</a>
+                    </div>`;
+                });
+            }
+        } else {
+            cardAgenda.style.display = 'none'; // Esconde se for Free
+        }
+    }
         // --- RENDERIZAR LISTA DE HISTÓRICO ---
         const divHist = document.getElementById('lista-historico');
         divHist.innerHTML = "";
@@ -1713,14 +1751,35 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
     }
 
     function toggleStatusHist(id) {
-        const item = state.historico.find(h => h.id === id);
-        if(!item) return;
-        // Ciclo: PENDENTE -> FECHADO -> PERDIDO -> PENDENTE
-        if(item.status === 'PENDENTE') item.status = 'FECHADO';
-        else if(item.status === 'FECHADO') item.status = 'PERDIDO';
-        else item.status = 'PENDENTE';
-        saveData(); // Salva e re-renderiza (atualizando os gráficos)
+    const item = state.historico.find(h => h.id === id);
+    if(!item) return;
+
+    // Lógica de Ciclo: PENDENTE -> FECHADO -> PERDIDO
+    if(item.status === 'PENDENTE') {
+        item.status = 'FECHADO';
+        
+        // --- NOVO: RECURSO PRO DE AGENDA ---
+        if(state.isPremium) {
+            // Pergunta simples para o MVP
+            const dataAgendada = prompt("📅 Agendar para quando?\n(Ex: Amanhã 14h, 25/08 às 09:00...)");
+            if(dataAgendada) {
+                item.dataAgendamento = dataAgendada;
+                alert("✅ Serviço agendado!");
+            }
+        }
+        // -----------------------------------
+        
+    } else if(item.status === 'FECHADO') {
+        item.status = 'PERDIDO';
+        item.dataAgendamento = null; // Limpa a agenda se perdeu/cancelou
+    } else {
+        item.status = 'PENDENTE';
+        item.dataAgendamento = null;
     }
+    
+    saveData();
+}
+
     function addProfissionalPrompt(){const n=prompt("Cargo:");if(n){state.profs.push({id:"c"+Date.now(),nome:n,valor:0});saveData();}}
     function updateProf(i,f,v){state.profs[i][f]=f==='valor'?parseFloat(v):v;saveData();}
     function rmProf(i){if(confirm("Remover?")){state.profs.splice(i,1);saveData();}}
