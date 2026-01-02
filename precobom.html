@@ -2193,8 +2193,7 @@ function iniciarDitado(elementId) {
         target.placeholder = originalPlaceholder;
     };
 }
-	// --- FUNÇÃO: CARTEIRINHA DIGITAL ---
-// --- FUNÇÃO AUXILIAR: QUEBRA DE LINHA (WORD WRAP) ---
+	// --- FUNÇÃO AUXILIAR: QUEBRA DE LINHA (WORD WRAP) ---
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     const words = text.split(' ');
     let line = '';
@@ -2217,7 +2216,7 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     return currentY; // Retorna a posição Y final para o próximo elemento usar
 }
 
-// --- FUNÇÃO PRINCIPAL: CARTEIRINHA PRO 2.0 ---
+// --- FUNÇÃO PRINCIPAL: CARTEIRINHA COM COMPARTILHAMENTO ---
 function gerarCarteirinha() {
     if (!state.config.pixName || !state.config.specialty) {
         alert("⚠️ Complete seu perfil (Nome e Especialidade) antes de gerar a carteirinha!");
@@ -2230,118 +2229,124 @@ function gerarCarteirinha() {
     const canvas = document.createElement('canvas'); 
     const ctx = canvas.getContext('2d');
     canvas.width = 1080; 
-    canvas.height = 1350; // Aumentei a altura para Story/Reels (Mais espaço para Bio)
+    canvas.height = 1350;
 
-    // 1. FUNDO PREMIUM
+    // --- DESENHO (IDÊNTICO AO SEU DESIGN ATUAL) ---
     const grd = ctx.createLinearGradient(0, 0, 0, 1350);
-    grd.addColorStop(0, "#2c3e50"); 
-    grd.addColorStop(1, "#000000");
-    ctx.fillStyle = grd; 
-    ctx.fillRect(0, 0, 1080, 1350);
+    grd.addColorStop(0, "#2c3e50"); grd.addColorStop(1, "#000000");
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, 1080, 1350);
     
-    // Círculo decorativo
-    ctx.beginPath(); 
-    ctx.arc(540, 675, 500, 0, 2 * Math.PI);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.02)"; 
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(540, 675, 500, 0, 2 * Math.PI);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.02)"; ctx.fill();
 
     ctx.textAlign = "center";
-
-    // 2. CABEÇALHO (LOGO E STATUS)
-    // Texto menor
-    ctx.fillStyle = "#bdc3c7";
-    ctx.font = "35px sans-serif";
+    ctx.fillStyle = "#bdc3c7"; ctx.font = "35px sans-serif";
     ctx.fillText("PROFISSIONAL CADASTRADO NA", 540, 150);
 
-    // LOGO PREÇO BOM (Simulado com Texto + Emoji)
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 80px sans-serif";
+    ctx.fillStyle = "#ffffff"; ctx.font = "bold 80px sans-serif";
     ctx.fillText("🤝 PREÇO BOM", 540, 240);
     
-    // Linha divisória elegante
-    ctx.strokeStyle = "#f1c40f";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(340, 280);
-    ctx.lineTo(740, 280);
-    ctx.stroke();
+    ctx.strokeStyle = "#f1c40f"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(340, 280); ctx.lineTo(740, 280); ctx.stroke();
 
-    // 3. IDENTIDADE DO PROFISSIONAL
     const nome = state.config.pixName.toUpperCase();
-    ctx.fillStyle = "#f1c40f"; // Ouro
+    ctx.fillStyle = "#f1c40f"; 
     let fontSize = nome.length > 15 ? 60 : 80; 
     ctx.font = `bold ${fontSize}px sans-serif`;
     ctx.fillText(nome, 540, 400);
 
     const cargo = state.config.specialty.toUpperCase();
-    ctx.fillStyle = "white";
-    ctx.font = "50px sans-serif";
+    ctx.fillStyle = "white"; ctx.font = "50px sans-serif";
     ctx.fillText(cargo, 540, 480);
 
-    // 4. BIO COMPLETA (Com quebra de linha)
     if(state.config.bio) {
-        ctx.fillStyle = "#ecf0f1"; 
-        ctx.font = "italic 35px sans-serif"; // Fonte confortável
-        // Função mágica que quebra o texto na largura de 900px
-        const finalY = wrapText(ctx, `"${state.config.bio}"`, 540, 600, 900, 50);
+        ctx.fillStyle = "#ecf0f1"; ctx.font = "italic 35px sans-serif";
+        wrapText(ctx, `"${state.config.bio}"`, 540, 600, 900, 50);
     }
 
-   // 5. AVALIAÇÃO DINÂMICA
-    const nota = parseFloat(state.config.nota) || 5.0; // Padrão 5 se der erro
+    // AVALIAÇÃO DINÂMICA
+    const nota = parseFloat(state.config.nota) || 5.0;
     const qtd = state.config.totalAvaliacoes || 0;
-    
-    // Desenha estrelas (Lógica visual simples: 1 estrela = texto "⭐")
-    // Se quiser algo mais preciso, podemos desenhar, mas texto resolve bem:
     let estrelasStr = "";
     if (nota >= 1) estrelasStr += "⭐";
     if (nota >= 2) estrelasStr += "⭐";
     if (nota >= 3) estrelasStr += "⭐";
     if (nota >= 4) estrelasStr += "⭐";
-    if (nota >= 4.8) estrelasStr += "⭐"; // 5ª estrela só se for quase perfeito
-    
-    // Se for "Novo", dá um incentivo
+    if (nota >= 4.8) estrelasStr += "⭐";
     if (state.config.nota === "Novo") estrelasStr = "⭐ ⭐ ⭐ ⭐ ⭐ (Novo)";
 
     const hoje = new Date().toLocaleDateString('pt-BR');
     const yEstrelas = 950;
 
-    ctx.fillStyle = "white"; 
-    ctx.font = "bold 50px sans-serif";
+    ctx.fillStyle = "white"; ctx.font = "bold 50px sans-serif";
     ctx.fillText(estrelasStr, 540, yEstrelas);
     
-    // Texto de apoio
-    ctx.font = "30px sans-serif"; 
-    ctx.fillStyle = "#95a5a6";
-    // Mostra a nota numérica e a data
     const textoNota = qtd > 0 ? `Nota ${nota} (${qtd} avaliações)` : "Profissional em início de jornada";
+    ctx.font = "30px sans-serif"; ctx.fillStyle = "#95a5a6";
     ctx.fillText(textoNota, 540, yEstrelas + 50);
     ctx.fillText(`Atualizado em: ${hoje}`, 540, yEstrelas + 90);
 
-    // 6. LINK DA PLATAFORMA
-    ctx.fillStyle = "#3498db"; // Azul link
-    ctx.font = "bold 40px sans-serif";
-    ctx.fillText("acesse: www.ecossistemagente.com.br/precobom.html", 540, 1150); // Substitua pelo seu domínio real
+    ctx.fillStyle = "#3498db"; ctx.font = "bold 40px sans-serif";
+    ctx.fillText("acesse: www.ecossistemagente.com.br/precobom.html", 540, 1150);
 
-    // 7. DISCLAIMER JURÍDICO (Rodapé)
-    ctx.font = "22px sans-serif";
-    ctx.fillStyle = "#7f8c8d";
+    ctx.font = "22px sans-serif"; ctx.fillStyle = "#7f8c8d";
     ctx.fillText("A negociação e execução do serviço são de responsabilidade do prestador.", 540, 1280);
     ctx.fillText("O Preço Bom conecta oportunidades, não garante serviços.", 540, 1310);
 
-    // GERAR IMAGEM
-    const imgData = canvas.toDataURL("image/jpeg", 0.9);
-    const win = window.open("");
-    if(win) {
-        win.document.write(`
-            <html><body style="background:#222; margin:0; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; color:white; font-family:sans-serif; text-align:center;">
-                <h3 style="color:#f1c40f; margin-bottom:10px;">✨ Carteirinha Pronta!</h3>
-                <p style="font-size:0.9rem; opacity:0.8; margin-bottom:20px;">Segure na imagem para salvar na Galeria.</p>
-                <img src="${imgData}" style="height:70vh; border-radius:10px; box-shadow:0 0 20px rgba(0,0,0,0.5); border:1px solid #444;">
-                <br>
-                <button onclick="window.close()" style="margin-top:20px; padding:15px 40px; background:#e74c3c; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer;">Fechar</button>
-            </body></html>`);
-    } else { alert("Ative os pop-ups para ver a imagem."); }
-    btn.innerText = txtOriginal;
+    // --- NOVA LÓGICA DE EXPORTAÇÃO (SHARE API) ---
+    
+    // Converte para Arquivo real na memória (BLOB)
+    canvas.toBlob(async function(blob) {
+        const file = new File([blob], "minha-carteirinha.jpg", { type: "image/jpeg" });
+        
+        // Texto da Legenda
+        const linkApp = "www.ecossistemagente.com.br/precobom.html";
+        const textoLegenda = `Olá! Sou profissional cadastrado no Preço Bom. 🤝\nVeja meu perfil verificado e peça um orçamento: ${linkApp}`;
+
+        // 1. TENTA COMPARTILHAMENTO NATIVO (Android/iOS)
+        // Isso abre o menu do Zap com a imagem E o texto já preenchidos
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: 'Minha Carteirinha',
+                    text: textoLegenda
+                });
+                btn.innerText = txtOriginal;
+                return; // Sucesso!
+            } catch (err) {
+                console.log("Compartilhamento cancelado ou erro: " + err);
+            }
+        }
+
+        // 2. FALLBACK (Computador ou Navegadores antigos)
+        // Mostra a imagem e um botão para copiar o texto
+        const imgData = canvas.toDataURL("image/jpeg", 0.9);
+        const win = window.open("");
+        if(win) {
+            win.document.write(`
+                <html><body style="background:#222; margin:0; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; color:white; font-family:sans-serif; text-align:center;">
+                    <h3 style="color:#f1c40f; margin-bottom:10px;">✨ Carteirinha Pronta!</h3>
+                    <img src="${imgData}" style="height:55vh; border-radius:10px; box-shadow:0 0 20px rgba(0,0,0,0.5); border:1px solid #444;">
+                    <br>
+                    <p style="font-size:0.9rem; color:#ccc;">Como seu navegador não suporta envio direto:</p>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+                        <button onclick="copiarTexto()" style="padding:15px 25px; background:#3498db; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer;">🔗 Copiar Link/Legenda</button>
+                        <button onclick="window.close()" style="padding:15px 25px; background:#e74c3c; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer;">Fechar</button>
+                    </div>
+                    <script>
+                        function copiarTexto() {
+                            const txt = ${JSON.stringify(textoLegenda)};
+                            navigator.clipboard.writeText(txt).then(() => alert("Legenda copiada! Agora salve a imagem e cole o texto no Zap."));
+                        }
+                    </script>
+                </body></html>`);
+        } else { 
+            alert("Ative os pop-ups para ver a imagem."); 
+        }
+        btn.innerText = txtOriginal;
+
+    }, 'image/jpeg', 0.9);
 }
 </script>
 </body>
