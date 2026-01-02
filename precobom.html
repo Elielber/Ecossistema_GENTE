@@ -2217,6 +2217,7 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
 }
 
 // --- FUNÇÃO PRINCIPAL: CARTEIRINHA COM COMPARTILHAMENTO ---
+// --- FUNÇÃO PRINCIPAL: CARTEIRINHA COM COMPARTILHAMENTO (CORRIGIDA) ---
 function gerarCarteirinha() {
     if (!state.config.pixName || !state.config.specialty) {
         alert("⚠️ Complete seu perfil (Nome e Especialidade) antes de gerar a carteirinha!");
@@ -2231,7 +2232,7 @@ function gerarCarteirinha() {
     canvas.width = 1080; 
     canvas.height = 1350;
 
-    // --- DESENHO (IDÊNTICO AO SEU DESIGN ATUAL) ---
+    // --- DESENHO ---
     const grd = ctx.createLinearGradient(0, 0, 0, 1350);
     grd.addColorStop(0, "#2c3e50"); grd.addColorStop(1, "#000000");
     ctx.fillStyle = grd; ctx.fillRect(0, 0, 1080, 1350);
@@ -2264,7 +2265,6 @@ function gerarCarteirinha() {
         wrapText(ctx, `"${state.config.bio}"`, 540, 600, 900, 50);
     }
 
-    // AVALIAÇÃO DINÂMICA
     const nota = parseFloat(state.config.nota) || 5.0;
     const qtd = state.config.totalAvaliacoes || 0;
     let estrelasStr = "";
@@ -2294,17 +2294,12 @@ function gerarCarteirinha() {
     ctx.fillText("O Preço Bom conecta oportunidades, não garante serviços.", 540, 1310);
 
     // --- NOVA LÓGICA DE EXPORTAÇÃO (SHARE API) ---
-    
-    // Converte para Arquivo real na memória (BLOB)
     canvas.toBlob(async function(blob) {
         const file = new File([blob], "minha-carteirinha.jpg", { type: "image/jpeg" });
-        
-        // Texto da Legenda
-        const linkApp = "www.ecossistemagente.com.br/precobom.html";
+        const linkApp = "www.ecossistemagente.com.br/precobom.html"; 
         const textoLegenda = `Olá! Sou profissional cadastrado no Preço Bom. 🤝\nVeja meu perfil verificado e peça um orçamento: ${linkApp}`;
 
-        // 1. TENTA COMPARTILHAMENTO NATIVO (Android/iOS)
-        // Isso abre o menu do Zap com a imagem E o texto já preenchidos
+        // 1. MOBILE (NATIVO)
         if (navigator.share && navigator.canShare({ files: [file] })) {
             try {
                 await navigator.share({
@@ -2313,34 +2308,34 @@ function gerarCarteirinha() {
                     text: textoLegenda
                 });
                 btn.innerText = txtOriginal;
-                return; // Sucesso!
+                return; 
             } catch (err) {
-                console.log("Compartilhamento cancelado ou erro: " + err);
+                console.log("Erro share: " + err);
             }
         }
 
-        // 2. FALLBACK (Computador ou Navegadores antigos)
-        // Mostra a imagem e um botão para copiar o texto
+        // 2. PC (FALLBACK)
         const imgData = canvas.toDataURL("image/jpeg", 0.9);
         const win = window.open("");
         if(win) {
+            // TRUQUE DE SEGURANÇA: Quebramos a tag script em duas partes
             win.document.write(`
                 <html><body style="background:#222; margin:0; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; color:white; font-family:sans-serif; text-align:center;">
                     <h3 style="color:#f1c40f; margin-bottom:10px;">✨ Carteirinha Pronta!</h3>
                     <img src="${imgData}" style="height:55vh; border-radius:10px; box-shadow:0 0 20px rgba(0,0,0,0.5); border:1px solid #444;">
                     <br>
-                    <p style="font-size:0.9rem; color:#ccc;">Como seu navegador não suporta envio direto:</p>
+                    <p style="font-size:0.9rem; color:#ccc;">Opções:</p>
                     <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
-                        <button onclick="copiarTexto()" style="padding:15px 25px; background:#3498db; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer;">🔗 Copiar Link/Legenda</button>
+                        <button onclick="copiarTexto()" style="padding:15px 25px; background:#3498db; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer;">🔗 Copiar Legenda</button>
                         <button onclick="window.close()" style="padding:15px 25px; background:#e74c3c; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer;">Fechar</button>
                     </div>
                     <script>
                         function copiarTexto() {
                             const txt = ${JSON.stringify(textoLegenda)};
-                            navigator.clipboard.writeText(txt).then(() => alert("Legenda copiada! Agora salve a imagem e cole o texto no Zap."));
+                            navigator.clipboard.writeText(txt).then(() => alert("Legenda copiada! Salve a imagem e cole o texto no Zap."));
                         }
-                    <\/script>
-                </body></html>`);
+                    ` + "<" + "/script>" + ` 
+                </body></html>`); 
         } else { 
             alert("Ative os pop-ups para ver a imagem."); 
         }
