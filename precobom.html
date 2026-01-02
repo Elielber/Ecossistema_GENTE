@@ -364,6 +364,13 @@
                 <div class="dash-label">Assertividade</div>
             </div>
         </div>
+	   <button class="btn" onclick="abrirCaderninho()" style="background:white; border:1px solid #ccc; color:#2c3e50; margin-bottom:15px; display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+         <span style="font-size:1.5rem">📒</span>
+           <div style="text-align:left; line-height:1.2;">
+             <div style="font-weight:bold;">Abrir Caderninho</div>
+             <div style="font-size:0.75rem; color:#7f8c8d;">Fluxo de Caixa (Entradas e Saídas)</div>
+           </div>
+       </button>
         <div id="card-agenda-pro" class="card" style="border-left-color: #9b59b6; display:none;">
     <div class="card-header">
         <span class="card-title">📅 Agenda de Compromissos</span>
@@ -580,7 +587,32 @@
         <button class="btn btn-success" onclick="salvarCadastroInicial()">✅ Concluir Cadastro</button>
     </div>
 </div>
+<div id="modal-financeiro" class="modal-overlay" onclick="if(event.target.id==='modal-financeiro')this.style.display='none'">
+    <div class="modal-content" style="background:#f4f6f7;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3 style="margin:0; color:#2c3e50;">📒 Meu Caixa</h3>
+            <button onclick="document.getElementById('modal-financeiro').style.display='none'" style="border:none; background:none; font-size:1.5rem;">&times;</button>
+        </div>
+        
+        <div style="background:white; padding:20px; border-radius:15px; text-align:center; box-shadow:0 4px 10px rgba(0,0,0,0.05); margin-bottom:20px;">
+            <div style="font-size:0.8rem; color:#7f8c8d; letter-spacing:1px;">SALDO ATUAL</div>
+            <div id="fin-saldo-display" style="font-size:2.5rem; font-weight:bold; color:#2c3e50;">R$ 0,00</div>
+        </div>
 
+        <div style="display:flex; gap:10px; margin-bottom:20px;">
+            <button class="btn" onclick="addMovimento('ENTRADA')" style="background:#27ae60; color:white; flex:1; padding:15px;">
+                💰 Recebi
+            </button>
+            <button class="btn" onclick="addMovimento('SAIDA')" style="background:#c0392b; color:white; flex:1; padding:15px;">
+                💸 Gastei
+            </button>
+        </div>
+
+        <h4 style="margin:0 0 10px 0; color:#7f8c8d; font-size:0.9rem;">Últimos Lançamentos</h4>
+        <div id="lista-financeiro" style="max-height:350px; overflow-y:auto; padding-bottom:20px;">
+            </div>
+    </div>
+</div>
 
 <script>
   
@@ -591,7 +623,8 @@
         catalogo: [{ id: 1, nome: "Serviço Exemplo", cat: "Geral", ordem: 1, equipe: [{pid: "p1", h: 2}], mat: [] }],
         carrinho: [],
         modelos: [],
-		historico: []
+		historico: [],
+		state.financeiro = { saldo: 0, movimentos: [] };
     };
     // --- SISTEMA DE SEGURANÇA (NOVO) ---
       // --- SISTEMA DE SEGURANÇA E RISCO (V2 - APROVADO POR ESPECIALISTA) ---
@@ -2351,6 +2384,102 @@ function gerarCarteirinha() {
         btn.innerText = txtOriginal;
 
     }, 'image/jpeg', 0.9);
+}
+	// --- FUNÇÕES DO CADERNINHO (FLUXO DE CAIXA) ---
+
+function abrirCaderninho() {
+    // Garante que o objeto existe (para usuários antigos)
+    if(!state.financeiro) state.financeiro = { saldo: 0, movimentos: [] };
+    
+    renderListaFinanceiro();
+    document.getElementById('modal-financeiro').style.display = 'flex';
+}
+
+function renderListaFinanceiro() {
+    const div = document.getElementById('lista-financeiro');
+    const display = document.getElementById('fin-saldo-display');
+    
+    // Recalcula o saldo do zero para garantir precisão
+    let saldo = 0;
+    state.financeiro.movimentos.forEach(m => {
+        if(m.tipo === 'ENTRADA') saldo += m.valor;
+        else saldo -= m.valor;
+    });
+    state.financeiro.saldo = saldo; // Atualiza state
+
+    // Formata o saldo visualmente
+    display.innerText = saldo.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+    display.style.color = saldo >= 0 ? '#27ae60' : '#c0392b'; // Verde ou Vermelho
+
+    div.innerHTML = "";
+    
+    // Inverte a lista para mostrar os mais recentes no topo
+    const listaInvertida = [...state.financeiro.movimentos].reverse();
+
+    if(listaInvertida.length === 0) {
+        div.innerHTML = "<div style='text-align:center; color:#bdc3c7; margin-top:30px; font-style:italic;'>Nenhum registro ainda.<br>Anote o que entra e o que sai!</div>";
+        return;
+    }
+
+    listaInvertida.forEach((m, i) => {
+        // Calcula o índice real no array original (para poder deletar corretamente)
+        const realIndex = state.financeiro.movimentos.length - 1 - i;
+        
+        const isEntrada = m.tipo === 'ENTRADA';
+        const color = isEntrada ? '#27ae60' : '#c0392b';
+        const icon = isEntrada ? '⬇️' : '⬆️';
+        const dataFormatada = new Date(m.data).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+
+        div.innerHTML += `
+        <div style="background:white; padding:12px; border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; border-left: 5px solid ${color}; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+            <div style="flex:1;">
+                <div style="font-weight:bold; color:#34495e;">${m.desc}</div>
+                <div style="font-size:0.7rem; color:#95a5a6;">${dataFormatada}</div>
+            </div>
+            <div style="text-align:right; margin-right:10px;">
+                <div style="font-weight:bold; color:${color}; font-size:1rem;">
+                    ${isEntrada ? '+' : '-'} R$ ${m.valor.toFixed(2)}
+                </div>
+            </div>
+            <button onclick="rmMovimento(${realIndex})" style="border:none; background:#f4f6f7; width:30px; height:30px; border-radius:50%; color:#c0392b; font-weight:bold; cursor:pointer;">&times;</button>
+        </div>`;
+    });
+}
+
+function addMovimento(tipo) {
+    // Pergunta simples ao usuário
+    const desc = prompt(tipo === 'ENTRADA' ? "💰 Quem te pagou? (Ex: Dona Maria)" : "💸 Gastou com o quê? (Ex: Material, Gasolina)");
+    if(!desc) return;
+    
+    const valStr = prompt("Valor (R$):");
+    if(!valStr) return;
+    
+    // Limpa o valor (troca vírgula por ponto)
+    const valor = parseFloat(valStr.replace(',', '.').replace('R$','').trim());
+    
+    if(isNaN(valor) || valor <= 0) {
+        alert("Valor inválido! Digite apenas números.");
+        return;
+    }
+
+    // Salva
+    state.financeiro.movimentos.push({
+        tipo: tipo,
+        desc: desc,
+        valor: valor,
+        data: new Date().toISOString()
+    });
+    
+    saveData();
+    renderListaFinanceiro(); // Atualiza a tela
+}
+
+function rmMovimento(index) {
+    if(confirm("Tem certeza que deseja apagar este registro?")) {
+        state.financeiro.movimentos.splice(index, 1);
+        saveData();
+        renderListaFinanceiro();
+    }
 }
 </script>
 </body>
