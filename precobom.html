@@ -2184,84 +2184,136 @@ function iniciarDitado(elementId) {
     };
 }
 	// --- FUNÇÃO: CARTEIRINHA DIGITAL ---
+// --- FUNÇÃO AUXILIAR: QUEBRA DE LINHA (WORD WRAP) ---
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+    const words = text.split(' ');
+    let line = '';
+    let currentY = y;
+
+    for(let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        const testWidth = metrics.width;
+        
+        if (testWidth > maxWidth && n > 0) {
+            ctx.fillText(line, x, currentY);
+            line = words[n] + ' ';
+            currentY += lineHeight;
+        } else {
+            line = testLine;
+        }
+    }
+    ctx.fillText(line, x, currentY);
+    return currentY; // Retorna a posição Y final para o próximo elemento usar
+}
+
+// --- FUNÇÃO PRINCIPAL: CARTEIRINHA PRO 2.0 ---
 function gerarCarteirinha() {
-    
     if (!state.config.pixName || !state.config.specialty) {
         alert("⚠️ Complete seu perfil (Nome e Especialidade) antes de gerar a carteirinha!");
         nav('gestao'); return;
     }
-    const btn = event.currentTarget; const txtOriginal = btn.innerText; btn.innerText = "⏳ Gerando...";
-    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
-    canvas.width = 1080; canvas.height = 1080;
+    const btn = event.currentTarget; 
+    const txtOriginal = btn.innerText; 
+    btn.innerText = "⏳ Criando...";
 
-    // 1. FUNDO
-    const grd = ctx.createLinearGradient(0, 0, 0, 1080);
-    grd.addColorStop(0, "#2c3e50"); grd.addColorStop(1, "#1a252f");
-    ctx.fillStyle = grd; ctx.fillRect(0, 0, 1080, 1080);
-    ctx.beginPath(); ctx.arc(540, 540, 400, 0, 2 * Math.PI);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.03)"; ctx.fill();
+    const canvas = document.createElement('canvas'); 
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1080; 
+    canvas.height = 1350; // Aumentei a altura para Story/Reels (Mais espaço para Bio)
 
-    // 2. TEXTOS
+    // 1. FUNDO PREMIUM
+    const grd = ctx.createLinearGradient(0, 0, 0, 1350);
+    grd.addColorStop(0, "#2c3e50"); 
+    grd.addColorStop(1, "#000000");
+    ctx.fillStyle = grd; 
+    ctx.fillRect(0, 0, 1080, 1350);
+    
+    // Círculo decorativo
+    ctx.beginPath(); 
+    ctx.arc(540, 675, 500, 0, 2 * Math.PI);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.02)"; 
+    ctx.fill();
+
     ctx.textAlign = "center";
 
-    //  Título Mais Seguro ---
-    ctx.fillStyle = "#3498db"; 
-    ctx.font = "bold 40px sans-serif";
-    ctx.fillText("📱 PROFISSIONAL CADASTRADO", 540, 180); 
+    // 2. CABEÇALHO (LOGO E STATUS)
+    // Texto menor
+    ctx.fillStyle = "#bdc3c7";
+    ctx.font = "35px sans-serif";
+    ctx.fillText("PROFISSIONAL CADASTRADO NA", 540, 150);
+
+    // LOGO PREÇO BOM (Simulado com Texto + Emoji)
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 80px sans-serif";
+    ctx.fillText("🤝 PREÇO BOM", 540, 240);
     
-    // ----------------------------------------
+    // Linha divisória elegante
+    ctx.strokeStyle = "#f1c40f";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(340, 280);
+    ctx.lineTo(740, 280);
+    ctx.stroke();
 
-    // Nome
+    // 3. IDENTIDADE DO PROFISSIONAL
     const nome = state.config.pixName.toUpperCase();
-    ctx.fillStyle = "#f1c40f"; 
-    let fontSize = nome.length > 15 ? 70 : 90; 
+    ctx.fillStyle = "#f1c40f"; // Ouro
+    let fontSize = nome.length > 15 ? 60 : 80; 
     ctx.font = `bold ${fontSize}px sans-serif`;
-    ctx.fillText(nome, 540, 450);
+    ctx.fillText(nome, 540, 400);
 
-    // Cargo
     const cargo = state.config.specialty.toUpperCase();
     ctx.fillStyle = "white";
     ctx.font = "50px sans-serif";
-    ctx.fillText(cargo, 540, 550);
+    ctx.fillText(cargo, 540, 480);
 
-    // Bio
+    // 4. BIO COMPLETA (Com quebra de linha)
     if(state.config.bio) {
-        ctx.fillStyle = "#bdc3c7"; 
-        ctx.font = "italic 30px sans-serif";
-        const bioCurta = state.config.bio.substring(0, 50) + "..."; 
-        ctx.fillText(`"${bioCurta}"`, 540, 650);
+        ctx.fillStyle = "#ecf0f1"; 
+        ctx.font = "italic 35px sans-serif"; // Fonte confortável
+        // Função mágica que quebra o texto na largura de 900px
+        const finalY = wrapText(ctx, `"${state.config.bio}"`, 540, 600, 900, 50);
     }
 
-    // Rodapé Visual
+    // 5. AVALIAÇÃO COM DATA
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    const yEstrelas = 950; // Posição fixa mais para baixo para não bater na bio
+    
     ctx.fillStyle = "white";
-    ctx.font = "bold 35px sans-serif";
-    ctx.fillText("⭐ ⭐ ⭐ ⭐ ⭐", 540, 800);
+    ctx.font = "bold 50px sans-serif";
+    ctx.fillText("⭐ ⭐ ⭐ ⭐ ⭐", 540, yEstrelas);
     
     ctx.font = "30px sans-serif";
     ctx.fillStyle = "#95a5a6";
-    ctx.fillText("App Preço Bom", 540, 850);
+    ctx.fillText(`Avaliação atualizada em: ${hoje}`, 540, yEstrelas + 50);
 
-    // --- NOVO: DISCLAIMER JURÍDICO NA IMAGEM ---
-    ctx.font = "20px sans-serif";
+    // 6. LINK DA PLATAFORMA
+    ctx.fillStyle = "#3498db"; // Azul link
+    ctx.font = "bold 40px sans-serif";
+    ctx.fillText("acesse: www.precobom.app", 540, 1150); // Substitua pelo seu domínio real
+
+    // 7. DISCLAIMER JURÍDICO (Rodapé)
+    ctx.font = "22px sans-serif";
     ctx.fillStyle = "#7f8c8d";
-    ctx.fillText("A negociação e execução do serviço são de total responsabilidade do prestador.", 540, 1020);
-    // -------------------------------------------
+    ctx.fillText("A negociação e execução do serviço são de responsabilidade do prestador.", 540, 1280);
+    ctx.fillText("O Preço Bom conecta oportunidades, não garante serviços.", 540, 1310);
 
-    // Finalização (Gerar imagem)
+    // GERAR IMAGEM
     const imgData = canvas.toDataURL("image/jpeg", 0.9);
     const win = window.open("");
     if(win) {
         win.document.write(`
-            <html><body style="background:#333; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; text-align:center; color:white; font-family:sans-serif;">
-                <h2 style="color:#f1c40f">🎉 Sua Identidade Digital</h2>
-                <p>Use no WhatsApp, Instagram e Facebook!</p>
-                <img src="${imgData}" style="width:100%; max-width:500px; border-radius:15px; border:2px solid #fff;">
-                <br><br><button onclick="window.close()" style="padding:15px 30px; background:#e74c3c; color:white; border:none; border-radius:10px;">Fechar</button>
+            <html><body style="background:#222; margin:0; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; color:white; font-family:sans-serif; text-align:center;">
+                <h3 style="color:#f1c40f; margin-bottom:10px;">✨ Carteirinha Pronta!</h3>
+                <p style="font-size:0.9rem; opacity:0.8; margin-bottom:20px;">Segure na imagem para salvar na Galeria.</p>
+                <img src="${imgData}" style="height:70vh; border-radius:10px; box-shadow:0 0 20px rgba(0,0,0,0.5); border:1px solid #444;">
+                <br>
+                <button onclick="window.close()" style="margin-top:20px; padding:15px 40px; background:#e74c3c; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer;">Fechar</button>
             </body></html>`);
-    } else { alert("Permita pop-ups para ver a imagem."); }
+    } else { alert("Ative os pop-ups para ver a imagem."); }
     btn.innerText = txtOriginal;
 }
-
 </script>
 </body>
 </html>
