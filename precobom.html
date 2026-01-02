@@ -289,7 +289,7 @@
     <header>
         <div class="header-content">
             <button class="btn-home" onclick="goToScreen('welcome')">🏠</button>
-            <h1>Preço Bom Pro</h1>
+            <h1>Preço Bom</h1>
             <div style="width:35px; text-align:right; font-size:0.7rem; opacity:0.8" id="header-status">FREE</div>
         </div>
     </header>
@@ -582,13 +582,7 @@
 
 
 <script>
-    // --- MOCK DATABASE ---
-    const mockDemandas = [
-        { id: 101, cat: "Pintura", titulo: "Pintar Fachada", desc: "Fachada de casa térrea, aprox 40m2. Já tenho tinta.", cidade: "São Paulo", data: "2025-08-28", cliente: "Maria" },
-        { id: 102, cat: "Elétrica", titulo: "Trocar Chuveiro", desc: "Fiação antiga derreteu.", cidade: "São Paulo", data: "2025-08-28", cliente: "Carlos" },
-        { id: 103, cat: "Pintura", titulo: "Pintura Quarto Bebê", desc: "Preciso de tinta antialérgica.", cidade: "Osasco", data: "2025-08-15", cliente: "Ana" }
-    ];
-
+  
     let state = {
         isPremium: false,
         config: { specialty: "Geral", taxaCompra: 0, taxaVisita: 0, pixKey: "", pixName: "", pixCity: "" },
@@ -1345,7 +1339,8 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
             versao: 2, // Para identificar estrutura nova
             lista: itensCalculados,
             taxas: valorTaxas,
-            usaMateriais: usaMat
+            usaMateriais: usaMat,
+            prestadorBio: state.config.bio || "Não informada",
         };
 
         // PACOTE PARA O GOOGLE SHEETS
@@ -1933,6 +1928,9 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
         if (state.config.pixKey) {
             txt += `💠 *Pagamento via Pix:*\nChave: ${state.config.pixKey}\nNome: ${state.config.pixName}\n--------------------\n`;
         }
+        if (state.config.bio) {
+        txt += `📝 *Sobre o Profissional:*\n_${state.config.bio}_\n\n--------------------\n`;
+    }
         
         txt += `🔒 Obs: Orçamento sujeito a confirmação técnica.`;
         window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
@@ -1962,6 +1960,8 @@ function enviarAvaliacao() {
     const id = document.getElementById('aval-id-demanda').value;
     const zap = document.getElementById('aval-zap-prestador').value;
     const nota = document.getElementById('aval-nota').value;
+    // Captura o nome do prestador que já está na tela para personalizar a mensagem
+    const nomePrestador = document.getElementById('aval-prestador').innerText; 
 
     const btn = document.querySelector('#modal-avaliacao .btn-primary');
     btn.innerText = "Enviando..."; btn.disabled = true;
@@ -1977,12 +1977,28 @@ function enviarAvaliacao() {
         mode: "no-cors"
     })
     .then(() => {
-        alert("Obrigado! Demanda encerrada com sucesso.");
+        alert("✅ Contratação confirmada! Vamos avisar o profissional agora.");
         document.getElementById('modal-avaliacao').style.display = 'none';
         carregarMeusPedidos(); // Recarrega a lista para mostrar como FECHADO
         btn.innerText = "✅ Confirmar e Encerrar"; btn.disabled = false;
+
+        // --- NOVO: NOTIFICAÇÃO ZAP (Envia o cliente para o Zap do Prestador) ---
+        // Limpa o zap para garantir formato correto
+        const zapLimpo = zap.replace(/\D/g, ''); 
+        
+        const msg = `🎉 Olá ${nomePrestador}! \n\nAcabei de *APROVAR* o seu orçamento no App Preço Bom!\n\nPodemos combinar o início do serviço?`;
+        
+        // Abre o WhatsApp
+        window.open(`https://wa.me/${zapLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
+        // -----------------------------------------------------------------------
+    })
+    .catch(err => {
+        alert("Erro ao salvar, mas você pode avisar o prestador manualmente.");
+        console.error(err);
+        btn.innerText = "✅ Confirmar e Encerrar"; btn.disabled = false;
     });
 }
+
    
         // --- LÓGICA DE CADASTRO OBRIGATÓRIO ---
     
