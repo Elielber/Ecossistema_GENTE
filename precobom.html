@@ -2125,35 +2125,61 @@ function enviarAvaliacao() {
             select.options[select.selectedIndex].text = textoOriginal;
         }
     }
-function iniciarDitado(idInput) {
-    if (!('webkitSpeechRecognition' in window)) {
-        alert("Seu navegador não suporta digitação por voz. Tente usar o Chrome.");
+function iniciarDitado(elementId) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("Seu navegador não suporta reconhecimento de voz (SpeechRecognition). Use Chrome/Edge no desktop ou Android.");
         return;
     }
-    const recognition = new webkitSpeechRecognition();
-    recognition.lang = "pt-BR";
+
+    // Tenta usar o elemento pelo id; se não existir, usa o elemento focado
+    let target = elementId ? document.getElementById(elementId) : null;
+    if (!target) {
+        const focused = document.activeElement;
+        if (focused && (focused.tagName === 'TEXTAREA' || (focused.tagName === 'INPUT' && focused.type === 'text'))) {
+            target = focused;
+        } else {
+            // fallback: tenta primeiro textarea visível
+            target = document.querySelector('textarea') || document.querySelector('input[type="text"]');
+        }
+    }
+
+    if (!target) {
+        alert("Selecione o campo de texto antes de ditar ou passe o id correto para iniciarDitado().");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    // Indique visualmente (opcional)
+    const originalPlaceholder = target.placeholder || '';
+    target.placeholder = 'Ouvindo... (permita o microfone)';
+
     recognition.start();
 
-    const btn = event.currentTarget; // Pega o botão clicado
-    btn.style.background = "red"; // Feedback visual (Gravando)
-
-    recognition.onresult = function(event) {
+    recognition.onresult = (event) => {
         const texto = event.results[0][0].transcript;
-        const input = document.getElementById(idInput);
-        // Adiciona o texto ao que já existe
-        input.value = input.value ? input.value + " " + texto : texto;
-        btn.style.background = ""; // Volta ao normal
+        // Insere no campo, preservando conteúdo atual
+        if (target.value && target.value.length > 0) target.value = target.value.trim() + ' ' + texto;
+        else target.value = texto;
+
+        // Dispara evento input para atualizações (contadores, validações etc.)
+        target.dispatchEvent(new Event('input', { bubbles: true }));
     };
 
-    recognition.onerror = function() {
-        alert("Não entendi. Tente novamente.");
-        btn.style.background = "";
+    recognition.onerror = (e) => {
+        console.error('SpeechRecognition error', e);
+        alert('Erro no reconhecimento de voz: ' + (e.error || 'desconhecido'));
     };
-    recognition.onend = function() {
-        btn.style.background = "";
+
+    recognition.onend = () => {
+        // restaura placeholder
+        target.placeholder = originalPlaceholder;
     };
 }
-
 
 </script>
 </body>
