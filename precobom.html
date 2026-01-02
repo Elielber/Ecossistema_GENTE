@@ -586,7 +586,7 @@
   
     let state = {
         isPremium: false,
-        config: { specialty: "Geral", taxaCompra: 0, taxaVisita: 0, pixKey: "", pixName: "", pixCity: "" },
+        config: { specialty: "Geral", taxaCompra: 0, taxaVisita: 0, pixKey: "", pixName: "", pixCity: "" , zap: "", nota: "5.0", totalAvaliacoes: 0},
         profs: [{id: "p1", nome: "Mão de Obra", valor: 50}],
         catalogo: [{ id: 1, nome: "Serviço Exemplo", cat: "Geral", ordem: 1, equipe: [{pid: "p1", h: 2}], mat: [] }],
         carrinho: [],
@@ -841,21 +841,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
             .toLowerCase();
             
-        // Mapeamento manual para garantir compatibilidade com seus 28 arquivos
-        // Se seus arquivos tiverem nomes simples como "pedreiro.json", o slug automático pode falhar
-        // Exemplo: "Construção Civil (Pedreiro)" viraria "construcao_civil_pedreiro"
-        // Se o arquivo for só "pedreiro.json", você pode precisar de um mapa simples:
-        
-        /* DESCOMENTE E AJUSTE SE PRECISAR DE NOMES ESPECÍFICOS
-        const mapaArquivos = {
-            "Construção Civil (Pedreiro)": "pedreiro",
-            "Pintura e Acabamento": "pintor",
-            "Elétrica e Iluminação": "eletricista"
-        };
-        if (mapaArquivos[especialidade]) slug = mapaArquivos[especialidade];
-        else slug = slug.replace(/ /g, "_").replace(/[^a-z0-9_]/g, ""); 
-        */
-
+      
         // Padrão genérico (tenta cobrir a maioria): troca espaços por _ e remove parenteses
         slug = slug.replace(/ /g, "_").replace(/[^a-z0-9_]/g, "");
 
@@ -905,6 +891,30 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
             saveData();
         }
     }
+
+	function sincronizarNota() {
+    // Usa o Pix como ID se parecer um telefone, ou o campo zap se tivermos criado
+    // Para simplificar, vamos assumir que o usuário digita o zap na hora de enviar orçamento
+    // O ideal seria criar um campo fixo "input id='cfg-zap'" na aba Gestão.
+    
+    const zap = state.config.zap || state.config.pixKey; // Tenta usar a chave pix como ID provisório
+    
+    // Só busca se tiver um número válido (sem letras, > 10 digitos)
+    if (!zap || zap.replace(/\D/g,'').length < 10) return; 
+
+    const zapLimpo = zap.replace(/\D/g,'');
+
+    fetch(API_URL + "?acao=BUSCAR_PERFIL_PRO&zap=" + zapLimpo)
+    .then(res => res.json())
+    .then(data => {
+        if(data.nota !== "Novo") {
+            state.config.nota = data.nota;
+            state.config.totalAvaliacoes = data.total;
+            saveData();
+            console.log("Nota atualizada:", data.nota);
+        }
+    });
+}
 
     // --- PRESTADOR NAV ---
     function nav(tab) {
@@ -1608,8 +1618,8 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
 
 
       function renderGestao() {
-        // --- LÓGICA DO PERFIL (NOVO) ---
-        // Verifica se os elementos existem antes de tentar alterar o estilo
+        // --- LÓGICA DO PERFIL  ---
+        sincronizarNota();
         const viewResumo = document.getElementById('view-perfil-resumo');
         if (viewResumo) {
             const temCadastro = state.config.bio && state.config.bio.length >= 20;
@@ -2276,22 +2286,41 @@ function gerarCarteirinha() {
         const finalY = wrapText(ctx, `"${state.config.bio}"`, 540, 600, 900, 50);
     }
 
-    // 5. AVALIAÇÃO COM DATA
+   // 5. AVALIAÇÃO DINÂMICA
+    const nota = parseFloat(state.config.nota) || 5.0; // Padrão 5 se der erro
+    const qtd = state.config.totalAvaliacoes || 0;
+    
+    // Desenha estrelas (Lógica visual simples: 1 estrela = texto "⭐")
+    // Se quiser algo mais preciso, podemos desenhar, mas texto resolve bem:
+    let estrelasStr = "";
+    if (nota >= 1) estrelasStr += "⭐";
+    if (nota >= 2) estrelasStr += "⭐";
+    if (nota >= 3) estrelasStr += "⭐";
+    if (nota >= 4) estrelasStr += "⭐";
+    if (nota >= 4.8) estrelasStr += "⭐"; // 5ª estrela só se for quase perfeito
+    
+    // Se for "Novo", dá um incentivo
+    if (state.config.nota === "Novo") estrelasStr = "⭐ ⭐ ⭐ ⭐ ⭐ (Novo)";
+
     const hoje = new Date().toLocaleDateString('pt-BR');
-    const yEstrelas = 950; // Posição fixa mais para baixo para não bater na bio
-    
-    ctx.fillStyle = "white";
+    const yEstrelas = 950;
+
+    ctx.fillStyle = "white"; 
     ctx.font = "bold 50px sans-serif";
-    ctx.fillText("⭐ ⭐ ⭐ ⭐ ⭐", 540, yEstrelas);
+    ctx.fillText(estrelasStr, 540, yEstrelas);
     
-    ctx.font = "30px sans-serif";
+    // Texto de apoio
+    ctx.font = "30px sans-serif"; 
     ctx.fillStyle = "#95a5a6";
-    ctx.fillText(`Avaliação atualizada em: ${hoje}`, 540, yEstrelas + 50);
+    // Mostra a nota numérica e a data
+    const textoNota = qtd > 0 ? `Nota ${nota} (${qtd} avaliações)` : "Profissional em início de jornada";
+    ctx.fillText(textoNota, 540, yEstrelas + 50);
+    ctx.fillText(`Atualizado em: ${hoje}`, 540, yEstrelas + 90);
 
     // 6. LINK DA PLATAFORMA
     ctx.fillStyle = "#3498db"; // Azul link
     ctx.font = "bold 40px sans-serif";
-    ctx.fillText("acesse: www.precobom.app", 540, 1150); // Substitua pelo seu domínio real
+    ctx.fillText("acesse: www.ecossistemagente.com.br/precobom.html", 540, 1150); // Substitua pelo seu domínio real
 
     // 7. DISCLAIMER JURÍDICO (Rodapé)
     ctx.font = "22px sans-serif";
