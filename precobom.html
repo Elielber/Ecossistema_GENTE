@@ -2216,8 +2216,7 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     return currentY; // Retorna a posição Y final para o próximo elemento usar
 }
 
-// --- FUNÇÃO PRINCIPAL: CARTEIRINHA COM COMPARTILHAMENTO ---
-// --- FUNÇÃO PRINCIPAL: CARTEIRINHA COM COMPARTILHAMENTO (CORRIGIDA) ---
+// --- FUNÇÃO PRINCIPAL: CARTEIRINHA COM COMPARTILHAMENTO INTELIGENTE ---
 function gerarCarteirinha() {
     if (!state.config.pixName || !state.config.specialty) {
         alert("⚠️ Complete seu perfil (Nome e Especialidade) antes de gerar a carteirinha!");
@@ -2232,7 +2231,7 @@ function gerarCarteirinha() {
     canvas.width = 1080; 
     canvas.height = 1350;
 
-    // --- DESENHO ---
+    // --- DESENHO (MANTIDO) ---
     const grd = ctx.createLinearGradient(0, 0, 0, 1350);
     grd.addColorStop(0, "#2c3e50"); grd.addColorStop(1, "#000000");
     ctx.fillStyle = grd; ctx.fillRect(0, 0, 1080, 1350);
@@ -2293,19 +2292,30 @@ function gerarCarteirinha() {
     ctx.fillText("A negociação e execução do serviço são de responsabilidade do prestador.", 540, 1280);
     ctx.fillText("O Preço Bom conecta oportunidades, não garante serviços.", 540, 1310);
 
-    // --- NOVA LÓGICA DE EXPORTAÇÃO (SHARE API) ---
+    // --- EXPORTAÇÃO BLINDADA ---
     canvas.toBlob(async function(blob) {
         const file = new File([blob], "minha-carteirinha.jpg", { type: "image/jpeg" });
-        const linkApp = "www.ecossistemagente.com.br/precobom.html"; 
-        const textoLegenda = `Olá! Sou profissional cadastrado no Preço Bom. 🤝\nVeja meu perfil verificado e peça um orçamento: ${linkApp}`;
+        const linkApp = "https://www.ecossistemagente.com.br/precobom.html"; 
+        const textoLegenda = `Olá! Sou profissional cadastrado no Preço Bom. 🤝\nVeja meu perfil verificado: ${linkApp}`;
 
         // 1. MOBILE (NATIVO)
         if (navigator.share && navigator.canShare({ files: [file] })) {
             try {
+                // --- TRUQUE DO CLIPBOARD ---
+                // Tentamos copiar o texto antes de abrir o compartilhamento.
+                // O alert avisa o usuário para colar.
+                try {
+                    await navigator.clipboard.writeText(textoLegenda);
+                    alert("📋 Link copiado para a memória!\n\nSe a legenda não aparecer na foto automaticamente, é só escolher 'COLAR'.");
+                } catch (e) {
+                    console.log("Clipboard falhou, seguindo apenas com share.");
+                }
+                // ---------------------------
+
                 await navigator.share({
                     files: [file],
                     title: 'Minha Carteirinha',
-                    text: textoLegenda
+                    text: textoLegenda 
                 });
                 btn.innerText = txtOriginal;
                 return; 
@@ -2318,7 +2328,6 @@ function gerarCarteirinha() {
         const imgData = canvas.toDataURL("image/jpeg", 0.9);
         const win = window.open("");
         if(win) {
-            // TRUQUE DE SEGURANÇA: Quebramos a tag script em duas partes
             win.document.write(`
                 <html><body style="background:#222; margin:0; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; color:white; font-family:sans-serif; text-align:center;">
                     <h3 style="color:#f1c40f; margin-bottom:10px;">✨ Carteirinha Pronta!</h3>
