@@ -389,9 +389,12 @@
         </div>
         <div class="card" style="border-left-color: #32a9ba;">
             <div class="card-header">
-                <span class="card-title">👤 Perfil Profissional</span>
+           <span class="card-title">👤 Perfil Profissional</span>
+              <div style="display:flex; gap:5px;">
+                <button class="btn-sm btn-accent" onclick="gerarCarteirinha()" style="background:#9b59b6; border:none; color:white;">🪪 Carteirinha</button>
                 <button class="btn-sm btn-outline" id="btn-editar-perfil" onclick="abrirModalCadastro(true)" style="display:none">✏️ Editar</button>
-            </div>
+             </div>
+           </div>
 
             <div id="view-perfil-resumo" style="display:none; padding-top:10px;">
                 <div style="display:flex; align-items:center; gap:10px;">
@@ -2179,6 +2182,105 @@ function iniciarDitado(elementId) {
         // restaura placeholder
         target.placeholder = originalPlaceholder;
     };
+}
+	// --- FUNÇÃO: CARTEIRINHA DIGITAL ---
+function gerarCarteirinha() {
+    // 1. Validação Simples
+    if (!state.config.pixName || !state.config.specialty) {
+        alert("⚠️ Complete seu perfil (Nome e Especialidade) antes de gerar a carteirinha!");
+        nav('gestao');
+        return;
+    }
+
+    const btn = event.currentTarget;
+    const txtOriginal = btn.innerText;
+    btn.innerText = "⏳ Gerando...";
+    
+    // 2. Cria o Canvas na memória (1080x1080 = Tamanho Post Instagram)
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1080; 
+    canvas.height = 1080;
+
+    // --- DESENHANDO O FUNDO ---
+    // Gradiente Profissional (Azul Escuro)
+    const grd = ctx.createLinearGradient(0, 0, 0, 1080);
+    grd.addColorStop(0, "#2c3e50"); // Cor do topo
+    grd.addColorStop(1, "#1a252f"); // Cor do fundo
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, 1080, 1080);
+
+    // Detalhe visual (Círculo de fundo)
+    ctx.beginPath();
+    ctx.arc(540, 540, 400, 0, 2 * Math.PI);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+    ctx.fill();
+
+    // --- DESENHANDO OS TEXTOS ---
+    ctx.textAlign = "center";
+
+    // 1. Título "Verificado"
+    ctx.fillStyle = "#2ecc71"; // Verde sucesso
+    ctx.font = "bold 40px sans-serif";
+    ctx.fillText("✅ PROFISSIONAL VERIFICADO", 540, 180);
+
+    // 2. Nome do Profissional (Destaque Ouro)
+    const nome = state.config.pixName.toUpperCase();
+    ctx.fillStyle = "#f1c40f"; // Dourado
+    // Ajusta tamanho da fonte se o nome for muito grande
+    let fontSize = nome.length > 15 ? 70 : 90; 
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.fillText(nome, 540, 450);
+
+    // 3. Especialidade
+    const cargo = state.config.specialty.toUpperCase();
+    ctx.fillStyle = "white";
+    ctx.font = "50px sans-serif";
+    ctx.fillText(cargo, 540, 550);
+
+    // 4. Bio Curta (Se tiver)
+    if(state.config.bio) {
+        ctx.fillStyle = "#bdc3c7"; // Cinza claro
+        ctx.font = "italic 30px sans-serif";
+        // Pega só os primeiros 50 caracteres para não poluir
+        const bioCurta = state.config.bio.substring(0, 50) + "..."; 
+        ctx.fillText(`"${bioCurta}"`, 540, 650);
+    }
+
+    // 5. Rodapé
+    ctx.fillStyle = "white";
+    ctx.font = "bold 35px sans-serif";
+    ctx.fillText("⭐ ⭐ ⭐ ⭐ ⭐", 540, 850);
+    
+    ctx.font = "30px sans-serif";
+    ctx.fillStyle = "#95a5a6";
+    ctx.fillText("Contrate pelo App Preço Bom", 540, 950);
+
+    // --- FINALIZANDO ---
+    
+    // Converte para imagem JPG
+    const imgData = canvas.toDataURL("image/jpeg", 0.9);
+    
+    // Abre numa nova janela/aba para o usuário salvar
+    const win = window.open("");
+    if(win) {
+        win.document.write(`
+            <html>
+            <head><title>Sua Carteirinha</title></head>
+            <body style="background:#333; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                <h2 style="color:#f1c40f">🎉 Ficou top!</h2>
+                <p>Segure na imagem abaixo para <strong>Salvar</strong> ou <strong>Compartilhar</strong>.</p>
+                <img src="${imgData}" style="width:100%; max-width:500px; border-radius:15px; box-shadow:0 10px 30px rgba(0,0,0,0.5); border:2px solid #fff;">
+                <br><br>
+                <button onclick="window.close()" style="padding:15px 30px; font-size:1.2rem; background:#e74c3c; color:white; border:none; border-radius:10px; cursor:pointer;">Fechar</button>
+            </body>
+            </html>
+        `);
+    } else {
+        alert("⚠️ O navegador bloqueou a janela. Permita pop-ups para ver a imagem.");
+    }
+
+    btn.innerText = txtOriginal;
 }
 
 </script>
