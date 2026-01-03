@@ -1802,18 +1802,16 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
             </div>`;
         });
 
-                // --- RENDERIZAR SERVIÇOS (ATUALIZADO COM DUPLICAR) ---
+        // --- RENDERIZAR SERVIÇOS (LAYOUT LIMPO) ---
         const ds = document.getElementById('lista-gestao-servicos'); 
         ds.innerHTML = ""; 
+        
         state.catalogo.forEach((s, i) => { 
             ds.innerHTML += `
-            <div class="list-item-row">
-                <span class="list-text">${s.nome}</span>
+            <div class="list-item-row" onclick="abrirEditorServico(${i})" style="cursor:pointer;">
+                <span class="list-text" style="font-weight:600; font-size:0.95rem;">${s.nome}</span>
                 <div class="list-actions">
-                    <button class="btn-sm btn-outline" onclick="duplicarServico(${i})" style="color:#2980b9; border-color:#2980b9; margin-right:3px;" title="Duplicar">📑</button>
-                    
-                    <button class="btn-sm btn-outline" onclick="abrirEditorServico(${i})">✏️</button>
-                    <button class="btn-sm btn-danger" onclick="rmServico(${i})" style="margin-left:3px;">×</button>
+                    <span style="font-size:1.2rem; color:#7f8c8d;">✏️</span>
                 </div>
             </div>`;
         });
@@ -1887,18 +1885,51 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
 
  editCtx='catalogo'; editIdx=i; tempItem=i===null?{id:Date.now(),nome:"Novo",cat:"Geral",ordem:1,equipe:[],mat:[]}:JSON.parse(JSON.stringify(state.catalogo[i])); renderModalBody(); document.getElementById('modal-editor').style.display='flex'; }
     function editCartItem(i){ editCtx='carrinho'; editIdx=i; tempItem=JSON.parse(JSON.stringify(state.carrinho[i])); renderModalBody(); document.getElementById('modal-editor').style.display='flex'; }
-    function renderModalBody(){
-        const b=document.getElementById('modal-body'), opts=state.profs.map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
-        b.innerHTML=`<div class="form-group"><span class="label">Nome</span><input type="text" class="input" value="${tempItem.nome}" onchange="tempItem.nome=this.value"></div>
-        <div class="row"><div class="col"><span class="label">Categoria</span><input type="text" class="input" value="${tempItem.cat||'Geral'}" onchange="tempItem.cat=this.value"></div><div class="col"><span class="label">Ordem</span><input type="number" class="input" value="${tempItem.ordem}" onchange="tempItem.ordem=parseInt(this.value)"></div></div>
-        <div style="margin-top:10px;border-top:1px solid #ddd;padding-top:5px;"><span class="label">Equipe</span><div id="mod-eq"></div><div class="row"><select id="s-p" class="input">${opts}</select><button class="btn btn-accent btn-sm" style="width:auto" onclick="addEq()">+</button></div></div>
-        <div style="margin-top:10px;border-top:1px solid #ddd;padding-top:5px;"><span class="label">Materiais</span><div id="mod-mt"></div><div class="row"><input id="i-m" class="input" placeholder="Material"><button class="btn btn-accent btn-sm" style="width:auto" onclick="addMt()">+</button></div></div>`;
+        function renderModalBody(){
+        const b = document.getElementById('modal-body');
+        const opts = state.profs.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+        
+        b.innerHTML = `
+        <div class="form-group"><span class="label">Nome do Serviço</span><input type="text" class="input" value="${tempItem.nome}" onchange="tempItem.nome=this.value"></div>
+        
+        <div class="row">
+            <div class="col"><span class="label">Categoria</span><input type="text" class="input" value="${tempItem.cat||'Geral'}" onchange="tempItem.cat=this.value"></div>
+            <div class="col"><span class="label">Ordem</span><input type="number" class="input" value="${tempItem.ordem}" onchange="tempItem.ordem=parseInt(this.value)"></div>
+        </div>
+        
+        <div style="margin-top:10px; border-top:1px solid #ddd; padding-top:5px;">
+            <span class="label">Equipe Necessária</span>
+            <div id="mod-eq"></div>
+            <div class="row"><select id="s-p" class="input">${opts}</select><button class="btn btn-accent btn-sm" style="width:auto" onclick="addEq()">+</button></div>
+        </div>
+        
+        <div style="margin-top:10px; border-top:1px solid #ddd; padding-top:5px;">
+            <span class="label">Materiais Padrão</span>
+            <div id="mod-mt"></div>
+            <div class="row"><input id="i-m" class="input" placeholder="Ex: Cimento (saco)"><button class="btn btn-accent btn-sm" style="width:auto" onclick="addMt()">+</button></div>
+        </div>
+
+        ${(editCtx === 'catalogo' && editIdx !== null) ? `
+        <div style="margin-top:20px; padding-top:15px; border-top:1px dashed #ccc; display:flex; gap:10px;">
+            <button class="btn btn-outline" onclick="acaoDuplicarNoModal()">📑 Duplicar</button>
+            <button class="btn btn-danger" onclick="acaoExcluirNoModal()">🗑️ Excluir</button>
+        </div>` : ''}
+        `;
+
         renderModLists();
-        document.getElementById('btn-modal-save').onclick=()=>{
-            if(editCtx==='catalogo'){if(editIdx===null)state.catalogo.push(tempItem);else state.catalogo[editIdx]=tempItem;}else state.carrinho[editIdx]=tempItem;
-            saveData(); document.getElementById('modal-editor').style.display='none';
-        }
+        
+        document.getElementById('btn-modal-save').onclick = () => {
+            if(editCtx === 'catalogo'){
+                if(editIdx === null) state.catalogo.push(tempItem);
+                else state.catalogo[editIdx] = tempItem;
+            } else {
+                state.carrinho[editIdx] = tempItem;
+            }
+            saveData(); 
+            document.getElementById('modal-editor').style.display = 'none';
+        };
     }
+
     function renderModLists(){
         document.getElementById('mod-eq').innerHTML=tempItem.equipe.map((e,i)=>{const p=state.profs.find(x=>x.id===e.pid);return `<div class="list-item-row"><span>${p?.nome}</span><span><input type="number" value="${e.h}" style="width:50px" onchange="tempItem.equipe[${i}].h=parseFloat(this.value)">h <span style="color:red" onclick="tempItem.equipe.splice(${i},1);renderModLists()">x</span></span></div>`}).join('');
         document.getElementById('mod-mt').innerHTML=tempItem.mat.map((m,i)=>`<div class="list-item-row"><span>${m.n}</span><span>Q:<input type="number" value="${m.q}" style="width:40px" onchange="tempItem.mat[${i}].q=parseFloat(this.value)"> R$:<input type="number" value="${m.p}" style="width:50px" onchange="tempItem.mat[${i}].p=parseFloat(this.value)"> <span style="color:red" onclick="tempItem.mat.splice(${i},1);renderModLists()">x</span></span></div>`).join('');
