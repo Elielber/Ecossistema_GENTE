@@ -1930,10 +1930,43 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
         };
     }
 
-    function renderModLists(){
-        document.getElementById('mod-eq').innerHTML=tempItem.equipe.map((e,i)=>{const p=state.profs.find(x=>x.id===e.pid);return `<div class="list-item-row"><span>${p?.nome}</span><span><input type="number" value="${e.h}" style="width:50px" onchange="tempItem.equipe[${i}].h=parseFloat(this.value)">h <span style="color:red" onclick="tempItem.equipe.splice(${i},1);renderModLists()">x</span></span></div>`}).join('');
-        document.getElementById('mod-mt').innerHTML=tempItem.mat.map((m,i)=>`<div class="list-item-row"><span>${m.n}</span><span>Q:<input type="number" value="${m.q}" style="width:40px" onchange="tempItem.mat[${i}].q=parseFloat(this.value)"> R$:<input type="number" value="${m.p}" style="width:50px" onchange="tempItem.mat[${i}].p=parseFloat(this.value)"> <span style="color:red" onclick="tempItem.mat.splice(${i},1);renderModLists()">x</span></span></div>`).join('');
+        function renderModLists(){
+        // Renderiza Equipe (Mantido igual, mas se quiser seta aqui também, basta replicar a lógica)
+        document.getElementById('mod-eq').innerHTML = tempItem.equipe.map((e,i) => {
+            const p = state.profs.find(x => x.id === e.pid);
+            return `<div class="list-item-row">
+                        <span>${p?.nome}</span>
+                        <span>
+                            <input type="number" value="${e.h}" style="width:50px" onchange="tempItem.equipe[${i}].h=parseFloat(this.value)">h 
+                            <span style="color:red; margin-left:5px; cursor:pointer;" onclick="tempItem.equipe.splice(${i},1);renderModLists()">x</span>
+                        </span>
+                    </div>`;
+        }).join('');
+
+        // Renderiza Materiais (COM SETA PARA SUBIR)
+        document.getElementById('mod-mt').innerHTML = tempItem.mat.map((m, i) => {
+            // Só mostra a seta se NÃO for o primeiro item da lista
+            const visibility = i === 0 ? 'hidden' : 'visible'; 
+            
+            return `
+            <div class="list-item-row" style="display:flex; align-items:center;">
+                <button onclick="moverMaterialCima(${i})" style="visibility:${visibility}; border:none; background:none; cursor:pointer; font-size:1.1rem; padding:0 5px 0 0; margin-right:5px;">
+                    ⬆️
+                </button>
+
+                <span style="flex:1; font-weight:500;">${m.n}</span>
+                
+                <span style="display:flex; align-items:center; gap:3px;">
+                    <span style="font-size:0.8rem">Q:</span>
+                    <input type="number" value="${m.q}" style="width:40px; padding:2px;" onchange="tempItem.mat[${i}].q=parseFloat(this.value)">
+                    <span style="font-size:0.8rem">R$:</span>
+                    <input type="number" value="${m.p}" style="width:50px; padding:2px;" onchange="tempItem.mat[${i}].p=parseFloat(this.value)">
+                    <span style="color:red; font-weight:bold; margin-left:5px; cursor:pointer; padding:5px;" onclick="tempItem.mat.splice(${i},1);renderModLists()">x</span>
+                </span>
+            </div>`;
+        }).join('');
     }
+
     function addEq(){const pid=document.getElementById('s-p').value;if(pid){tempItem.equipe.push({pid:pid,h:1});renderModLists();}}
     function addMt(){const n=document.getElementById('i-m').value;if(n){tempItem.mat.push({n:n,q:1,p:0});document.getElementById('i-m').value='';renderModLists();}}
 
@@ -2464,7 +2497,22 @@ function gerarCarteirinha() {
 
     }, 'image/jpeg', 0.9);
 }
-	// --- FUNÇÕES DO CADERNINHO (FLUXO DE CAIXA) ---
+// --- FUNÇÃO PARA MOVER ITEM (SUBIR) ---
+function moverMaterialCima(index) {
+    if (index === 0) return; // Já está no topo, não faz nada
+
+    // Troca de lugar com o item de cima (index - 1)
+    const itemAtual = tempItem.mat[index];
+    const itemAcima = tempItem.mat[index - 1];
+
+    tempItem.mat[index] = itemAcima;
+    tempItem.mat[index - 1] = itemAtual;
+
+    renderModLists(); // Redesenha a lista atualizada
+	}
+	
+	
+// --- FUNÇÕES DO CADERNINHO (FLUXO DE CAIXA) ---
 
 function abrirCaderninho() {
    
