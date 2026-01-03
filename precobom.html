@@ -1802,17 +1802,22 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
             </div>`;
         });
 
-        // --- RENDERIZAR SERVICOS (COM CORREÇÃO DE QUEBRA DE LINHA) ---
-        const ds=document.getElementById('lista-gestao-servicos'); ds.innerHTML=""; 
-        state.catalogo.forEach((s,i)=>{ 
-            ds.innerHTML+=`<div class="list-item-row">
+                // --- RENDERIZAR SERVIÇOS (ATUALIZADO COM DUPLICAR) ---
+        const ds = document.getElementById('lista-gestao-servicos'); 
+        ds.innerHTML = ""; 
+        state.catalogo.forEach((s, i) => { 
+            ds.innerHTML += `
+            <div class="list-item-row">
                 <span class="list-text">${s.nome}</span>
                 <div class="list-actions">
+                    <button class="btn-sm btn-outline" onclick="duplicarServico(${i})" style="color:#2980b9; border-color:#2980b9; margin-right:3px;" title="Duplicar">📑</button>
+                    
                     <button class="btn-sm btn-outline" onclick="abrirEditorServico(${i})">✏️</button>
-                    <button class="btn-sm btn-danger" onclick="rmServico(${i})">×</button>
+                    <button class="btn-sm btn-danger" onclick="rmServico(${i})" style="margin-left:3px;">×</button>
                 </div>
             </div>`;
         });
+
         
         // Inputs Config normais...
         document.getElementById('cfg-taxa-compra').value = state.config.taxaCompra;
@@ -1856,7 +1861,18 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
     function updateProf(i,f,v){state.profs[i][f]=f==='valor'?parseFloat(v):v;saveData();}
     function rmProf(i){if(confirm("Remover?")){state.profs.splice(i,1);saveData();}}
     function rmServico(i){if(confirm("Apagar?")){state.catalogo.splice(i,1);saveData();}}
-    function rmCartItem(i){state.carrinho.splice(i,1);saveData();}
+    // --- FUNÇÃO DUPLICAR SERVIÇO ---
+    function duplicarServico(i) {if(!confirm(`Deseja criar uma cópia de "${state.catalogo[i].nome}"?`)) return;
+    // 1. Clona o objeto (Deep copy para não alterar o original)
+    const original = state.catalogo[i];
+    const copia = JSON.parse(JSON.stringify(original));
+    // 2. Ajusta dados únicos
+    copia.id = Date.now(); // Gera novo ID
+    copia.nome = original.nome + " (Cópia)"; // Adiciona sufixo
+    // 3. Salva e Atualiza
+    state.catalogo.push(copia);
+    saveData();}
+	function rmCartItem(i){state.carrinho.splice(i,1);saveData();}
     function limparCarrinho(){if(confirm("Limpar?")){state.carrinho=[];saveData();}}
     function resetFactory(){if(confirm("Resetar?")){localStorage.clear();location.reload();}}
     
