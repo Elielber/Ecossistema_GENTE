@@ -442,23 +442,23 @@
 
         <div class="form-group">
             <span class="label">Seu Nome / Nome da Empresa</span>
-            <input type="text" id="cfg-pix-name" class="input" onchange="salvarConfig()" placeholder="Como quer ser chamado?">
+            <input type="text" id="cfg-pix-name" class="input" placeholder="Como quer ser chamado?">
         </div>
 
         <div class="row">
             <div class="col">
                 <span class="label">Cidade Base</span>
-                <input type="text" id="cfg-pix-city" class="input" onchange="salvarConfig()" placeholder="Ex: Campos">
+                <input type="text" id="cfg-pix-city" class="input" placeholder="Ex: Campos">
             </div>
             <div class="col">
                 <span class="label">WhatsApp Oficial</span>
-                <input type="tel" id="cfg-zap" class="input" onchange="salvarConfig()" placeholder="(DD) 99999-9999">
+                <input type="tel" id="cfg-zap" class="input" placeholder="(DD) 99999-9999">
             </div>
         </div>
         
         <div class="form-group" style="margin-top:10px;">
              <span class="label">Bio / Resumo (Para a Carteirinha)</span>
-             <textarea id="cfg-bio" class="input" rows="2" onchange="salvarConfig()" placeholder="Ex: Especialista em acabamentos com 10 anos de mercado..."></textarea>
+             <textarea id="cfg-bio" class="input" rows="2" placeholder="Ex: Especialista em acabamentos com 10 anos de mercado..."></textarea>
         </div>
     </div>
 
@@ -467,7 +467,7 @@
         
         <div class="form-group" style="margin-top:10px;">
             <span class="label">Sua Chave Pix</span>
-            <input type="text" id="cfg-pix-key" class="input" onchange="salvarConfig()" placeholder="CPF, Celular, Email...">
+            <input type="text" id="cfg-pix-key" class="input" placeholder="CPF, Celular, Email...">
         </div>
 
         <div style="margin-top:15px; padding-top:10px; border-top:1px solid #eee;">
@@ -489,6 +489,11 @@
         <button class="btn btn-accent" onclick="abrirEditorServico()" style="margin-bottom:10px;">+ Novo Serviço</button>
         <div style="max-height:300px; overflow-y:auto;" id="lista-gestao-servicos"></div>
     </div>
+    
+    <button class="btn btn-success" onclick="salvarConfig()" style="margin-top:20px; margin-bottom:20px; font-size:1.1rem; box-shadow: 0 4px 15px rgba(39, 174, 96, 0.4);">
+    💾 Salvar Alterações
+</button>
+
 
     <div class="card" style="border-left-color: #95a5a6;">
         <span class="card-title">💾 Sistema</span>
@@ -976,71 +981,52 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
     }
 
     // Função acionada pelo Select de Especialidade
-    async function carregarKitPorEspecialidade() {
-        const especialidade = document.getElementById('cfg-specialty').value;
-        const select = document.getElementById('cfg-specialty');
+ // 2. Atualização da função do Kit (Para proteger seus dados)
+async function carregarKitPorEspecialidade() {
+    // TRUQUE: Salva o que está escrito nos campos antes de carregar o kit.
+    // Isso evita que o nome ou bio sumam quando a tela piscar.
+    salvarConfig(true); // true = modo silencioso (sem alerta)
+
+    const especialidade = document.getElementById('cfg-specialty').value;
+    const select = document.getElementById('cfg-specialty');
+    const textoOriginal = select.options[select.selectedIndex].text;
+    
+    select.options[select.selectedIndex].text = "🔄 Buscando...";
+
+    let slug = especialidade.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    slug = slug.replace(/ /g, "_").replace(/[^a-z0-9_]/g, "");
+    const urlKit = `kits/${slug}.json`; 
+
+    try {
+        const response = await fetch(urlKit);
+        if (!response.ok) throw new Error("Kit não encontrado."); 
+
+        const data = await response.json();
         
-        // Guarda o texto original para restaurar depois
-        const textoOriginal = select.options[select.selectedIndex].text;
-        select.options[select.selectedIndex].text = "🔄 Buscando...";
-
-        // 1. Padronização do nome do arquivo (Slug)
-        // Transforma "Elétrica e Iluminação" em "eletrica_e_iluminacao"
-        // (Ajuste aqui se seus arquivos usam hífen '-' em vez de underline '_')
-        let slug = especialidade
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
-            .toLowerCase();
+        if (confirm(`📦 Encontrei uma configuração pronta para "${especialidade}".\n\nDeseja aplicar os serviços e taxas sugeridos?`)) {
+            const usuarioEraPro = state.isPremium;
             
-      
-        // Padrão genérico (tenta cobrir a maioria): troca espaços por _ e remove parenteses
-        slug = slug.replace(/ /g, "_").replace(/[^a-z0-9_]/g, "");
-
-        // Monta o caminho relativo da sua pasta
-        const urlKit = `kits/${slug}.json`; 
-
-        console.log("Tentando carregar:", urlKit);
-
-        try {
-            const response = await fetch(urlKit);
+            // Mescla mantendo os dados pessoais que acabamos de salvar
+            // A ordem importa: state (seus dados) <- data (kit)
+            // Mas queremos preservar Nome/Pix se o kit trouxer vazio. 
+            // O ideal é mesclar só o catalogo/taxas, mas vamos usar a lógica padrão:
+            state = { ...state, ...data };
             
-            if (!response.ok) {
-                // Se der 404, silencia. O usuário só escolheu uma categoria sem kit.
-                throw new Error("Kit não encontrado."); 
-            }
-
-            const data = await response.json();
+            state.isPremium = usuarioEraPro;
+            state.config.specialty = especialidade;
             
-        
-           // Pergunta se quer aplicar (igual o link faz)
-            if (confirm(`📦 Encontrei uma configuração pronta para "${especialidade}".\n\nDeseja aplicar os serviços e taxas sugeridos?`)) {
-                
-                // 1. SALVA O STATUS ATUAL (PROTEÇÃO)
-                const usuarioEraPro = state.isPremium;
-
-                // 2. Mescla com o estado atual
-                state = { ...state, ...data };
-                
-                // 3. RESTAURA O STATUS PRO
-                state.isPremium = usuarioEraPro;
-
-                // Força a especialidade selecionada
-                state.config.specialty = especialidade;
-                
-                saveData();
-                renderAll();
-                alert("✅ Configurações aplicadas com sucesso!");
-            }
-
-
-        } catch (error) {
-            console.log("Nenhum kit automático para: " + slug);
-        } finally {
-            // Restaura o visual do select e salva a mudança básica de categoria
-            select.options[select.selectedIndex].text = textoOriginal;
-            state.config.specialty = especialidade; // Salva a escolha mesmo se não tiver kit
             saveData();
+            renderAll();
+            alert("✅ Configurações aplicadas!");
         }
+    } catch (error) {
+        console.log("Nenhum kit automático.");
+    } finally {
+        select.options[select.selectedIndex].text = textoOriginal;
+        state.config.specialty = especialidade;
+        saveData();
     }
+}
 
 	function sincronizarNota() {
     // Usa o Pix como ID se parecer um telefone, ou o campo zap se tivermos criado
@@ -1828,7 +1814,54 @@ function loadData() {
             fetch(API_URL, { method: "POST", body: JSON.stringify(payloadSeguranca), mode: "no-cors" });
         }
     }
+// 1. Nova função Salvar (Com alerta e modo silencioso)
+async function salvarConfig(silencioso = false) {
+    // Captura os valores da tela
+    state.config.taxaCompra = parseFloat(document.getElementById('cfg-taxa-compra').value)||0;
+    state.config.taxaVisita = parseFloat(document.getElementById('cfg-taxa-visita').value)||0;
+    
+    const elPixKey = document.getElementById('cfg-pix-key');
+    const elPixName = document.getElementById('cfg-pix-name');
+    const elPixCity = document.getElementById('cfg-pix-city');
+    const elZap = document.getElementById('cfg-zap'); 
+    const elBio = document.getElementById('cfg-bio');
+    const elSpec = document.getElementById('cfg-specialty');
 
+    if(elPixKey) state.config.pixKey = elPixKey.value;
+    if(elPixName) state.config.pixName = elPixName.value;
+    if(elPixCity) state.config.pixCity = elPixCity.value;
+    if(elZap) state.config.zap = elZap.value;
+    if(elBio) state.config.bio = elBio.value;
+    
+    // Captura a especialidade sem travas
+    if(elSpec) {
+         state.config.specialty = elSpec.value;
+    }
+
+    saveData(); // Grava no celular
+
+    // Só mostra o alerta se NÃO for silencioso (ou seja, se foi clicado no botão)
+    if (!silencioso) {
+        alert("✅ Dados salvos com sucesso!");
+        renderGestao(); // Atualiza visualmente o painel
+    }
+
+    // Segurança (Pix) - Mantido
+    if(state.config.pixKey && state.config.pixKey.length > 3) {
+         const analysis = await Security.analyzeRisk();
+         const payloadSeguranca = {
+            tipo: "REGISTRO_DISPOSITIVO",
+            pix: state.config.pixKey,
+            deviceID: analysis.deviceID,
+            ip: analysis.ip,
+            geo: analysis.geo,
+            risco: "BAIXO",
+            detalhes: analysis.flags.join(", ") || "Acesso Padrão",
+            userAgent: analysis.userAgent
+        };
+        fetch(API_URL, { method: "POST", body: JSON.stringify(payloadSeguranca), mode: "no-cors" });
+    }
+}
 
       function renderGestao() {
         // --- LÓGICA DO DASHBOARD (BI) ---
