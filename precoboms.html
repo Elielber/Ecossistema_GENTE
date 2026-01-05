@@ -416,7 +416,19 @@
         📲 <strong>Instale o App</strong> para acesso rápido!
         <button class="btn-sm btn-success" style="margin-top:5px; display:block; width:100%;" onclick="installApp()">Instalar Agora</button>
     </div>
-
+        <div id="banner-premium" style="display:none; background: linear-gradient(135deg, #2c3e50, #34495e); color:white; padding:20px; border-radius:15px; margin-bottom:20px; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4); text-align:center; position:relative; overflow:hidden;">
+        <div style="position:absolute; top:-50%; left:-50%; width:200%; height:200%; background:radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 70%); transform:rotate(45deg);"></div>
+        
+        <div style="position:relative; z-index:2;">
+            <h2 style="margin:0 0 5px 0; font-size:1.4rem;">👑 Seja Profissional PRO</h2>
+            <p style="font-size:0.9rem; opacity:0.9; margin-bottom:15px;">Desbloqueie Metas, Agenda, CRM e Backup local</p>
+            
+            <button onclick="simularCompraPremium()" style="background:white; color:#2980b9; border:none; padding:12px 30px; border-radius:25px; font-weight:bold; font-size:1rem; cursor:pointer; box-shadow:0 3px 10px rgba(0,0,0,0.1);">
+                DESBLOQUEAR TUDO 💎
+            </button>
+        </div>
+    </div>
+    
     <div class="gestao-module" style="border-left: 5px solid #27ae60;">
         <div class="gestao-header">
             <div class="gestao-title"><span class="gestao-icon">💰</span> Financeiro</div>
@@ -524,6 +536,10 @@
                 <button class="btn-sm btn-outline" style="width:100%; margin-top:5px; border-color:#0097a7; color:#0097a7;" onclick="addRadar()">+ Adicionar ao Radar</button>
                 
                 <div id="lista-radar" class="chip-container"></div>
+                <button class="btn-sm btn-outline" style="width:100%; margin-top:10px; border-style:dashed; color:#2980b9; border-color:#2980b9;" onclick="importarKitsDoRadar()">
+    📥 Baixar Serviços do Radar (Mesclar)
+</button>
+
             </div>
             </div>
         </div>
@@ -578,16 +594,13 @@
         <div style="max-height:300px; overflow-y:auto;" id="lista-gestao-servicos"></div>
     </div>
     
-    <button class="btn btn-success" onclick="salvarConfig()" style="margin-top:20px; margin-bottom:20px; font-size:1.1rem; box-shadow: 0 4px 15px rgba(39, 174, 96, 0.4);">
-    💾 Salvar Alterações
-</button>
-
-
     <div class="card" style="border-left-color: #95a5a6;">
         <span class="card-title">💾 Sistema</span>
         <div class="row" style="margin-bottom:10px;">
+            
             <button class="btn btn-outline" onclick="exportarBackup()">⬇️ Backup</button>
             <button class="btn btn-outline" onclick="document.getElementById('input-restore').click()">⬆️ Restaurar</button>
+            <button class="btn btn-success" onclick="salvarConfig()" > 💾 Salvar</button>
             <input type="file" id="input-restore" style="display:none" onchange="importarBackup(this)">
         </div>
         <button class="btn btn-danger" onclick="resetFactory()">⚠️ Resetar Fábrica</button>
@@ -798,6 +811,43 @@
     <button onclick="document.getElementById('modal-ios-install').style.display='none'" style="margin-top:15px; background:none; border:none; color:#999;">Fechar</button>
 </div>
 <script>
+  let deferredPrompt;
+  
+  // COLE AQUI SUA URL DO GOOGLE APPS SCRIPT
+const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6YbMKWK4kuO-fdexmhOp_4_dO_-oeDwyVtJazuiA3le5rcA/exec"; 
+
+
+        // --- TAXONOMIA DE SERVIÇOS (NOVA ESTRUTURA) ---
+    const TAXONOMIA = {
+        "Reforma e Construção": [
+            "Construção Civil", "Obra e Reforma", "Pintura e Acabamento",
+            "Elétrica e Iluminação", "Hidráulica e Encanamento", "Gesso e Drywall",
+            "Serralheria e Portões", "Vidraçaria e Box", "Telhados e Calhas", "Impermeabilização"
+        ],
+        "Manutenção e Casa": [
+            "Pequenos Reparos", "Refrigeração", "Limpeza e Faxina",
+            "Jardinagem e Paisagismo", "Piscina e Lazer", "Montagem de Móveis",
+            "Marcenaria e Planejados"
+        ],
+        "Tecnologia e Segurança": [
+            "Segurança Eletrônica", "Automação Residencial", "Desenvolvimento de Software"
+        ],
+		"Manutenção automotiva": [
+            "Mecanico", "Eletricista", "Pintor"
+        ],
+        "Saúde e Bem-Estar": [
+            "Nutrição", "Dentista", "Cuidador e Acompanhante", "Barbeiro", "Manicure", "Cabeleireiro"
+        ],
+        "Negócios e Eventos": [
+            "Buffet e Festas", "Publicidade e Propaganda"
+        ],
+		"Educação e treinamento": [
+            "Explicador de Matemática", "Explicador de Português", "Explicador de Inglês"
+        ],
+        "Outros": [
+            "Outros Serviços"
+        ]
+    };
   
     let state = {
         isPremium: false,
@@ -810,7 +860,7 @@
 		radar: [],
 		financeiro: { saldo: 0, movimentos: [] }
     };
-	let deferredPrompt;
+	
     // --- SISTEMA DE SEGURANÇA (NOVO) ---
       // --- SISTEMA DE SEGURANÇA E RISCO (V2 - APROVADO POR ESPECIALISTA) ---
     const Security = {
@@ -872,15 +922,15 @@
 
     // --- FUNÇÃO ATUALIZADA DE SALVAR (COM ENVIO DE RISCO) ---
    	
-   window.onload = () => { 
-    // 1. ORDEM CORRIGIDA: HTML PRIMEIRO, DADOS DEPOIS
+      window.onload = () => { 
+    // 1. Inicialização
     popularCategorias(); 
     loadData();
 
-    // 2. LOGICA DE PWA (DETECTIVE)
+    // 2. LÓGICA DE PWA (Captura do evento)
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
-        deferredPrompt = e;
+        deferredPrompt = e; // Agora usa a variável global definida no topo
         // Mostra botão de instalar no painel do prestador
         const btnPro = document.getElementById('install-alert-pro');
         if(btnPro) btnPro.style.display = 'block';
@@ -894,7 +944,7 @@
          if(btnPro) btnPro.style.display = 'block';
     }
 
-    // 3. POPULAR MENU DO RADAR (Mesma logica do menu principal)
+    // 3. POPULAR MENU DO RADAR
     const elRadar = document.getElementById('radar-grupo');
     if(elRadar) {
         const grupos = Object.keys(TAXONOMIA);
@@ -902,7 +952,7 @@
         grupos.forEach(g => elRadar.innerHTML += `<option value="${g}">${g}</option>`);
     }
 
-    // 4. TRATAMENTO DE LINK EXCLUSIVO (ATERRISSAGEM VIP)
+    // 4. TRATAMENTO DE LINK EXCLUSIVO (Deep Linking)
     const params = new URLSearchParams(window.location.search);
     const zapIndicado = params.get('indicar');
     const nomeIndicado = params.get('nome');
@@ -912,128 +962,62 @@
         goToScreen('cliente');
         toggleClientView('novo');
         
-        // CORREÇÃO: Preenche e TRAVA Categoria
         if(catIndicada) {
             const elGrupo = document.getElementById('req-grupo');
             const elCat = document.getElementById('req-cat');
-            
             const grupo = encontrarGrupoPorServico(catIndicada);
             if(grupo) {
                 elGrupo.value = grupo;
                 atualizarSubCategorias('req', catIndicada);
-                
-                // TRAVA VISUALMENTE (UX)
-                elGrupo.style.pointerEvents = 'none';
-                elGrupo.style.background = '#e9ecef';
-                elCat.style.pointerEvents = 'none';
-                elCat.style.background = '#e9ecef';
+                // TRAVA VISUALMENTE
+                elGrupo.style.pointerEvents = 'none'; elGrupo.style.background = '#e9ecef';
+                elCat.style.pointerEvents = 'none'; elCat.style.background = '#e9ecef';
             }
         }
-
-        // CORREÇÃO: Checkbox Público já vem MARCADO
+        
         const areaEx = document.getElementById('area-exclusividade');
         areaEx.style.display = 'block';
         document.getElementById('lbl-nome-indicado').innerText = nomeIndicado;
-        document.getElementById('chk-publico-apos-prazo').checked = true; // <--- FIX
+        document.getElementById('chk-publico-apos-prazo').checked = true;
 
         sessionStorage.setItem('targetZap', zapIndicado);
         alert(`🎁 Olá! Você está na área exclusiva de ${nomeIndicado}.`);
     }
-        const kitUrl = params.get('kit');
-        
-        if (kitUrl) {
-            // Se tiver um link de kit, tenta baixar e instalar
-            const btnConfirm = confirm("Deseja carregar as configurações deste perfil profissional agora?");
-            if (btnConfirm) {
-                fetch(kitUrl)
-                .then(response => {
-                    if(!response.ok) throw new Error("Arquivo não encontrado");
-                    return response.json();
-                })
-                             .then(data => {
-                    // 1. SALVA O STATUS ATUAL (PROTEÇÃO)
-                    const usuarioEraPro = state.isPremium;
 
-                    // 2. Mescla os dados do kit
-                    state = { ...state, ...data };
-                    
-                    // 3. RESTAURA O STATUS PRO
-                    state.isPremium = usuarioEraPro;
-
-                    saveData(); // Salva na memória do celular
-                    alert("✅ Perfil Profissional Carregado com Sucesso!");
-                    
-                    // Limpa a URL...
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                    
-                    // Recarrega...
-                    location.reload(); 
-                })
-
-                .catch(err => {
-                    alert("Erro ao carregar kit: " + err.message);
-                });
-            }
+    // 5. TRATAMENTO DE KITS (Configuração Automática)
+    const kitUrl = params.get('kit');
+    if (kitUrl) {
+        const btnConfirm = confirm("Deseja carregar as configurações deste perfil profissional agora?");
+        if (btnConfirm) {
+            fetch(kitUrl)
+            .then(response => { if(!response.ok) throw new Error("Arquivo não encontrado"); return response.json(); })
+            .then(data => {
+                const usuarioEraPro = state.isPremium;
+                state = { ...state, ...data };
+                state.isPremium = usuarioEraPro;
+                saveData(); 
+                alert("✅ Perfil Profissional Carregado com Sucesso!");
+                window.history.replaceState({}, document.title, window.location.pathname);
+                location.reload(); 
+            })
+            .catch(err => { alert("Erro ao carregar kit: " + err.message); });
         }
-        // -------------------------------------
+    }
 
-        // --- AUTO-UPDATE (NOVA FUNCIONALIDADE) ---
-    // Executa a atualização a cada 30 segundos (30000 milissegundos)
+    // 6. AUTO-UPDATE FEED
     setInterval(() => {
-        // Verifica se o usuário está na tela de Prestador E na aba de Oportunidades
         const screenPrestador = document.getElementById('screen-prestador');
         const tabOpp = document.getElementById('tab-oportunidades');
-        
-        // Só roda se a tela estiver visível para economizar bateria e dados
         if (screenPrestador.style.display === 'block' && tabOpp.classList.contains('active')) {
             console.log("🔄 Auto-atualizando feed...");
-            
-            // Opcional: Mostra um pequeno aviso visual no botão para saber que está rodando
-            const btn = document.querySelector('#tab-oportunidades button');
-            if(btn) btn.innerText = "🔄 Atualizando...";
-            
-            // Chama a função original
             renderOportunidades();
         }
-    }, 1200000); // <-- Mude aqui o tempo: 30000 = 30 segundos, 60000 = 1 minuto
+    }, 60000); // Ajustado para 60 segundos
 };
+
  
 const APP_VERSION = "9.5 - Conectado";
-// COLE AQUI SUA URL DO GOOGLE APPS SCRIPT
-const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6YbMKWK4kuO-fdexmhOp_4_dO_-oeDwyVtJazuiA3le5rcA/exec"; 
 
-
-        // --- TAXONOMIA DE SERVIÇOS (NOVA ESTRUTURA) ---
-    const TAXONOMIA = {
-        "Reforma e Construção": [
-            "Construção Civil", "Obra e Reforma", "Pintura e Acabamento",
-            "Elétrica e Iluminação", "Hidráulica e Encanamento", "Gesso e Drywall",
-            "Serralheria e Portões", "Vidraçaria e Box", "Telhados e Calhas", "Impermeabilização"
-        ],
-        "Manutenção e Casa": [
-            "Pequenos Reparos", "Refrigeração", "Limpeza e Faxina",
-            "Jardinagem e Paisagismo", "Piscina e Lazer", "Montagem de Móveis",
-            "Marcenaria e Planejados"
-        ],
-        "Tecnologia e Segurança": [
-            "Segurança Eletrônica", "Automação Residencial", "Desenvolvimento de Software"
-        ],
-		"Manutenção automotiva": [
-            "Mecanico", "Eletricista", "Pintor"
-        ],
-        "Saúde e Bem-Estar": [
-            "Nutrição", "Dentista", "Cuidador e Acompanhante", "Barbeiro", "Manicure", "Cabeleireiro"
-        ],
-        "Negócios e Eventos": [
-            "Buffet e Festas", "Publicidade e Propaganda"
-        ],
-		"Educação e treinamento": [
-            "Explicador de Matemática", "Explicador de Português", "Explicador de Inglês"
-        ],
-        "Outros": [
-            "Outros Serviços"
-        ]
-    };
 
     function installApp() {
         // Verifica iOS
@@ -1055,13 +1039,83 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
             alert("Para instalar: \nNo Chrome: Toque nos 3 pontinhos -> Instalar Aplicativo.\nNo Safari: Toque em Compartilhar -> Adicionar à Tela de Início.");
         }
     }
+    // --- NOVA FUNÇÃO: MESCLAR KITS DO RADAR ---
+async function importarKitsDoRadar() {
+    if (!state.radar || state.radar.length === 0) {
+        alert("⚠️ Seu Radar está vazio. Adicione áreas primeiro.");
+        return;
+    }
+
+    if (!confirm(`Deseja buscar e importar serviços para as ${state.radar.length} áreas do seu Radar?\n\nIsso adicionará novos itens ao seu catálogo sem apagar os atuais.`)) {
+        return;
+    }
+
+    const btn = event.currentTarget; // Pega o botão clicado
+    const textoOriginal = btn.innerText;
+    btn.innerText = "⏳ Buscando Kits...";
+    btn.disabled = true;
+
+    let importados = 0;
+    let erros = 0;
+
+    // Percorre cada área do radar
+    for (const area of state.radar) {
+        // Gera o nome do arquivo (slug) igual ao da função original
+        let slug = area.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        slug = slug.replace(/ /g, "_").replace(/[^a-z0-9_]/g, "");
+        const urlKit = `kits/${slug}.json`;
+
+        try {
+            const response = await fetch(urlKit);
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Verifica se o kit tem catálogo
+                if (data.catalogo && Array.isArray(data.catalogo)) {
+                    data.catalogo.forEach(novoServico => {
+                        // Verifica duplicidade pelo nome para não poluir
+                        const existe = state.catalogo.some(s => s.nome === novoServico.nome);
+                        
+                        if (!existe) {
+                            // Gera novo ID para evitar conflito
+                            novoServico.id = Date.now() + Math.floor(Math.random() * 1000);
+                            state.catalogo.push(novoServico);
+                            importados++;
+                        }
+                    });
+                }
+            } else {
+                console.log(`Kit não encontrado para: ${area}`);
+                erros++; // Conta como erro silencioso (kit não existe)
+            }
+        } catch (e) {
+            console.error(e);
+            erros++;
+        }
+    }
+
+    // Finalização
+    saveData();
+    renderAll();
+    
+    btn.innerText = textoOriginal;
+    btn.disabled = false;
+
+    if (importados > 0) {
+        alert(`✅ Sucesso! ${importados} novos serviços foram adicionados ao seu catálogo.`);
+        nav('catalogo'); // Leva o usuário para ver os novos serviços
+    } else {
+        alert("⚠️ Nenhum serviço novo encontrado nos kits das áreas do seu Radar.");
+    }
+}
+
 	function addRadar() {
         const cat = document.getElementById('radar-cat').value;
         if(!cat) return;
         
         if(!state.radar) state.radar = [];
         if(state.radar.includes(cat)) { alert("Já está no radar!"); return; }
-        if(state.radar.length >= 5 && !state.isPremium) { alert("Limite Grátis: 5 áreas no Radar. Vire PRO!"); return; }
+        if(state.radar.length >= 2 && !state.isPremium) { alert("Limite Grátis: 2 áreas no Radar. Vire PRO!"); return; }
 
         state.radar.push(cat);
         saveData();
@@ -1087,24 +1141,48 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
         });
     }
     
- 	// Função para iniciar os menus (Popula apenas o 1º nível: Grupos)
+    // Função para iniciar os menus (Popula apenas o 1º nível: Grupos)
     function popularCategorias() {
         const grupos = Object.keys(TAXONOMIA);
-        const selectsGrupo = ['req-grupo', 'cfg-grupo'];
+        
+        // --- CORREÇÃO AQUI ---
+        // Adicionamos 'radar-grupo' na lista para garantir que ele carregue as opções
+        const selectsGrupo = ['req-grupo', 'cfg-grupo', 'radar-grupo'];
+        // ---------------------
 
         selectsGrupo.forEach(id => {
             const el = document.getElementById(id);
             if(!el) return;
-            el.innerHTML = '<option value="">Selecione a Área...</option>';
+            
+            // Texto padrão do primeiro option
+            let textoPadrao = "Selecione a Área...";
+            if(id === 'radar-grupo') textoPadrao = "1. Área..."; // Texto mais curto para o radar
+
+            el.innerHTML = `<option value="">${textoPadrao}</option>`;
             grupos.forEach(g => el.innerHTML += `<option value="${g}">${g}</option>`);
         });
     }
 
-    // Função que roda quando o usuário escolhe o Grupo (Popula o 2º nível)
+
+     // Função que roda quando o usuário escolhe o Grupo (Popula o 2º nível)
     function atualizarSubCategorias(prefixo, valorSalvo = null) {
         const grupo = document.getElementById(prefixo + '-grupo').value;
-        const selectSub = document.getElementById(prefixo + (prefixo === 'req' ? '-cat' : '-specialty'));
         
+        // --- CORREÇÃO AQUI ---
+        // Define dinamicamente o ID do segundo select baseando-se no prefixo
+        let sufixo = '-specialty'; // Padrão para 'cfg' e 'cad'
+        
+        // Se for Requisição (Cliente) ou Radar, o sufixo do ID é '-cat'
+        if (prefixo === 'req' || prefixo === 'radar') {
+            sufixo = '-cat';
+        }
+
+        const selectSub = document.getElementById(prefixo + sufixo);
+        // ---------------------
+        
+        // Proteção caso o elemento não exista na tela
+        if (!selectSub) return;
+
         selectSub.innerHTML = '<option value="">Agora escolha o serviço...</option>';
         
         if (grupo && TAXONOMIA[grupo]) {
@@ -1121,6 +1199,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
             selectSub.value = valorSalvo;
         }
     }
+
 
     // Função auxiliar para descobrir o grupo de um serviço salvo (Engenharia reversa)
     function encontrarGrupoPorServico(servico) {
@@ -1227,16 +1306,20 @@ async function carregarKitPorEspecialidade() {
     });
 }
 
-    // --- PRESTADOR NAV ---
+    // --- PRESTADOR NAV (CORRIGIDA) ---
     function nav(tab) {
         document.querySelectorAll('.container').forEach(e => e.classList.remove('active'));
-        // Remove 'active' dos botões do rodapé se não for uma das abas principais
         document.querySelectorAll('.nav-btn').forEach(e => e.classList.remove('active'));
         
-        // Se for config, mostramos a div mas não acendemos nenhum botão embaixo (o usuário sabe que saiu do fluxo)
+        // Se for config (Ajustes)
         if (tab === 'config') {
             document.getElementById('tab-config').classList.add('active');
             document.getElementById('footer-orcamento').style.display = 'none';
+            
+            // --- CORREÇÃO: Força renderizar o radar ao entrar na tela ---
+            renderRadarTags();
+            // ------------------------------------------------------------
+            
             return; 
         }
 
@@ -1785,12 +1868,19 @@ if(typeof installApp === 'function') {
     }
 
     // --- LÓGICA PRINCIPAL (CATALOGO/CARRINHO/GESTÃO) ---
-function loadData() {
-        const localData = localStorage.getItem('orcaFacilApp_v94');
+        function loadData() {
+        // --- CORREÇÃO CRÍTICA DE PERSISTÊNCIA ---
+        // O nome da chave aqui DEVE ser igual ao usado no saveData ('precobom')
+        const localData = localStorage.getItem('precobom'); 
+        // ----------------------------------------
+
         if (localData) state = { ...state, ...JSON.parse(localData) };
         
+        // Sincroniza nota do servidor
+        sincronizarNota(); 
+
         // --- RECUPERAÇÃO INTELIGENTE DOS MENUS ---
-        // Garante que a especialidade salva apareça selecionada na tela de Ajustes
+        // Garante que a especialidade principal salva apareça selecionada
         if (state.config.specialty) {
             const servicoSalvo = state.config.specialty;
             const grupoDoServico = encontrarGrupoPorServico(servicoSalvo);
@@ -1798,13 +1888,11 @@ function loadData() {
             const elGrupo = document.getElementById('cfg-grupo');
             if(elGrupo && grupoDoServico) {
                 elGrupo.value = grupoDoServico;
-                // O segundo parâmetro força a seleção do item correto
                 atualizarSubCategorias('cfg', servicoSalvo);
             }
         }
-        // ---------------------------------------------
 
-        // Preenche os inputs de texto
+        // Preenche os inputs de texto com os dados do state recuperado
         if(document.getElementById('cfg-taxa-compra')) document.getElementById('cfg-taxa-compra').value = state.config.taxaCompra;
         if(document.getElementById('cfg-taxa-visita')) document.getElementById('cfg-taxa-visita').value = state.config.taxaVisita;
         if(document.getElementById('cfg-pix-key')) document.getElementById('cfg-pix-key').value = state.config.pixKey || "";
@@ -1813,18 +1901,33 @@ function loadData() {
         if(document.getElementById('cfg-zap')) document.getElementById('cfg-zap').value = state.config.zap || "";
         if(document.getElementById('cfg-bio')) document.getElementById('cfg-bio').value = state.config.bio || "";
 		
+        // Atualiza a UI conforme o status Premium recuperado
         updatePremiumUI();
+        
+        // Renderiza listas (Catálogo, Carrinho, Gestão)
         renderAll();
-		renderRadarTags()
+        
+        // --- RENDERIZA O RADAR RECUPERADO ---
+        renderRadarTags(); 
     }
+
 
     
     function saveData() {
-        localStorage.setItem('orcaFacilApp_v94', JSON.stringify(state));
+        localStorage.setItem('precobom', JSON.stringify(state));
         renderAll();
     }
     
-    function renderAll() { renderCatalogo(); renderCarrinho(); renderGestao(); }
+        function renderAll() { 
+        renderCatalogo(); 
+        renderCarrinho(); 
+        renderGestao(); 
+        
+        // --- CORREÇÃO: Incluímos o Radar aqui ---
+        renderRadarTags(); 
+        // ----------------------------------------
+    }
+
 
     // --- CATÁLOGO ---
         function renderCatalogo(filtro = "") {
