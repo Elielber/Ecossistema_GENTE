@@ -885,10 +885,8 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
 		financeiro: { saldo: 0, movimentos: [] }
     };
 	
-    // --- SISTEMA DE SEGURANÇA (NOVO) ---
-      // --- SISTEMA DE SEGURANÇA E RISCO (V2 - APROVADO POR ESPECIALISTA) ---
+    // --- SISTEMA DE SEGURANÇA E RISCO (V3 - COM PLANO B) ---
     const Security = {
-        // Gera ou recupera a identidade do aparelho
         getDeviceID: function() {
             let id = localStorage.getItem('pb_device_id');
             if (!id) {
@@ -898,47 +896,71 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
             return id;
         },
 
-        // Captura rede e compara com o histórico para gerar SCORE DE RISCO
+        // Função interna para tentar buscar IP em várias fontes
+        fetchLocation: async function() {
+            try {
+                // TENTATIVA 1: ipapi.co (Muito preciso)
+                const res1 = await fetch('https://ipapi.co/json/');
+                if(res1.ok) return await res1.json();
+                throw new Error("Falha API 1");
+            } catch (e) {
+                try {
+                    // TENTATIVA 2: ipwho.is (Plano B - Gratuito e rápido)
+                    const res2 = await fetch('https://ipwho.is/');
+                    if(res2.ok) return await res2.json();
+                    throw new Error("Falha API 2");
+                } catch (e2) {
+                    return null; // Desiste se ambos falharem
+                }
+            }
+        },
+
         analyzeRisk: async function() {
             let riskFlags = [];
             let currentGeo = "Desconhecida";
             let currentIP = "Oculto";
+            let data = null;
 
             try {
-                // 1. Dados atuais
-                const response = await fetch('https://ipapi.co/json/');
-                const data = await response.json();
-                currentIP = data.ip || 'Oculto';
-                currentGeo = data.city ? `${data.city}/${data.region_code}` : 'Desconhecida';
-                
-                // 2. Compara com histórico salvo no celular
-                const lastDevice = localStorage.getItem('pb_device_id'); // ID já existente
-                const lastGeo = localStorage.getItem('pb_last_geo');
-                const currentDevice = this.getDeviceID();
+                // Chama a função blindada acima
+                data = await this.fetchLocation();
 
-                // Lógica do Especialista: Combinação de Fatores
-                const isNewDevice = lastDevice && (lastDevice !== currentDevice); // Mudou aparelho?
-                const isNewLocation = lastGeo && (lastGeo !== currentGeo);       // Mudou de cidade?
+                if (data) {
+                    // Normaliza os dados (pois cada API retorna nomes diferentes)
+                    currentIP = data.ip || 'Oculto';
+                    const cidade = data.city || 'Cidade?';
+                    const regiao = data.region_code || data.region || 'UF';
+                    currentGeo = `${cidade}/${regiao}`;
 
-                // Se mudou aparelho, gera alerta leve (Amarelo)
-                if (isNewDevice) riskFlags.push("TROCA_APARELHO");
-                
-                // Se mudou cidade, gera alerta leve (Amarelo)
-                if (isNewLocation) riskFlags.push("NOVA_CIDADE");
+                    // Lógica de Risco
+                    const lastDevice = localStorage.getItem('pb_device_id'); 
+                    const lastGeo = localStorage.getItem('pb_last_geo');
+                    const currentDevice = this.getDeviceID();
 
-                // Atualiza o histórico local para a próxima vez
-                localStorage.setItem('pb_last_geo', currentGeo);
+                    if (lastDevice && (lastDevice !== currentDevice)) riskFlags.push("TROCA_APARELHO");
+                    if (lastGeo && (lastGeo !== currentGeo)) riskFlags.push("NOVA_LOCALIZACAO");
+                    
+                    // Salva para a próxima
+                    localStorage.setItem('pb_last_geo', currentGeo);
+                } else {
+                    riskFlags.push("BLOQUEIO_RASTREIO"); // Identifica que o usuário usa bloqueador
+                }
 
             } catch (e) {
-                console.warn("Falha na análise de risco");
-                riskFlags.push("ERRO_ANALISE");
+                console.warn("Falha total na segurança");
+                riskFlags.push("ERRO_CRITICO");
             }
+
+            // Se não houve erro mas a lista está vazia, é acesso padrão
+            const detalhesFinal = riskFlags.length > 0 ? riskFlags.join(", ") : "Acesso Seguro";
 
             return {
                 deviceID: this.getDeviceID(),
                 ip: currentIP,
                 geo: currentGeo,
-                flags: riskFlags, // Lista de alertas (Ex: ["TROCA_APARELHO", "NOVA_CIDADE"])
+                risco: riskFlags.length > 0 ? "MEDIO" : "BAIXO", // Sobe o risco se tiver flag
+                detalhes: detalhesFinal, 
+                pix: state.config.pixKey || "Sem Pix", // Garante que não vá vazio
                 userAgent: navigator.userAgent
             };
         }
