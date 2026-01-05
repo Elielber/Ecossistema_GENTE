@@ -1402,13 +1402,8 @@ async function carregarKitPorEspecialidade() {
 }
 
 	function sincronizarNota() {
-    // Usa o Pix como ID se parecer um telefone, ou o campo zap se tivermos criado
-    // Para simplificar, vamos assumir que o usuário digita o zap na hora de enviar orçamento
-    // O ideal seria criar um campo fixo "input id='cfg-zap'" na aba Gestão.
-    
-    const zap = state.config.zap || state.config.pixKey; // Tenta usar a chave pix como ID provisório
-    
-    // Só busca se tiver um número válido (sem letras, > 10 digitos)
+    // Usa o Zap salvo ou a chave pix (se for celular)
+    const zap = state.config.zap || state.config.pixKey; 
     if (!zap || zap.replace(/\D/g,'').length < 10) return; 
 
     const zapLimpo = zap.replace(/\D/g,'');
@@ -1416,13 +1411,39 @@ async function carregarKitPorEspecialidade() {
     fetch(API_URL + "?acao=BUSCAR_PERFIL_PRO&zap=" + zapLimpo)
     .then(res => res.json())
     .then(data => {
+        
+        // 🚨 VERIFICAÇÃO DE BLOQUEIO
+        if (data.bloqueado) {
+            document.body.innerHTML = `
+                <div style="height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#c0392b; color:white; text-align:center; padding:20px;">
+                    <div style="font-size:4rem;">🚫</div>
+                    <h1>Conta Suspensa</h1>
+                    <p>O acesso a este número foi bloqueado.</p>
+                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; margin-top:10px;">
+                        Motivo: <strong>${data.motivoBloqueio}</strong>
+                    </div>
+                    <button onclick="location.reload()" style="margin-top:20px; padding:10px 20px; border:none; background:white; color:#c0392b; font-weight:bold; border-radius:20px; cursor:pointer;">Tentar Novamente</button>
+                </div>
+            `;
+            throw new Error("Conta Bloqueada"); // Para a execução
+        }
+
+        // ✅ RECUPERAÇÃO DE ASSINATURA (Persistence)
+        if (data.isPremium === true && !state.isPremium) {
+            state.isPremium = true;
+            saveData();
+            updatePremiumUI();
+            alert("👑 Sua assinatura PRO foi restaurada com sucesso!");
+        }
+
+        // Atualiza nota
         if(data.nota !== "Novo") {
             state.config.nota = data.nota;
             state.config.totalAvaliacoes = data.total;
             saveData();
-            console.log("Nota atualizada:", data.nota);
         }
-    });
+    })
+    .catch(err => console.log("Erro sync:", err));
 }
 
     // --- PRESTADOR NAV (CORRIGIDA) ---
@@ -2507,7 +2528,46 @@ async function salvarConfig(silencioso = false) {
     function addMt(){const n=document.getElementById('i-m').value;if(n){tempItem.mat.push({n:n,q:1,p:0});document.getElementById('i-m').value='';renderModLists();}}
 
     // --- FREEMIUM ---
-    function simularCompraPremium() { if(confirm("Ativar PRO?")) { state.isPremium = true; saveData(); updatePremiumUI(); } }
+   function simularCompraPremium() {
+    if (!state.config.zap || state.config.zap.length < 10) {
+        alert("⚠️ Cadastre seu WhatsApp em 'Ajustes' antes de assinar.");
+        nav('config');
+        return;
+    }
+
+    if(confirm("Confirma a assinatura PRO Vitalícia?")) { 
+        
+        // Feedback Visual
+        const btn = document.querySelector('#banner-premium button');
+        if(btn) { btn.innerText = "Registrando..."; btn.disabled = true; }
+
+        // Envia para o servidor
+        const payload = {
+            tipo: "NOVA_ASSINATURA",
+            zap: state.config.zap,
+            nome: state.config.pixName || "Prestador",
+            valor: "99.90" // Valor simbólico ou real
+        };
+
+        fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify(payload),
+            mode: "no-cors"
+        })
+        .then(() => {
+            state.isPremium = true; 
+            saveData(); 
+            updatePremiumUI();
+            alert("💎 Parabéns! Você agora é PRO e seus dados estão seguros na nuvem.");
+        })
+        .catch(err => {
+            alert("Erro ao conectar, mas liberamos seu acesso temporariamente.");
+            state.isPremium = true; 
+            saveData(); 
+            updatePremiumUI();
+        });
+    } 
+}
     function updatePremiumUI() {
         const s = document.getElementById('header-status'), b = document.getElementById('banner-premium');
         if(state.isPremium) { s.innerHTML = "💎 PRO Ativo"; s.style.color = "#f1c40f"; b.style.display = 'none'; } 
