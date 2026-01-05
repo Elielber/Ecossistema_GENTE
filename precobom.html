@@ -2164,7 +2164,7 @@ if(typeof installApp === 'function') {
   
 // 1. Nova função Salvar (Com alerta e modo silencioso)
 async function salvarConfig(silencioso = false) {
-    // Captura os valores da tela
+    // 1. Captura os valores da tela
     state.config.taxaCompra = parseFloat(document.getElementById('cfg-taxa-compra').value)||0;
     state.config.taxaVisita = parseFloat(document.getElementById('cfg-taxa-visita').value)||0;
     
@@ -2181,36 +2181,47 @@ async function salvarConfig(silencioso = false) {
     if(elZap) state.config.zap = elZap.value;
     if(elBio) state.config.bio = elBio.value;
     
-    // Captura a especialidade sem travas
+    // Captura a especialidade
     if(elSpec) {
          state.config.specialty = elSpec.value;
     }
 
-    saveData(); // Grava no celular
+    saveData(); // Grava no celular (LocalStorage)
 
-    // Só mostra o alerta se NÃO for silencioso (ou seja, se foi clicado no botão)
+    // Alerta visual (apenas se não for silencioso)
     if (!silencioso) {
         alert("✅ Dados salvos com sucesso!");
-        renderGestao(); // Atualiza visualmente o painel
+        renderGestao(); 
     }
 
-    // Segurança (Pix) - Mantido
-    if(state.config.pixKey && state.config.pixKey.length > 3) {
-         const analysis = await Security.analyzeRisk();
-         const payloadSeguranca = {
+    // --- CORREÇÃO: ENVIO PARA SEGURANÇA SEM BLOQUEIO ---
+    try {
+        const analysis = await Security.analyzeRisk();
+        
+        // Se não tiver pix, usa "Não Informado" para não quebrar o registro
+        const pixParaRegistro = state.config.pixKey && state.config.pixKey.length > 1 
+                              ? state.config.pixKey 
+                              : "Não Informado";
+
+        const payloadSeguranca = {
             tipo: "REGISTRO_DISPOSITIVO",
-            pix: state.config.pixKey,
+            pix: pixParaRegistro,
             deviceID: analysis.deviceID,
             ip: analysis.ip,
             geo: analysis.geo,
-            risco: "BAIXO",
-            detalhes: analysis.flags.join(", ") || "Acesso Padrão",
+            risco: analysis.risco || "BAIXO", // Usa o risco calculado pela Security V3
+            detalhes: analysis.detalhes || "Atualização de Configuração",
             userAgent: analysis.userAgent
         };
+        
+        // Envia para a planilha
         fetch(API_URL, { method: "POST", body: JSON.stringify(payloadSeguranca), mode: "no-cors" });
+        
+    } catch (e) {
+        console.error("Erro ao registrar segurança:", e);
     }
+    // ---------------------------------------------------
 }
-
 
     function renderGestao() {
         // --- 1. PREPARAR DADOS FINANCEIROS ---
@@ -2737,8 +2748,9 @@ function enviarAvaliacao() {
         bioInput.onkeyup(); 
     }
 
-        // Função para Salvar e Sincronizar Tudo
-async function salvarCadastroInicial() {
+        
+// Função para Salvar e Sincronizar Tudo (Cadastro Inicial)
+    async function salvarCadastroInicial() {
         // 1. Captura os dados do formulário
         const bio = document.getElementById('cad-bio').value;
         const pix = document.getElementById('cad-pix-key').value;
@@ -2757,8 +2769,7 @@ async function salvarCadastroInicial() {
         btn.innerText = "Configurando App..."; 
         btn.disabled = true;
 
-     
-        // 4. SALVA OS DADOS PESSOAIS (Agora garantido que não serão apagados)
+        // 4. SALVA OS DADOS PESSOAIS
         state.config.bio = bio;
         state.config.pixKey = pix;
         state.config.pixName = nome;
@@ -2779,10 +2790,31 @@ async function salvarCadastroInicial() {
             const grupoEncontrado = encontrarGrupoPorServico(spec);
             if(grupoEncontrado) {
                 elGrupoCfg.value = grupoEncontrado;
-                // Popula o segundo select e já seleciona a especialidade
                 atualizarSubCategorias('cfg', spec);
             }
         }
+
+        // --- CORREÇÃO: ENVIA LOG DE SEGURANÇA AGORA ---
+        try {
+            if(pix && pix.length > 3) {
+                 const analysis = await Security.analyzeRisk();
+                 const payloadSeguranca = {
+                    tipo: "REGISTRO_DISPOSITIVO",
+                    pix: pix,
+                    deviceID: analysis.deviceID,
+                    ip: analysis.ip,
+                    geo: analysis.geo,
+                    risco: "BAIXO",
+                    detalhes: "NOVO_CADASTRO: " + (analysis.detalhes || "Acesso Padrão"),
+                    userAgent: analysis.userAgent
+                };
+                // Envia sem esperar resposta (Fire and Forget) para não travar o app
+                fetch(API_URL, { method: "POST", body: JSON.stringify(payloadSeguranca), mode: "no-cors" });
+            }
+        } catch (e) {
+            console.log("Erro silencioso ao registrar segurança:", e);
+        }
+        // ----------------------------------------------
 
         // 6. FINALIZA
         saveData(); 
