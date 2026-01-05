@@ -487,10 +487,9 @@
             <div class="gestao-title"><span class="gestao-icon">📣</span> Marketing</div>
         </div>
 
-        <div class="row" style="margin-bottom:10px;">
-            <button class="btn btn-outline btn-sm" onclick="gerarCarteirinha()" style="flex:1;">🪪 Carteirinha</button>
-            <button class="btn btn-outline btn-sm" onclick="gerarLinkDivulgacao('zap')" style="flex:1;">🔗 Link Zap</button>
-        </div>
+        <button class="btn btn-outline" onclick="gerarCarteirinha()" style="width:100%; margin-bottom:10px; border-color:#8e44ad; color:#8e44ad;">
+            🪪 Gerar Carteirinha + Link de Pedidos
+        </button>
 
         <div id="area-crm-pro" class="pro-feature" onclick="if(!state.isPremium) simularCompraPremium()">
             <div style="font-weight:bold; font-size:0.9rem;">📢 Radar de Clientes</div>
@@ -818,6 +817,20 @@
     <div class="ios-arrow">⬇️</div>
     <button onclick="document.getElementById('modal-ios-install').style.display='none'" style="margin-top:15px; background:none; border:none; color:#999;">Fechar</button>
 </div>
+<div id="modal-historico-full" class="modal-overlay" onclick="if(event.target.id==='modal-historico-full')this.style.display='none'">
+    <div class="modal-content" style="background:#f8f9fa; max-height:85vh;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3 style="margin:0; color:var(--primary);">📂 Histórico Completo</h3>
+            <button onclick="document.getElementById('modal-historico-full').style.display='none'" style="border:none; background:none; font-size:1.5rem;">&times;</button>
+        </div>
+        
+        <div class="form-group">
+            <input type="text" class="input" placeholder="🔍 Buscar cliente ou serviço..." onkeyup="filtrarHistorico(this.value)">
+        </div>
+
+        <div id="lista-historico-full" style="padding-bottom:20px;"></div>
+    </div>
+</div>
 <script>
   let deferredPrompt;
   
@@ -973,27 +986,31 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
         grupos.forEach(g => elRadar.innerHTML += `<option value="${g}">${g}</option>`);
     }
 
-    // 4. TRATAMENTO DE LINK EXCLUSIVO (Deep Linking)
+   // 4. TRATAMENTO DE LINK EXCLUSIVO (Versão Limpa para Banco Novo)
     const params = new URLSearchParams(window.location.search);
     const zapIndicado = params.get('indicar');
     const nomeIndicado = params.get('nome');
-    const catIndicada = params.get('cat'); 
+    const catIndicada = params.get('cat');   // Especialidade (ex: Mecânico)
+    const grupoIndicado = params.get('grupo'); // Categoria (ex: Automotiva)
 
     if (zapIndicado && nomeIndicado) {
         goToScreen('cliente');
         toggleClientView('novo');
         
-        if(catIndicada) {
+        // Se veio o grupo e a categoria, preenche direto sem adivinhação
+        if(grupoIndicado && catIndicada) {
             const elGrupo = document.getElementById('req-grupo');
             const elCat = document.getElementById('req-cat');
-            const grupo = encontrarGrupoPorServico(catIndicada);
-            if(grupo) {
-                elGrupo.value = grupo;
-                atualizarSubCategorias('req', catIndicada);
-                // TRAVA VISUALMENTE
-                elGrupo.style.pointerEvents = 'none'; elGrupo.style.background = '#e9ecef';
-                elCat.style.pointerEvents = 'none'; elCat.style.background = '#e9ecef';
-            }
+            
+            // 1. Seleciona o Grupo
+            elGrupo.value = grupoIndicado;
+            
+            // 2. Carrega as especialidades desse grupo
+            atualizarSubCategorias('req', catIndicada);
+            
+            // 3. Trava visualmente
+            elGrupo.style.pointerEvents = 'none'; elGrupo.style.background = '#e9ecef';
+            elCat.style.pointerEvents = 'none'; elCat.style.background = '#e9ecef';
         }
         
         const areaEx = document.getElementById('area-exclusividade');
@@ -1004,7 +1021,6 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
         sessionStorage.setItem('targetZap', zapIndicado);
         alert(`🎁 Olá! Você está na área exclusiva de ${nomeIndicado}.`);
     }
-
     // 5. TRATAMENTO DE KITS (Configuração Automática)
     const kitUrl = params.get('kit');
     if (kitUrl) {
@@ -1038,7 +1054,61 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
 
  
 const APP_VERSION = "9.5 - Conectado";
+// --- FUNÇÕES DE HISTÓRICO COMPLETO ---
+function abrirHistoricoCompleto() {
+    renderHistoricoCompleto();
+    document.getElementById('modal-historico-full').style.display = 'flex';
+}
 
+function renderHistoricoCompleto(filtro = "") {
+    const div = document.getElementById('lista-historico-full');
+    div.innerHTML = "";
+    
+    // Pega TODOS os itens e inverte (mais novos primeiro)
+    const lista = [...state.historico].reverse();
+    
+    // Filtro de busca
+    const filtrados = lista.filter(h => 
+        h.cliente.toLowerCase().includes(filtro.toLowerCase()) || 
+        h.titulo.toLowerCase().includes(filtro.toLowerCase())
+    );
+
+    if(filtrados.length === 0) {
+        div.innerHTML = "<div style='text-align:center; color:#999; margin-top:20px;'>Nenhum registro encontrado.</div>";
+        return;
+    }
+
+    filtrados.forEach(h => {
+        const dataF = new Date(h.data).toLocaleDateString('pt-BR');
+        const valorF = h.valor.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+        
+        // Status Visual
+        let statusCor = "#95a5a6"; // Cinza (Pendente)
+        let statusIcon = "⏳";
+        if(h.status === 'FECHADO') { statusCor = "#27ae60"; statusIcon = "✅"; }
+        if(h.status === 'PERDIDO') { statusCor = "#c0392b"; statusIcon = "❌"; }
+
+        div.innerHTML += `
+        <div style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border-left:5px solid ${statusCor}; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                <strong style="color:var(--primary)">${h.cliente}</strong>
+                <span style="font-size:0.8rem; color:#666;">${dataF}</span>
+            </div>
+            <div style="font-size:0.9rem; color:#555; margin-bottom:8px;">${h.titulo}</div>
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #eee; padding-top:8px;">
+                <div style="font-weight:bold; color:var(--success);">${valorF}</div>
+                <div style="cursor:pointer; font-size:0.8rem; background:#f4f6f7; padding:4px 8px; border-radius:15px;" onclick="toggleStatusHist(${h.id}); renderHistoricoCompleto('${filtro}')">
+                    ${statusIcon} ${h.status}
+                </div>
+            </div>
+        </div>`;
+    });
+}
+
+function filtrarHistorico(texto) {
+    renderHistoricoCompleto(texto);
+}
 
     function installApp() {
         // Verifica se é iOS
@@ -1376,6 +1446,7 @@ async function carregarKitPorEspecialidade() {
 
     function enviarDemanda() {
     const cat = document.getElementById('req-cat').value;
+	const grupo = document.getElementById('req-grupo').value;
     const tit = document.getElementById('req-titulo').value;
     const desc = document.getElementById('req-desc').value;
     const nome = document.getElementById('req-nome').value;
@@ -1412,6 +1483,7 @@ async function carregarKitPorEspecialidade() {
 
     const payload = {
         categoria: cat, 
+		grupo: grupo,
         titulo: tit, 
         descricao: desc,
         nome: nome, 
@@ -1491,7 +1563,13 @@ if(typeof installApp === 'function') {
                 // VERIFICA SE ESTÁ FECHADO
                 const isFechado = d.status === 'FECHADO';
                 
-                // ESTILO DO CARD (Se fechado: cinza e opaco / Se aberto: branco e normal)
+                // --- CORREÇÃO PRINCIPAL: GARANTIR A CATEGORIA ---
+                // Tenta ler 'cat' (padrão do feed) ou 'categoria' (legado)
+                // Se não achar nenhum, usa string vazia para não gerar "undefined"
+                const categoriaCorrigida = d.cat || d.categoria || ""; 
+                // ------------------------------------------------
+                
+                // ESTILO DO CARD
                 const cardStyle = isFechado 
                     ? "background:#f4f4f4; border-left:5px solid #7f8c8d; opacity:0.8; filter: grayscale(100%);" 
                     : "border-left:5px solid var(--cli-accent);";
@@ -1504,35 +1582,17 @@ if(typeof installApp === 'function') {
                 
                 if(d.orcamentos.length > 0) {
                     d.orcamentos.forEach((o, indexOrc) => {
-                        // Verifica se este prestador foi o vencedor
-                        // (d.vencedor vem do backend preenchido quando fecha)
                         const isVencedor = isFechado && d.vencedor && d.vencedor.toString() === o.zapPrestador.toString();
                         
-                        // Link do Zap
-                        const msgZap = `Olá, estou retomando o contato sobre o serviço: ${d.titulo}.`;
-                        const linkZap = `https://wa.me/${o.zapPrestador}?text=${encodeURIComponent(msgZap)}`;
-
-                        // Lógica de Reputação (Visual)
-                        let corBorda = "#ddd";
-                        if(o.reputacao && o.reputacao.includes("Ouro")) corBorda = "#f1c40f"; 
-                        else if(o.reputacao && o.reputacao.includes("Prata")) corBorda = "#bdc3c7"; 
-                        else if(o.reputacao && o.reputacao.includes("Bronze")) corBorda = "#cd7f32";
-
                         // Estrelas
                         let htmlEstrelas = (!o.estrelas || o.estrelas === "Novato") ? "🆕" : `⭐ ${o.estrelas}`;
-
-                        // Se estiver fechado, esconde orçamentos PERDEDORES para limpar a tela
-                        // (Ou mostra de forma bem discreta). Aqui optei por mostrar só o vencedor ou todos discretos.
-                        // Vamos manter todos, mas destacar o vencedor.
                         
                         let estiloOrc = isVencedor 
-                            ? "background:#d4edda; border:2px solid #28a745;" // Vencedor ganha verde
-                            : `background:white; border:1px solid ${corBorda}; border-left: 5px solid ${corBorda};`;
+                            ? "background:#d4edda; border:2px solid #28a745;" 
+                            : `background:white; border:1px solid #ddd; border-left: 5px solid #ccc;`;
 
-                        
-                       // Link do Zap (Direto) - Mantemos caso precise
-                       const linkZapDireto = `https://wa.me/${o.zapPrestador}`;
-
+                       // AQUI ESTAVA O ERRO: Chamada da função com d.categoria (que era undefined)
+                       // Agora usamos categoriaCorrigida
                        htmlOrcamentos += `
                        <div style="${estiloOrc} padding:12px; border-radius:8px; margin-top:8px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
                            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -1550,7 +1610,7 @@ if(typeof installApp === 'function') {
                            <div style="display:flex; gap:10px; margin-top:10px;">
                                <button class="btn btn-outline btn-sm" style="flex:1;" onclick="verDetalhesOrcamento(${indexDemanda}, ${indexOrc})">👁️ Ver</button>
         
-                               <button class="btn btn-success btn-sm" style="flex:1;" onclick="abrirOpcoesContato('${o.prestador}', '${o.zapPrestador}', '${d.categoria}', '${d.titulo}')">
+                               <button class="btn btn-success btn-sm" style="flex:1;" onclick="abrirOpcoesContato('${o.prestador}', '${o.zapPrestador}', '${categoriaCorrigida}', '${d.titulo}')">
                                    💬 Contato / Indicar
                                </button>
         
@@ -2128,27 +2188,7 @@ async function salvarConfig(silencioso = false) {
         fetch(API_URL, { method: "POST", body: JSON.stringify(payloadSeguranca), mode: "no-cors" });
     }
 }
-function gerarLinkDivulgacao(tipo) {
-        if(!state.config.zap || !state.config.pixName) {
-            alert("⚠️ Preencha seu Nome e WhatsApp em 'Ajustes' antes de divulgar!");
-            nav('config');
-            return;
-        }
 
-        const baseUrl = window.location.href.split('?')[0];
-        const zapLimpo = state.config.zap.replace(/\D/g, '');
-        const nomeEncode = encodeURIComponent(state.config.pixName);
-        const catEncode = encodeURIComponent(state.config.specialty || "");
-
-        const linkFinal = `${baseUrl}?indicar=${zapLimpo}&nome=${nomeEncode}&cat=${catEncode}`;
-
-        if(tipo === 'copy') {
-            navigator.clipboard.writeText(linkFinal).then(() => alert("🔗 Link copiado! Cole no Instagram, Facebook ou Email."));
-        } else {
-            const msg = `Olá! Para agilizar seu orçamento e garantir a segurança do serviço, por favor registre seu pedido no meu link oficial:\n\n${linkFinal}\n\nAssim consigo te passar os valores detalhados.`;
-            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-        }
-    }
 
     function renderGestao() {
         // --- 1. PREPARAR DADOS FINANCEIROS ---
@@ -2212,7 +2252,9 @@ function gerarLinkDivulgacao(tipo) {
                     <div style="font-weight:bold; color:#7f8c8d;">${h.valor.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div>
                 </div>`;
             });
-            divHist.innerHTML += `<div style="text-align:center; margin-top:5px;"><small style="color:#3498db; cursor:pointer;" onclick="alert('Histórico completo em breve!')">Ver tudo</small></div>`;
+           divHist.innerHTML += `<div style="text-align:center; margin-top:5px;">
+    <small style="color:#3498db; cursor:pointer; font-weight:bold;" onclick="abrirHistoricoCompleto()">📂 Ver Histórico Completo</small>
+</div>`;
         }
 
         // --- 4. LÓGICA PRO (AGENDA) ---
@@ -2814,7 +2856,7 @@ function iniciarDitado(elementId) {
         target.placeholder = originalPlaceholder;
     };
 }
-	// --- FUNÇÃO AUXILIAR: QUEBRA DE LINHA (WORD WRAP) ---
+// --- FUNÇÃO AUXILIAR OBRIGATÓRIA PARA A CARTEIRINHA ---
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     const words = text.split(' ');
     let line = '';
@@ -2834,32 +2876,49 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
         }
     }
     ctx.fillText(line, x, currentY);
-    return currentY; // Retorna a posição Y final para o próximo elemento usar
+    return currentY; 
 }
-
-// --- FUNÇÃO PRINCIPAL: CARTEIRINHA COM COMPARTILHAMENTO INTELIGENTE ---
+// --- FUNÇÃO CARTEIRINHA: VISUAL + LINK EXCLUSIVO ---
 function gerarCarteirinha() {
+    // 1. Validação
     if (!state.config.pixName || !state.config.specialty) {
         alert("⚠️ Complete seu perfil (Nome e Especialidade) antes de gerar a carteirinha!");
         nav('gestao'); return;
     }
+
     const btn = event.currentTarget; 
     const txtOriginal = btn.innerText; 
     btn.innerText = "⏳ Criando...";
 
+    // 2. Construção do Link Exclusivo (A Mágica acontece aqui)
+    const baseUrl = window.location.href.split('?')[0];
+    const zapLimpo = state.config.zap.replace(/\D/g, '');
+    const nomeEncode = encodeURIComponent(state.config.pixName);
+    const catEncode = encodeURIComponent(state.config.specialty || "");
+    
+    // Busca o Grupo para deixar o link perfeito (sem erros de preenchimento)
+    const grupo = encontrarGrupoPorServico(state.config.specialty);
+    const grupoEncode = encodeURIComponent(grupo || "");
+
+    // Monta a URL completa
+    const linkExclusivo = `${baseUrl}?indicar=${zapLimpo}&nome=${nomeEncode}&cat=${catEncode}&grupo=${grupoEncode}`;
+
+    // 3. Configuração do Canvas (Desenho)
     const canvas = document.createElement('canvas'); 
     const ctx = canvas.getContext('2d');
     canvas.width = 1080; 
     canvas.height = 1350;
 
-    // --- DESENHO (MANTIDO) ---
+    // Fundo
     const grd = ctx.createLinearGradient(0, 0, 0, 1350);
     grd.addColorStop(0, "#2c3e50"); grd.addColorStop(1, "#000000");
     ctx.fillStyle = grd; ctx.fillRect(0, 0, 1080, 1350);
     
+    // Círculo de fundo
     ctx.beginPath(); ctx.arc(540, 675, 500, 0, 2 * Math.PI);
     ctx.fillStyle = "rgba(255, 255, 255, 0.02)"; ctx.fill();
 
+    // Textos do Cabeçalho
     ctx.textAlign = "center";
     ctx.fillStyle = "#bdc3c7"; ctx.font = "35px sans-serif";
     ctx.fillText("PROFISSIONAL CADASTRADO NA", 540, 150);
@@ -2867,9 +2926,11 @@ function gerarCarteirinha() {
     ctx.fillStyle = "#ffffff"; ctx.font = "bold 80px sans-serif";
     ctx.fillText("🤝 PREÇO BOM", 540, 240);
     
+    // Linha divisória
     ctx.strokeStyle = "#f1c40f"; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(340, 280); ctx.lineTo(740, 280); ctx.stroke();
 
+    // Dados do Prestador
     const nome = state.config.pixName.toUpperCase();
     ctx.fillStyle = "#f1c40f"; 
     let fontSize = nome.length > 15 ? 60 : 80; 
@@ -2880,11 +2941,13 @@ function gerarCarteirinha() {
     ctx.fillStyle = "white"; ctx.font = "50px sans-serif";
     ctx.fillText(cargo, 540, 480);
 
+    // Bio
     if(state.config.bio) {
         ctx.fillStyle = "#ecf0f1"; ctx.font = "italic 35px sans-serif";
         wrapText(ctx, `"${state.config.bio}"`, 540, 600, 900, 50);
     }
 
+    // Estrelas e Nota
     const nota = parseFloat(state.config.nota) || 5.0;
     const qtd = state.config.totalAvaliacoes || 0;
     let estrelasStr = "";
@@ -2901,41 +2964,37 @@ function gerarCarteirinha() {
     ctx.fillStyle = "white"; ctx.font = "bold 50px sans-serif";
     ctx.fillText(estrelasStr, 540, yEstrelas);
     
-    const textoNota = qtd > 0 ? `Nota ${nota} (${qtd} avaliações)` : "Profissional em início de jornada";
+    const textoNota = qtd > 0 ? `Nota ${nota} (${qtd} avaliações)` : "Profissional Verificado";
     ctx.font = "30px sans-serif"; ctx.fillStyle = "#95a5a6";
     ctx.fillText(textoNota, 540, yEstrelas + 50);
-    ctx.fillText(`Atualizado em: ${hoje}`, 540, yEstrelas + 90);
+    ctx.fillText(`Emissão: ${hoje}`, 540, yEstrelas + 90);
 
+    // Rodapé Visual (O link na imagem é meramente ilustrativo, o clicável vai na legenda)
     ctx.fillStyle = "#3498db"; ctx.font = "bold 40px sans-serif";
-    ctx.fillText("acesse: www.ecossistemagente.com.br/precobom.html", 540, 1150);
+    ctx.fillText("Peça um orçamento no link da legenda! ⬇️", 540, 1150);
 
     ctx.font = "22px sans-serif"; ctx.fillStyle = "#7f8c8d";
-    ctx.fillText("A negociação e execução do serviço são de responsabilidade do prestador.", 540, 1280);
-    ctx.fillText("O Preço Bom conecta oportunidades, não garante serviços.", 540, 1310);
+    ctx.fillText("Negociação direta com o prestador. Sem taxas.", 540, 1280);
 
-    // --- EXPORTAÇÃO BLINDADA ---
+    // 4. Exportação e Compartilhamento
     canvas.toBlob(async function(blob) {
         const file = new File([blob], "minha-carteirinha.jpg", { type: "image/jpeg" });
-        const linkApp = "https://www.ecossistemagente.com.br/precobom.html"; 
-        const textoLegenda = `Olá! Sou profissional cadastrado no Preço Bom. 🤝\n ${linkApp}`;
+        
+        // MENSAGEM PODEROSA PARA O WHATSAPP
+        const textoLegenda = `Olá! Sou *${state.config.pixName}*, profissional de *${state.config.specialty}*.\n\nPrecisa de um orçamento? Clique no meu link exclusivo abaixo para fazer seu pedido direto pra mim:\n\n👇👇👇\n${linkExclusivo}`;
 
-        // 1. MOBILE (NATIVO)
+        // Lógica Mobile (Android/iOS)
         if (navigator.share && navigator.canShare({ files: [file] })) {
             try {
-                // --- TRUQUE DO CLIPBOARD ---
-                // Tentamos copiar o texto antes de abrir o compartilhamento.
-                // O alert avisa o usuário para colar.
+                // Tenta copiar para a área de transferência primeiro (backup)
                 try {
                     await navigator.clipboard.writeText(textoLegenda);
-                    alert("📋 Link copiado para a memória!\n\nSe a legenda não aparecer na foto automaticamente, é só escolher 'COLAR'.");
-                } catch (e) {
-                    console.log("Clipboard falhou, seguindo apenas com share.");
-                }
-                // ---------------------------
+                    alert("📋 Texto copiado! Se a legenda não for automática, escolha 'COLAR' no WhatsApp.");
+                } catch (e) { console.log("Clipboard falhou"); }
 
                 await navigator.share({
                     files: [file],
-                    title: 'Minha Carteirinha',
+                    title: 'Minha Carteirinha Digital',
                     text: textoLegenda 
                 });
                 btn.innerText = txtOriginal;
@@ -2945,7 +3004,7 @@ function gerarCarteirinha() {
             }
         }
 
-        // 2. PC (FALLBACK)
+        // Lógica Desktop (Fallback)
         const imgData = canvas.toDataURL("image/jpeg", 0.9);
         const win = window.open("");
         if(win) {
@@ -2954,15 +3013,15 @@ function gerarCarteirinha() {
                     <h3 style="color:#f1c40f; margin-bottom:10px;">✨ Carteirinha Pronta!</h3>
                     <img src="${imgData}" style="height:55vh; border-radius:10px; box-shadow:0 0 20px rgba(0,0,0,0.5); border:1px solid #444;">
                     <br>
-                    <p style="font-size:0.9rem; color:#ccc;">Opções:</p>
+                    <p style="font-size:0.9rem; color:#ccc;">O navegador do PC não compartilha direto.</p>
                     <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
-                        <button onclick="copiarTexto()" style="padding:15px 25px; background:#3498db; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer;">🔗 Copiar Legenda</button>
+                        <button onclick="copiarTudo()" style="padding:15px 25px; background:#27ae60; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer;">📋 Copiar Texto do Link</button>
                         <button onclick="window.close()" style="padding:15px 25px; background:#e74c3c; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer;">Fechar</button>
                     </div>
                     <script>
-                        function copiarTexto() {
+                        function copiarTudo() {
                             const txt = ${JSON.stringify(textoLegenda)};
-                            navigator.clipboard.writeText(txt).then(() => alert("Legenda copiada! Salve a imagem e cole o texto no Zap."));
+                            navigator.clipboard.writeText(txt).then(() => alert("Texto copiado! Agora baixe a imagem e cole o texto no WhatsApp."));
                         }
                     ` + "<" + "/script>" + ` 
                 </body></html>`); 
@@ -3133,20 +3192,57 @@ function abrirOpcoesContato(nome, zap, categoria, tituloServico) {
 
     // 2. Ação: Indicar Amigo (Gera o Voucher)
     document.getElementById('btn-indicar-amigo').onclick = function() {
-        // Prepara o Link para a página atual com parâmetros
         const urlBase = window.location.href.split('?')[0]; 
-        // Codifica os dados para a URL
-        const linkIndica = `${urlBase}?indicar=${zap}&nome=${encodeURIComponent(nome)}&cat=${encodeURIComponent(categoria)}`;
+        
+        // USANDO A NOVA BUSCA ROBUSTA
+        const grupo = encontrarGrupoPorServico(categoria);
+        
+        // Monta o link base
+        let linkIndica = `${urlBase}?indicar=${zap}&nome=${encodeURIComponent(nome)}&cat=${encodeURIComponent(categoria)}`;
+        
+        // Se encontrou o grupo, adiciona (Prioridade Máxima)
+        if(grupo) {
+            linkIndica += `&grupo=${encodeURIComponent(grupo)}`;
+        } else {
+            // Log de alerta para depuração
+            console.warn("Grupo não encontrado para o serviço:", categoria);
+        }
 
         const textoZap = `Olá! Tenho uma indicação de ouro pra você.\n\n👷 Profissional: *${nome}*\nEle me atendeu muito bem.\n\nPara pedir um orçamento exclusivo pra ele, usa esse link aqui:\n${linkIndica}`;
         
-        // Abre o zap para escolher o amigo
         window.open(`https://wa.me/?text=${encodeURIComponent(textoZap)}`, '_blank');
-        
         document.getElementById('modal-contato-opcoes').style.display = 'none';
     };
 
     document.getElementById('modal-contato-opcoes').style.display = 'flex';
+}
+// --- FUNÇÕES AUXILIARES DE TEXTO ---
+function normalizarTexto(str) {
+    if(!str) return "";
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+// Função de Busca Robusta (Ignora acentos e case)
+function encontrarGrupoPorServico(servico) {
+    if(!servico) return "";
+    
+    const servicoNorm = normalizarTexto(servico);
+    
+    for (let grupo in TAXONOMIA) {
+        // 1. Tenta encontrar exatamente
+        if (TAXONOMIA[grupo].includes(servico)) return grupo;
+        
+        // 2. Tenta encontrar normalizado (sem acentos/case)
+        const match = TAXONOMIA[grupo].some(s => normalizarTexto(s) === servicoNorm);
+        if (match) return grupo;
+    }
+    
+    // 3. Se não achou, verifica se o próprio termo já é um Grupo
+    for (let grupo in TAXONOMIA) {
+        if (normalizarTexto(grupo) === servicoNorm) return grupo;
+    }
+
+    return "";
 }
 </script>
 </body>
