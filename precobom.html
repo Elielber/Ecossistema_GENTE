@@ -483,20 +483,24 @@
     </div>
 
     <div class="gestao-module" style="border-left: 5px solid #9b59b6;">
-        <div class="gestao-header">
-            <div class="gestao-title"><span class="gestao-icon">📣</span> Marketing</div>
-        </div>
-
-        <button class="btn btn-outline" onclick="gerarCarteirinha()" style="width:100%; margin-bottom:10px; border-color:#8e44ad; color:#8e44ad;">
-            🪪 Gerar Carteirinha + Link de Pedidos
-        </button>
-
-        <div id="area-crm-pro" class="pro-feature" onclick="if(!state.isPremium) simularCompraPremium()">
-            <div style="font-weight:bold; font-size:0.9rem;">📢 Radar de Clientes</div>
-            <p style="font-size:0.75rem; margin:5px 0;">Recupere clientes sumidos com 1 clique.</p>
-            <button class="btn-sm btn-primary" style="width:100%; background:#8e44ad; border:none;" disabled>🔍 Buscar Clientes Inativos</button>
-        </div>
+    <div class="gestao-header">
+        <div class="gestao-title"><span class="gestao-icon">📣</span> Marketing</div>
     </div>
+
+    <div class="row" style="margin-bottom:10px;">
+        <button class="btn btn-outline" onclick="gerarCarteirinha()" style="flex:1; border-color:#8e44ad; color:#8e44ad;">
+            🪪 Carteirinha
+        </button>
+        <button class="btn btn-outline" onclick="gerarLinkDivulgacao('zap')" style="flex:1; border-color:#2ecc71; color:#27ae60;">
+            🔗 Só o Link
+        </button>
+    </div>
+    <div id="area-crm-pro" class="pro-feature" onclick="if(!state.isPremium) simularCompraPremium()">
+        <div style="font-weight:bold; font-size:0.9rem;">📢 Radar de Clientes</div>
+        <p style="font-size:0.75rem; margin:5px 0;">Recupere clientes sumidos com 1 clique.</p>
+        <button class="btn-sm btn-primary" style="width:100%; background:#8e44ad; border:none;" disabled>🔍 Buscar Clientes Inativos</button>
+    </div>
+</div>
 
     <div style="height:80px"></div>
 </div>
@@ -3035,10 +3039,11 @@ function gerarCarteirinha() {
     // Textos do Cabeçalho
     ctx.textAlign = "center";
     ctx.fillStyle = "#bdc3c7"; ctx.font = "35px sans-serif";
-    ctx.fillText("PROFISSIONAL CADASTRADO NA", 540, 150);
+    ctx.fillText("Profissional Cadastrado na", 540, 150);
 
     ctx.fillStyle = "#ffffff"; ctx.font = "bold 80px sans-serif";
-    ctx.fillText("🤝 PREÇO BOM", 540, 240);
+    ctx.fillText("🤝", 540, 240);
+	ctx.fillText("PREÇO BOM", 540, 240);
     
     // Linha divisória
     ctx.strokeStyle = "#f1c40f"; ctx.lineWidth = 4;
@@ -3078,7 +3083,7 @@ function gerarCarteirinha() {
     ctx.fillStyle = "white"; ctx.font = "bold 50px sans-serif";
     ctx.fillText(estrelasStr, 540, yEstrelas);
     
-    const textoNota = qtd > 0 ? `Nota ${nota} (${qtd} avaliações)` : "Profissional Verificado";
+    const textoNota = qtd > 0 ? `Nota ${nota} (${qtd} avaliações)` : "Classificação";
     ctx.font = "30px sans-serif"; ctx.fillStyle = "#95a5a6";
     ctx.fillText(textoNota, 540, yEstrelas + 50);
     ctx.fillText(`Emissão: ${hoje}`, 540, yEstrelas + 90);
@@ -3088,14 +3093,16 @@ function gerarCarteirinha() {
     ctx.fillText("Peça um orçamento no link da legenda! ⬇️", 540, 1150);
 
     ctx.font = "22px sans-serif"; ctx.fillStyle = "#7f8c8d";
-    ctx.fillText("Negociação direta com o prestador. Sem taxas.", 540, 1280);
+    ctx.fillText("A negociação e execução do serviço são de responsabilidade do prestador.", 540, 1280);
+    ctx.fillText("O Preço Bom conecta oportunidades, não garante serviços.", 540, 1310);
+
 
     // 4. Exportação e Compartilhamento
     canvas.toBlob(async function(blob) {
         const file = new File([blob], "minha-carteirinha.jpg", { type: "image/jpeg" });
         
         // MENSAGEM PODEROSA PARA O WHATSAPP
-        const textoLegenda = `Olá! Sou *${state.config.pixName}*, profissional de *${state.config.specialty}*.\n\nPrecisa de um orçamento? Clique no meu link exclusivo abaixo para fazer seu pedido direto pra mim:\n\n👇👇👇\n${linkExclusivo}`;
+        const textoLegenda = `Olá! Sou *${state.config.pixName}*, profissional de *${state.config.specialty}*.\n\nEstou usando a plataforma do Preço Bom para um orçamento rápido e preciso. Clique no meu link abaixo para fazer seu pedido direto pra mim:\n\n👇👇👇\n${linkExclusivo}`;
 
         // Lógica Mobile (Android/iOS)
         if (navigator.share && navigator.canShare({ files: [file] })) {
@@ -3145,6 +3152,37 @@ function gerarCarteirinha() {
         btn.innerText = txtOriginal;
 
     }, 'image/jpeg', 0.9);
+}
+// --- FUNÇÃO RECUPERADA E MELHORADA ---
+function gerarLinkDivulgacao(tipo) {
+    // 1. Validação Básica
+    if(!state.config.zap || !state.config.pixName) {
+        alert("⚠️ Preencha seu Nome e WhatsApp em 'Ajustes' antes de divulgar!");
+        nav('config');
+        return;
+    }
+
+    // 2. Construção do Link Inteligente (Igual ao da Carteirinha)
+    const baseUrl = window.location.href.split('?')[0];
+    const zapLimpo = state.config.zap.replace(/\D/g, '');
+    const nomeEncode = encodeURIComponent(state.config.pixName);
+    const catEncode = encodeURIComponent(state.config.specialty || "");
+    
+    // Busca o Grupo para deixar o link perfeito (Preenche os 2 selects do cliente)
+    const grupo = encontrarGrupoPorServico(state.config.specialty);
+    const grupoEncode = encodeURIComponent(grupo || "");
+
+    const linkFinal = `${baseUrl}?indicar=${zapLimpo}&nome=${nomeEncode}&cat=${catEncode}&grupo=${grupoEncode}`;
+
+    // 3. Ação
+    if(tipo === 'copy') {
+        // Opção extra caso queira apenas copiar
+        navigator.clipboard.writeText(linkFinal).then(() => alert("🔗 Link copiado!"));
+    } else {
+        // Abre direto no WhatsApp para enviar
+        const msg = `Olá! Sou *${state.config.pixName}*.\n\nPara agilizar seu atendimento e garantir a segurança, faça seu pedido pelo meu link oficial:\n\n👇👇👇\n${linkFinal}`;
+        window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
 }
 // --- AÇÕES DO MODAL DE SERVIÇO (ATUALIZADA) ---
 
@@ -3322,7 +3360,7 @@ function abrirOpcoesContato(nome, zap, categoria, tituloServico) {
             console.warn("Grupo não encontrado para o serviço:", categoria);
         }
 
-        const textoZap = `Olá! Tenho uma indicação de ouro pra você.\n\n👷 Profissional: *${nome}*\nEle me atendeu muito bem.\n\nPara pedir um orçamento exclusivo pra ele, usa esse link aqui:\n${linkIndica}`;
+        const textoZap = `Olá! Este é o Profissional: *${nome}* que lhe falei.\nEle me atendeu muito bem.\n\nPara pedir um orçamento exclusivo pra ele, usa esse link do Preço Bom:\n${linkIndica}`;
         
         window.open(`https://wa.me/?text=${encodeURIComponent(textoZap)}`, '_blank');
         document.getElementById('modal-contato-opcoes').style.display = 'none';
