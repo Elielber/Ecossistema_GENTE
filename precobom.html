@@ -213,7 +213,7 @@
 .pro-feature { opacity: 0.6; filter: grayscale(1); position: relative; border: 1px dashed #ccc; padding: 10px; border-radius: 8px; margin-top: 10px; }
 .pro-feature::after { content: "🔒 PRO"; position: absolute; right: 10px; top: 10px; font-size: 0.7rem; background: #f1c40f; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
 .pro-active { opacity: 1; filter: none; border: 1px solid #f1c40f; background: #fffdf0; }
-.pro-active::after { content: "💎 ATIVO"; background: #27ae60; }
+.pro-active::after { content: "💎"; background: #2c3e50; }
 
     
     </style>
@@ -438,7 +438,7 @@
     <div class="gestao-module" style="border-left: 5px solid #27ae60;">
         <div class="gestao-header">
             <div class="gestao-title"><span class="gestao-icon">💰</span> Financeiro</div>
-            <button class="btn-sm btn-outline" onclick="abrirCaderninho()">Abrir Caixa</button>
+            <button class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="abrirCaderninho()">🗳️ Abrir Caixa</button>
         </div>
 
         <div class="row">
@@ -1119,6 +1119,20 @@ function getCardPagamentoHTML() {
         </select>
         ${htmlExtra}
     </div>`;
+}
+// --- NOVA FUNÇÃO: CONFIRMAR AGENDAMENTO NO ZAP ---
+function confirmarAgendamentoZap(id) {
+    const item = state.historico.find(h => h.id === id);
+    if (!item) return;
+
+    // Formata a data para ficar bonita (Dia/Mês/Ano)
+    const dataPartes = item.dataAgendamento.split('-'); // O input date salva YYYY-MM-DD
+    const dataFormatada = `${dataPartes[2]}/${dataPartes[1]}/${dataPartes[0]}`;
+
+    const texto = `Olá ${item.cliente}! 👋\n\nPassando para confirmar nosso agendamento de *${item.titulo}* para o dia *${dataFormatada}*.\n\nTudo certo?`;
+
+    // Abre o WhatsApp para escolher o contato (já que o histórico nem sempre tem o telefone salvo)
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
 }
 // --- FUNÇÕES DE HISTÓRICO COMPLETO ---
 function abrirHistoricoCompleto() {
@@ -2031,6 +2045,8 @@ if(typeof installApp === 'function') {
                 cliente: state.demandaAtiva.cliente,
                 titulo: state.demandaAtiva.titulo,
                 valor: totalParaHistorico,
+                pagamento: configPagamentoTemp, 
+               
                 data: new Date().toISOString(),
                 status: 'PENDENTE',
                 itensBackup: JSON.parse(JSON.stringify(state.carrinho))
@@ -2307,145 +2323,268 @@ async function salvarConfig(silencioso = false) {
     // ---------------------------------------------------
 }
 
-    function renderGestao() {
-        // --- 1. PREPARAR DADOS FINANCEIROS ---
-        const mesAtual = new Date().getMonth();
-        if(!state.historico) state.historico = [];
-        if(!state.financeiro) state.financeiro = { saldo: 0, movimentos: [] };
-        
-        // Calcula Vendas do Mês (Baseado no histórico fechado)
-        const vendasMes = state.historico
-            .filter(h => h.status === 'FECHADO' && new Date(h.data).getMonth() === mesAtual)
-            .reduce((acc, h) => acc + h.valor, 0);
+function renderGestao() {
+    // --- 1. CÁLCULOS FINANCEIROS & METRICAS ---
+    const mesAtual = new Date().getMonth();
+    if(!state.historico) state.historico = [];
+    if(!state.financeiro) state.financeiro = { saldo: 0, movimentos: [] };
+    if(!state.config.metaMensal) state.config.metaMensal = 5000; // Valor padrão se não tiver
 
-        // Calcula Saldo do Caixa (Baseado nas movimentações manuais)
-        let saldoCaixa = 0;
-        state.financeiro.movimentos.forEach(m => {
+    // A) Vendas do Mês
+    const vendasMes = state.historico
+        .filter(h => h.status === 'FECHADO' && new Date(h.data).getMonth() === mesAtual)
+        .reduce((acc, h) => acc + h.valor, 0);
+
+    // B) Saldo e Previsão
+    let saldoCaixa = 0;
+    let previsaoReceber = 0;
+    state.financeiro.movimentos.forEach(m => {
+        if(m.status === 'REALIZADO' || !m.status) {
             if(m.tipo === 'ENTRADA') saldoCaixa += m.valor;
             else saldoCaixa -= m.valor;
-        });
-
-        // Atualiza UI Financeira (Free)
-        document.getElementById('painel-saldo').innerText = saldoCaixa.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
-        document.getElementById('painel-vendas').innerText = vendasMes.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
-
-        // --- 2. LÓGICA PRO (FINANCEIRO) ---
-        const areaMeta = document.getElementById('area-meta-pro');
-        if (state.isPremium) {
-            areaMeta.classList.add('pro-active');
-            areaMeta.classList.remove('pro-feature'); // Remove bloqueio visual
-            
-            // Meta Fixa de Exemplo: R$ 5.000,00 (Pode virar config depois)
-            const meta = 5000;
-            const pct = Math.min((vendasMes / meta) * 100, 100);
-            
-            document.getElementById('bar-meta').style.width = pct + "%";
-            document.getElementById('txt-meta-progresso').innerText = Math.round(pct) + "% da Meta (5k)";
-            
-            // Estimativa simples de imposto (Ex: 6% Simples Nacional ou Fixo MEI)
-            // Para efeito visual, vamos usar 4%
-            const imposto = vendasMes * 0.04;
-            document.getElementById('txt-imposto').innerText = imposto.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
-        } else {
-            areaMeta.classList.remove('pro-active');
-            areaMeta.classList.add('pro-feature');
+        } else if (m.status === 'PENDENTE') {
+            previsaoReceber += m.valor;
         }
+    });
 
-        // --- 3. OPERAÇÃO (MINI HISTÓRICO) ---
-        const divHist = document.getElementById('mini-historico');
-        divHist.innerHTML = "";
-        const ultimos = [...state.historico].reverse().slice(0, 5);
-        
-        if(ultimos.length === 0) {
-            divHist.innerHTML = "<div style='font-size:0.8rem; color:#ccc; text-align:center; padding:10px;'>Nenhum serviço realizado.</div>";
-        } else {
-            ultimos.forEach(h => {
-                let icon = h.status === 'FECHADO' ? '✅' : '⏳';
-                divHist.innerHTML += `
-                <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f9f9f9; font-size:0.85rem;">
-                    <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:65%;">
-                        ${icon} ${h.cliente}
-                    </div>
-                    <div style="font-weight:bold; color:#7f8c8d;">${h.valor.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div>
-                </div>`;
-            });
-           divHist.innerHTML += `<div style="text-align:center; margin-top:5px;">
-    <small style="color:#3498db; cursor:pointer; font-weight:bold;" onclick="abrirHistoricoCompleto()">📂 Ver Histórico Completo</small>
-</div>`;
-        }
+    // C) Assertividade Real
+    const totalEnviados = state.historico.length;
+    const totalFechados = state.historico.filter(h => h.status === 'FECHADO').length;
+    const taxaConversao = totalEnviados > 0 ? Math.round((totalFechados / totalEnviados) * 100) : 0;
 
-        // --- 4. LÓGICA PRO (AGENDA) ---
-        const areaAgenda = document.getElementById('area-agenda-pro');
-        if (state.isPremium) {
-            areaAgenda.classList.add('pro-active');
-            areaAgenda.classList.remove('pro-feature');
-            
-            const agendados = state.historico.filter(h => h.status === 'FECHADO' && h.dataAgendamento);
-            if(agendados.length > 0) {
-                const prox = agendados[0]; // Pega o primeiro (ideal seria ordenar por data)
-                document.getElementById('mini-agenda-texto').innerHTML = `
-                    <div style="color:#2c3e50;">Próximo: <strong>${prox.dataAgendamento}</strong></div>
-                    <div style="font-size:0.75rem;">${prox.cliente} - ${prox.titulo}</div>
-                `;
-            } else {
-                document.getElementById('mini-agenda-texto').innerText = "Nenhum agendamento pendente.";
-            }
-        }
+    // --- 2. ATUALIZAÇÃO VISUAL ---
 
-        // --- 5. MARKETING (CRM PRO) ---
-        const areaCrm = document.getElementById('area-crm-pro');
-        if (state.isPremium) {
-            areaCrm.classList.add('pro-active');
-            areaCrm.classList.remove('pro-feature');
-            areaCrm.querySelector('button').disabled = false;
-            areaCrm.querySelector('button').innerText = "🔍 Buscar Clientes Inativos";
-            areaCrm.querySelector('button').onclick = () => alert("CRM: Em breve listaremos clientes sumidos há 30 dias!");
-        }
-
-        // Preencher configs visuais
-        if(document.getElementById('cfg-pix-key')) document.getElementById('cfg-pix-key').value = state.config.pixKey;
-    
-
-
-        // --- RENDERIZAR EQUIPE ---
-        const dp = document.getElementById('lista-profissionais'); 
-        if(dp) {
-            dp.innerHTML=""; 
-            state.profs.forEach((p,i)=>{ 
-                dp.innerHTML+=`<div class="list-item-row">
-                    <input type="text" class="input" style="flex:1; margin-right:5px;" value="${p.nome}" onchange="updateProf(${i},'nome',this.value)">
-                    <input type="number" class="input" style="width:30%" value="${p.valor}" onchange="updateProf(${i},'valor',this.value)">
-                    <button style="border:none;background:none;color:red;" onclick="rmProf(${i})">×</button>
-                </div>`;
-            });
-        }
-
-        // --- RENDERIZAR SERVIÇOS ---
-        const ds = document.getElementById('lista-gestao-servicos'); 
-        if(ds) {
-            ds.innerHTML = ""; 
-            state.catalogo.forEach((s, i) => { 
-                ds.innerHTML += `
-                <div class="list-item-row" onclick="abrirEditorServico(${i})" style="cursor:pointer;">
-                    <span class="list-text" style="font-weight:600; font-size:0.95rem;">${s.nome}</span>
-                    <div class="list-actions">
-                        <span style="font-size:1.2rem; color:#7f8c8d;">✏️</span>
-                    </div>
-                </div>`;
-            });
-        }
-
-        // --- PREENCHER INPUTS DE CONFIGURAÇÃO ---
-        const elTaxaCompra = document.getElementById('cfg-taxa-compra');
-        const elTaxaVisita = document.getElementById('cfg-taxa-visita');
-        if(elTaxaCompra) elTaxaCompra.value = state.config.taxaCompra;
-        if(elTaxaVisita) elTaxaVisita.value = state.config.taxaVisita;
-        if(document.getElementById('cfg-pix-key')) document.getElementById('cfg-pix-key').value = state.config.pixKey;
-        if(document.getElementById('cfg-pix-name')) document.getElementById('cfg-pix-name').value = state.config.pixName;
-        if(document.getElementById('cfg-pix-city')) document.getElementById('cfg-pix-city').value = state.config.pixCity;
+    // --- MÓDULO FINANCEIRO ---
+    const painelFin = document.querySelector('.gestao-module .row'); 
+    if(painelFin) {
+        painelFin.innerHTML = `
+            <div class="col" style="text-align:center; border-right:1px solid #eee;">
+                <div style="font-size:0.65rem; color:#7f8c8d; font-weight:bold;">SALDO (CX)</div>
+                <div style="font-weight:bold; font-size:1rem; color:#2c3e50">${saldoCaixa.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}</div>
+            </div>
+            <div class="col" style="text-align:center; border-right:1px solid #eee;">
+                <div style="font-size:0.65rem; color:#d35400; font-weight:bold;">A RECEBER</div>
+                <div style="font-weight:bold; font-size:1rem; color:#e67e22">${previsaoReceber.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}</div>
+            </div>
+            <div class="col" style="text-align:center;">
+                <div style="font-size:0.65rem; color:#27ae60; font-weight:bold;">VENDAS (MÊS)</div>
+                <div style="font-weight:bold; font-size:1rem; color:#27ae60">${vendasMes.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}</div>
+            </div>
+        `;
     }
 
-   function toggleStatusHist(id) {
+    // META (Arredondada e Clicável)
+    const areaMeta = document.getElementById('area-meta-pro');
+    if (state.isPremium) {
+        areaMeta.classList.add('pro-active');
+        areaMeta.classList.remove('pro-feature');
+        
+        // Estilo Arredondado
+        areaMeta.style.borderRadius = "16px";
+        areaMeta.style.border = "1px solid #e0e0e0";
+        areaMeta.style.boxShadow = "0 2px 5px rgba(0,0,0,0.03)";
+        areaMeta.onclick = definirMeta; // Clique para editar!
+
+        const meta = state.config.metaMensal;
+        const pct = Math.min((vendasMes / meta) * 100, 100);
+        const metaFormatada = meta >= 1000 ? (meta/1000) + 'k' : meta;
+
+        document.getElementById('bar-meta').style.width = pct + "%";
+        // Ajuste visual da barra
+        document.querySelector('.progress-bar-bg').style.borderRadius = "10px";
+        document.querySelector('.progress-bar-bg').style.height = "12px";
+
+        document.getElementById('txt-meta-progresso').innerHTML = `<strong>${Math.round(pct)}%</strong> da Meta (${metaFormatada})`;
+        
+        const imposto = vendasMes * 0.04;
+        document.getElementById('txt-imposto').innerText = imposto.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+    } else {
+        areaMeta.style.borderRadius = "16px"; // Mesmo bloqueado fica redondo
+    }
+
+    // --- MÓDULO OPERAÇÃO ---
+    // Movemos o botão para o cabeçalho para limpar o layout
+    const headerOperacao = document.querySelectorAll('.gestao-header')[1];
+    if(headerOperacao) {
+        headerOperacao.innerHTML = `
+            <div class="gestao-title"><span class="gestao-icon">🛠️</span> Operação</div>
+            <button class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="abrirHistoricoCompleto()">
+                📂 Histórico
+            </button>
+        `;
+    }
+
+    // AGENDA (Arredondada e com Lista Completa)
+    const areaAgenda = document.getElementById('area-agenda-pro');
+    areaAgenda.style.borderRadius = "16px";
+    areaAgenda.style.boxShadow = "0 2px 5px rgba(0,0,0,0.03)";
+    
+    if (state.isPremium) {
+        areaAgenda.classList.add('pro-active');
+        areaAgenda.classList.remove('pro-feature');
+        
+        // Remove o clique geral do container para não dar conflito
+        areaAgenda.onclick = null;
+        areaAgenda.style.cursor = "default";
+
+        const agendados = state.historico
+            .filter(h => h.status === 'FECHADO' && h.dataAgendamento)
+            .sort((a,b) => new Date(a.dataAgendamento) - new Date(b.dataAgendamento));
+
+        if(agendados.length > 0) {
+            let htmlLista = '<div style="max-height: 250px; overflow-y: auto; padding-right:5px;">';
+            
+            agendados.forEach(prox => {
+                const hoje = new Date(); hoje.setHours(0,0,0,0);
+                
+                // Corrige o problema de fuso horário
+                const partesData = prox.dataAgendamento.split('-');
+                const dataAgendada = new Date(partesData[0], partesData[1] - 1, partesData[2]);
+                
+                const diffTime = dataAgendada - hoje;
+                const diasRestantes = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                let badgePrazo = diasRestantes === 0 ? "HOJE" : (diasRestantes === 1 ? "Amanhã" : `${diasRestantes}d`);
+                let corPrazo = diasRestantes < 0 ? "#e74c3c" : "#16a085"; 
+                if(diasRestantes < 0) badgePrazo = "ATRASADO";
+
+                // Monta cada item da lista com seu próprio clique
+                htmlLista += `
+                <div onclick="confirmarAgendamentoZap(${prox.id})" style="
+                    cursor:pointer; 
+                    border-bottom:1px solid #f0f0f0; 
+                    padding:10px 0; 
+                    display:flex; 
+                    justify-content:space-between; 
+                    align-items:center;
+                    transition: background 0.2s;
+                " onmouseover="this.style.background='#f9f9f9'" onmouseout="this.style.background='transparent'">
+                    
+                    <div style="flex:1">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-weight:bold; color:#2c3e50; font-size:0.9rem;">
+                                ${dataAgendada.toLocaleDateString('pt-BR')}
+                            </span>
+                            <span style="background:${corPrazo}20; color:${corPrazo}; padding:2px 6px; border-radius:8px; font-size:0.65rem; font-weight:bold;">
+                                ${badgePrazo}
+                            </span>
+                        </div>
+                        <div style="font-size:0.85rem; color:#555; margin-top:2px;">${prox.cliente}</div>
+                        <div style="font-size:0.75rem; color:#999;">${prox.titulo}</div>
+                    </div>
+                    
+                    <div style="font-size:1.2rem; padding-left:10px;">📲</div>
+                </div>`;
+            });
+
+            htmlLista += '</div>';
+            document.getElementById('mini-agenda-texto').innerHTML = htmlLista;
+
+        } else {
+            document.getElementById('mini-agenda-texto').innerHTML = "<div style='padding:10px; color:#999; text-align:center'>Nenhum serviço agendado.</div>";
+        }
+    }
+    
+
+    // Mini Histórico (Limpo, sem botão embaixo)
+    const divHist = document.getElementById('mini-historico');
+    divHist.innerHTML = "";
+    const ultimos = [...state.historico].reverse().slice(0, 3); // Mostra só 3 para não esticar
+    if(ultimos.length === 0) {
+        divHist.innerHTML = "<div style='font-size:0.8rem; color:#ccc; text-align:center; padding:10px;'>Sem dados recentes.</div>";
+    } else {
+        ultimos.forEach(h => {
+            let icon = h.status === 'FECHADO' ? '✅' : '⏳';
+            divHist.innerHTML += `
+            <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #f9f9f9; font-size:0.85rem;">
+                <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:65%; color:#555;">
+                    ${icon} ${h.cliente}
+                </div>
+                <div style="font-weight:bold; color:#7f8c8d;">${h.valor.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div>
+            </div>`;
+        });
+    }
+
+    // --- MÓDULO MARKETING ---
+    const moduleMkt = document.querySelectorAll('.gestao-module')[2];
+    if (moduleMkt) {
+        // Remove display antigo se existir para recriar
+        const oldDisplay = document.getElementById('taxa-assertividade-display');
+        if(oldDisplay) oldDisplay.remove();
+
+        // Novo Display de Assertividade
+        const divTaxa = document.createElement('div');
+        divTaxa.id = 'taxa-assertividade-display';
+        // Visual Arredondado
+        divTaxa.style = "background:#f4f6f7; padding:12px; border-radius:16px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;";
+        
+        let corTaxa = taxaConversao > 30 ? '#27ae60' : '#e74c3c';
+        
+        divTaxa.innerHTML = `
+            <div>
+                <div style="font-size:0.85rem; font-weight:bold; color:#555;">🎯 Assertividade</div>
+                <div style="font-size:0.75rem; color:#7f8c8d;">
+                    Fechou <strong>${totalFechados}</strong> de <strong>${totalEnviados}</strong> orçamentos.
+                </div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:1.4rem; font-weight:bold; color:${corTaxa};">${taxaConversao}%</div>
+            </div>
+        `;
+        // Insere logo após o título
+        moduleMkt.insertBefore(divTaxa, moduleMkt.children[1]);
+    }
+
+    // RADAR DE CLIENTES (Arredondado e Desativado)
+    const areaCrm = document.getElementById('area-crm-pro');
+    areaCrm.style.borderRadius = "16px";
+    areaCrm.style.marginTop = "15px";
+    
+    // Mantemos a lógica original do botão desativado
+    if (state.isPremium) {
+        areaCrm.classList.add('pro-active');
+        areaCrm.classList.remove('pro-feature');
+        const btnCrm = areaCrm.querySelector('button');
+        btnCrm.disabled = true; // Mantém desativado como pedido
+        btnCrm.innerText = "🔍 Buscar Clientes Inativos (Em breve)";
+        btnCrm.style.borderRadius = "20px"; // Botão redondo também
+    }
+
+    // --- RENDERIZAÇÃO DE EQUIPE/SERVIÇOS (MANTIDO DO CÓDIGO ANTERIOR) ---
+    // ... (Mantenha o resto da função igual: lista-profissionais, lista-gestao-servicos, inputs de config) ...
+    const dp = document.getElementById('lista-profissionais'); 
+    if(dp) {
+        dp.innerHTML=""; 
+        state.profs.forEach((p,i)=>{ 
+            dp.innerHTML+=`<div class="list-item-row">
+                <input type="text" class="input" style="flex:1; margin-right:5px;" value="${p.nome}" onchange="updateProf(${i},'nome',this.value)">
+                <input type="number" class="input" style="width:30%" value="${p.valor}" onchange="updateProf(${i},'valor',this.value)">
+                <button style="border:none;background:none;color:red;" onclick="rmProf(${i})">×</button>
+            </div>`;
+        });
+    }
+    const ds = document.getElementById('lista-gestao-servicos'); 
+    if(ds) {
+        ds.innerHTML = ""; 
+        state.catalogo.forEach((s, i) => { 
+            ds.innerHTML += `
+            <div class="list-item-row" onclick="abrirEditorServico(${i})" style="cursor:pointer;">
+                <span class="list-text" style="font-weight:600; font-size:0.95rem;">${s.nome}</span>
+                <div class="list-actions">
+                    <span style="font-size:1.2rem; color:#7f8c8d;">✏️</span>
+                </div>
+            </div>`;
+        });
+    }
+
+    if(document.getElementById('cfg-taxa-compra')) document.getElementById('cfg-taxa-compra').value = state.config.taxaCompra;
+    if(document.getElementById('cfg-taxa-visita')) document.getElementById('cfg-taxa-visita').value = state.config.taxaVisita;
+    if(document.getElementById('cfg-pix-key')) document.getElementById('cfg-pix-key').value = state.config.pixKey;
+    if(document.getElementById('cfg-pix-name')) document.getElementById('cfg-pix-name').value = state.config.pixName;
+    if(document.getElementById('cfg-pix-city')) document.getElementById('cfg-pix-city').value = state.config.pixCity;
+}
+
+function toggleStatusHist(id) {
     const item = state.historico.find(h => h.id === id);
     if(!item) return;
 
@@ -2453,64 +2592,101 @@ async function salvarConfig(silencioso = false) {
         const confirmar = confirm("Confirmar fechamento? Isso vai gerar o fluxo de caixa previsto.");
         if(!confirmar) return;
 
-        item.status = 'FECHADO';
+        // Pergunta a data base (Início do serviço ou Data da Venda)
+        let dataInput = prompt("📅 Data de Referência (Início/Venda)? (AAAA-MM-DD)", new Date().toISOString().split('T')[0]);
         
-        // --- LÓGICA DE PROVISÃO FINANCEIRA ---
+        // Validação da data
+        if (!dataInput || dataInput.length !== 10) {
+            alert("Data inválida. Usando data de hoje.");
+            dataInput = new Date().toISOString().split('T')[0];
+        }
+
+        // Converte string para objeto Date
+        const partes = dataInput.split('-');
+        const dataBase = new Date(partes[0], partes[1] - 1, partes[2]);
+
+        item.status = 'FECHADO';
+        item.dataAgendamento = dataInput; 
+        
+        // --- LÓGICA FINANCEIRA DE PARCELAS ---
         const total = item.valor;
-        const condicoes = item.pagamento || { tipo: 'vista' }; // Pega o que foi salvo no orçamento
-        const hoje = new Date();
+        // Pega o pagamento salvo ou assume À vista
+        const condicoes = item.pagamento || { tipo: 'vista', parcelas: 1 }; 
         
         if(!state.financeiro) state.financeiro = { saldo: 0, movimentos: [] };
 
-        // Função auxiliar para criar lançamento
+        // Função auxiliar para lançar
         const lancar = (desc, valor, diasParaVencer) => {
-            const dataVenc = new Date();
-            dataVenc.setDate(hoje.getDate() + diasParaVencer);
+            const dataVenc = new Date(dataBase); // Clona a data base
+            dataVenc.setDate(dataBase.getDate() + diasParaVencer);
             
             state.financeiro.movimentos.push({
-                id: Date.now() + Math.random(), // ID único
+                id: Date.now() + Math.random(), // ID único para cada parcela
                 tipo: 'ENTRADA',
                 desc: `${item.cliente} - ${desc}`,
                 valor: valor,
                 data: dataVenc.toISOString(),
-                status: 'PENDENTE' // O segredo: Nasce pendente!
+                status: 'PENDENTE' // Entra como previsão (amarelo)
             });
         };
 
-        // Regras de Negócio
+        // GERAÇÃO DAS PARCELAS
         if(condicoes.tipo === 'vista') {
-            lancar("Pagamento Único", total, 0); // Vence hoje (ou na entrega)
+            lancar("Pagamento à Vista", total, 0); 
         } 
         else if (condicoes.tipo === 'antecipado') {
-             lancar("Pagamento Antecipado", total, 0);
+             lancar("Pagamento Antecipado", total, 0); // Vence no dia
         }
         else if (condicoes.tipo === 'sinal') {
-            lancar("Sinal (50%)", total / 2, 0);
-            lancar("Parcela Final (50%)", total / 2, 15); // Ex: 15 dias estimado
+            lancar("Sinal (50%)", total / 2, 0); // Vence hoje/inicio
+            lancar("Parcela Final (50%)", total / 2, 15); // Vence em 15 dias (exemplo)
         }
         else if (condicoes.tipo === 'parcelado') {
-            const qtd = condicoes.parcelas || 2;
+            const qtd = condicoes.parcelas || 2; // Padrão 2 se falhar
             const valorParc = total / qtd;
+            
             for(let i=1; i<=qtd; i++) {
-                lancar(`Parcela ${i}/${qtd}`, valorParc, i * 30); // 30, 60, 90 dias...
+                // Gera: Parcela 1/3 (30 dias), Parcela 2/3 (60 dias)...
+                lancar(`Parcela ${i}/${qtd} (${item.titulo})`, valorParc, i * 30);
             }
         }
         else if (condicoes.tipo === 'cronograma') {
-            // Cria um lançamento "A Definir" para o usuário editar depois
             lancar("Cronograma a definir", total, 7);
         }
         
-        alert("✅ Venda Fechada! Previsão de recebimentos lançada no Financeiro.");
+        alert("✅ Venda Fechada! As previsões de recebimento foram lançadas no Caixa.");
 
     } else if(item.status === 'FECHADO') {
-        if(confirm("Reabrir orçamento? (Nota: Os lançamentos financeiros terão que ser ajustados manualmente)")) {
+        if(confirm("Reabrir orçamento? (Nota: Os lançamentos financeiros terão que ser apagados manualmente no Caixa)")) {
             item.status = 'PENDENTE';
+            item.dataAgendamento = null;
         }
     }
     
     saveData();
+    // Se o modal de histórico estiver aberto, renderiza de novo para atualizar ícone
+    if(document.getElementById('modal-historico-full').style.display === 'flex') {
+        renderHistoricoCompleto(); 
+    } else {
+        renderGestao();
+    }
 }
-
+function definirMeta() {
+    if(!state.isPremium) { simularCompraPremium(); return; }
+    
+    // Pega a meta atual ou usa 5000 como padrão
+    const atual = state.config.metaMensal || 5000;
+    
+    const nova = prompt("🎯 Qual sua Meta de Vendas Mensal? (R$)", atual);
+    if(nova) {
+        const valor = parseFloat(nova.replace(',','.').replace('R$',''));
+        if(!isNaN(valor) && valor > 0) {
+            state.config.metaMensal = valor;
+            saveData();
+            renderGestao(); // Atualiza a tela na hora
+        }
+    }
+}
     function addProfissionalPrompt(){const n=prompt("Cargo:");if(n){state.profs.push({id:"c"+Date.now(),nome:n,valor:0});saveData();}}
     function updateProf(i,f,v){state.profs[i][f]=f==='valor'?parseFloat(v):v;saveData();}
     function rmProf(i){if(confirm("Remover?")){state.profs.splice(i,1);saveData();}}
