@@ -1,0 +1,3666 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Preço Bom</title>
+	<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤝</text></svg>">
+
+    <style>
+        :root {
+            --primary: #2c3e50; --secondary: #95a5a6; --accent: #e67e22;
+            --bg: #ecf0f1; --white: #ffffff; --danger: #e74c3c; --success: #27ae60;
+            --premium: #f1c40f; --cli-bg: #e3f2fd; --cli-accent: #1565c0;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; padding: 0; background-color: var(--bg); color: #333;
+            height: 100vh; overflow-x: hidden;
+        }
+
+        /* --- CONTROLE DE TELAS (FIX DE LAYOUT) --- */
+        .app-screen { display: none; width: 100%; min-height: 100vh; animation: fadeIn 0.3s; position: absolute; top:0; left:0; }
+        .app-screen.active { display: block; }
+        
+        /* TELA WELCOME */
+              
+        #screen-welcome {
+            background: linear-gradient(135deg, var(--primary), #34495e);
+            color: white; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; /* Isso centraliza verticalmente */
+            text-align: center; 
+            padding: 20px;
+            z-index: 1000;
+            height: 100vh; /* Garante altura total */
+            width: 100%;
+            position: absolute; /* Mantém sobre as outras */
+        }
+		
+        #screen-welcome h1 {
+            flex-grow: 0; /* Impede que o título estique e empurre os botões */
+            width: auto;
+            white-space: normal;
+            overflow: visible;
+		}
+		
+
+        .welcome-logo { font-size: 3.5rem; margin-bottom: 10px; text-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .welcome-btn {
+            background: white; color: var(--primary); border: none; padding: 20px;
+            border-radius: 15px; width: 100%; max-width: 320px; margin: 12px 0;
+            font-size: 1.1rem; font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: transform 0.2s;
+            display: flex; align-items: center; justify-content: flex-start; gap: 15px; padding-left: 30px;
+        }
+        .welcome-btn:active { transform: scale(0.98); }
+        .welcome-btn.btn-prestador { background: var(--accent); color: white; }
+
+        /* HEADER GERAL */
+        header {
+            color: white; padding: 10px 15px; /* Ajustado padding */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            position: fixed; top: 0; left: 0; width: 100%; z-index: 1000;
+        }
+        /* Mudamos de relative para flexbox para evitar sobreposição */
+        .header-content { 
+            width: 100%; display: flex; align-items: center; justify-content: space-between; 
+            height: 40px; 
+        }
+        /* Botão virou ícone redondo */
+        .btn-home { 
+            background: rgba(255,255,255,0.2); border: none; color: white;
+            width: 35px; height: 35px; border-radius: 50%; font-size: 1.2rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        /* H1 com proteção contra texto longo em telas pequenas */
+        h1 { margin: 0; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; text-align: center; flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* --- ESTILOS CLIENTE --- */
+        #screen-cliente { padding-top: 80px; padding-bottom: 20px; background-color: var(--cli-bg); }
+        #screen-cliente header { background: linear-gradient(135deg, var(--cli-accent), #1976d2); height: 70px; }
+        
+        .notification-card {
+            background: white; border-radius: 10px; padding: 15px; margin-bottom: 10px;
+            border-left: 5px solid var(--cli-accent); box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .badge { background: #eee; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
+        .badge-green { background: #d4edda; color: #155724; }
+
+        /* --- ESTILOS PRESTADOR --- */
+        #screen-prestador { padding-top: 155px; padding-bottom: 90px; background-color: var(--bg); }
+        #screen-prestador header { background: linear-gradient(135deg, var(--primary), #34495e); height: 95px; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; }
+
+        /* NAV PRESTADOR */
+        .nav-tabs {
+            display: flex; justify-content: space-between; background: white;
+            position: fixed; top: 90px; left: 10px; right: 10px; z-index: 999;
+            border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); padding: 5px;
+        }
+        .nav-btn { flex: 1; padding: 8px 5px; border: none; background: none; font-size: 0.75rem; color: #7f8c8d; border-radius: 8px; font-weight: 600; transition: 0.3s; display: flex; flex-direction: column; align-items: center; gap:3px;}
+        .nav-btn.active { background-color: #dff9fb; color: var(--primary); }
+        .nav-icon { font-size: 1.2rem; }
+        
+        /* Notificação (Bolinha vermelha) */
+        .notify-badge { position: absolute; top: 5px; right: 25px; background: red; color: white; border-radius: 50%; width: 16px; height: 16px; font-size: 0.6rem; display: flex; align-items: center; justify-content: center; }
+
+        /* CARDS DE OPORTUNIDADE (Prestador) */
+        .opp-card {
+            background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px;
+            border: 1px solid #eee; position: relative; border-left: 4px solid var(--accent);
+        }
+        .opp-card h4 { margin: 0 0 5px 0; color: var(--primary); }
+        .opp-meta { font-size: 0.8rem; color: #666; display: flex; gap: 10px; margin-bottom: 10px; }
+        .opp-desc { font-size: 0.9rem; color: #333; background: #f9f9f9; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+
+        /* COMPONENTES GERAIS */
+        .container { display: none; padding: 15px; animation: fadeIn 0.3s; }
+        .container.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 12px; position: relative; border-left: 5px solid var(--secondary); transition: 0.2s; }
+        .card.selected { border-left: 5px solid var(--success); background-color: #f0fdf4; }
+        
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .card-title { font-weight: bold; font-size: 1rem; color: var(--primary); margin-bottom: 5px; }
+        .card-subtitle { font-size: 0.75rem; color: #7f8c8d; }
+
+        .check-icon { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem; background: #eee; color: #ccc; }
+        .card.selected .check-icon { background: var(--success); color: white; }
+        
+        .form-group { margin-bottom: 15px; }
+        .label { display: block; font-size: 0.8rem; color: #7f8c8d; margin-bottom: 5px; font-weight: 600; }
+        .input { width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 8px; font-size: 1rem; background: #f9f9f9; }
+        .input:focus { border-color: var(--accent); outline: none; background: white;}
+        .row { display: flex; gap: 10px; }
+        .col { flex: 1; }
+        
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; margin-top: 10px; text-align: center;}
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-accent { background: var(--accent); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-outline { background: white; border: 1px solid #bdc3c7; color: #7f8c8d; }
+        .btn-danger { background: white; border: 1px solid var(--danger); color: var(--danger); }
+        .btn-premium { background: linear-gradient(45deg, #f1c40f, #f39c12); color: white; box-shadow: 0 2px 10px rgba(241, 196, 15, 0.4); }
+        .btn-sm { padding: 5px 10px; font-size: 0.8rem; width: auto; margin-top: 0; }
+        
+        /* FOOTER PRESTADOR */
+        .floating-footer { position: fixed; bottom: 0; left: 0; width: 100%; background: white; padding: 10px 15px; box-shadow: 0 -4px 10px rgba(0,0,0,0.1); display: flex; gap: 10px; align-items: center; z-index: 900; }
+        .total-box { flex: 1; display: flex; flex-direction: column; }
+        .total-val { font-size: 1.1rem; font-weight: bold; color: var(--primary); }
+        .btn-action { background-color: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 25px; font-weight: bold; font-size: 0.9rem; }
+        .btn-zap { background-color: #25D366; color: white; border: none; padding: 10px 15px; border-radius: 25px; font-weight: bold; display: flex; align-items: center; gap: 5px; font-size: 0.9rem; }
+        .btn-pix { background-color: #32a9ba; color: white; border: none; padding: 10px 15px; border-radius: 25px; font-weight: bold; display: flex; align-items: center; gap: 5px; font-size: 0.9rem; }
+
+        .list-item-row { display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; padding: 8px; border-radius: 6px; margin-bottom: 5px; border: 1px solid #eee; }
+        /* Novas classes auxiliares para segurar o layout */
+        .list-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 10px; font-size: 0.9rem; }
+        .list-actions { display: flex; gap: 5px; flex-shrink: 0; }
+		
+        .qty-control { display: flex; align-items: center; gap: 5px; background: #eee; padding: 2px; border-radius: 5px; }
+        .qty-btn { width: 25px; height: 25px; border: none; background: white; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .tag { background: #dfe6e9; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; color: #2d3436; }
+
+        /* MODAL */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; display: none; align-items: flex-end; }
+        .modal-content { background: white; width: 100%; border-top-left-radius: 20px; border-top-right-radius: 20px; padding: 20px; max-height: 90vh; overflow-y: auto; animation: slideUp 0.3s; }
+        .pix-box { text-align: center; padding: 15px; background: #f8f9fa; border-radius: 10px; border: 1px dashed #ccc; margin-top: 10px; }
+        .pix-code { word-break: break-all; font-family: monospace; font-size: 0.8rem; background: #fff; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin: 10px 0; }
+        .qr-img { width: 150px; height: 150px; margin: 0 auto; display: block; }
+		
+		/* NOVOS ESTILOS PARA O DASHBOARD (BI) */
+        .dash-row { display: flex; gap: 10px; margin-bottom: 15px; }
+        .dash-card { flex: 1; background: white; padding: 10px; border-radius: 10px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .dash-val { font-size: 1.2rem; font-weight: bold; color: var(--primary); }
+        .dash-label { font-size: 0.7rem; color: #7f8c8d; text-transform: uppercase; }
+        .hist-item { background: white; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #ccc; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
+        .hist-status { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; }
+     
+	   /* --- NOVO: ESTILOS PARA O RADAR (CHIPS) --- */
+        .chip-container { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+        .chip { background: #e3f2fd; color: #1565c0; padding: 5px 10px; border-radius: 15px; font-size: 0.8rem; display: flex; align-items: center; gap: 5px; border: 1px solid #bbdefb; }
+        .chip-close { cursor: pointer; font-weight: bold; color: #ef5350; }
+
+        /* --- NOVO: MODAL DE INSTALAÇÃO IOS --- */
+        .ios-install-modal { position: fixed; bottom: 0; left: 0; width: 100%; background: white; padding: 20px; box-shadow: 0 -5px 15px rgba(0,0,0,0.2); z-index: 9999; display: none; text-align: center; border-top-left-radius: 20px; border-top-right-radius: 20px; animation: slideUp 0.3s; }
+        .ios-arrow { font-size: 2rem; animation: bounce 1s infinite; margin-top: 10px; }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(10px); } }
+
+        /* --- NOVO: CARD DE DIVULGAÇÃO --- */
+        .share-card { background: linear-gradient(135deg, #6c5ce7, #a29bfe); color: white; border: none; }
+        .share-card .card-title { color: white; }
+        .share-card .label { color: rgba(255,255,255,0.8); }
+   /* --- ESTILOS DA NOVA GESTÃO 2.0 --- */
+.gestao-module {
+    background: white; border-radius: 12px; padding: 15px; margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05); position: relative; overflow: hidden;
+}
+.gestao-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;
+    border-bottom: 1px solid #eee; padding-bottom: 10px;
+}
+.gestao-title { font-weight: bold; color: var(--primary); font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+.gestao-icon { background: #ecf0f1; padding: 8px; border-radius: 50%; font-size: 1.2rem; }
+
+/* Barra de Progresso (Meta) */
+.progress-bar-bg { background: #eee; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 5px; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--success), #2ecc71); width: 0%; transition: width 0.5s; }
+
+/* Item Pro Bloqueado */
+.pro-feature { opacity: 0.6; filter: grayscale(1); position: relative; border: 1px dashed #ccc; padding: 10px; border-radius: 8px; margin-top: 10px; }
+.pro-feature::after { content: "🔒 PRO"; position: absolute; right: 10px; top: 10px; font-size: 0.7rem; background: #f1c40f; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+.pro-active { opacity: 1; filter: none; border: 1px solid #f1c40f; background: #fffdf0; }
+.pro-active::after { content: "💎"; background: #2c3e50; }
+/* --- GESTÃO 3.0 (Estilo Cockpit) --- */
+.gestao-module {
+    background: white;
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.05), 0 6px 6px rgba(0,0,0,0.05); /* Sombra difusa */
+    transition: transform 0.2s;
+    position: relative;
+    border-left: 6px solid #ccc; /* Cor da borda lateral definida via JS */
+}
+
+.gestao-module:active {
+    transform: scale(0.98); /* Efeito de clique */
+}
+
+.gestao-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0;
+}
+
+.gestao-title {
+    font-size: 1rem; font-weight: 700; color: #2c3e50;
+    display: flex; align-items: center; gap: 10px;
+}
+
+.icon-badge {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+}
+
+/* Botão Pílula */
+.btn-pill {
+    background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 20px;
+    padding: 6px 14px; font-size: 0.7rem; font-weight: bold; color: #555;
+    text-transform: uppercase; cursor: pointer; box-shadow: 0 2px 0 #e0e0e0;
+    text-decoration: none;
+}
+.btn-pill:active { box-shadow: none; transform: translateY(2px); }
+
+/* Área dos KPIs */
+.kpi-container { text-align: center; margin: 15px 0; }
+.kpi-label { font-size: 0.7rem; color: #95a5a6; text-transform: uppercase; font-weight: 600; letter-spacing: 1px; }
+.kpi-value { font-size: 2.2rem; font-weight: 800; color: #2c3e50; line-height: 1; margin: 5px 0; }
+
+/* Grid de Apoio */
+.stats-grid {
+    display: flex; gap: 15px; margin-top: 20px; background: #f8f9fa; padding: 12px; border-radius: 12px;
+}
+.stat-item { flex: 1; text-align: center; }
+.stat-val { font-weight: bold; color: #2c3e50; font-size: 0.9rem; }
+.stat-lbl { font-size: 0.65rem; color: #7f8c8d; text-transform: uppercase; }
+
+/* Banner PRO Elegante */
+.banner-pro-gold {
+    background: linear-gradient(135deg, #2c3e50, #000);
+    color: #f1c40f; padding: 20px; border-radius: 16px;
+    text-align: center; margin-top: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+.btn-gold {
+    background: linear-gradient(45deg, #f1c40f, #f39c12); color: #333;
+    border: none; padding: 10px 25px; border-radius: 25px;
+    font-weight: bold; margin-top: 15px; cursor: pointer;
+    box-shadow: 0 4px 15px rgba(241, 196, 15, 0.3);
+}
+
+    
+    </style>
+</head>
+<body>
+
+<div id="screen-welcome" class="app-screen active" style="display:flex;">
+   <div class="welcome-logo" onclick="document.getElementById('modal-declaracao').style.display='flex'" style="cursor:pointer">🤝</div>
+    <h1 style="margin-bottom:10px;">Preço Bom</h1>
+    <p style="opacity:0.8; margin-bottom:40px; max-width:80%;">Conectando quem precisa com quem faz bem feito.</p>
+
+    <button class="welcome-btn" onclick="goToScreen('cliente')">
+        <span style="font-size:1.5rem">🏠</span> 
+        <div style="text-align:left">
+            <div style="font-size:0.8rem; opacity:0.7">PARA VOCÊ</div>
+            <div>Pedir um Serviço</div>
+        </div>
+    </button>
+    
+    <button class="welcome-btn btn-prestador" onclick="goToScreen('prestador')">
+        <span style="font-size:1.5rem">🛠️</span> 
+        <div style="text-align:left">
+            <div style="font-size:0.8rem; opacity:0.7">PARA PROFISSIONAIS</div>
+            <div>Sou Prestador</div>
+        </div>
+    </button>
+	<div style="text-align: center; margin-top: 15px; width: 100%;">
+            <a href="https://www.ecossistemagente.com.br/debriefing.html" target="_blank" style="
+                background-color: rgba(255, 255, 255, 0.2); /* Ajustado para transparente para combinar com a tela */
+                color: #ffffff;
+                padding: 10px 20px;
+                text-decoration: none;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                font-weight: normal;
+                border: 1px solid rgba(255,255,255,0.4);
+                border-radius: 20px;
+                font-size: 0.9rem;
+                display: inline-block;
+                backdrop-filter: blur(5px);
+            ">
+                ⭐ Avaliar o App
+            </a>
+        </div>
+    <div style="margin-top:50px; font-size:0.7rem; opacity:0.5">Versão beta</div>
+</div>
+
+<div id="screen-cliente" class="app-screen">
+    <header>
+        <div class="header-content">
+            <button class="btn-home" onclick="goToScreen('welcome')">🏠</button>
+            <h1>Cliente</h1>
+            <div style="width:35px"></div> </div>
+    </header>
+<div style="padding: 10px 15px 0 15px;">
+    <div id="install-alert-cli" style="display:none; background:#d4edda; color:#155724; padding:10px; border-radius:8px; margin-bottom:10px; text-align:center; border:1px solid #c3e6cb; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+        📲 <strong>Instale o App</strong> para acesso fácil!
+        <button class="btn-sm btn-success" style="margin-top:5px; display:block; width:100%; background:#155724; border:none;" onclick="installApp()">Instalar Agora</button>
+    </div>
+</div>
+    <div style="padding: 15px;">
+	
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+            <button class="btn btn-outline" style="margin:0; background:white; color:var(--cli-accent); border-color:var(--cli-accent)" onclick="toggleClientView('novo')" id="btn-cli-novo">➕ Novo Pedido</button>
+            <button class="btn btn-outline" style="margin:0;" onclick="toggleClientView('pedidos')" id="btn-cli-lista">📂 Meus Pedidos</button>
+        </div>
+
+        <div id="view-cli-novo" style="display:block; animation: fadeIn 0.3s;">
+            <div class="card">
+               <div class="form-group">
+                <span class="label">O que você precisa? (Área)</span>
+                <select id="req-grupo" class="input" onchange="atualizarSubCategorias('req')">
+                    <option value="">Carregando...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <span class="label">Qual o serviço específico?</span>
+                <select id="req-cat" class="input" disabled>
+                    <option value="">Selecione a área acima primeiro</option>
+                </select>
+            </div>
+                <div class="form-group"><span class="label">Título do Serviço</span><input type="text" id="req-titulo" class="input" placeholder="Ex: Pintura da Sala..."></div>
+                <div class="form-group"><span class="label">Descrição Detalhada</span><textarea id="req-desc" class="input" rows="4" placeholder="Descreva o que precisa ser feito ou clik no microfone para ditar..."></textarea>
+				<button class="btn btn-outline" onclick="iniciarDitado('req-desc')" style="width:50px; font-size:1.5rem;">🎙️</button></div>
+                <div class="row">
+                    <div class="col"><span class="label">Seu Nome</span><input type="text" id="req-nome" class="input"></div>
+                    <div class="col"><span class="label">Bairro e Cidade</span><input type="text" id="req-cidade" class="input" placeholder="Ex: Centro - Rio de Janeiro"></div>
+                </div>
+                <div class="form-group" style="margin-top:10px;"><span class="label">WhatsApp</span><input type="tel" id="req-zap" class="input" placeholder="(00) 00000-0000"></div>
+                <div style="margin: 15px 0; background: #fff3cd; padding: 10px; border-radius: 8px; border: 1px solid #ffeeba;">
+                    <label style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; font-size: 0.8rem; color: #856404;">
+                        <input type="checkbox" id="chk-termos" style="margin-top:3px;">
+                        <span>Declaro que li e concordo que o <strong>Preço Bom</strong> é apenas uma ferramenta de conexão. A negociação e pagamento são de minha total responsabilidade.</span>
+                    </label>
+                </div>
+				<div id="area-exclusividade" style="display:none; background:#e8f5e9; padding:15px; border-radius:8px; border:1px solid #c8e6c9; margin-bottom:15px;">
+ 				   <strong style="color:#2e7d32">🔒 Pedido Exclusivo</strong>
+  				  <p style="font-size:0.8rem; margin:5px 0 10px 0;">Você está pedindo direto para <strong id="lbl-nome-indicado"></strong>.</p>
+    
+ 				   <label style="display:flex; gap:10px; align-items:flex-start; font-size:0.85rem; cursor:pointer;">
+ 				       <input type="checkbox" id="chk-publico-apos-prazo">
+ 				       <span>Se ele não responder em <strong>5 dias</strong>, desejo liberar meu pedido para outros profissionais (Público).</span>
+ 				   </label>
+				</div>
+                <button class="btn btn-success" onclick="enviarDemanda()">🚀 Enviar para Profissionais</button>
+            </div>
+        </div>
+
+                <div id="view-cli-lista" style="display:none; animation: fadeIn 0.3s;">
+            
+            <div class="card" style="background:#e3f2fd; border:none;">
+                <span class="label">Para ver seus pedidos, digite seu WhatsApp:</span>
+                <div style="display:flex; gap:10px;">
+                    <input type="tel" id="cli-login-zap" class="input" placeholder="Seu número usado no pedido">
+                    <button class="btn btn-primary btn-sm" style="width:auto; margin:0;" onclick="carregarMeusPedidos()">🔍 Buscar</button>
+                </div>
+            </div>
+
+            <div id="lista-pedidos-cliente">
+                <div style="text-align:center; color:#999; margin-top:30px;">Digite seu número acima para consultar.</div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div id="screen-prestador" class="app-screen">
+    <header>
+        <div class="header-content">
+            <button class="btn-home" onclick="goToScreen('welcome')">🏠</button>
+            <h1>Preço Bom</h1>
+            <div style="width:35px; text-align:right; font-size:0.7rem; opacity:0.8" id="header-status">FREE</div>
+        </div>
+    </header>
+
+    <div class="nav-tabs">
+        <button class="nav-btn" onclick="nav('oportunidades')" style="position:relative;">
+            <span class="nav-icon">🔔</span>Feed
+            <div class="notify-badge" id="badge-opp" style="display:none">0</div>
+        </button>
+        <button class="nav-btn active" onclick="nav('catalogo')"><span class="nav-icon">📋</span>Serviços</button>
+        <button class="nav-btn" onclick="nav('carrinho')"><span class="nav-icon">🛒</span>Orçamento</button>
+        <button class="nav-btn" onclick="nav('gestao')"><span class="nav-icon">📊</span>Gestão</button>
+    </div>
+
+        <div id="tab-oportunidades" class="container">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span class="label" style="margin:0;">Disponíveis agora</span>
+            <button class="btn btn-sm btn-outline" onclick="renderOportunidades()" style="width:auto; border-color:var(--accent); color:var(--accent);">
+                🔄 Atualizar Lista
+            </button>
+        </div>
+
+        <div style="background:#fff3cd; padding:10px; border-radius:8px; font-size:0.8rem; color:#856404; margin-bottom:15px;">
+            ⚠️ Pedidos compatíveis com a especialidade definida na aba Gestão.
+        </div>
+        
+        <div id="lista-oportunidades"></div>
+    </div>
+
+
+       <div id="tab-catalogo" class="container active">
+        <div class="form-group">
+            <input type="text" class="input" placeholder="🔍 Buscar serviço..." onkeyup="filtrarCatalogo(this.value)">
+        </div>
+        
+        <div id="lista-catalogo"></div>
+
+        <div id="area-btn-orcamento" style="margin-top:20px; padding-bottom:80px; display:none; text-align:center;">
+            <button class="btn btn-success" onclick="nav('carrinho')" style="font-size:1.1rem; padding:15px; box-shadow: 0 4px 15px rgba(39, 174, 96, 0.4); width:100%;">
+                Próximo: Ver Orçamento ➡
+            </button>
+        </div>
+    </div>
+    <div id="tab-carrinho" class="container">
+        <div id="lista-carrinho-empty" style="text-align:center; color:#999; margin-top:50px;">Selecione os serviços na aba Serviços.</div>
+        <div id="lista-carrinho"></div>
+        <div id="acoes-carrinho" style="display:none; margin-top:20px;">
+            <div class="form-group" style="background:white; padding:10px; border-radius:8px;">
+                <label style="display:flex; align-items:center; gap:10px; font-weight:600;">
+                    <input type="checkbox" id="chk-materiais" checked onchange="renderCarrinho()"> Incluir Materiais/Taxas?
+                </label>
+            </div>
+            <button class="btn btn-outline" onclick="salvarModelo()">💾 Salvar Modelo <span class="premium-lock">💎</span></button>
+            <button class="btn btn-danger" onclick="limparCarrinho()">🗑️ Limpar</button>
+            <div style="margin-top:20px; border-top:1px solid #ddd; padding-top:10px;">
+                <h4 onclick="toggleModelos()" style="margin:0; color:var(--primary); cursor:pointer;">📂 Carregar Modelo (Ver)</h4>
+                <div id="area-modelos" style="display:none; margin-top:10px;"></div>
+            </div>
+        </div>
+        <div style="height:60px"></div>
+    </div>
+
+   
+ <div id="tab-gestao" class="container">
+    
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <div>
+            <h2 style="margin:0; color:var(--primary);">Gestão do Negócio</h2>
+            <div style="font-size:0.8rem; color:#7f8c8d;">Painel de Controle</div>
+        </div>
+        <button onclick="nav('config')" style="background:white; border:1px solid #ccc; padding:8px 15px; border-radius:20px; font-size:0.9rem; color:#333; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+            ⚙️ Ajustes
+        </button>
+    </div>
+
+    <div id="panel-free" style="display:none;">
+        <div class="gestao-module" style="border-left: 5px solid #7f8c8d; text-align:center; padding: 25px 15px;">
+            <div style="font-size:0.8rem; color:#7f8c8d; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">Vendas no Mês</div>
+            <div id="free-kpi-vendas" style="font-size:2.5rem; font-weight:bold; color:#2c3e50; margin-bottom:20px;">R$ 0,00</div>
+            
+            <div style="display:flex; justify-content:space-around; margin-bottom:25px; border-top:1px solid #eee; padding-top:15px;">
+                <div>
+                    <div id="free-kpi-clientes" style="font-weight:bold; font-size:1.1rem; color:#2c3e50">👥 0</div>
+                    <div style="font-size:0.7rem; color:#999;">Clientes</div>
+                </div>
+                <div>
+                    <div id="free-kpi-nota" style="font-weight:bold; font-size:1.1rem; color:#f1c40f">⭐ 5.0</div>
+                    <div style="font-size:0.7rem; color:#999;">Reputação</div>
+                </div>
+            </div>
+
+            <button class="btn btn-outline" style="border-radius:25px;" onclick="abrirHistoricoCompleto()">
+                📂 Ver Histórico Completo
+            </button>
+        </div>
+
+        <div id="banner-premium" style="background: linear-gradient(135deg, #2c3e50, #34495e); color:white; padding:20px; border-radius:15px; margin-top:20px; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4); text-align:center;">
+            <h2 style="margin:0 0 5px 0; font-size:1.3rem;">👑 Profissionalize seu Negócio</h2>
+            <p style="font-size:0.9rem; opacity:0.9; margin-bottom:15px;">Desbloqueie o Controle de Caixa, Agenda Inteligente e Radar.</p>
+            <button onclick="simularCompraPremium()" style="background:white; color:#2980b9; border:none; padding:12px 30px; border-radius:25px; font-weight:bold;">SEJA PRO 💎</button>
+        </div>
+    </div>
+
+    <div id="panel-pro" style="display:none;">
+        
+        <div class="gestao-module" style="border-left: 5px solid #27ae60;">
+            <div class="gestao-header">
+                <div class="gestao-title"><span class="gestao-icon">💰</span> Financeiro</div>
+                <button class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="abrirCaderninho()">🗳️ Abrir Caixa</button>
+            </div>
+            <div class="row">
+                <div class="col" style="text-align:center; border-right:1px solid #eee;">
+                    <div style="font-size:0.65rem; color:#7f8c8d; font-weight:bold;">SALDO DISPONÍVEL</div>
+                    <div id="pro-saldo" style="font-weight:bold; font-size:1.1rem; color:#2c3e50">R$ 0,00</div>
+                </div>
+                <div class="col" style="text-align:center;">
+                    <div style="font-size:0.65rem; color:#d35400; font-weight:bold;">A RECEBER</div>
+                    <div id="pro-receber" style="font-weight:bold; font-size:1.1rem; color:#e67e22">R$ 0,00</div>
+                </div>
+            </div>
+            <div style="margin-top:15px; cursor:pointer;" onclick="definirMeta()">
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:2px;">
+                    <strong id="lbl-meta">🎯 Meta: R$ 5k</strong>
+                    <span id="lbl-meta-pct" style="color:#27ae60">0%</span>
+                </div>
+                <div class="progress-bar-bg"><div id="bar-meta" class="progress-fill" style="width:0%"></div></div>
+            </div>
+        </div>
+
+        <div class="gestao-module" style="border-left: 5px solid #3498db;">
+            <div class="gestao-header">
+                <div class="gestao-title"><span class="gestao-icon">🛠️</span> Operação</div>
+                <button class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="abrirHistoricoCompleto()">📅 Agenda</button>
+            </div>
+            <div style="margin-bottom:10px; font-size:0.75rem; font-weight:bold; color:#7f8c8d;">PRÓXIMO SERVIÇO</div>
+            <div id="pro-prox-servico"></div> <div style="display:flex; gap:10px; margin-top:15px;">
+                 <div style="flex:1; background:#fff; border:1px solid #eee; padding:8px; border-radius:8px; text-align:center;">
+                    <div id="pro-count-pendente" style="font-weight:bold; color:#2c3e50">0</div>
+                    <div style="font-size:0.65rem; color:#999;">EM ANÁLISE</div>
+                 </div>
+                 <div style="flex:1; background:#fff; border:1px solid #eee; padding:8px; border-radius:8px; text-align:center;">
+                    <div id="pro-count-realizado" style="font-weight:bold; color:#27ae60">0</div>
+                    <div style="font-size:0.65rem; color:#999;">REALIZADOS</div>
+                 </div>
+            </div>
+        </div>
+
+        <div class="gestao-module" style="border-left: 5px solid #9b59b6;">
+            <div class="gestao-header">
+                <div class="gestao-title"><span class="gestao-icon">📣</span> Marketing</div>
+                 <button class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="gerarLinkDivulgacao()">🔗 Divulgar</button>
+            </div>
+            
+            <div style="display:flex; align-items:center; justify-content:space-between; background:#fbfaff; padding:10px; border-radius:10px; margin-bottom:15px;">
+                <div style="text-align:center; padding:0 10px;">
+                    <div id="pro-nota" style="font-size:1.5rem;">⭐ 5.0</div>
+                    <div class="dash-label">Avaliações</div>
+                </div>
+                <div style="height:40px; border-left:1px solid #eee;"></div>
+                <div style="text-align:center; padding:0 10px;">
+                     <div id="pro-assertividade" style="font-size:1.5rem; font-weight:bold; color:#27ae60;">100%</div>
+                     <div class="dash-label">Assertividade</div>
+                </div>
+            </div>
+            <button class="btn btn-outline" onclick="gerarCarteirinha()" style="width:100%; border-color:#8e44ad; color:#8e44ad;">🪪 Carteirinha Digital</button>
+        </div>
+    </div>
+
+    <div style="height:80px"></div>
+</div>
+
+
+
+    <div id="tab-config" class="container">
+    <h3 style="color:var(--primary); margin-top:0;">⚙️ Ajustes do Negócio</h3>
+
+    <div class="card" style="border-left-color: #32a9ba;">
+        <div class="card-header">
+            <span class="card-title">⭐ Especialidade</span>
+            <button class="btn-sm btn-primary"	onclick="importarKitsDoRadar()">Mesclar</button> <button class="btn-sm btn-primary" onclick="addRadar()">+ Radar</button>
+        </div>
+        
+        <div style="background:#e0f7fa; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #b2ebf2;">
+            <div class="form-group" style="margin-bottom:10px;">
+                <span class="label" style="color:#006064;">Sua Área de Atuação</span>
+                <select id="cfg-grupo" class="input" onchange="atualizarSubCategorias('cfg')">
+                    <option value="">Carregando...</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <span class="label" style="color:#006064;">Serviço Principal (Especialidade)</span>
+                <select id="cfg-specialty" class="input" onchange="carregarKitPorEspecialidade()" disabled>
+                    <option value="">Selecione a área acima</option>
+                </select>
+				<div style="margin-top:15px; border-top:1px dashed #b2ebf2; padding-top:10px;">
+                <span class="label" style="color:#006064;">📡 Radar de Oportunidades (Extra)</span>
+				<p style="font-size:0.75rem; color:#00838f; margin-bottom:5px;">Além da principal, quais outras áreas você atende?</p>
+                
+                <div class="row">
+                    <select id="radar-grupo" class="input" style="font-size:0.8rem" onchange="atualizarSubCategorias('radar')">
+                        <option value="">1. Área...</option>
+                    </select>
+                    <select id="radar-cat" class="input" style="font-size:0.8rem">
+                        <option value="">2. Serviço...</option>
+                    </select>
+                </div>
+                          
+                <div id="lista-radar" class="chip-container"></div>
+               
+            </div>
+            </div>
+        </div>
+		</div>
+		
+		
+
+<div class="card" style="border-left-color:#34495e;">
+    <span class="card-title">👤 Apresentação</span>
+        <div class="form-group">
+            <span class="label">Seu Nome / Nome da Empresa</span>
+            <input type="text" id="cfg-pix-name" class="input" placeholder="Como quer ser chamado?">
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <span class="label">Cidade Base</span>
+                <input type="text" id="cfg-pix-city" class="input" placeholder="Ex: Campos">
+            </div>
+            <div class="col">
+                <span class="label">WhatsApp Oficial</span>
+                <input type="tel" id="cfg-zap" class="input" placeholder="(DD) 99999-9999">
+            </div>
+        </div>
+        
+        <div class="form-group" style="margin-top:10px;">
+             <span class="label">Bio / Resumo (Para a Carteirinha)</span>
+             <textarea id="cfg-bio" class="input" rows="2" placeholder="Ex: Especialista em acabamentos com 10 anos de mercado..."></textarea>
+        </div>
+    </div>
+	 
+	    
+
+    <div class="card" style="border-left-color: #8e44ad;">
+        <span class="card-title">💰 Dados de Recebimento</span>
+        
+        <div class="form-group" style="margin-top:10px;">
+            <span class="label">Sua Chave Pix</span>
+            <input type="text" id="cfg-pix-key" class="input" placeholder="CPF, Celular, Email...">
+        </div>
+
+        <div style="margin-top:15px; padding-top:10px; border-top:1px solid #eee;">
+            <span class="label" style="margin-bottom:10px; display:block;">Taxas Padrão (Opcional)</span>
+            <div class="row">
+                <div class="col"><span class="label">Gestão Compra</span><input type="number" id="cfg-taxa-compra" class="input" ></div>
+                <div class="col"><span class="label">Visita/Desloc.</span><input type="number" id="cfg-taxa-visita" class="input" ></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="border-left-color: var(--primary);">
+        <div class="card-header">
+			<span class="card-title">👥 Custo da Equipe (H/h)</span> 
+			<button class="btn-sm btn-primary" onclick="addProfissionalPrompt()">+ Equipe</button>
+		</div><div id="lista-profissionais"></div>
+    </div>
+
+    <div class="card" style="border-left-color: var(--accent);">
+	  <div class="card-header">
+        <span class="card-title">🛠️ Gerenciar Serviços</span>
+        <button class="btn-sm btn-primary" onclick="abrirEditorServico()">+ Serviço</button>
+      </div> <div style="max-height:300px; overflow-y:auto;" id="lista-gestao-servicos"></div>
+    </div>
+    
+    <div class="card" style="border-left-color: #95a5a6;">
+        <span class="card-title">💾 Sistema</span>
+        <div class="row" style="margin-bottom:10px;">
+            
+            <button class="btn btn-outline" onclick="exportarBackup()">⬇️ Backup</button>
+            <button class="btn btn-outline" onclick="document.getElementById('input-restore').click()">⬆️ Restaurar</button>
+            <button class="btn btn-success" onclick="salvarConfig()" > 💾 Salvar</button>
+            <input type="file" id="input-restore" style="display:none" onchange="importarBackup(this)">
+        </div>
+        <button class="btn btn-danger" onclick="resetFactory()">⚠️ Resetar Fábrica</button>
+    </div>
+    
+    <div style="height:80px"></div>
+</div>
+
+    <div class="floating-footer" id="footer-orcamento" style="display:none;">
+        <div class="total-box">
+            <span style="font-size:0.7rem; color:#7f8c8d;">TOTAL ESTIMADO</span>
+            <span class="total-val" id="txt-total">R$ 0,00</span>
+        </div>
+        <button class="btn-action" onclick="enviarOrcamentoFinal()">Enviar Pela Plataforma</button>
+        <button class="btn-pix" onclick="abrirModalPix()">Pix</button>
+        <button class="btn-zap" onclick="gerarZap()">WhatsApp</button>
+    </div>
+</div>
+<div id="modal-detalhes" class="modal-overlay" onclick="if(event.target.id==='modal-detalhes')this.style.display='none'">
+    <div class="modal-content" style="background:#f8f9fa;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+            <h3 style="margin:0; color:var(--primary)">Detalhes da Proposta</h3>
+            <button onclick="document.getElementById('modal-detalhes').style.display='none'" style="border:none; background:none; font-size:1.5rem;">&times;</button>
+        </div>
+        <div id="conteudo-detalhes"></div>
+        <button class="btn btn-primary" onclick="document.getElementById('modal-detalhes').style.display='none'">Fechar</button>
+    </div>
+</div>
+<div id="modal-pix" class="modal-overlay" onclick="if(event.target.id==='modal-pix')this.style.display='none'">
+    <div class="modal-content">
+        <h3>Receber com Pix</h3>
+        <p style="font-size:0.9rem; color:#666;">QR Code EMVCo (Padrão Banco Central).</p>
+		<div style="background:#ffebee; color:#c62828; font-size:0.75rem; padding:8px; border-radius:5px; margin-top:5px; font-weight:bold;">
+         ⚠️ ATENÇÃO: Este pagamento vai DIRETAMENTE para a conta do prestador. O Preço Bom não intermedia valores e não realiza estornos.
+         </div>
+        <div id="pix-alert" style="color:red; display:none; margin-bottom:10px;">Configure sua Chave Pix na aba Gestão!</div>
+        <div id="pix-container" style="display:none;">
+            <img id="img-qr" class="qr-img" src="" alt="QR Code">
+            <div class="pix-box">
+                <span class="label">Copia e Cola</span>
+                <div id="txt-brcode" class="pix-code"></div>
+                <button class="btn btn-primary" onclick="copiarPix()">Copiar Código</button>
+            </div>
+            <div style="text-align:center; margin-top:15px; font-weight:bold; font-size:1.2rem; color:var(--success)">Valor: <span id="val-pix-display">R$ 0,00</span></div>
+        </div>
+        <button class="btn btn-outline" style="margin-top:15px;" onclick="document.getElementById('modal-pix').style.display='none'">Fechar</button>
+    </div>
+</div>
+<div id="modal-avaliacao" class="modal-overlay" onclick="if(event.target.id==='modal-avaliacao')this.style.display='none'">
+    <div class="modal-content" style="text-align:center;">
+        <h3>Confirmar Contratação</h3>
+        <p>Você fechou com <strong id="aval-prestador"></strong>?</p>
+        <p style="font-size:0.9rem; color:#666;">Avalie para encerrar este pedido:</p>
+        
+        <div style="font-size:2rem; margin:15px 0; cursor:pointer;" id="stars-container">
+            <span onclick="setStar(1)">⭐</span><span onclick="setStar(2)">⭐</span><span onclick="setStar(3)">⭐</span><span onclick="setStar(4)">⭐</span><span onclick="setStar(5)">⭐</span>
+        </div>
+        <input type="hidden" id="aval-nota" value="5">
+        <input type="hidden" id="aval-id-demanda">
+        <input type="hidden" id="aval-zap-prestador">
+
+        <button class="btn btn-primary" onclick="enviarAvaliacao()">✅ Confirmar e Encerrar</button>
+    </div>
+</div>
+<div id="modal-editor" class="modal-overlay" onclick="if(event.target.id==='modal-editor')this.style.display='none'">
+    <div class="modal-content">
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+            <h3 id="modal-title" style="margin:0">Editar</h3>
+            <button onclick="document.getElementById('modal-editor').style.display='none'" style="border:none; background:none; font-size:1.5rem;">&times;</button>
+        </div>
+        <div id="modal-body"></div>
+        <button class="btn btn-primary" id="btn-modal-save">Salvar</button>
+    </div>
+</div>
+<div id="modal-cadastro" class="modal-overlay" style="z-index: 3000;">
+    <div class="modal-content">
+        <h3 style="color:var(--primary); margin-top:0;">🚀 Finalizar Cadastro</h3>
+        <p style="font-size:0.9rem; color:#666; margin-bottom:20px;">Preencha para criar orçamentos profissionais.</p>
+
+        <div style="background:#e0f7fa; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #b2ebf2;">
+            <div class="form-group">
+                <span class="label" style="color:#006064">Sua Área de Atuação</span>
+                <select id="cad-grupo" class="input" onchange="atualizarSubCategorias('cad')">
+                    <option value="">Carregando...</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <span class="label" style="color:#006064">Especialidade Principal</span>
+                <select id="cad-specialty" class="input" onchange="carregarKitNoCadastro()" disabled>
+                    <option value="">Selecione a área acima</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <span class="label">Seu Nome / Nome da Empresa</span>
+            <input type="text" id="cad-pix-name" class="input" placeholder="Ex: João Construções">
+        </div>
+
+        <div class="row">
+            <div class="col">
+                <span class="label">Cidade Base</span>
+                <input type="text" id="cad-pix-city" class="input" placeholder="Ex: Campos">
+            </div>
+            <div class="col">
+                <span class="label">WhatsApp (Obrigatório)</span>
+                <input type="tel" id="cad-zap" class="input" placeholder="(DD) 99999-9999">
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-top:15px;">
+            <span class="label">Chave Pix (Para receber)</span>
+            <input type="text" id="cad-pix-key" class="input" placeholder="CPF, Celular, Email...">
+        </div>
+
+        <div class="form-group" style="margin-top:15px;">
+            <span class="label">Resumo Profissional (Mín. 20 letras) *</span>
+            <textarea id="cad-bio" class="input" rows="3" placeholder="Ex: Especialista em acabamentos finos com 10 anos de experiência..."></textarea>
+            <button class="btn btn-outline" onclick="iniciarDitado('cad-bio')" style="width:50px; font-size:1.5rem; margin-top:5px;">🎙️</button>
+            <div style="font-size:0.7rem; color:#999; text-align:right;" id="bio-counter">0/20</div>
+        </div>
+
+        <button class="btn btn-success" onclick="salvarCadastroInicial()">✅ Concluir Cadastro</button>
+    </div>
+</div>
+<div id="modal-financeiro" class="modal-overlay" onclick="if(event.target.id==='modal-financeiro')this.style.display='none'">
+    <div class="modal-content" style="background:#f4f6f7;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3 style="margin:0; color:#2c3e50;">📒 Meu Caixa</h3>
+            <button onclick="document.getElementById('modal-financeiro').style.display='none'" style="border:none; background:none; font-size:1.5rem;">&times;</button>
+        </div>
+        
+        <div style="background:white; padding:20px; border-radius:15px; text-align:center; box-shadow:0 4px 10px rgba(0,0,0,0.05); margin-bottom:20px;">
+            <div style="font-size:0.8rem; color:#7f8c8d; letter-spacing:1px;">SALDO ATUAL</div>
+            <div id="fin-saldo-display" style="font-size:2.5rem; font-weight:bold; color:#2c3e50;">R$ 0,00</div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-bottom:20px;">
+            <button class="btn" onclick="addMovimento('ENTRADA')" style="background:#27ae60; color:white; flex:1; padding:15px;">
+                💰 Recebi
+            </button>
+            <button class="btn" onclick="addMovimento('SAIDA')" style="background:#c0392b; color:white; flex:1; padding:15px;">
+                💸 Gastei
+            </button>
+        </div>
+
+        <h4 style="margin:0 0 10px 0; color:#7f8c8d; font-size:0.9rem;">Últimos Lançamentos</h4>
+        <div id="lista-financeiro" style="max-height:350px; overflow-y:auto; padding-bottom:20px;">
+            </div>
+    </div>
+</div>
+<div id="modal-declaracao" class="modal-overlay" onclick="if(event.target.id==='modal-declaracao')this.style.display='none'" style="z-index: 9999;">
+    <div class="modal-content">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3 style="margin:0; color:var(--primary);">📜 Manifesto Preço Bom</h3>
+            <button onclick="document.getElementById('modal-declaracao').style.display='none'" style="border:none; background:none; font-size:1.5rem;">&times;</button>
+        </div>
+        
+        <div style="max-height:60vh; overflow-y:auto; line-height:1.6; color:#555; text-align:left;">
+            <p style="font-size:1.1rem; color:var(--accent); font-weight:bold;">Conectando quem precisa com quem faz bem feito.</p>
+            
+            <p>O <strong>Preço Bom</strong> nasceu para democratizar o acesso a serviços e profissionalizar o mercado autônomo brasileiro.</p>
+            
+            <ul style="padding-left:20px; margin:15px 0;">
+                <li style="margin-bottom:10px;"><strong>🤝 Democrático:</strong> Aqui tem espaço para todos, do ajudante iniciante ao técnico pós-graduado. O sol nasce para todos.</li>
+                
+                <li style="margin-bottom:10px;"><strong>📚 Educativo:</strong> Não somos apenas um app de bicos. Somos uma ferramenta que ensina você a precificar, gerenciar e crescer.</li>
+                
+                <li style="margin-bottom:10px;"><strong>💎 Transparente:</strong> Sem taxas escondidas. O valor do seu suor é seu.</li>
+            </ul>
+
+            <div style="background:#f0fdf4; padding:10px; border-radius:8px; font-size:0.9rem; border:1px solid #d1e7dd;">
+                <strong>Nosso Compromisso:</strong> Criar tecnologia simples, leve e poderosa para que o microempreendedor tenha no bolso a mesma gestão de uma grande empresa.
+            </div>
+            
+            <p style="font-size:0.8rem; color:#999; margin-top:20px; text-align:center;">Ecossistema GENTE • Versão Beta 9.5</p>
+        </div>
+
+        <button class="btn btn-primary" onclick="document.getElementById('modal-declaracao').style.display='none'">Fechar</button>
+    </div>
+</div>
+<div id="modal-contato-opcoes" class="modal-overlay" onclick="if(event.target.id==='modal-contato-opcoes')this.style.display='none'">
+    <div class="modal-content" style="text-align:center;">
+        <h3 style="color:var(--primary); margin-top:0;">O que deseja fazer?</h3>
+        <p style="color:#666; font-size:0.9rem; margin-bottom:20px;">Você já foi atendido por <strong id="modal-nome-prestador"></strong>.</p>
+        
+        <button class="btn btn-success" id="btn-falar-prestador" style="margin-bottom:10px;">
+            💬 Falar com ele novamente
+        </button>
+        
+        <button class="btn btn-outline" id="btn-indicar-amigo" style="border-color:#f1c40f; color:#f39c12;">
+            🎁 Indicar para um Amigo
+        </button>
+        
+        <button class="btn btn-outline" onclick="document.getElementById('modal-contato-opcoes').style.display='none'" style="margin-top:10px; border:none; color:#999;">
+            Cancelar
+        </button>
+    </div>
+</div>
+<div id="modal-ios-install" class="ios-install-modal">
+    <h3 style="margin:0 0 10px 0;">Instalar Aplicativo 📲</h3>
+    <p style="font-size:0.9rem; color:#666; margin-bottom:15px;">Para instalar no seu iPhone/iPad:</p>
+    <div style="font-size:0.9rem; text-align:left; display:inline-block;">
+        1. Toque no botão <strong>Compartilhar</strong> <span style="font-size:1.2rem">⎋</span> abaixo.<br>
+        2. Escolha <strong>"Adicionar à Tela de Início"</strong> ➕.
+    </div>
+    <div class="ios-arrow">⬇️</div>
+    <button onclick="document.getElementById('modal-ios-install').style.display='none'" style="margin-top:15px; background:none; border:none; color:#999;">Fechar</button>
+</div>
+<div id="modal-historico-full" class="modal-overlay" onclick="if(event.target.id==='modal-historico-full')this.style.display='none'">
+    <div class="modal-content" style="background:#f8f9fa; max-height:85vh;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3 style="margin:0; color:var(--primary);">📂 Histórico Completo</h3>
+            <button onclick="document.getElementById('modal-historico-full').style.display='none'" style="border:none; background:none; font-size:1.5rem;">&times;</button>
+        </div>
+        
+        <div class="form-group">
+            <input type="text" class="input" placeholder="🔍 Buscar cliente ou serviço..." onkeyup="filtrarHistorico(this.value)">
+        </div>
+
+        <div id="lista-historico-full" style="padding-bottom:20px;"></div>
+    </div>
+</div>
+<div class="row" style="margin-bottom:20px;">
+    <div class="col" style="background:white; padding:15px; border-radius:10px; text-align:center; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+        <div style="font-size:0.7rem; color:#7f8c8d;">EM CAIXA</div>
+        <div id="fin-saldo-display" style="font-size:1.2rem; font-weight:bold; color:#2c3e50;">R$ 0,00</div>
+    </div>
+    <div class="col" style="background:#fff3cd; padding:15px; border-radius:10px; text-align:center; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+        <div style="font-size:0.7rem; color:#856404;">A RECEBER</div>
+        <div id="fin-previsto-display" style="font-size:1.2rem; font-weight:bold; color:#d35400;">R$ 0,00</div>
+    </div>
+</div>
+<script>
+  let deferredPrompt;
+  
+  // COLE AQUI SUA URL DO GOOGLE APPS SCRIPT
+const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6YbMKWK4kuO-fdexmhOp_4_dO_-oeDwyVtJazuiA3le5rcA/exec"; 
+
+
+        // --- TAXONOMIA DE SERVIÇOS (NOVA ESTRUTURA) ---
+    const TAXONOMIA = {
+        "Reforma e Construção": [
+            "Construção Civil", "Obra e Reforma", "Pintura e Acabamento",
+            "Elétrica e Iluminação", "Hidráulica e Encanamento", "Gesso e Drywall",
+            "Serralheria e Portões", "Vidraçaria e Box", "Telhados e Calhas", "Impermeabilização"
+        ],
+        "Manutenção e Casa": [
+            "Pequenos Reparos", "Refrigeração", "Limpeza e Faxina",
+            "Jardinagem e Paisagismo", "Piscina e Lazer", "Montagem de Móveis",
+            "Marcenaria e Planejados"
+        ],
+        "Tecnologia e Segurança": [
+            "Segurança Eletrônica", "Automação Residencial", "Desenvolvimento de Software", "Energia Solar"
+        ],
+		"Manutenção automotiva": [
+            "Mecanico de Automóvel", "Eletricista de Automóvel", "Lanternagem e Pintura"
+        ],
+        "Saúde e Bem-Estar": [
+            "Nutrição", "Dentista", "Cuidador e Acompanhante", "Barbeiro", "Manicure", "Cabeleireiro"
+        ],
+		"Costura e Moda": [
+            "Conserto de Roupas", "Corte e Costura", "Designer de Moda"
+        ],
+        "Negócios e Eventos": [
+            "Buffet e Festas", "Publicidade e Propaganda"
+        ],
+		"Educação e treinamento": [
+            "Explicador de Matemática", "Explicador de Português", "Explicador de Inglês"
+        ],
+        "Outros": [
+            "Outros Serviços"
+        ]
+    };
+  
+    let state = {
+        isPremium: false,
+        config: { specialty: "Geral", taxaCompra: 0, taxaVisita: 0, pixKey: "", pixName: "", pixCity: "" , zap: "", nota: "5.0", totalAvaliacoes: 0},
+        profs: [{id: "p1", nome: "Mão de Obra", valor: 50}],
+        catalogo: [{ id: 1, nome: "Serviço Exemplo", cat: "Geral", ordem: 1, equipe: [{pid: "p1", h: 2}], mat: [] }],
+        carrinho: [],
+        modelos: [],
+		historico: [],
+		radar: [],
+		financeiro: { saldo: 0, movimentos: [] }
+    };
+	
+	let configPagamentoTemp = { tipo: 'vista', parcelas: 1 };
+	
+    // --- SISTEMA DE SEGURANÇA E RISCO (V3 - COM PLANO B) ---
+    const Security = {
+        getDeviceID: function() {
+            let id = localStorage.getItem('pb_device_id');
+            if (!id) {
+                id = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                localStorage.setItem('pb_device_id', id);
+            }
+            return id;
+        },
+
+        // Função interna para tentar buscar IP em várias fontes
+        fetchLocation: async function() {
+            try {
+                // TENTATIVA 1: ipapi.co (Muito preciso)
+                const res1 = await fetch('https://ipapi.co/json/');
+                if(res1.ok) return await res1.json();
+                throw new Error("Falha API 1");
+            } catch (e) {
+                try {
+                    // TENTATIVA 2: ipwho.is (Plano B - Gratuito e rápido)
+                    const res2 = await fetch('https://ipwho.is/');
+                    if(res2.ok) return await res2.json();
+                    throw new Error("Falha API 2");
+                } catch (e2) {
+                    return null; // Desiste se ambos falharem
+                }
+            }
+        },
+
+        analyzeRisk: async function() {
+            let riskFlags = [];
+            let currentGeo = "Desconhecida";
+            let currentIP = "Oculto";
+            let data = null;
+
+            try {
+                // Chama a função blindada acima
+                data = await this.fetchLocation();
+
+                if (data) {
+                    // Normaliza os dados (pois cada API retorna nomes diferentes)
+                    currentIP = data.ip || 'Oculto';
+                    const cidade = data.city || 'Cidade?';
+                    const regiao = data.region_code || data.region || 'UF';
+                    currentGeo = `${cidade}/${regiao}`;
+
+                    // Lógica de Risco
+                    const lastDevice = localStorage.getItem('pb_device_id'); 
+                    const lastGeo = localStorage.getItem('pb_last_geo');
+                    const currentDevice = this.getDeviceID();
+
+                    if (lastDevice && (lastDevice !== currentDevice)) riskFlags.push("TROCA_APARELHO");
+                    if (lastGeo && (lastGeo !== currentGeo)) riskFlags.push("NOVA_LOCALIZACAO");
+                    
+                    // Salva para a próxima
+                    localStorage.setItem('pb_last_geo', currentGeo);
+                } else {
+                    riskFlags.push("BLOQUEIO_RASTREIO"); // Identifica que o usuário usa bloqueador
+                }
+
+            } catch (e) {
+                console.warn("Falha total na segurança");
+                riskFlags.push("ERRO_CRITICO");
+            }
+
+            // Se não houve erro mas a lista está vazia, é acesso padrão
+            const detalhesFinal = riskFlags.length > 0 ? riskFlags.join(", ") : "Acesso Seguro";
+
+            return {
+                deviceID: this.getDeviceID(),
+                ip: currentIP,
+                geo: currentGeo,
+                risco: riskFlags.length > 0 ? "MEDIO" : "BAIXO", // Sobe o risco se tiver flag
+                detalhes: detalhesFinal, 
+                pix: state.config.pixKey || "Sem Pix", // Garante que não vá vazio
+                userAgent: navigator.userAgent
+            };
+        }
+    };
+
+    // --- FUNÇÃO ATUALIZADA DE SALVAR (COM ENVIO DE RISCO) ---
+   	
+      window.onload = () => { 
+    // 1. Inicialização
+    popularCategorias(); 
+    loadData();
+
+  // 2. LÓGICA DE PWA (ATUALIZADA PARA 2 TELAS)
+    
+    // Verifica se JÁ ESTÁ rodando como App
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+    // Função auxiliar para mostrar os botões
+    const mostrarBotoesInstalacao = () => {
+        const btnPro = document.getElementById('install-alert-pro');
+        const btnCli = document.getElementById('install-alert-cli'); // Novo ID do cliente
+        
+        if(btnPro) btnPro.style.display = 'block';
+        if(btnCli) btnCli.style.display = 'block';
+    };
+
+    // Se NÃO estiver instalado, mostra os botões imediatamente (Fallback)
+    if (!isStandalone) {
+        mostrarBotoesInstalacao();
+    }
+
+    // Se o Chrome disparar o evento nativo (Melhor cenário), guardamos e garantimos que os botões apareçam
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e; 
+        mostrarBotoesInstalacao();
+        console.log("Evento de instalação capturado e botões ativados!");
+    });
+
+    // 3. POPULAR MENU DO RADAR
+    const elRadar = document.getElementById('radar-grupo');
+    if(elRadar) {
+        const grupos = Object.keys(TAXONOMIA);
+        elRadar.innerHTML = '<option value="">1. Área...</option>';
+        grupos.forEach(g => elRadar.innerHTML += `<option value="${g}">${g}</option>`);
+    }
+
+   // 4. TRATAMENTO DE LINK EXCLUSIVO (Versão Limpa para Banco Novo)
+    const params = new URLSearchParams(window.location.search);
+    const zapIndicado = params.get('indicar');
+    const nomeIndicado = params.get('nome');
+    const catIndicada = params.get('cat');   // Especialidade (ex: Mecânico)
+    const grupoIndicado = params.get('grupo'); // Categoria (ex: Automotiva)
+
+    if (zapIndicado && nomeIndicado) {
+        goToScreen('cliente');
+        toggleClientView('novo');
+        
+        // Se veio o grupo e a categoria, preenche direto sem adivinhação
+        if(grupoIndicado && catIndicada) {
+            const elGrupo = document.getElementById('req-grupo');
+            const elCat = document.getElementById('req-cat');
+            
+            // 1. Seleciona o Grupo
+            elGrupo.value = grupoIndicado;
+            
+            // 2. Carrega as especialidades desse grupo
+            atualizarSubCategorias('req', catIndicada);
+            
+            // 3. Trava visualmente
+            elGrupo.style.pointerEvents = 'none'; elGrupo.style.background = '#e9ecef';
+            elCat.style.pointerEvents = 'none'; elCat.style.background = '#e9ecef';
+        }
+        
+        const areaEx = document.getElementById('area-exclusividade');
+        areaEx.style.display = 'block';
+        document.getElementById('lbl-nome-indicado').innerText = nomeIndicado;
+        document.getElementById('chk-publico-apos-prazo').checked = true;
+
+        sessionStorage.setItem('targetZap', zapIndicado);
+        alert(`🎁 Olá! Você está na área exclusiva de ${nomeIndicado}.`);
+    }
+    // 5. TRATAMENTO DE KITS (Configuração Automática)
+    const kitUrl = params.get('kit');
+    if (kitUrl) {
+        const btnConfirm = confirm("Deseja carregar as configurações deste perfil profissional agora?");
+        if (btnConfirm) {
+            fetch(kitUrl)
+            .then(response => { if(!response.ok) throw new Error("Arquivo não encontrado"); return response.json(); })
+            .then(data => {
+                const usuarioEraPro = state.isPremium;
+                state = { ...state, ...data };
+                state.isPremium = usuarioEraPro;
+                saveData(); 
+                alert("✅ Perfil Profissional Carregado com Sucesso!");
+                window.history.replaceState({}, document.title, window.location.pathname);
+                location.reload(); 
+            })
+            .catch(err => { alert("Erro ao carregar kit: " + err.message); });
+        }
+    }
+
+    // 6. AUTO-UPDATE FEED
+    setInterval(() => {
+        const screenPrestador = document.getElementById('screen-prestador');
+        const tabOpp = document.getElementById('tab-oportunidades');
+        if (screenPrestador.style.display === 'block' && tabOpp.classList.contains('active')) {
+            console.log("🔄 Auto-atualizando feed...");
+            renderOportunidades();
+        }
+    }, 60000); // Ajustado para 60 segundos
+};
+
+ 
+const APP_VERSION = "9.5 - Conectado";
+function getCardPagamentoHTML() {
+    const p = configPagamentoTemp;
+    let htmlExtra = '';
+    
+    if(p.tipo === 'parcelado') {
+        htmlExtra = `
+        <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+            <span class="label">Qtd Parcelas:</span>
+            <input type="number" class="input" style="width:60px" value="${p.parcelas}" onchange="configPagamentoTemp.parcelas=parseInt(this.value); renderCarrinho()">
+            <span style="font-size:0.8rem; color:#666;">Mensais</span>
+        </div>`;
+    }
+
+    return `
+    <div class="card" style="border-left: 5px solid #8e44ad; background:#fbfaff;">
+        <div class="card-title">💳 Condições de Pagamento</div>
+        <div style="font-size:0.8rem; color:#666; margin-bottom:10px;">Defina como o cliente pagará este serviço.</div>
+        
+        <select class="input" onchange="configPagamentoTemp.tipo=this.value; renderCarrinho()">
+            <option value="vista" ${p.tipo==='vista'?'selected':''}>À Vista (100% no Final)</option>
+            <option value="antecipado" ${p.tipo==='antecipado'?'selected':''}>Antecipado (100% no Início)</option>
+            <option value="sinal" ${p.tipo==='sinal'?'selected':''}>50% Entrada + 50% Final</option>
+            <option value="parcelado" ${p.tipo==='parcelado'?'selected':''}>Parcelado (Cartão/Boleto)</option>
+            <option value="cronograma" ${p.tipo==='cronograma'?'selected':''}>Cronograma Físico-Financeiro</option>
+        </select>
+        ${htmlExtra}
+    </div>`;
+}
+// --- NOVA FUNÇÃO: CONFIRMAR AGENDAMENTO NO ZAP ---
+function confirmarAgendamentoZap(id) {
+    const item = state.historico.find(h => h.id === id);
+    if (!item) return;
+
+    // Formata a data para ficar bonita (Dia/Mês/Ano)
+    const dataPartes = item.dataAgendamento.split('-'); // O input date salva YYYY-MM-DD
+    const dataFormatada = `${dataPartes[2]}/${dataPartes[1]}/${dataPartes[0]}`;
+
+    const texto = `Olá ${item.cliente}! 👋\n\nPassando para confirmar nosso agendamento de *${item.titulo}* para o dia *${dataFormatada}*.\n\nTudo certo?`;
+
+    // Abre o WhatsApp para escolher o contato (já que o histórico nem sempre tem o telefone salvo)
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
+}
+// --- FUNÇÕES DE HISTÓRICO COMPLETO ---
+function abrirHistoricoCompleto() {
+    renderHistoricoCompleto();
+    document.getElementById('modal-historico-full').style.display = 'flex';
+}
+
+function renderHistoricoCompleto(filtro = "") {
+    const div = document.getElementById('lista-historico-full');
+    div.innerHTML = "";
+    
+    // Pega TODOS os itens e inverte (mais novos primeiro)
+    const lista = [...state.historico].reverse();
+    
+    // Filtro de busca
+    const filtrados = lista.filter(h => 
+        h.cliente.toLowerCase().includes(filtro.toLowerCase()) || 
+        h.titulo.toLowerCase().includes(filtro.toLowerCase())
+    );
+
+    if(filtrados.length === 0) {
+        div.innerHTML = "<div style='text-align:center; color:#999; margin-top:20px;'>Nenhum registro encontrado.</div>";
+        return;
+    }
+
+    filtrados.forEach(h => {
+        const dataF = new Date(h.data).toLocaleDateString('pt-BR');
+        const valorF = h.valor.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+        
+        // Status Visual
+        let statusCor = "#95a5a6"; // Cinza (Pendente)
+        let statusIcon = "⏳";
+        if(h.status === 'FECHADO') { statusCor = "#27ae60"; statusIcon = "✅"; }
+        if(h.status === 'PERDIDO') { statusCor = "#c0392b"; statusIcon = "❌"; }
+
+        div.innerHTML += `
+        <div style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border-left:5px solid ${statusCor}; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                <strong style="color:var(--primary)">${h.cliente}</strong>
+                <span style="font-size:0.8rem; color:#666;">${dataF}</span>
+            </div>
+            <div style="font-size:0.9rem; color:#555; margin-bottom:8px;">${h.titulo}</div>
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #eee; padding-top:8px;">
+                <div style="font-weight:bold; color:var(--success);">${valorF}</div>
+                <div style="cursor:pointer; font-size:0.8rem; background:#f4f6f7; padding:4px 8px; border-radius:15px;" onclick="toggleStatusHist(${h.id}); renderHistoricoCompleto('${filtro}')">
+                    ${statusIcon} ${h.status}
+                </div>
+            </div>
+        </div>`;
+    });
+}
+
+function filtrarHistorico(texto) {
+    renderHistoricoCompleto(texto);
+}
+
+    function installApp() {
+        // Verifica se é iOS
+        const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+        
+        if (isIos) {
+            // No iPhone, sempre mostramos o modal de instruções manual
+            document.getElementById('modal-ios-install').style.display = 'block';
+        } 
+        else if (deferredPrompt) {
+            // Se o navegador "deixou" instalar automaticamente (Android/PC com critérios PWA ok)
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('Usuário aceitou instalar');
+                    // Esconde os dois botões
+                    if(document.getElementById('install-alert-pro')) document.getElementById('install-alert-pro').style.display = 'none';
+                    if(document.getElementById('install-alert-cli')) document.getElementById('install-alert-cli').style.display = 'none';
+                }
+                deferredPrompt = null;
+            });
+        } 
+        else {
+            // FALLBACK: Se o botão apareceu mas o navegador não suporta install automático (ex: Firefox, ou PWA incompleto)
+            alert("📲 Para instalar:\n\n1. Toque nos 3 pontinhos do navegador (⋮)\n2. Selecione 'Adicionar à Tela Inicial' ou 'Instalar Aplicativo'.");
+        }
+    }
+    // --- NOVA FUNÇÃO: MESCLAR KITS DO RADAR ---
+async function importarKitsDoRadar() {
+    if (!state.radar || state.radar.length === 0) {
+        alert("⚠️ Seu Radar está vazio. Adicione áreas primeiro.");
+        return;
+    }
+
+    if (!confirm(`Deseja buscar e importar serviços para as ${state.radar.length} áreas do seu Radar?\n\nIsso adicionará novos itens ao seu catálogo sem apagar os atuais.`)) {
+        return;
+    }
+
+    const btn = event.currentTarget; // Pega o botão clicado
+    const textoOriginal = btn.innerText;
+    btn.innerText = "⏳ Buscando Kits...";
+    btn.disabled = true;
+
+    let importados = 0;
+    let erros = 0;
+
+    // Percorre cada área do radar
+    for (const area of state.radar) {
+        // Gera o nome do arquivo (slug) igual ao da função original
+        let slug = area.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        slug = slug.replace(/ /g, "_").replace(/[^a-z0-9_]/g, "");
+        const urlKit = `kits/${slug}.json`;
+
+        try {
+            const response = await fetch(urlKit);
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Verifica se o kit tem catálogo
+                if (data.catalogo && Array.isArray(data.catalogo)) {
+                    data.catalogo.forEach(novoServico => {
+                        // Verifica duplicidade pelo nome para não poluir
+                        const existe = state.catalogo.some(s => s.nome === novoServico.nome);
+                        
+                        if (!existe) {
+                            // Gera novo ID para evitar conflito
+                            novoServico.id = Date.now() + Math.floor(Math.random() * 1000);
+                            state.catalogo.push(novoServico);
+                            importados++;
+                        }
+                    });
+                }
+            } else {
+                console.log(`Kit não encontrado para: ${area}`);
+                erros++; // Conta como erro silencioso (kit não existe)
+            }
+        } catch (e) {
+            console.error(e);
+            erros++;
+        }
+    }
+
+    // Finalização
+    saveData();
+    renderAll();
+    
+    btn.innerText = textoOriginal;
+    btn.disabled = false;
+
+    if (importados > 0) {
+        alert(`✅ Sucesso! ${importados} novos serviços foram adicionados ao seu catálogo.`);
+        nav('catalogo'); // Leva o usuário para ver os novos serviços
+    } else {
+        alert("⚠️ Nenhum serviço novo encontrado nos kits das áreas do seu Radar.");
+    }
+}
+
+	function addRadar() {
+        const cat = document.getElementById('radar-cat').value;
+        if(!cat) return;
+        
+        if(!state.radar) state.radar = [];
+        if(state.radar.includes(cat)) { alert("Já está no radar!"); return; }
+        if(state.radar.length >= 2 && !state.isPremium) { alert("Limite Grátis: 2 áreas no Radar. Vire PRO!"); return; }
+
+        state.radar.push(cat);
+        saveData();
+        renderRadarTags();
+        document.getElementById('radar-cat').value = ""; // Limpa seleção
+    }
+
+    function rmRadar(index) {
+        state.radar.splice(index, 1);
+        saveData();
+        renderRadarTags();
+    }
+
+    function renderRadarTags() {
+        const div = document.getElementById('lista-radar');
+        if(!div) return;
+        div.innerHTML = "";
+        
+        if(!state.radar) state.radar = [];
+        
+        state.radar.forEach((r, i) => {
+            div.innerHTML += `<div class="chip">${r} <span class="chip-close" onclick="rmRadar(${i})">&times;</span></div>`;
+        });
+    }
+    
+    // Função para iniciar os menus (Popula apenas o 1º nível: Grupos)
+    function popularCategorias() {
+        const grupos = Object.keys(TAXONOMIA);
+        
+        // --- CORREÇÃO AQUI ---
+        // Adicionamos 'radar-grupo' na lista para garantir que ele carregue as opções
+        const selectsGrupo = ['req-grupo', 'cfg-grupo', 'radar-grupo'];
+        // ---------------------
+
+        selectsGrupo.forEach(id => {
+            const el = document.getElementById(id);
+            if(!el) return;
+            
+            // Texto padrão do primeiro option
+            let textoPadrao = "Selecione a Área...";
+            if(id === 'radar-grupo') textoPadrao = "1. Área..."; // Texto mais curto para o radar
+
+            el.innerHTML = `<option value="">${textoPadrao}</option>`;
+            grupos.forEach(g => el.innerHTML += `<option value="${g}">${g}</option>`);
+        });
+    }
+
+
+     // Função que roda quando o usuário escolhe o Grupo (Popula o 2º nível)
+    function atualizarSubCategorias(prefixo, valorSalvo = null) {
+        const grupo = document.getElementById(prefixo + '-grupo').value;
+        
+        // --- CORREÇÃO AQUI ---
+        // Define dinamicamente o ID do segundo select baseando-se no prefixo
+        let sufixo = '-specialty'; // Padrão para 'cfg' e 'cad'
+        
+        // Se for Requisição (Cliente) ou Radar, o sufixo do ID é '-cat'
+        if (prefixo === 'req' || prefixo === 'radar') {
+            sufixo = '-cat';
+        }
+
+        const selectSub = document.getElementById(prefixo + sufixo);
+        // ---------------------
+        
+        // Proteção caso o elemento não exista na tela
+        if (!selectSub) return;
+
+        selectSub.innerHTML = '<option value="">Agora escolha o serviço...</option>';
+        
+        if (grupo && TAXONOMIA[grupo]) {
+            TAXONOMIA[grupo].sort().forEach(servico => {
+                selectSub.innerHTML += `<option value="${servico}">${servico}</option>`;
+            });
+            selectSub.disabled = false;
+        } else {
+            selectSub.disabled = true;
+        }
+
+        // Se tivermos um valor salvo (usado ao carregar dados), seleciona ele
+        if (valorSalvo) {
+            selectSub.value = valorSalvo;
+        }
+    }
+
+
+    // Função auxiliar para descobrir o grupo de um serviço salvo (Engenharia reversa)
+    function encontrarGrupoPorServico(servico) {
+        for (let grupo in TAXONOMIA) {
+            if (TAXONOMIA[grupo].includes(servico)) return grupo;
+        }
+        return "";
+    }
+    
+    function goToScreen(screen) {
+        // Esconde todas as telas
+        document.querySelectorAll('.app-screen').forEach(el => {
+            el.classList.remove('active');
+            el.style.display = 'none';
+        });
+        
+        const target = document.getElementById('screen-'+screen);
+        
+        // CORREÇÃO: Se for 'welcome', usa FLEX. Se for outras, usa BLOCK.
+        if (screen === 'welcome') {
+            target.style.display = 'flex';
+        } else {
+            target.style.display = 'block';
+        }
+        
+        // Pequeno delay para animação CSS funcionar
+        setTimeout(() => target.classList.add('active'), 10);
+
+        if(screen === 'prestador') {
+            renderOportunidades();
+            nav('oportunidades');
+        }
+    }
+
+    // Função acionada pelo Select de Especialidade
+ // 2. Atualização da função do Kit (Para proteger seus dados)
+async function carregarKitPorEspecialidade() {
+    // TRUQUE: Salva o que está escrito nos campos antes de carregar o kit.
+    // Isso evita que o nome ou bio sumam quando a tela piscar.
+    salvarConfig(true); // true = modo silencioso (sem alerta)
+
+    const especialidade = document.getElementById('cfg-specialty').value;
+    const select = document.getElementById('cfg-specialty');
+    const textoOriginal = select.options[select.selectedIndex].text;
+    
+    select.options[select.selectedIndex].text = "🔄 Buscando...";
+
+    let slug = especialidade.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    slug = slug.replace(/ /g, "_").replace(/[^a-z0-9_]/g, "");
+    const urlKit = `kits/${slug}.json`; 
+
+    try {
+        const response = await fetch(urlKit);
+        if (!response.ok) throw new Error("Kit não encontrado."); 
+
+        const data = await response.json();
+        
+        if (confirm(`📦 Encontrei uma configuração pronta para "${especialidade}".\n\nDeseja aplicar os serviços e taxas sugeridos?`)) {
+            const usuarioEraPro = state.isPremium;
+            
+            // Mescla mantendo os dados pessoais que acabamos de salvar
+            // A ordem importa: state (seus dados) <- data (kit)
+            // Mas queremos preservar Nome/Pix se o kit trouxer vazio. 
+            // O ideal é mesclar só o catalogo/taxas, mas vamos usar a lógica padrão:
+            state = { ...state, ...data };
+            
+            state.isPremium = usuarioEraPro;
+            state.config.specialty = especialidade;
+            
+            saveData();
+            renderAll();
+            alert("✅ Configurações aplicadas!");
+        }
+    } catch (error) {
+        console.log("Nenhum kit automático.");
+    } finally {
+        select.options[select.selectedIndex].text = textoOriginal;
+        state.config.specialty = especialidade;
+        saveData();
+    }
+}
+
+	function sincronizarNota() {
+    // Usa o Zap salvo ou a chave pix (se for celular)
+    const zap = state.config.zap || state.config.pixKey; 
+    if (!zap || zap.replace(/\D/g,'').length < 10) return; 
+
+    const zapLimpo = zap.replace(/\D/g,'');
+
+    fetch(API_URL + "?acao=BUSCAR_PERFIL_PRO&zap=" + zapLimpo)
+    .then(res => res.json())
+    .then(data => {
+        
+        // 🚨 VERIFICAÇÃO DE BLOQUEIO
+        if (data.bloqueado) {
+            document.body.innerHTML = `
+                <div style="height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#c0392b; color:white; text-align:center; padding:20px;">
+                    <div style="font-size:4rem;">🚫</div>
+                    <h1>Conta Suspensa</h1>
+                    <p>O acesso a este número foi bloqueado.</p>
+                    <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px; margin-top:10px;">
+                        Motivo: <strong>${data.motivoBloqueio}</strong>
+                    </div>
+                    <button onclick="location.reload()" style="margin-top:20px; padding:10px 20px; border:none; background:white; color:#c0392b; font-weight:bold; border-radius:20px; cursor:pointer;">Tentar Novamente</button>
+                </div>
+            `;
+            throw new Error("Conta Bloqueada"); // Para a execução
+        }
+
+        // ✅ RECUPERAÇÃO DE ASSINATURA (Persistence)
+        if (data.isPremium === true && !state.isPremium) {
+            state.isPremium = true;
+            saveData();
+            updatePremiumUI();
+            alert("👑 Sua assinatura PRO foi restaurada com sucesso!");
+        }
+
+        // Atualiza nota
+        if(data.nota !== "Novo") {
+            state.config.nota = data.nota;
+            state.config.totalAvaliacoes = data.total;
+            saveData();
+        }
+    })
+    .catch(err => console.log("Erro sync:", err));
+}
+
+    // --- PRESTADOR NAV (CORRIGIDA) ---
+    function nav(tab) {
+        document.querySelectorAll('.container').forEach(e => e.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(e => e.classList.remove('active'));
+        
+        // Se for config (Ajustes)
+        if (tab === 'config') {
+            document.getElementById('tab-config').classList.add('active');
+            document.getElementById('footer-orcamento').style.display = 'none';
+            
+            // --- CORREÇÃO: Força renderizar o radar ao entrar na tela ---
+            renderRadarTags();
+            // ------------------------------------------------------------
+            
+            return; 
+        }
+
+        document.getElementById('tab-'+tab).classList.add('active');
+        const map = {'oportunidades':0, 'catalogo':1, 'carrinho':2, 'gestao':3};
+        
+        if (document.querySelectorAll('.nav-btn')[map[tab]]) {
+            document.querySelectorAll('.nav-btn')[map[tab]].classList.add('active');
+        }
+        document.getElementById('footer-orcamento').style.display = tab === 'carrinho' ? 'flex' : 'none';
+    }
+
+    // --- CLIENTE ---
+    function toggleClientView(view) {
+        document.getElementById('view-cli-novo').style.display = view === 'novo' ? 'block' : 'none';
+        document.getElementById('view-cli-lista').style.display = view === 'pedidos' ? 'block' : 'none';
+        const btnNovo = document.getElementById('btn-cli-novo');
+        const btnLista = document.getElementById('btn-cli-lista');
+        if(view === 'novo') {
+            btnNovo.style.background = 'white'; btnNovo.style.color = 'var(--cli-accent)';
+            btnLista.style.background = 'none'; btnLista.style.color = '#7f8c8d';
+        } else {
+            btnLista.style.background = 'white'; btnLista.style.color = 'var(--cli-accent)';
+            btnNovo.style.background = 'none'; btnNovo.style.color = '#7f8c8d';
+        }
+    }
+
+    function enviarDemanda() {
+    const cat = document.getElementById('req-cat').value;
+	const grupo = document.getElementById('req-grupo').value;
+    const tit = document.getElementById('req-titulo').value;
+    const desc = document.getElementById('req-desc').value;
+    const nome = document.getElementById('req-nome').value;
+    const cid = document.getElementById('req-cidade').value;
+    const zap = document.getElementById('req-zap').value;
+    
+    // 1. LIMPEZA E VALIDAÇÃO PRÉVIA 
+    
+    const zapLimpo = zap.replace(/\D/g, ''); 
+    
+    // Se tiver menos de 10 dígitos (ex: faltou DDD ou número), avisa agora
+    if (zapLimpo.length < 10) {
+        alert("⚠️ Telefone inválido! Digite o DDD + Número (Mínimo 10 dígitos).");
+        return; // Para aqui e não envia pro servidor
+    }
+    
+    // VALIDAÇÃO JURÍDICA
+    const termos = document.getElementById('chk-termos');
+    if(!termos || !termos.checked) {
+        alert("⚠️ Por favor, aceite os termos de responsabilidade para continuar.");
+        return;
+    }
+    
+    if(!cat || !tit || !nome || !zap) { alert("Preencha os campos obrigatórios!"); return; }
+
+    const btn = document.querySelector('#view-cli-novo .btn-success');
+    const txtOriginal = btn.innerText;
+    btn.innerText = "Enviando e Protegendo...";
+    btn.disabled = true;
+	const targetZap = sessionStorage.getItem('targetZap') || "";
+    // Checkbox opcional: Se marcado (true), vira público depois de 5 dias. 
+    // Se desmarcado (false), morre com o prestador (Exclusividade Total).
+    const permitirPublico = document.getElementById('chk-publico-apos-prazo').checked;
+
+    const payload = {
+        categoria: cat, 
+		grupo: grupo,
+        titulo: tit, 
+        descricao: desc,
+        nome: nome, 
+        cidade: cid, 
+        zap: zap,
+        targetZap: targetZap, 
+        permitirPublico: permitirPublico, 
+        dataCriacao: new Date().toISOString()
+    };
+
+    fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify(payload),
+        mode: "no-cors"
+    })
+    .then(() => {
+        alert(`✅ Sucesso! Sua demanda foi registrada.\n\nAviso: Nunca faça pagamentos antecipados sem conhecer o profissional.`);
+        document.getElementById('req-titulo').value = "";
+        document.getElementById('req-desc').value = "";
+        sessionStorage.removeItem('targetZap');
+        toggleClientView('pedidos');
+        const lista = document.getElementById('lista-pedidos-cliente');
+        lista.innerHTML = `
+            <div class="notification-card" style="border-left-color: orange;">
+                <div style="display:flex; justify-content:space-between;">
+                    <strong>${tit}</strong>
+                    <span class="badge">Enviado</span>
+                </div>
+                <div style="font-size:0.8rem; color:#666; margin-top:5px;">Aguarde orçamentos no WhatsApp</div>
+            </div>` + lista.innerHTML;
+            
+        btn.innerText = txtOriginal;
+        btn.disabled = false;
+    })
+    .catch(err => {
+        alert("Erro de conexão. Tente novamente.");
+        btn.innerText = txtOriginal;
+        btn.disabled = false;
+		// Mostra sugestão de instalação para o cliente
+if(typeof installApp === 'function') {
+     // Opcional: Criar um botão dinâmico na view-cli-lista ou apenas alertar
+     // Por hora, vamos manter simples. Se quiser, pode chamar o installApp() aqui se for Android.
+}
+    });
+}
+
+    // Variável global para guardar os orçamentos carregados e podermos clicar em "Ver Detalhes"
+    let cacheOrcamentosCliente = [];
+
+  function carregarMeusPedidos() {
+        const zap = document.getElementById('cli-login-zap').value;
+        if(!zap) { alert("Digite seu telefone!"); return; }
+        localStorage.setItem('cli_zap', zap);
+
+        const div = document.getElementById('lista-pedidos-cliente');
+        div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando...</div>";
+
+        fetch(API_URL + "?acao=BUSCAR_MEUS_PEDIDOS&zap=" + zap)
+        .then(res => res.json())
+        .then(demandas => {
+            div.innerHTML = "";
+            cacheOrcamentosCliente = demandas; // Salva no cache
+
+            if(demandas.length === 0) {
+                div.innerHTML = "<div style='text-align:center;'>Nenhum pedido encontrado.</div>";
+                return;
+            }
+
+            // ORDENAÇÃO: Abertas primeiro, Fechadas por último
+            demandas.sort((a, b) => {
+                if (a.status === 'ABERTA' && b.status === 'FECHADO') return -1;
+                if (a.status === 'FECHADO' && b.status === 'ABERTA') return 1;
+                return new Date(b.data) - new Date(a.data); // Desempate por data
+            });
+
+            demandas.forEach((d, indexDemanda) => {
+                // VERIFICA SE ESTÁ FECHADO
+                const isFechado = d.status === 'FECHADO';
+                
+                // --- CORREÇÃO PRINCIPAL: GARANTIR A CATEGORIA ---
+                // Tenta ler 'cat' (padrão do feed) ou 'categoria' (legado)
+                // Se não achar nenhum, usa string vazia para não gerar "undefined"
+                const categoriaCorrigida = d.cat || d.categoria || ""; 
+                // ------------------------------------------------
+                
+                // ESTILO DO CARD
+                const cardStyle = isFechado 
+                    ? "background:#f4f4f4; border-left:5px solid #7f8c8d; opacity:0.8; filter: grayscale(100%);" 
+                    : "border-left:5px solid var(--cli-accent);";
+
+                const badgeStatus = isFechado
+                    ? `<span class="badge" style="background:#7f8c8d; color:white;">🔒 CONCLUÍDO</span>`
+                    : `<span class="badge badge-green">ABERTA</span>`;
+
+                let htmlOrcamentos = "";
+                
+                if(d.orcamentos.length > 0) {
+                    d.orcamentos.forEach((o, indexOrc) => {
+                        const isVencedor = isFechado && d.vencedor && d.vencedor.toString() === o.zapPrestador.toString();
+                        
+                        // Estrelas
+                        let htmlEstrelas = (!o.estrelas || o.estrelas === "Novato") ? "🆕" : `⭐ ${o.estrelas}`;
+                        
+                        let estiloOrc = isVencedor 
+                            ? "background:#d4edda; border:2px solid #28a745;" 
+                            : `background:white; border:1px solid #ddd; border-left: 5px solid #ccc;`;
+
+                       // AQUI ESTAVA O ERRO: Chamada da função com d.categoria (que era undefined)
+                       // Agora usamos categoriaCorrigida
+                       htmlOrcamentos += `
+                       <div style="${estiloOrc} padding:12px; border-radius:8px; margin-top:8px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                               <div>
+                                   <div style="font-weight:bold; color:var(--primary)">
+                                       ${isVencedor ? '🏆 ' : '👷 '}${o.prestador}
+                                   </div>
+                                   <div style="font-size:0.75rem; color:#666; margin-top:2px;">
+                                       ${o.seloVolume || ''} • ${htmlEstrelas}
+                                   </div>
+                               </div>
+                               <div style="font-weight:bold; font-size:1.1rem; color:var(--success)">${o.valor}</div>
+                           </div>
+    
+                           <div style="display:flex; gap:10px; margin-top:10px;">
+                               <button class="btn btn-outline btn-sm" style="flex:1;" onclick="verDetalhesOrcamento(${indexDemanda}, ${indexOrc})">👁️ Ver</button>
+        
+                               <button class="btn btn-success btn-sm" style="flex:1;" onclick="abrirOpcoesContato('${o.prestador}', '${o.zapPrestador}', '${categoriaCorrigida}', '${d.titulo}')">
+                                   💬 Contato / Indicar
+                               </button>
+        
+                               ${!isFechado ? 
+                                 `<button class="btn btn-outline btn-sm" style="flex:1; border-color:#f1c40f; color:#d35400;" onclick="abrirModalAvaliacao('${d.id}', '${o.prestador}', '${o.zapPrestador}')">🏆 Contratar</button>` 
+                                 : ''}
+                           </div>
+                       </div>`;
+                    });
+                } else {
+                    htmlOrcamentos = "<div style='font-size:0.8rem; color:#999; margin-top:5px;'>Aguardando orçamentos...</div>";
+                }
+
+                div.innerHTML += `
+                <div class="notification-card" style="${cardStyle}">
+                    <div style="display:flex; justify-content:space-between;">
+                        <strong>${d.titulo}</strong>
+                        <div>${badgeStatus} <span class="badge">${d.orcamentos.length} Props</span></div>
+                    </div>
+                    <div style="font-size:0.8rem; color:#666; margin-top:5px;">Data: ${new Date(d.data).toLocaleDateString('pt-BR')}</div>
+                    
+                    ${isFechado && d.nota ? `<div style="font-size:0.8rem; color:#e67e22; margin-top:5px;">⭐ Sua avaliação: ${d.nota}</div>` : ''}
+
+                    <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+                    ${htmlOrcamentos}
+                </div>`;
+            });
+        });
+    }
+
+    // Função Nova: Popula e abre o modal
+  function verDetalhesOrcamento(idxDemanda, idxOrc) {
+    const dadosBrutos = cacheOrcamentosCliente[idxDemanda].orcamentos[idxOrc];
+    const div = document.getElementById('conteudo-detalhes');
+    
+    // Tratamento de compatibilidade (Versão antiga vs Nova)
+    let itens = [];
+    let taxas = 0;
+    
+    // Se for o formato novo (Objeto), extrai. Se for antigo (Array), usa direto.
+    if (dadosBrutos.itens && !Array.isArray(dadosBrutos.itens) && dadosBrutos.itens.lista) {
+        itens = dadosBrutos.itens.lista;
+        taxas = dadosBrutos.itens.taxas || 0;
+    } else {
+        itens = dadosBrutos.itens || []; // Legado
+    }
+
+    let html = `<div style="margin-bottom:15px; color:#666">Profissional: <strong>${dadosBrutos.prestador}</strong></div>`;
+    
+    // Agrupamento por Fases (Igual ao Zap)
+    const grupos = {};
+    itens.forEach(item => {
+        if(!grupos[item.ordem]) grupos[item.ordem] = [];
+        grupos[item.ordem].push(item);
+    });
+    const ordens = Object.keys(grupos).sort((a,b) => a-b);
+
+    if(ordens.length === 0) {
+        html += "<em>Sem detalhes disponíveis.</em>";
+    } else {
+        ordens.forEach(ordem => {
+            const listaDaFase = grupos[ordem];
+            const nomeFase = listaDaFase[0].cat ? listaDaFase[0].cat.toUpperCase() : "ETAPA";
+            
+            // Cabeçalho da Fase
+            html += `<div style="background:#eee; padding:5px 10px; font-weight:bold; margin-top:10px; border-radius:5px;">${ordem}. ${nomeFase}</div>`;
+            
+            let subTotal = 0;
+
+            listaDaFase.forEach(item => {
+                const custoItem = (item._fixoMO || 0) + (item._fixoMat || 0);
+                subTotal += custoItem;
+                
+                html += `<div style="padding:8px; border-bottom:1px solid #f1f1f1; display:flex; justify-content:space-between;">
+                            <div>
+                                <div style="font-weight:600">${item.nome}</div>
+                                <div style="font-size:0.75rem; color:#888">${item.qtd}x un.</div>
+                            </div>
+                            ${custoItem > 0 ? `<div>R$ ${custoItem.toFixed(2)}</div>` : ''}
+                            </div>`;
+                
+                // Lista Materiais (se houver custo neles)
+                if(item._fixoMat > 0 && item.mat) {
+                    item.mat.forEach(m => {
+                        html += `<div style="padding-left:15px; font-size:0.7rem; color:#666">• ${m.q * item.qtd}x ${m.n}</div>`;
+                    });
+                }
+            });
+            
+            // Subtotal da Fase
+            if(subTotal > 0) {
+                html += `<div style="text-align:right; font-size:0.8rem; font-weight:bold; color:#555; padding:5px;">Subtotal Fase: R$ ${subTotal.toFixed(2)}</div>`;
+            }
+        });
+    }
+
+    // Taxas Extras
+    if (taxas > 0) {
+        html += `<div style="margin-top:10px; padding:10px; border-top:2px dashed #ddd; display:flex; justify-content:space-between;">
+                    <span>🚚 Deslocamento/Taxas</span>
+                    <strong>R$ ${taxas.toFixed(2)}</strong>
+                    </div>`;
+    }
+
+    // --- NOVO: Exibir Condição de Pagamento ---
+    if (dadosBrutos.configPagamento) {
+        let textoPag = "A Combinar";
+        const p = dadosBrutos.configPagamento;
+        
+        if(p.tipo === 'vista') textoPag = "À Vista (100% no Final)";
+        else if(p.tipo === 'antecipado') textoPag = "Antecipado (100% no Início)";
+        else if(p.tipo === 'sinal') textoPag = "50% Sinal + 50% Entrega";
+        else if(p.tipo === 'parcelado') textoPag = `${p.parcelas}x Parcelado`;
+        else if(p.tipo === 'cronograma') textoPag = "Cronograma Físico-Financeiro";
+
+        html += `<div style="background:#f8f9fa; border:1px solid #ddd; padding:10px; border-radius:8px; margin-top:15px; text-align:center;">
+                    <div style="font-size:0.8rem; color:#666;">Forma de Pagamento</div>
+                    <div style="font-weight:bold; color:#2c3e50;">💳 ${textoPag}</div>
+                 </div>`;
+    }
+    // ------------------------------------------
+
+    // Total Final
+    html += `<div style="background:var(--success); color:white; padding:10px; text-align:center; font-size:1.2rem; font-weight:bold; border-radius:8px; margin-top:10px;">
+                Total: ${dadosBrutos.valor}
+                </div>`;
+
+    div.innerHTML = html;
+    document.getElementById('modal-detalhes').style.display = 'flex';
+}
+    // Auto-preencher se já tiver logado antes
+    const zapSalvo = localStorage.getItem('cli_zap');
+    if(zapSalvo) document.getElementById('cli-login-zap').value = zapSalvo;
+
+    // --- OPORTUNIDADES ---
+        // Variável para guardar os dados vindos da planilha
+    let listaDemandasCache = [];
+
+    function renderOportunidades() {
+        const div = document.getElementById('lista-oportunidades');
+        const badge = document.getElementById('badge-opp');
+        const area = state.config.specialty;
+        
+        div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando oportunidades...</div>";
+
+        // BUSCA REAL NA PLANILHA (GET)
+        fetch(API_URL) 
+        .then(response => response.json())
+        .then(data => {
+            listaDemandasCache = data; // Salva o que veio da nuvem
+            filtrarERenderizar(div, area, badge);
+        })
+        .catch(err => {
+            console.error(err);
+            // Se der erro, tenta mostrar o cache ou mensagem de erro
+            if(listaDemandasCache.length > 0) filtrarERenderizar(div, area, badge);
+            else div.innerHTML = "<div style='text-align:center; color:red'>Erro de conexão. Verifique a internet.</div>";
+        });
+    }
+
+    function filtrarERenderizar(divElement, areaEspecialidade, badgeElement) {
+        divElement.innerHTML = "";
+        let count = 0;
+        const hoje = new Date();
+
+        const meuZap = state.config.zap ? state.config.zap.replace(/\D/g, '') : "";
+
+        // LISTA DE INTERESSE: Especialidade Principal + Radar
+        const minhasAreas = [areaEspecialidade];
+        if(state.radar && state.radar.length > 0) {
+            minhasAreas.push(...state.radar);
+        }
+
+        listaDemandasCache.forEach(d => {
+            // 1. FILTRO DE CATEGORIA (Lógica "OU" - Principal ou Radar)
+            // Se for 'Geral', mostra tudo. Senão, verifica se a categoria da demanda está na lista do prestador.
+            if(areaEspecialidade !== 'Geral' && !minhasAreas.includes(d.cat)) return;
+
+            // --- LÓGICA DE EXCLUSIVIDADE & PRAZO (CORRIGIDA) ---
+            let isParaMim = false;
+            let styleCard = "";
+            let badgeExtra = "";
+            
+            // CONVERSÃO ROBUSTA PARA STRING
+            const targetRaw = String(d.targetZap || "");
+            const targetLimpo = targetRaw.replace(/\D/g, '');
+
+            if (targetLimpo.length > 5) {
+                // Verifica se o target sou EU (Texto vs Texto)
+                if ((meuZap.length > 5) && (meuZap.includes(targetLimpo) || targetLimpo.includes(meuZap))) {
+                    isParaMim = true;
+                    styleCard = "border-left: 5px solid #f1c40f; background: #fffdf0;"; 
+                    badgeExtra = '<span class="badge" style="background:#f1c40f; color:#fff; margin-left:5px;">🎁 SÓ PRA VOCÊ</span>';
+                } else {
+                    // É para outro -> Verifica regra de data e permissão pública
+                    const dataCriacao = new Date(d.dataCriacao || d.data);
+                    const diffDays = (hoje - dataCriacao) / (1000 * 60 * 60 * 24);
+                    
+                    if (diffDays < 5) return; // Menos de 5 dias? Esconde.
+                    if (!d.permitirPublico) return; // Não liberou? Esconde.
+                }
+            }
+            // ---------------------------------------
+
+            // Filtro de Data Geral (Se não for exclusivo pra mim, esconde velharia)
+            const dataRef = new Date(d.data || d.dataCriacao);
+            const diffGeral = (hoje - dataRef) / (1000 * 60 * 60 * 24);
+            if(!isParaMim && diffGeral > 10) return; 
+
+            count++;
+            
+            const dataFormatada = !isNaN(dataRef) ? dataRef.toLocaleDateString('pt-BR') : 'Hoje';
+            const tituloSafe = d.titulo.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            const styleAttr = styleCard ? `style="${styleCard}"` : "";
+
+            divElement.innerHTML += `
+            <div class="opp-card" ${styleAttr}>
+                <div style="display:flex; justify-content:space-between">
+                    <h4>${d.titulo}</h4>
+                    <div>
+                        <span class="badge badge-green">${d.cidade}</span>
+                        ${badgeExtra}
+                    </div>
+                </div>
+                <div class="opp-meta"> 📅 ${dataFormatada} • 👤 ${d.cliente} <span class="badge">${d.cat}</span></div>
+                <div class="opp-desc">${d.desc}</div>
+                <button class="btn btn-primary btn-sm" onclick="iniciarOrcamento('${d.id}', '${tituloSafe}', '${d.cliente}')">📝 Criar Orçamento</button>
+            </div>`;
+        });
+
+        if(count === 0) divElement.innerHTML = "<div style='text-align:center; padding:20px; color:#999'>Nenhuma oportunidade nas suas áreas (Radar).</div>";
+        
+        badgeElement.innerText = count;
+        badgeElement.style.display = count > 0 ? 'flex' : 'none';
+    }
+            
+
+            function iniciarOrcamento(idDemanda, titulo, nomeCliente) {
+        if(confirm(`Iniciar orçamento para: ${titulo}?`)) {
+            state.carrinho = [];
+            // SALVA O CONTEXTO DO ORÇAMENTO ATUAL
+            state.demandaAtiva = { id: idDemanda, cliente: nomeCliente, titulo: titulo };
+            saveData(); 
+            nav('catalogo');
+            alert("Carrinho limpo! Monte o orçamento e clique em Enviar no final.");
+        }
+    }
+
+        function enviarOrcamentoFinal() {
+        if(state.carrinho.length === 0) { alert("Carrinho vazio!"); return; }
+        
+        if(!state.demandaAtiva || !state.demandaAtiva.id) { 
+            alert("Erro: Nenhuma demanda selecionada. Volte ao Feed."); nav('oportunidades'); return; 
+        }
+        
+        // --- LÓGICA DO ZAP AUTOMÁTICO ---
+        let zapInput = "";
+        
+        // 1. Tenta pegar do cadastro
+        if (state.config.zap && state.config.zap.length >= 10) {
+            zapInput = state.config.zap.replace(/\D/g, ''); // Limpa caracteres
+        } 
+        
+        // 2. Se não tiver, pede ao usuário
+        if (!zapInput) {
+            let userZap = prompt("Qual seu WhatsApp para contato? (DDD+Número)", "");
+            if(userZap) zapInput = userZap.replace(/\D/g, '');
+        }
+
+        // 3. Validação final
+        if (!zapInput || zapInput.length < 10) {
+            alert("É necessário um WhatsApp válido para enviar o orçamento.");
+            return;
+        }
+        
+        // Adiciona 55 se precisar
+        if (zapInput.length >= 10 && zapInput.length <= 11) zapInput = "55" + zapInput;
+        // --------------------------------
+
+        const prestadorNome = state.config.pixName || "Profissional";
+        
+        // Feedback visual no botão
+        const btn = document.querySelector('#footer-orcamento .btn-action');
+        const txtOriginal = btn.innerText;
+        btn.innerText = "Enviando..."; btn.disabled = true;
+
+        // --- CÁLCULOS (MANTIDOS) ---
+        const itensCalculados = state.carrinho.map(item => {
+            let custoMOUnit = 0;
+            item.equipe.forEach(e => {
+                const p = state.profs.find(x => x.id === e.pid);
+                if(p) custoMOUnit += (p.valor * e.h);
+            });
+            const custoMatUnit = item.mat.reduce((acc, m) => acc + (m.q * (m.p||0)), 0);
+            return { ...item, _fixoMO: custoMOUnit * item.qtd, _fixoMat: custoMatUnit * item.qtd };
+        });
+
+        let valorTaxas = 0;
+        const usaMat = document.getElementById('chk-materiais').checked;
+        if (usaMat) {
+            valorTaxas = (parseFloat(state.config.taxaCompra)||0) + (parseFloat(state.config.taxaVisita)||0);
+        }
+
+        let totalParaHistorico = itensCalculados.reduce((acc, item) => acc + item._fixoMO + item._fixoMat, 0);
+        totalParaHistorico += valorTaxas;
+        const totalValStr = totalParaHistorico.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+        
+        // --- PAYLOAD ---
+        const payload = {
+            tipo: "NOVO_ORCAMENTO",
+            idDemanda: state.demandaAtiva.id,
+            prestadorNome: prestadorNome,
+            prestadorZap: zapInput, // USA O ZAP AUTOMÁTICO
+            prestadorBio: state.config.bio || "Não informada",
+			configPagamento: configPagamentoTemp,
+            valorTotal: totalValStr,
+            itens: { versao: 2, lista: itensCalculados, taxas: valorTaxas, usaMateriais: usaMat }
+        };
+
+        fetch(API_URL, { method: "POST", body: JSON.stringify(payload), mode: "no-cors" })
+        .then(() => {
+            if(!state.historico) state.historico = [];
+            
+            // Atualiza ou Cria Histórico Local
+            const idDemandaAtual = state.demandaAtiva.id;
+            const indexExistente = state.historico.findIndex(h => h.idDemanda === idDemandaAtual);
+
+            const dadosAtualizados = {
+                id: (indexExistente !== -1) ? state.historico[indexExistente].id : Date.now(),
+                idDemanda: idDemandaAtual,
+                cliente: state.demandaAtiva.cliente,
+                titulo: state.demandaAtiva.titulo,
+                valor: totalParaHistorico,
+                pagamento: configPagamentoTemp, 
+               
+                data: new Date().toISOString(),
+                status: 'PENDENTE',
+                itensBackup: JSON.parse(JSON.stringify(state.carrinho))
+            };
+
+            if (indexExistente !== -1) state.historico[indexExistente] = dadosAtualizados;
+            else state.historico.push(dadosAtualizados);
+            
+            // Limpeza e Navegação
+            state.demandaAtiva = null; 
+            state.carrinho = []; 
+            saveData(); 
+            renderCarrinho(); 
+            nav('gestao'); 
+            
+            // Abre o WhatsApp com a mensagem
+            const txt = `Olá! Segue orçamento atualizado: *${payload.valorTotal}*.\nPodemos fechar?`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
+
+            btn.innerText = txtOriginal; btn.disabled = false;
+        })
+        .catch(err => { 
+            console.error(err);
+            alert("Erro de conexão. Tente novamente.");
+            btn.innerText = txtOriginal; btn.disabled = false; 
+        });
+    }
+
+    // --- LÓGICA PRINCIPAL (CATALOGO/CARRINHO/GESTÃO) ---
+        function loadData() {
+        // --- CORREÇÃO CRÍTICA DE PERSISTÊNCIA ---
+        // O nome da chave aqui DEVE ser igual ao usado no saveData ('precobom')
+        const localData = localStorage.getItem('precobom'); 
+        // ----------------------------------------
+
+        if (localData) state = { ...state, ...JSON.parse(localData) };
+        
+        // Sincroniza nota do servidor
+        sincronizarNota(); 
+
+        // --- RECUPERAÇÃO INTELIGENTE DOS MENUS ---
+        // Garante que a especialidade principal salva apareça selecionada
+        if (state.config.specialty) {
+            const servicoSalvo = state.config.specialty;
+            const grupoDoServico = encontrarGrupoPorServico(servicoSalvo);
+            
+            const elGrupo = document.getElementById('cfg-grupo');
+            if(elGrupo && grupoDoServico) {
+                elGrupo.value = grupoDoServico;
+                atualizarSubCategorias('cfg', servicoSalvo);
+            }
+        }
+
+        // Preenche os inputs de texto com os dados do state recuperado
+        if(document.getElementById('cfg-taxa-compra')) document.getElementById('cfg-taxa-compra').value = state.config.taxaCompra;
+        if(document.getElementById('cfg-taxa-visita')) document.getElementById('cfg-taxa-visita').value = state.config.taxaVisita;
+        if(document.getElementById('cfg-pix-key')) document.getElementById('cfg-pix-key').value = state.config.pixKey || "";
+        if(document.getElementById('cfg-pix-name')) document.getElementById('cfg-pix-name').value = state.config.pixName || "";
+        if(document.getElementById('cfg-pix-city')) document.getElementById('cfg-pix-city').value = state.config.pixCity || "";
+        if(document.getElementById('cfg-zap')) document.getElementById('cfg-zap').value = state.config.zap || "";
+        if(document.getElementById('cfg-bio')) document.getElementById('cfg-bio').value = state.config.bio || "";
+		
+        // Atualiza a UI conforme o status Premium recuperado
+        updatePremiumUI();
+        
+        // Renderiza listas (Catálogo, Carrinho, Gestão)
+        renderAll();
+        
+        // --- RENDERIZA O RADAR RECUPERADO ---
+        renderRadarTags(); 
+    }
+
+
+    
+    function saveData() {
+        localStorage.setItem('precobom', JSON.stringify(state));
+        renderAll();
+    }
+    
+        function renderAll() { 
+        renderCatalogo(); 
+        renderCarrinho(); 
+        renderGestao(); 
+        
+        // --- CORREÇÃO: Incluímos o Radar aqui ---
+        renderRadarTags(); 
+        // ----------------------------------------
+    }
+
+
+    // --- CATÁLOGO ---
+        function renderCatalogo(filtro = "") {
+        const div = document.getElementById('lista-catalogo'); 
+        div.innerHTML = "";
+        
+        const grupos = {};
+        
+        state.catalogo.forEach(s => {
+            if (s.nome.toLowerCase().includes(filtro.toLowerCase())) {
+                if (!grupos[s.cat]) grupos[s.cat] = [];
+                grupos[s.cat].push(s);
+            }
+        });
+
+        for (let cat in grupos) {
+            div.innerHTML += `<div class="label" style="margin-top:15px; font-size:0.9rem; color:var(--primary)">${cat}</div>`;
+            grupos[cat].forEach(s => {
+                let custoMO = 0; let t = 0;
+                s.equipe.forEach(m => { const p = state.profs.find(x => x.id === m.pid); if(p) custoMO += (p.valor * m.h); t += m.h; });
+                const isInCart = state.carrinho.some(i => i.idRef === s.id);
+                const cardClass = isInCart ? "card selected" : "card";
+                const icon = isInCart ? "✓" : "+";
+                div.innerHTML += `
+                <div class="${cardClass}" onclick="toggleCart(${s.id})">
+                    <div class="card-header">
+                        <div><div class="card-title">${s.nome}</div><div class="card-subtitle">⏱️ ${t.toFixed(1)}h | MO: R$ ${custoMO.toFixed(0)}</div></div>
+                        <div class="check-icon">${icon}</div>
+                    </div>
+                </div>`;
+            });
+        }
+
+        // --- LÓGICA DO NOVO BOTÃO ---
+        const btnArea = document.getElementById('area-btn-orcamento');
+        if (state.carrinho.length > 0) {
+            btnArea.style.display = 'block';
+            // Atualiza o texto para mostrar quantos itens tem
+            btnArea.querySelector('button').innerHTML = `Próximo: Ver Orçamento (${state.carrinho.length}) ➡`;
+        } else {
+            btnArea.style.display = 'none';
+        }
+    }
+
+            function toggleCart(idRef) {
+        // --- BLOQUEIO DE CADASTRO ---
+        if (!checkCadastro()) return; 
+        // ----------------------------
+
+        const idx = state.carrinho.findIndex(i => i.idRef === idRef);
+        if (idx > -1) state.carrinho.splice(idx, 1);
+        else {
+            if(!checkPremiumLimit()) return;
+            const s = state.catalogo.find(s => s.id === idRef);
+            state.carrinho.push({
+                uid: Date.now(), idRef: s.id, nome: s.nome, cat: s.cat, ordem: s.ordem, qtd: 1,
+                equipe: JSON.parse(JSON.stringify(s.equipe)), mat: JSON.parse(JSON.stringify(s.mat))
+            });
+        }
+        saveData();
+    }
+
+
+    // --- CARRINHO ---
+    function renderCarrinho() {
+        const div = document.getElementById('lista-carrinho'); div.innerHTML = "";
+        const empty = document.getElementById('lista-carrinho-empty');
+        const actions = document.getElementById('acoes-carrinho');
+        
+        if (state.carrinho.length === 0) {
+            empty.style.display = 'block'; actions.style.display = 'none'; updateTotal(0); return;
+        }
+        empty.style.display = 'none'; actions.style.display = 'block';
+
+        let totalGeral = 0;
+        const itensOrdenados = state.carrinho.sort((a,b) => a.ordem - b.ordem);
+
+        itensOrdenados.forEach((item, idx) => {
+            let custoMO = 0;
+            item.equipe.forEach(e => { const p = state.profs.find(x => x.id === e.pid); if(p) custoMO += (p.valor * e.h); });
+            custoMO = custoMO * item.qtd;
+            totalGeral += custoMO;
+
+            let htmlMat = ''; let custoMat = 0;
+            if (document.getElementById('chk-materiais').checked) {
+                item.mat.forEach(m => {
+                    const totalM = m.q * item.qtd;
+                    const val = totalM * (m.p || 0);
+                    custoMat += val;
+                    htmlMat += `<div class="list-item-row" style="background:#fff3cd; font-size:0.8rem;"><span>${totalM}x ${m.n}</span>${m.p > 0 ? `<span>R$ ${val.toFixed(2)}</span>` : ''}</div>`;
+                });
+            }
+            totalGeral += custoMat;
+
+            div.innerHTML += `
+            <div class="card" style="border-left-color: #3498db;">
+                <div class="card-header">
+                    <div><div class="tag" style="background:#3498db; color:white; display:inline-block; margin-bottom:5px;">Ordem: ${item.ordem}</div><div class="card-title">${item.nome}</div></div>
+                    <div style="text-align:right">
+                        <div class="total-val" style="font-size:1rem;">R$ ${custoMO.toFixed(2)}</div>
+                        <div class="qty-control"><button class="qty-btn" onclick="mudaQtd(${idx}, -1)">-</button><span>${item.qtd}</span><button class="qty-btn" onclick="mudaQtd(${idx}, 1)">+</button></div>
+                    </div>
+                </div>
+                ${htmlMat}
+                <div class="row" style="margin-top:10px;"><button class="btn btn-outline btn-sm" onclick="editCartItem(${idx})">✏️ Editar</button><button class="btn btn-danger btn-sm" onclick="rmCartItem(${idx})">🗑️</button></div>
+            </div>`;
+        });
+		div.innerHTML += getCardPagamentoHTML();
+        updateTotal(totalGeral);
+    }
+    
+    function mudaQtd(idx, delta) {
+        state.carrinho[idx].qtd += delta;
+        if(state.carrinho[idx].qtd < 1) state.carrinho[idx].qtd = 1;
+        saveData();
+    }
+    function updateTotal(val) {
+        if (document.getElementById('chk-materiais').checked && state.carrinho.length > 0) {
+            val += (parseFloat(state.config.taxaCompra)||0) + (parseFloat(state.config.taxaVisita)||0);
+        }
+        document.getElementById('txt-total').innerText = val.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+        return val;
+    }
+
+    // --- GESTÃO & EDITOR ---
+  
+// 1. Nova função Salvar (Com alerta e modo silencioso)
+async function salvarConfig(silencioso = false) {
+    // 1. Captura os valores da tela
+    state.config.taxaCompra = parseFloat(document.getElementById('cfg-taxa-compra').value)||0;
+    state.config.taxaVisita = parseFloat(document.getElementById('cfg-taxa-visita').value)||0;
+    
+    const elPixKey = document.getElementById('cfg-pix-key');
+    const elPixName = document.getElementById('cfg-pix-name');
+    const elPixCity = document.getElementById('cfg-pix-city');
+    const elZap = document.getElementById('cfg-zap'); 
+    const elBio = document.getElementById('cfg-bio');
+    const elSpec = document.getElementById('cfg-specialty');
+
+    if(elPixKey) state.config.pixKey = elPixKey.value;
+    if(elPixName) state.config.pixName = elPixName.value;
+    if(elPixCity) state.config.pixCity = elPixCity.value;
+    if(elZap) state.config.zap = elZap.value;
+    if(elBio) state.config.bio = elBio.value;
+    
+    // Captura a especialidade
+    if(elSpec) {
+         state.config.specialty = elSpec.value;
+    }
+
+    saveData(); // Grava no celular (LocalStorage)
+
+    // Alerta visual (apenas se não for silencioso)
+    if (!silencioso) {
+        alert("✅ Dados salvos com sucesso!");
+        renderGestao(); 
+    }
+
+    // --- CORREÇÃO: ENVIO PARA SEGURANÇA SEM BLOQUEIO ---
+    try {
+        const analysis = await Security.analyzeRisk();
+        
+        // Se não tiver pix, usa "Não Informado" para não quebrar o registro
+        const pixParaRegistro = state.config.pixKey && state.config.pixKey.length > 1 
+                              ? state.config.pixKey 
+                              : "Não Informado";
+
+        const payloadSeguranca = {
+            tipo: "REGISTRO_DISPOSITIVO",
+            pix: pixParaRegistro,
+            deviceID: analysis.deviceID,
+            ip: analysis.ip,
+            geo: analysis.geo,
+            risco: analysis.risco || "BAIXO", // Usa o risco calculado pela Security V3
+            detalhes: analysis.detalhes || "Atualização de Configuração",
+            userAgent: analysis.userAgent
+        };
+        
+        // Envia para a planilha
+        fetch(API_URL, { method: "POST", body: JSON.stringify(payloadSeguranca), mode: "no-cors" });
+        
+    } catch (e) {
+        console.error("Erro ao registrar segurança:", e);
+    }
+    // ---------------------------------------------------
+}
+
+function renderGestao() {
+    // 1. CÁLCULOS (Mantidos da versão inteligente)
+    const mesAtual = new Date().getMonth();
+    const anoAtual = new Date().getFullYear();
+    
+    if(!state.historico) state.historico = [];
+    if(!state.financeiro) state.financeiro = { saldo: 0, movimentos: [] };
+    if(!state.config.metaMensal) state.config.metaMensal = 5000;
+
+    // A) Vendas do Mês
+    const vendasMes = state.historico
+        .filter(h => h.status === 'FECHADO' && new Date(h.data).getMonth() === mesAtual && new Date(h.data).getFullYear() === anoAtual)
+        .reduce((acc, h) => acc + h.valor, 0);
+
+    // B) Clientes e Nota
+    const clientesUnicos = new Set(state.historico.map(h => h.cliente)).size;
+    const nota = state.config.nota || "5.0";
+
+    // C) Saldo PRO
+    let saldoCaixa = 0;
+    let previsaoReceber = 0;
+    state.financeiro.movimentos.forEach(m => {
+        if(m.status === 'REALIZADO' || !m.status) {
+            if(m.tipo === 'ENTRADA') saldoCaixa += m.valor;
+            else saldoCaixa -= m.valor;
+        } else if (m.status === 'PENDENTE') {
+            if(m.tipo === 'ENTRADA') previsaoReceber += m.valor;
+        }
+    });
+
+    // D) Assertividade
+    const totalEnviados = state.historico.length;
+    const totalFechados = state.historico.filter(h => h.status === 'FECHADO').length;
+    const taxaConversao = totalEnviados > 0 ? Math.round((totalFechados / totalEnviados) * 100) : 0;
+
+    // --- CONTROLE DE VISIBILIDADE (O Pulo do Gato) ---
+    const panelFree = document.getElementById('panel-free');
+    const panelPro = document.getElementById('panel-pro');
+    
+    // Se não achar os painéis (caso raro de erro de HTML), para aqui para não travar
+    if(!panelFree || !panelPro) return; 
+
+    if (!state.isPremium) {
+        // MODO FREE: Mostra painel free, esconde pro
+        panelFree.style.display = 'block';
+        panelPro.style.display = 'none';
+        
+        // Atualiza Valores FREE
+        document.getElementById('free-kpi-vendas').innerText = vendasMes.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+        document.getElementById('free-kpi-clientes').innerText = "👥 " + clientesUnicos;
+        document.getElementById('free-kpi-nota').innerText = "⭐ " + nota;
+    } 
+    else {
+        // MODO PRO: Mostra painel pro, esconde free
+        panelFree.style.display = 'none';
+        panelPro.style.display = 'block';
+        
+        // Atualiza Valores PRO
+        document.getElementById('pro-saldo').innerText = saldoCaixa.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+        document.getElementById('pro-receber').innerText = previsaoReceber.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+        
+        // Meta
+        const meta = state.config.metaMensal;
+        const pct = Math.min((vendasMes/meta)*100, 100);
+        document.getElementById('lbl-meta').innerText = `🎯 Meta: ${meta.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}`;
+        document.getElementById('lbl-meta-pct').innerText = Math.round(pct) + "%";
+        document.getElementById('bar-meta').style.width = pct + "%";
+        
+        // Contadores
+        document.getElementById('pro-count-pendente').innerText = state.historico.filter(h=>h.status==='PENDENTE').length;
+        document.getElementById('pro-count-realizado').innerText = totalFechados;
+        
+        // Marketing
+        document.getElementById('pro-nota').innerText = "⭐ " + nota;
+        document.getElementById('pro-assertividade').innerText = taxaConversao + "%";
+        document.getElementById('pro-assertividade').style.color = taxaConversao > 30 ? '#27ae60' : '#e74c3c';
+
+        // Próximo Serviço (Lógica Avançada)
+        atualizarProximoServico();
+    }
+}
+
+// Função auxiliar separada para não poluir
+function atualizarProximoServico() {
+    const div = document.getElementById('pro-prox-servico');
+    if(!div) return;
+
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const proximos = state.historico
+        .filter(h => h.status === 'FECHADO' && h.dataAgendamento)
+        .map(h => {
+            const partes = h.dataAgendamento.split('-');
+            const data = new Date(partes[0], partes[1]-1, partes[2]);
+            return { ...h, dataObj: data };
+        })
+        .filter(h => h.dataObj >= hoje)
+        .sort((a,b) => a.dataObj - b.dataObj);
+        
+    const p = proximos.length > 0 ? proximos[0] : null;
+
+    if(p) {
+        const dias = Math.ceil((p.dataObj - hoje) / (1000 * 60 * 60 * 24));
+        const txtDia = dias === 0 ? "HOJE" : (dias === 1 ? "Amanhã" : `Em ${dias} dias`);
+        const corDia = dias === 0 ? "#e74c3c" : "#2980b9";
+        
+        div.innerHTML = `
+        <div style="background:#f4f6f7; padding:10px; border-radius:10px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-size:0.7rem; font-weight:bold; color:${corDia}; text-transform:uppercase;">${txtDia}</div>
+                <div style="font-weight:bold; color:#2c3e50;">${p.cliente}</div>
+                <div style="font-size:0.8rem; color:#555;">${p.titulo}</div>
+            </div>
+            <div style="font-size:1.5rem;">📲</div>
+        </div>`;
+    } else {
+        div.innerHTML = "<div style='color:#ccc; font-size:0.8rem;'>Agenda livre por enquanto.</div>";
+    }
+}
+
+
+
+function toggleStatusHist(id) {
+    const item = state.historico.find(h => h.id === id);
+    if(!item) return;
+
+    if(item.status === 'PENDENTE') {
+        const confirmar = confirm("Confirmar fechamento? Isso vai gerar o fluxo de caixa previsto.");
+        if(!confirmar) return;
+
+        // Pergunta a data base (Início do serviço ou Data da Venda)
+        let dataInput = prompt("📅 Data de Referência (Início/Venda)? (AAAA-MM-DD)", new Date().toISOString().split('T')[0]);
+        
+        // Validação da data
+        if (!dataInput || dataInput.length !== 10) {
+            alert("Data inválida. Usando data de hoje.");
+            dataInput = new Date().toISOString().split('T')[0];
+        }
+
+        // Converte string para objeto Date
+        const partes = dataInput.split('-');
+        const dataBase = new Date(partes[0], partes[1] - 1, partes[2]);
+
+        item.status = 'FECHADO';
+        item.dataAgendamento = dataInput; 
+        
+        // --- LÓGICA FINANCEIRA DE PARCELAS ---
+        const total = item.valor;
+        // Pega o pagamento salvo ou assume À vista
+        const condicoes = item.pagamento || { tipo: 'vista', parcelas: 1 }; 
+        
+        if(!state.financeiro) state.financeiro = { saldo: 0, movimentos: [] };
+
+        // Função auxiliar para lançar
+        const lancar = (desc, valor, diasParaVencer) => {
+            const dataVenc = new Date(dataBase); // Clona a data base
+            dataVenc.setDate(dataBase.getDate() + diasParaVencer);
+            
+            state.financeiro.movimentos.push({
+                id: Date.now() + Math.random(), // ID único para cada parcela
+                tipo: 'ENTRADA',
+                desc: `${item.cliente} - ${desc}`,
+                valor: valor,
+                data: dataVenc.toISOString(),
+                status: 'PENDENTE' // Entra como previsão (amarelo)
+            });
+        };
+
+        // GERAÇÃO DAS PARCELAS
+        if(condicoes.tipo === 'vista') {
+            lancar("Pagamento à Vista", total, 0); 
+        } 
+        else if (condicoes.tipo === 'antecipado') {
+             lancar("Pagamento Antecipado", total, 0); // Vence no dia
+        }
+        else if (condicoes.tipo === 'sinal') {
+            lancar("Sinal (50%)", total / 2, 0); // Vence hoje/inicio
+            lancar("Parcela Final (50%)", total / 2, 15); // Vence em 15 dias (exemplo)
+        }
+        else if (condicoes.tipo === 'parcelado') {
+            const qtd = condicoes.parcelas || 2; // Padrão 2 se falhar
+            const valorParc = total / qtd;
+            
+            for(let i=1; i<=qtd; i++) {
+                // Gera: Parcela 1/3 (30 dias), Parcela 2/3 (60 dias)...
+                lancar(`Parcela ${i}/${qtd} (${item.titulo})`, valorParc, i * 30);
+            }
+        }
+        else if (condicoes.tipo === 'cronograma') {
+            lancar("Cronograma a definir", total, 7);
+        }
+        
+        alert("✅ Venda Fechada! As previsões de recebimento foram lançadas no Caixa.");
+
+    } else if(item.status === 'FECHADO') {
+        if(confirm("Reabrir orçamento? (Nota: Os lançamentos financeiros terão que ser apagados manualmente no Caixa)")) {
+            item.status = 'PENDENTE';
+            item.dataAgendamento = null;
+        }
+    }
+    
+    saveData();
+    // Se o modal de histórico estiver aberto, renderiza de novo para atualizar ícone
+    if(document.getElementById('modal-historico-full').style.display === 'flex') {
+        renderHistoricoCompleto(); 
+    } else {
+        renderGestao();
+    }
+}
+function definirMeta() {
+    if(!state.isPremium) { simularCompraPremium(); return; }
+    
+    // Pega a meta atual ou usa 5000 como padrão
+    const atual = state.config.metaMensal || 5000;
+    
+    const nova = prompt("🎯 Qual sua Meta de Vendas Mensal? (R$)", atual);
+    if(nova) {
+        const valor = parseFloat(nova.replace(',','.').replace('R$',''));
+        if(!isNaN(valor) && valor > 0) {
+            state.config.metaMensal = valor;
+            saveData();
+            renderGestao(); // Atualiza a tela na hora
+        }
+    }
+}
+    function addProfissionalPrompt(){const n=prompt("Cargo:");if(n){state.profs.push({id:"c"+Date.now(),nome:n,valor:0});saveData();}}
+    function updateProf(i,f,v){state.profs[i][f]=f==='valor'?parseFloat(v):v;saveData();}
+    function rmProf(i){if(confirm("Remover?")){state.profs.splice(i,1);saveData();}}
+    function rmServico(i){if(confirm("Apagar?")){state.catalogo.splice(i,1);saveData();}}
+    // --- FUNÇÃO DUPLICAR SERVIÇO ---
+    function duplicarServico(i) {if(!confirm(`Deseja criar uma cópia de "${state.catalogo[i].nome}"?`)) return;
+    // 1. Clona o objeto (Deep copy para não alterar o original)
+    const original = state.catalogo[i];
+    const copia = JSON.parse(JSON.stringify(original));
+    // 2. Ajusta dados únicos
+    copia.id = Date.now(); // Gera novo ID
+    copia.nome = original.nome + " (Cópia)"; // Adiciona sufixo
+    // 3. Salva e Atualiza
+    state.catalogo.push(copia);
+    saveData();}
+	function rmCartItem(i){state.carrinho.splice(i,1);saveData();}
+    function limparCarrinho(){if(confirm("Limpar?")){state.carrinho=[];saveData();}}
+    function resetFactory(){if(confirm("Resetar?")){localStorage.clear();location.reload();}}
+    
+    // EDITOR MODAL
+    let tempItem=null, editCtx='', editIdx=-1;
+            function abrirEditorServico(i=null){ 
+        // --- BLOQUEIO DE CADASTRO ---
+        if (!checkCadastro()) return; 
+        // ----------------------------
+
+        
+
+ editCtx='catalogo'; editIdx=i; tempItem=i===null?{id:Date.now(),nome:"Novo",cat:"Geral",ordem:1,equipe:[],mat:[]}:JSON.parse(JSON.stringify(state.catalogo[i])); renderModalBody(); document.getElementById('modal-editor').style.display='flex'; }
+    function editCartItem(i){ editCtx='carrinho'; editIdx=i; tempItem=JSON.parse(JSON.stringify(state.carrinho[i])); renderModalBody(); document.getElementById('modal-editor').style.display='flex'; }
+        function renderModalBody(){
+        const b = document.getElementById('modal-body');
+        const opts = state.profs.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+        
+        b.innerHTML = `
+        <div class="form-group"><span class="label">Nome do Serviço</span><input type="text" class="input" value="${tempItem.nome}" onchange="tempItem.nome=this.value"></div>
+        
+        <div class="row">
+            <div class="col"><span class="label">Categoria</span><input type="text" class="input" value="${tempItem.cat||'Geral'}" onchange="tempItem.cat=this.value"></div>
+            <div class="col"><span class="label">Ordem</span><input type="number" class="input" value="${tempItem.ordem}" onchange="tempItem.ordem=parseInt(this.value)"></div>
+        </div>
+        
+        <div style="margin-top:10px; border-top:1px solid #ddd; padding-top:5px;">
+            <span class="label">Equipe Necessária</span>
+            <div id="mod-eq"></div>
+            <div class="row"><select id="s-p" class="input">${opts}</select><button class="btn btn-accent btn-sm" style="width:auto" onclick="addEq()">+</button></div>
+        </div>
+        
+        <div style="margin-top:10px; border-top:1px solid #ddd; padding-top:5px;">
+            <span class="label">Materiais Padrão</span>
+            <div id="mod-mt"></div>
+            <div class="row"><input id="i-m" class="input" placeholder="Ex: Cimento (saco)"><button class="btn btn-accent btn-sm" style="width:auto" onclick="addMt()">+</button></div>
+        </div>
+
+        ${(editCtx === 'catalogo' && editIdx !== null) ? `
+        <div style="margin-top:20px; padding-top:15px; border-top:1px dashed #ccc; display:flex; gap:10px;">
+            <button class="btn btn-outline" onclick="acaoDuplicarNoModal()">📑 Duplicar</button>
+            <button class="btn btn-danger" onclick="acaoExcluirNoModal()">🗑️ Excluir</button>
+        </div>` : ''}
+        `;
+
+        renderModLists();
+        
+        document.getElementById('btn-modal-save').onclick = () => {
+            if(editCtx === 'catalogo'){
+                if(editIdx === null) state.catalogo.push(tempItem);
+                else state.catalogo[editIdx] = tempItem;
+            } else {
+                state.carrinho[editIdx] = tempItem;
+            }
+            saveData(); 
+            document.getElementById('modal-editor').style.display = 'none';
+        };
+    }
+
+        function renderModLists(){
+        // Renderiza Equipe (Mantido igual, mas se quiser seta aqui também, basta replicar a lógica)
+        document.getElementById('mod-eq').innerHTML = tempItem.equipe.map((e,i) => {
+            const p = state.profs.find(x => x.id === e.pid);
+            return `<div class="list-item-row">
+                        <span>${p?.nome}</span>
+                        <span>
+                            <input type="number" value="${e.h}" style="width:50px" onchange="tempItem.equipe[${i}].h=parseFloat(this.value)">h 
+                            <span style="color:red; margin-left:5px; cursor:pointer;" onclick="tempItem.equipe.splice(${i},1);renderModLists()">x</span>
+                        </span>
+                    </div>`;
+        }).join('');
+
+        // Renderiza Materiais (COM SETA PARA SUBIR)
+        document.getElementById('mod-mt').innerHTML = tempItem.mat.map((m, i) => {
+            // Só mostra a seta se NÃO for o primeiro item da lista
+            const visibility = i === 0 ? 'hidden' : 'visible'; 
+            
+            return `
+            <div class="list-item-row" style="display:flex; align-items:center;">
+                <button onclick="moverMaterialCima(${i})" style="visibility:${visibility}; border:none; background:none; cursor:pointer; font-size:1.1rem; padding:0 5px 0 0; margin-right:5px;">
+                    ⬆️
+                </button>
+
+                <span style="flex:1; font-weight:500;">${m.n}</span>
+                
+                <span style="display:flex; align-items:center; gap:3px;">
+                    <span style="font-size:0.8rem">Q:</span>
+                    <input type="number" value="${m.q}" style="width:40px; padding:2px;" onchange="tempItem.mat[${i}].q=parseFloat(this.value)">
+                    <span style="font-size:0.8rem">R$:</span>
+                    <input type="number" value="${m.p}" style="width:50px; padding:2px;" onchange="tempItem.mat[${i}].p=parseFloat(this.value)">
+                    <span style="color:red; font-weight:bold; margin-left:5px; cursor:pointer; padding:5px;" onclick="tempItem.mat.splice(${i},1);renderModLists()">x</span>
+                </span>
+            </div>`;
+        }).join('');
+    }
+
+    function addEq(){const pid=document.getElementById('s-p').value;if(pid){tempItem.equipe.push({pid:pid,h:1});renderModLists();}}
+    function addMt(){const n=document.getElementById('i-m').value;if(n){tempItem.mat.push({n:n,q:1,p:0});document.getElementById('i-m').value='';renderModLists();}}
+
+    // --- FREEMIUM ---
+   function simularCompraPremium() {
+    if (!state.config.zap || state.config.zap.length < 10) {
+        alert("⚠️ Cadastre seu WhatsApp em 'Ajustes' antes de assinar.");
+        nav('config');
+        return;
+    }
+
+    if(confirm("Confirma a assinatura PRO Vitalícia?")) { 
+        
+        // Feedback Visual
+        const btn = document.querySelector('#banner-premium button');
+        if(btn) { btn.innerText = "Registrando..."; btn.disabled = true; }
+
+        // Envia para o servidor
+        const payload = {
+            tipo: "NOVA_ASSINATURA",
+            zap: state.config.zap,
+            nome: state.config.pixName || "Prestador",
+            valor: "99.90" // Valor simbólico ou real
+        };
+
+        fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify(payload),
+            mode: "no-cors"
+        })
+        .then(() => {
+            state.isPremium = true; 
+            saveData(); 
+            updatePremiumUI();
+            alert("💎 Parabéns! Você agora é PRO e seus dados estão seguros na nuvem.");
+        })
+        .catch(err => {
+            alert("Erro ao conectar, mas liberamos seu acesso temporariamente.");
+            state.isPremium = true; 
+            saveData(); 
+            updatePremiumUI();
+        });
+    } 
+}
+    function updatePremiumUI() {
+    // Agora esta função cuida APENAS do indicador no topo da tela (Cabeçalho)
+    // A visibilidade dos painéis e banners é controlada pelo renderGestao()
+    
+    const s = document.getElementById('header-status');
+    
+    if (state.isPremium) { 
+        if(s) { 
+            s.innerHTML = "💎 PRO Ativo"; 
+            s.style.color = "#f1c40f"; 
+            s.style.fontWeight = "bold";
+        }
+    } 
+    else { 
+        if(s) { 
+            s.innerHTML = "Versão Grátis"; 
+            s.style.color = "#ccc"; 
+            s.style.fontWeight = "normal";
+        }
+    }
+}
+
+
+    function toggleModelos(){const d=document.getElementById('area-modelos');d.style.display=d.style.display==='none'?'block':'none';d.innerHTML=state.modelos.map((m,i)=>`<div class="list-item-row"><strong>${m.n}</strong><button class="btn-sm btn-primary" onclick="if(confirm('Carregar?')){state.carrinho=JSON.parse(JSON.stringify(state.modelos[${i}].itens));saveData();}">Carregar</button><button onclick="state.modelos.splice(${i},1);saveData();toggleModelos();" style="color:red;border:none">x</button></div>`).join('');}
+    function exportarBackup(){if(!state.isPremium){alert("Recurso PRO 💎");nav('gestao');return;}const b=new Blob([JSON.stringify(state)],{type:"application/json"});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`backup.json`;a.click();}
+    function importarBackup(i){const f=new FileReader();f.onload=(e)=>{try{state=JSON.parse(e.target.result);saveData();alert("Restaurado!");location.reload();}catch(x){alert("Erro");}};f.readAsText(i.files[0]);}
+
+   // --- ZAP AVANÇADO (V9) ---
+// --- ZAP AVANÇADO (Corrigido com Forma de Pagamento) ---
+function gerarZap() {
+    const nomeCliente = prompt("Nome do Cliente:", "") || "Cliente";
+    const validade = 10;
+    const dataHoje = new Date().toLocaleDateString('pt-BR');
+    const usaMat = document.getElementById('chk-materiais').checked;
+    const especialidade = state.config.specialty ? state.config.specialty.toUpperCase() : "ORÇAMENTO";
+
+    let txt = `*ORÇAMENTO: ${especialidade}*\n`;
+    txt += `👤 Cliente: ${nomeCliente}\n`;
+    txt += `📅 ${dataHoje} (Validade: ${validade} dias)\n\n`;
+
+    let totalGeralMO = 0;
+    let totalGeralMat = 0;
+    let resumoEquipe = {}; 
+
+    // Agrupa por Ordem/Fase
+    const grupos = {};
+    state.carrinho.forEach(item => {
+        if(!grupos[item.ordem]) grupos[item.ordem] = [];
+        grupos[item.ordem].push(item);
+    });
+
+    const ordens = Object.keys(grupos).sort((a,b) => a-b);
+    if(ordens.length === 0) { alert("Carrinho vazio!"); return; }
+
+    ordens.forEach(ordem => {
+        const nomeFase = grupos[ordem][0].cat ? grupos[ordem][0].cat.toUpperCase() : "ETAPA";
+        txt += `🏗️ *${ordem}. ${nomeFase}*\n`;
+
+        let subFaseMO = 0;
+        let subFaseMat = 0;
+        let subFaseHoras = 0;
+
+        grupos[ordem].forEach(item => {
+            let itemHoras = 0;
+            let itemCustoMO = 0;
+
+            item.equipe.forEach(e => {
+                const prof = state.profs.find(p => p.id === e.pid);
+                if (prof) {
+                    const hTotal = e.h * item.qtd;
+                    itemHoras += hTotal;
+                    itemCustoMO += (prof.valor * hTotal);
+                    if (!resumoEquipe[prof.nome]) resumoEquipe[prof.nome] = 0;
+                    resumoEquipe[prof.nome] += hTotal;
+                }
+            });
+
+            let txtMateriais = "";
+            if (usaMat) {
+                item.mat.forEach(m => {
+                    const qTotal = m.q * item.qtd;
+                    const custoM = qTotal * (m.p || 0);
+                    subFaseMat += custoM;
+                    txtMateriais += `      • ${qTotal}x ${m.n}\n`;
+                });
+            }
+
+            subFaseMO += itemCustoMO;
+            subFaseHoras += itemHoras;
+
+            txt += `   ✅ ${item.nome} (${itemHoras.toFixed(1)}h)\n`;
+            if(txtMateriais) txt += txtMateriais;
+        });
+
+        const totalFase = subFaseMO + subFaseMat;
+        txt += `   🔹 *Subtotal Fase: R$ ${totalFase.toFixed(2)}*\n`;
+        txt += `     _(Tempo: ${subFaseHoras.toFixed(1)}h | MO: ${subFaseMO.toFixed(2)} | Mat: ${subFaseMat.toFixed(2)})_\n\n`;
+
+        totalGeralMO += subFaseMO;
+        totalGeralMat += subFaseMat;
+    });
+
+    // --- BLOCO NOVO: DETALHES TÉCNICOS ---
+    txt += `--------------------\n`;
+    txt += `📊 *RESUMO TÉCNICO*\n`;
+    txt += `👥 *Equipe Necessária:*\n`;
+    for (let cargo in resumoEquipe) {
+        txt += `   - ${cargo}: ${resumoEquipe[cargo].toFixed(1)}h\n`;
+    }
+
+    txt += `\n--------------------\n`;
+    txt += `💰 *RESUMO FINANCEIRO*\n`;
+    
+    if (usaMat && totalGeralMat > 0) txt += `📦 Total Materiais: R$ ${totalGeralMat.toFixed(2)}\n`;
+    txt += `🛠️ Total Mão de Obra: R$ ${totalGeralMO.toFixed(2)}\n`;
+
+    let taxasExtras = 0;
+    if (usaMat) {
+        taxasExtras = (parseFloat(state.config.taxaCompra)||0) + (parseFloat(state.config.taxaVisita)||0);
+        if (taxasExtras > 0) txt += `🚚 Gestão/Deslocamento: R$ ${taxasExtras.toFixed(2)}\n`;
+    }
+
+    const grandTotal = totalGeralMO + totalGeralMat + taxasExtras;
+    txt += `\n💵 *TOTAL FINAL: R$ ${grandTotal.toFixed(2)}*\n`;
+
+    // --- BLOCO NOVO: CONDIÇÃO DE PAGAMENTO ---
+    // Aqui está a mágica que faltava!
+    let textoPagamento = "À Combinar";
+    const p = configPagamentoTemp; // Pega a variável que criamos
+    
+    if(p.tipo === 'vista') textoPagamento = "À Vista (100% na Conclusão)";
+    else if(p.tipo === 'antecipado') textoPagamento = "Pagamento Antecipado (100%)";
+    else if(p.tipo === 'sinal') textoPagamento = "50% Entrada + 50% na Entrega";
+    else if(p.tipo === 'parcelado') textoPagamento = `Parcelado em ${p.parcelas}x no Cartão/Boleto`;
+    else if(p.tipo === 'cronograma') textoPagamento = "Conforme Cronograma Físico-Financeiro";
+
+    txt += `💳 *Forma de Pagamento:* ${textoPagamento}\n`;
+    txt += `--------------------\n`;
+    
+    if (state.config.pixKey) {
+        txt += `💠 *Chave Pix:*\n${state.config.pixKey}\n(${state.config.pixName})\n--------------------\n`;
+    }
+    
+    if (state.config.bio) {
+        txt += `📝 *Sobre o Profissional:*\n_${state.config.bio}_\n\n--------------------\n`;
+    }
+    
+    txt += `🔒 Obs: Orçamento sujeito a confirmação técnica.`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
+}
+    
+    function crc16ccitt(str) { let crc=0xFFFF; for(let i=0;i<str.length;i++){ let c=str.charCodeAt(i); crc^=(c<<8); for(let j=0;j<8;j++){ if(crc&0x8000)crc=(crc<<1)^0x1021; else crc=crc<<1; } } return (crc&0xFFFF).toString(16).toUpperCase().padStart(4,'0'); }
+    function generatePixPayload(key,name,city,amount,txid="***"){ if(!key)return null; name=name.substring(0,25).normalize("NFD").replace(/[\u0300-\u036f]/g,""); city=city.substring(0,15).normalize("NFD").replace(/[\u0300-\u036f]/g,""); amount=amount.toFixed(2); const p=['000201','26'+(18+key.length+4).toString().padStart(2,'0')+'0014BR.GOV.BCB.PIX'+'01'+key.length.toString().padStart(2,'0')+key,'52040000','5303986','54'+amount.length.toString().padStart(2,'0')+amount,'5802BR','59'+name.length.toString().padStart(2,'0')+name,'60'+city.length.toString().padStart(2,'0')+city,'62'+(4+txid.length+4).toString().padStart(2,'0')+'05'+txid.length.toString().padStart(2,'0')+txid]; let pl=p.join('')+'6304'; pl+=crc16ccitt(pl); return pl; }
+    function abrirModalPix(){ const t=updateTotal(0); if(t<=0){alert("Zerado");return;} if(!state.config.pixKey){document.getElementById('pix-alert').style.display='block';document.getElementById('pix-container').style.display='none';} else { document.getElementById('pix-alert').style.display='none';document.getElementById('pix-container').style.display='block'; const pl=generatePixPayload(state.config.pixKey,state.config.pixName||"User",state.config.pixCity||"BR",t); document.getElementById('txt-brcode').innerText=pl; document.getElementById('val-pix-display').innerText=t.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); document.getElementById('img-qr').src=`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(pl)}`; } document.getElementById('modal-pix').style.display='flex'; }
+    function copiarPix(){ navigator.clipboard.writeText(document.getElementById('txt-brcode').innerText).then(()=>alert("Copiado!")); }
+	function abrirModalAvaliacao(idDemanda, nomePrestador, zapPrestador) {
+    document.getElementById('aval-id-demanda').value = idDemanda;
+    document.getElementById('aval-prestador').innerText = nomePrestador;
+    document.getElementById('aval-zap-prestador').value = zapPrestador;
+    setStar(5); // Começa com 5
+    document.getElementById('modal-avaliacao').style.display = 'flex';
+}
+
+function setStar(n) {
+    document.getElementById('aval-nota').value = n;
+    const spans = document.querySelectorAll('#stars-container span');
+    spans.forEach((s, i) => {
+        s.style.opacity = i < n ? "1" : "0.3"; // Acende as estrelas até N
+    });
+}
+
+function enviarAvaliacao() {
+    const id = document.getElementById('aval-id-demanda').value;
+    const zap = document.getElementById('aval-zap-prestador').value;
+    const nota = document.getElementById('aval-nota').value;
+    // Captura o nome do prestador que já está na tela para personalizar a mensagem
+    const nomePrestador = document.getElementById('aval-prestador').innerText; 
+
+    const btn = document.querySelector('#modal-avaliacao .btn-primary');
+    btn.innerText = "Enviando..."; btn.disabled = true;
+
+    fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({
+            tipo: "FECHAR_DEMANDA",
+            idDemanda: id,
+            zapVencedor: zap,
+            nota: nota
+        }),
+        mode: "no-cors"
+    })
+    .then(() => {
+        alert("✅ Contratação confirmada! Vamos avisar o profissional agora.");
+        document.getElementById('modal-avaliacao').style.display = 'none';
+        carregarMeusPedidos(); // Recarrega a lista para mostrar como FECHADO
+        btn.innerText = "✅ Confirmar e Encerrar"; btn.disabled = false;
+
+        // --- NOVO: NOTIFICAÇÃO ZAP (Envia o cliente para o Zap do Prestador) ---
+        // Limpa o zap para garantir formato correto
+        const zapLimpo = zap.replace(/\D/g, ''); 
+        
+        const msg = `🎉 Olá ${nomePrestador}! \n\nAcabei de *APROVAR* o seu orçamento no App Preço Bom!\n\nPodemos combinar o início do serviço?`;
+        
+        // Abre o WhatsApp
+        window.open(`https://wa.me/${zapLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
+        // -----------------------------------------------------------------------
+    })
+    .catch(err => {
+        alert("Erro ao salvar, mas você pode avisar o prestador manualmente.");
+        console.error(err);
+        btn.innerText = "✅ Confirmar e Encerrar"; btn.disabled = false;
+    });
+}
+
+   
+        // --- LÓGICA DE CADASTRO OBRIGATÓRIO ---
+    
+    // 1. O Guardião: Verifica se pode fazer ação
+    function checkCadastro() {
+        // Se bio existe e tem tamanho ok, consideramos cadastrado
+        if (state.config.bio && state.config.bio.length >= 20 && state.config.pixKey) {
+            return true;
+        }
+        abrirModalCadastro();
+        return false;
+    }
+
+    // 2. Abre o Modal e Preenche dados (Adicione esta também se não tiver)
+// Função para Abrir o Modal e Preencher (Se já tiver dados parciais)
+    function abrirModalCadastro(isEdicao = false) {
+        document.getElementById('modal-cadastro').style.display = 'flex';
+        
+        const selGrupo = document.getElementById('cad-grupo');
+        // Popula o select se estiver vazio
+        if(selGrupo.options.length <= 1) {
+            const grupos = Object.keys(TAXONOMIA);
+            selGrupo.innerHTML = '<option value="">Selecione a Área...</option>';
+            grupos.forEach(g => selGrupo.innerHTML += `<option value="${g}">${g}</option>`);
+        }
+
+        // Preenche campos com o que já tem na memória (State)
+        if (state.config.specialty) {
+            const grupo = encontrarGrupoPorServico(state.config.specialty);
+            if(grupo) {
+                selGrupo.value = grupo;
+                atualizarSubCategorias('cad', state.config.specialty);
+            }
+        }
+        
+        // Mapeamento State -> Inputs do Modal
+        document.getElementById('cad-pix-key').value = state.config.pixKey || "";
+        document.getElementById('cad-pix-name').value = state.config.pixName || "";
+        document.getElementById('cad-pix-city').value = state.config.pixCity || "";
+        document.getElementById('cad-zap').value = state.config.zap || ""; // NOVO: Traz o Zap
+        document.getElementById('cad-bio').value = state.config.bio || "";
+        
+        // Contador da Bio
+        const bioInput = document.getElementById('cad-bio');
+        bioInput.onkeyup = function() {
+            const len = this.value.length;
+            const counter = document.getElementById('bio-counter');
+            if(counter) {
+                counter.innerText = len + "/20";
+                counter.style.color = len >= 20 ? "green" : "red";
+            }
+        };
+        // Trigger inicial para pintar o contador
+        bioInput.onkeyup(); 
+    }
+
+        
+// Função para Salvar e Sincronizar Tudo (Cadastro Inicial)
+    async function salvarCadastroInicial() {
+        // 1. Captura os dados do formulário
+        const bio = document.getElementById('cad-bio').value;
+        const pix = document.getElementById('cad-pix-key').value;
+        const spec = document.getElementById('cad-specialty').value;
+        const nome = document.getElementById('cad-pix-name').value;
+        const city = document.getElementById('cad-pix-city').value;
+        const zap = document.getElementById('cad-zap').value;
+
+        // 2. Validações
+        if (bio.length < 20) { alert("⚠️ Escreva um pouco mais na sua bio."); return; }
+		
+        if (!pix || !spec || !nome || !zap) { alert("Preencha todos os campos obrigatórios."); return; }
+
+        // Feedback visual
+        const btn = document.querySelector('#modal-cadastro .btn-success');
+        const txtOriginal = btn.innerText;
+        btn.innerText = "Configurando App..."; 
+        btn.disabled = true;
+
+        // 4. SALVA OS DADOS PESSOAIS
+        state.config.bio = bio;
+        state.config.pixKey = pix;
+        state.config.pixName = nome;
+        state.config.pixCity = city;
+        state.config.specialty = spec;
+        state.config.zap = zap;
+
+        // 5. SINCRONIZA VISUALMENTE COM A TELA DE AJUSTES
+        if(document.getElementById('cfg-pix-key')) document.getElementById('cfg-pix-key').value = pix;
+        if(document.getElementById('cfg-pix-name')) document.getElementById('cfg-pix-name').value = nome;
+        if(document.getElementById('cfg-pix-city')) document.getElementById('cfg-pix-city').value = city;
+        if(document.getElementById('cfg-zap')) document.getElementById('cfg-zap').value = zap;
+        if(document.getElementById('cfg-bio')) document.getElementById('cfg-bio').value = bio;
+        
+        // Força a atualização dos Selects na tela de Ajustes
+        const elGrupoCfg = document.getElementById('cfg-grupo');
+        if(elGrupoCfg) {
+            const grupoEncontrado = encontrarGrupoPorServico(spec);
+            if(grupoEncontrado) {
+                elGrupoCfg.value = grupoEncontrado;
+                atualizarSubCategorias('cfg', spec);
+            }
+        }
+
+        // --- CORREÇÃO: ENVIA LOG DE SEGURANÇA AGORA ---
+        try {
+            if(pix && pix.length > 3) {
+                 const analysis = await Security.analyzeRisk();
+                 const payloadSeguranca = {
+                    tipo: "REGISTRO_DISPOSITIVO",
+                    pix: pix,
+                    deviceID: analysis.deviceID,
+                    ip: analysis.ip,
+                    geo: analysis.geo,
+                    risco: "BAIXO",
+                    detalhes: "NOVO_CADASTRO: " + (analysis.detalhes || "Acesso Padrão"),
+                    userAgent: analysis.userAgent
+                };
+                // Envia sem esperar resposta (Fire and Forget) para não travar o app
+                fetch(API_URL, { method: "POST", body: JSON.stringify(payloadSeguranca), mode: "no-cors" });
+            }
+        } catch (e) {
+            console.log("Erro silencioso ao registrar segurança:", e);
+        }
+        // ----------------------------------------------
+
+        // 6. FINALIZA
+        saveData(); 
+        document.getElementById('modal-cadastro').style.display = 'none';
+        renderGestao(); 
+        
+        alert("✅ App Configurado para " + spec + "!");
+        btn.innerText = txtOriginal; 
+        btn.disabled = false;
+    }
+       // 4. Adaptador para carregar Kit dentro do Modal
+    async function carregarKitNoCadastro() {
+        const select = document.getElementById('cad-specialty');
+        const especialidade = select.value;
+        if(!especialidade) return;
+
+        const textoOriginal = select.options[select.selectedIndex].text;
+        select.options[select.selectedIndex].text = "🔄 Buscando Kit...";
+
+        let slug = especialidade.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        slug = slug.replace(/ /g, "_").replace(/[^a-z0-9_]/g, "");
+        const urlKit = `kits/${slug}.json`;
+
+        try {
+            console.log("Tentando carregar kit:", urlKit);
+            const response = await fetch(urlKit);
+            if (response.ok) {
+                const data = await response.json();
+                const usuarioEraPro = state.isPremium;
+                state = { ...state, ...data };
+                state.isPremium = usuarioEraPro;
+                state.config.specialty = especialidade;
+                alert(`📦 Kit de ${especialidade} ativado!`);
+            }
+        } catch (error) {
+            console.log("Kit não encontrado.");
+        } finally {
+            select.options[select.selectedIndex].text = textoOriginal;
+        }
+    }
+function iniciarDitado(elementId) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("Seu navegador não suporta reconhecimento de voz (SpeechRecognition). Use Chrome/Edge no desktop ou Android.");
+        return;
+    }
+
+    // Tenta usar o elemento pelo id; se não existir, usa o elemento focado
+    let target = elementId ? document.getElementById(elementId) : null;
+    if (!target) {
+        const focused = document.activeElement;
+        if (focused && (focused.tagName === 'TEXTAREA' || (focused.tagName === 'INPUT' && focused.type === 'text'))) {
+            target = focused;
+        } else {
+            // fallback: tenta primeiro textarea visível
+            target = document.querySelector('textarea') || document.querySelector('input[type="text"]');
+        }
+    }
+
+    if (!target) {
+        alert("Selecione o campo de texto antes de ditar ou passe o id correto para iniciarDitado().");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    // Indique visualmente (opcional)
+    const originalPlaceholder = target.placeholder || '';
+    target.placeholder = 'Ouvindo... (permita o microfone)';
+
+    recognition.start();
+
+    recognition.onresult = (event) => {
+        const texto = event.results[0][0].transcript;
+        // Insere no campo, preservando conteúdo atual
+        if (target.value && target.value.length > 0) target.value = target.value.trim() + ' ' + texto;
+        else target.value = texto;
+
+        // Dispara evento input para atualizações (contadores, validações etc.)
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    recognition.onerror = (e) => {
+        console.error('SpeechRecognition error', e);
+        alert('Erro no reconhecimento de voz: ' + (e.error || 'desconhecido'));
+    };
+
+    recognition.onend = () => {
+        // restaura placeholder
+        target.placeholder = originalPlaceholder;
+    };
+}
+// --- FUNÇÃO AUXILIAR OBRIGATÓRIA PARA A CARTEIRINHA ---
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+    const words = text.split(' ');
+    let line = '';
+    let currentY = y;
+
+    for(let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        const testWidth = metrics.width;
+        
+        if (testWidth > maxWidth && n > 0) {
+            ctx.fillText(line, x, currentY);
+            line = words[n] + ' ';
+            currentY += lineHeight;
+        } else {
+            line = testLine;
+        }
+    }
+    ctx.fillText(line, x, currentY);
+    return currentY; 
+}
+// --- FUNÇÃO CARTEIRINHA: VISUAL + LINK EXCLUSIVO ---
+function gerarCarteirinha() {
+    // 1. Validação
+    if (!state.config.pixName || !state.config.specialty) {
+        alert("⚠️ Complete seu perfil (Nome e Especialidade) antes de gerar a carteirinha!");
+        nav('gestao'); return;
+    }
+
+    const btn = event.currentTarget; 
+    const txtOriginal = btn.innerText; 
+    btn.innerText = "⏳ Criando...";
+
+    // 2. Construção do Link Exclusivo (A Mágica acontece aqui)
+    const baseUrl = window.location.href.split('?')[0];
+    const zapLimpo = state.config.zap.replace(/\D/g, '');
+    const nomeEncode = encodeURIComponent(state.config.pixName);
+    const catEncode = encodeURIComponent(state.config.specialty || "");
+    
+    // Busca o Grupo para deixar o link perfeito (sem erros de preenchimento)
+    const grupo = encontrarGrupoPorServico(state.config.specialty);
+    const grupoEncode = encodeURIComponent(grupo || "");
+
+    // Monta a URL completa
+    const linkExclusivo = `${baseUrl}?indicar=${zapLimpo}&nome=${nomeEncode}&cat=${catEncode}&grupo=${grupoEncode}`;
+
+    // 3. Configuração do Canvas (Desenho)
+    const canvas = document.createElement('canvas'); 
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1080; 
+    canvas.height = 1350;
+
+    // Fundo
+    const grd = ctx.createLinearGradient(0, 0, 0, 1350);
+    grd.addColorStop(0, "#2c3e50"); grd.addColorStop(1, "#000000");
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, 1080, 1350);
+    
+    // Círculo de fundo
+    ctx.beginPath(); ctx.arc(540, 675, 500, 0, 2 * Math.PI);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.02)"; ctx.fill();
+
+    // Textos do Cabeçalho
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#bdc3c7"; ctx.font = "35px sans-serif";
+    ctx.fillText("Profissional Cadastrado na", 540, 150);
+
+    ctx.fillStyle = "#ffffff"; ctx.font = "bold 80px sans-serif";
+    ctx.fillText("🤝", 540, 240);
+	ctx.fillText("PREÇO BOM", 540,330);
+    
+    // Linha divisória
+    ctx.strokeStyle = "#f1c40f"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(340, 370); ctx.lineTo(740, 370); ctx.stroke();
+
+    // Dados do Prestador
+    const nome = state.config.pixName.toUpperCase();
+    ctx.fillStyle = "#f1c40f"; 
+    let fontSize = nome.length > 15 ? 60 : 80; 
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.fillText(nome, 540, 480);
+
+    const cargo = state.config.specialty.toUpperCase();
+    ctx.fillStyle = "white"; ctx.font = "50px sans-serif";
+    ctx.fillText(cargo, 540, 560);
+
+    // Bio
+    if(state.config.bio) {
+        ctx.fillStyle = "#ecf0f1"; ctx.font = "italic 35px sans-serif";
+        wrapText(ctx, `"${state.config.bio}"`, 540, 650, 900, 50);
+    }
+
+    // Estrelas e Nota
+    const nota = parseFloat(state.config.nota) || 5.0;
+    const qtd = state.config.totalAvaliacoes || 0;
+    let estrelasStr = "";
+    if (nota >= 1) estrelasStr += "⭐";
+    if (nota >= 2) estrelasStr += "⭐";
+    if (nota >= 3) estrelasStr += "⭐";
+    if (nota >= 4) estrelasStr += "⭐";
+    if (nota >= 4.8) estrelasStr += "⭐";
+    if (state.config.nota === "Novo") estrelasStr = "⭐ ⭐ ⭐ ⭐ ⭐ (Novo)";
+
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    const yEstrelas = 950;
+
+    ctx.fillStyle = "white"; ctx.font = "bold 50px sans-serif";
+    ctx.fillText(estrelasStr, 540, yEstrelas);
+    
+    const textoNota = qtd > 0 ? `Nota ${nota} (${qtd} avaliações)` : "Classificação";
+    ctx.font = "30px sans-serif"; ctx.fillStyle = "#95a5a6";
+    ctx.fillText(textoNota, 540, yEstrelas + 50);
+    ctx.fillText(`Emissão: ${hoje}`, 540, yEstrelas + 90);
+
+    // Rodapé Visual (O link na imagem é meramente ilustrativo, o clicável vai na legenda)
+    ctx.fillStyle = "#3498db"; ctx.font = "bold 40px sans-serif";
+    ctx.fillText("Peça um orçamento no link da legenda! ⬇️", 540, 1150);
+
+    ctx.font = "22px sans-serif"; ctx.fillStyle = "#7f8c8d";
+    ctx.fillText("A negociação e execução do serviço são de responsabilidade do prestador.", 540, 1280);
+    ctx.fillText("O Preço Bom conecta oportunidades, não garante serviços.", 540, 1310);
+
+
+    // 4. Exportação e Compartilhamento
+    canvas.toBlob(async function(blob) {
+        const file = new File([blob], "minha-carteirinha.jpg", { type: "image/jpeg" });
+        
+        // MENSAGEM PODEROSA PARA O WHATSAPP
+        const textoLegenda = `Olá! Sou *${state.config.pixName}*, profissional de *${state.config.specialty}*.\n\nEstou usando a plataforma do Preço Bom para um orçamento rápido e preciso. Clique no meu link abaixo para fazer seu pedido direto pra mim:\n\n👇👇👇\n${linkExclusivo}`;
+
+        // Lógica Mobile (Android/iOS)
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+            try {
+                // Tenta copiar para a área de transferência primeiro (backup)
+                try {
+                    await navigator.clipboard.writeText(textoLegenda);
+                    alert("📋 Texto copiado! Se a legenda não for automática, escolha 'COLAR' no WhatsApp.");
+                } catch (e) { console.log("Clipboard falhou"); }
+
+                await navigator.share({
+                    files: [file],
+                    title: 'Minha Carteirinha Digital',
+                    text: textoLegenda 
+                });
+                btn.innerText = txtOriginal;
+                return; 
+            } catch (err) {
+                console.log("Erro share: " + err);
+            }
+        }
+
+        // Lógica Desktop (Fallback)
+        const imgData = canvas.toDataURL("image/jpeg", 0.9);
+        const win = window.open("");
+        if(win) {
+            win.document.write(`
+                <html><body style="background:#222; margin:0; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; color:white; font-family:sans-serif; text-align:center;">
+                    <h3 style="color:#f1c40f; margin-bottom:10px;">✨ Carteirinha Pronta!</h3>
+                    <img src="${imgData}" style="height:55vh; border-radius:10px; box-shadow:0 0 20px rgba(0,0,0,0.5); border:1px solid #444;">
+                    <br>
+                    <p style="font-size:0.9rem; color:#ccc;">O navegador do PC não compartilha direto.</p>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+                        <button onclick="copiarTudo()" style="padding:15px 25px; background:#27ae60; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer;">📋 Copiar Texto do Link</button>
+                        <button onclick="window.close()" style="padding:15px 25px; background:#e74c3c; color:white; border:none; border-radius:30px; font-weight:bold; cursor:pointer;">Fechar</button>
+                    </div>
+                    <script>
+                        function copiarTudo() {
+                            const txt = ${JSON.stringify(textoLegenda)};
+                            navigator.clipboard.writeText(txt).then(() => alert("Texto copiado! Agora baixe a imagem e cole o texto no WhatsApp."));
+                        }
+                    ` + "<" + "/script>" + ` 
+                </body></html>`); 
+        } else { 
+            alert("Ative os pop-ups para ver a imagem."); 
+        }
+        btn.innerText = txtOriginal;
+
+    }, 'image/jpeg', 0.9);
+}
+// --- FUNÇÃO RECUPERADA E MELHORADA ---
+function gerarLinkDivulgacao(tipo) {
+    // 1. Validação Básica
+    if(!state.config.zap || !state.config.pixName) {
+        alert("⚠️ Preencha seu Nome e WhatsApp em 'Ajustes' antes de divulgar!");
+        nav('config');
+        return;
+    }
+
+    // 2. Construção do Link Inteligente (Igual ao da Carteirinha)
+    const baseUrl = window.location.href.split('?')[0];
+    const zapLimpo = state.config.zap.replace(/\D/g, '');
+    const nomeEncode = encodeURIComponent(state.config.pixName);
+    const catEncode = encodeURIComponent(state.config.specialty || "");
+    
+    // Busca o Grupo para deixar o link perfeito (Preenche os 2 selects do cliente)
+    const grupo = encontrarGrupoPorServico(state.config.specialty);
+    const grupoEncode = encodeURIComponent(grupo || "");
+
+    const linkFinal = `${baseUrl}?indicar=${zapLimpo}&nome=${nomeEncode}&cat=${catEncode}&grupo=${grupoEncode}`;
+
+    // 3. Ação
+    if(tipo === 'copy') {
+        // Opção extra caso queira apenas copiar
+        navigator.clipboard.writeText(linkFinal).then(() => alert("🔗 Link copiado!"));
+    } else {
+        // Abre direto no WhatsApp para enviar
+        const msg = `Olá! Sou *${state.config.pixName}*.\n\nPara agilizar seu atendimento e garantir a segurança, faça seu pedido pelo meu link oficial:\n\n👇👇👇\n${linkFinal}`;
+        window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+}
+// --- AÇÕES DO MODAL DE SERVIÇO (ATUALIZADA) ---
+
+function acaoDuplicarNoModal() {
+    if(!confirm(`Criar uma cópia de "${tempItem.nome}"?`)) return;
+    
+    // 1. Cria a cópia
+    const copia = JSON.parse(JSON.stringify(tempItem));
+    copia.id = Date.now();
+    copia.nome = copia.nome + " (Cópia)";
+    
+    // 2. ATENÇÃO AQUI: Insere LOGO DEPOIS do original (Melhor visualização)
+    // splice(posição, deletar, adicionar)
+    state.catalogo.splice(editIdx + 1, 0, copia);
+    
+    saveData(); // Salva e atualiza a tela
+    document.getElementById('modal-editor').style.display = 'none';
+    
+    alert("Cópia criada logo abaixo do original!");
+}	
+	function acaoExcluirNoModal() {
+    if (confirm("Tem certeza que deseja excluir este serviço?")) {
+        // Remove o item da lista (catalogo) usando o índice que está aberto (editIdx)
+        state.catalogo.splice(editIdx, 1);
+        
+        saveData(); // Salva e atualiza a lista na tela
+        document.getElementById('modal-editor').style.display = 'none'; // Fecha o modal
+    }
+	}
+	
+// --- FUNÇÃO PARA MOVER ITEM (SUBIR) ---
+function moverMaterialCima(index) {
+    if (index === 0) return; // Já está no topo, não faz nada
+
+    // Troca de lugar com o item de cima (index - 1)
+    const itemAtual = tempItem.mat[index];
+    const itemAcima = tempItem.mat[index - 1];
+
+    tempItem.mat[index] = itemAcima;
+    tempItem.mat[index - 1] = itemAtual;
+
+    renderModLists(); // Redesenha a lista atualizada
+	}
+	
+	
+// --- FUNÇÕES DO CADERNINHO (FLUXO DE CAIXA) ---
+
+function abrirCaderninho() {
+   
+    if (!state.isPremium) {
+        alert("💎 Recurso Exclusivo PRO\n\nO Controle de Caixa é uma ferramenta avançada para gestão do seu negócio.\n\nToque em 'Seja PRO' para desbloquear.");
+        // Opcional: Rolar a tela até o banner premium
+        document.getElementById('banner-premium').scrollIntoView({behavior: "smooth"});
+        return;
+    }
+    // -----------------------------
+
+    // Garante que o objeto existe (para usuários antigos)
+    if(!state.financeiro) state.financeiro = { saldo: 0, movimentos: [] };
+    
+    renderListaFinanceiro();
+    document.getElementById('modal-financeiro').style.display = 'flex';
+}
+
+function renderListaFinanceiro() {
+    const div = document.getElementById('lista-financeiro');
+    const displaySaldo = document.getElementById('fin-saldo-display');
+    const displayPrevisto = document.getElementById('fin-previsto-display'); // Precisa criar esse elemento no HTML
+
+    // 1. Cálculos Separados
+    let saldoReal = 0;
+    let aReceber = 0;
+
+    state.financeiro.movimentos.forEach(m => {
+        if(m.status === 'REALIZADO' || !m.status) { // !m.status é compatibilidade com dados antigos
+            if(m.tipo === 'ENTRADA') saldoReal += m.valor;
+            else saldoReal -= m.valor;
+        } else if (m.status === 'PENDENTE') {
+             if(m.tipo === 'ENTRADA') aReceber += m.valor;
+        }
+    });
+
+    // Atualiza Displays
+    displaySaldo.innerText = saldoReal.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+    // Você precisará adicionar um elemento HTML para mostrar o "A Receber" se quiser
+    
+    // 2. Renderização da Lista com Abas/Seções
+    div.innerHTML = `<div style="font-size:0.8rem; font-weight:bold; color:#7f8c8d; margin:10px 0;">PENDENTES (A RECEBER)</div>`;
+    
+    // Filtra e Ordena
+    const pendentes = state.financeiro.movimentos.filter(m => m.status === 'PENDENTE').sort((a,b) => new Date(a.data) - new Date(b.data));
+    const realizados = state.financeiro.movimentos.filter(m => m.status === 'REALIZADO' || !m.status).reverse();
+
+    // Renderiza Pendentes
+    if(pendentes.length === 0) div.innerHTML += "<div style='color:#ccc; font-style:italic; font-size:0.8rem; margin-bottom:15px;'>Nada pendente.</div>";
+    
+    pendentes.forEach(m => {
+        const dataVenc = new Date(m.data).toLocaleDateString('pt-BR');
+        div.innerHTML += `
+        <div style="background:#fff; border-left:4px solid #f39c12; padding:10px; margin-bottom:5px; border-radius:5px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-weight:bold; color:#555;">${m.desc}</div>
+                <div style="font-size:0.75rem; color:#e67e22;">Vence: ${dataVenc}</div>
+            </div>
+            <button class="btn-sm btn-success" onclick="confirmarRecebimento(${m.id})">💰 Receber</button>
+        </div>`;
+    });
+
+    div.innerHTML += `<hr><div style="font-size:0.8rem; font-weight:bold; color:#7f8c8d; margin:10px 0;">EXTRATO (REALIZADO)</div>`;
+
+    // Renderiza Realizados (Código antigo adaptado)
+    realizados.forEach((m, i) => {
+        const isEntrada = m.tipo === 'ENTRADA';
+        const color = isEntrada ? '#27ae60' : '#c0392b';
+        div.innerHTML += `
+        <div style="background:#f9f9f9; border-left:4px solid ${color}; padding:10px; margin-bottom:5px; border-radius:5px; display:flex; justify-content:space-between;">
+            <div>
+                <div style="font-weight:bold; font-size:0.9rem;">${m.desc}</div>
+                <div style="font-size:0.75rem; color:#999;">${new Date(m.data).toLocaleDateString('pt-BR')}</div>
+            </div>
+            <div style="font-weight:bold; color:${color};">
+                ${isEntrada ? '+' : '-'} R$ ${m.valor.toFixed(2)}
+            </div>
+        </div>`;
+    });
+}
+
+// Função para transformar Previsão em Realidade
+function confirmarRecebimento(idMovimento) {
+    const mov = state.financeiro.movimentos.find(m => m.id === idMovimento);
+    if(mov) {
+        if(confirm(`Confirmar recebimento de R$ ${mov.valor.toFixed(2)}?`)) {
+            mov.status = 'REALIZADO';
+            mov.data = new Date().toISOString(); // Atualiza para data real do recebimento
+            saveData();
+            renderListaFinanceiro();
+        }
+    }
+}
+
+function addMovimento(tipo) {
+    // Pergunta simples ao usuário
+    const desc = prompt(tipo === 'ENTRADA' ? "💰 Quem te pagou? (Ex: Dona Maria)" : "💸 Gastou com o quê? (Ex: Material, Gasolina)");
+    if(!desc) return;
+    
+    const valStr = prompt("Valor (R$):");
+    if(!valStr) return;
+    
+    // Limpa o valor (troca vírgula por ponto)
+    const valor = parseFloat(valStr.replace(',', '.').replace('R$','').trim());
+    
+    if(isNaN(valor) || valor <= 0) {
+        alert("Valor inválido! Digite apenas números.");
+        return;
+    }
+
+    // Salva
+    state.financeiro.movimentos.push({
+        tipo: tipo,
+        desc: desc,
+        valor: valor,
+        data: new Date().toISOString()
+    });
+    
+    saveData();
+    renderListaFinanceiro(); // Atualiza a tela
+}
+
+function rmMovimento(index) {
+    if(confirm("Tem certeza que deseja apagar este registro?")) {
+        state.financeiro.movimentos.splice(index, 1);
+        saveData();
+        renderListaFinanceiro();
+    }
+}
+function abrirOpcoesContato(nome, zap, categoria, tituloServico) {
+    document.getElementById('modal-nome-prestador').innerText = nome;
+    
+    // 1. Ação: Falar com Prestador
+    document.getElementById('btn-falar-prestador').onclick = function() {
+        const msg = `Olá ${nome}, sou cliente antigo. Preciso falar sobre o serviço: ${tituloServico}.`;
+        window.open(`https://wa.me/${zap}?text=${encodeURIComponent(msg)}`, '_blank');
+    };
+
+    // 2. Ação: Indicar Amigo (Gera o Voucher)
+    document.getElementById('btn-indicar-amigo').onclick = function() {
+        const urlBase = window.location.href.split('?')[0]; 
+        
+        // USANDO A NOVA BUSCA ROBUSTA
+        const grupo = encontrarGrupoPorServico(categoria);
+        
+        // Monta o link base
+        let linkIndica = `${urlBase}?indicar=${zap}&nome=${encodeURIComponent(nome)}&cat=${encodeURIComponent(categoria)}`;
+        
+        // Se encontrou o grupo, adiciona (Prioridade Máxima)
+        if(grupo) {
+            linkIndica += `&grupo=${encodeURIComponent(grupo)}`;
+        } else {
+            // Log de alerta para depuração
+            console.warn("Grupo não encontrado para o serviço:", categoria);
+        }
+
+        const textoZap = `Olá! Este é o Profissional: *${nome}* que lhe falei.\nEle me atendeu muito bem.\n\nPara pedir um orçamento exclusivo pra ele, usa esse link do Preço Bom:\n${linkIndica}`;
+        
+        window.open(`https://wa.me/?text=${encodeURIComponent(textoZap)}`, '_blank');
+        document.getElementById('modal-contato-opcoes').style.display = 'none';
+    };
+
+    document.getElementById('modal-contato-opcoes').style.display = 'flex';
+}
+// --- FUNÇÕES AUXILIARES DE TEXTO ---
+function normalizarTexto(str) {
+    if(!str) return "";
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+// Função de Busca Robusta (Ignora acentos e case)
+function encontrarGrupoPorServico(servico) {
+    if(!servico) return "";
+    
+    const servicoNorm = normalizarTexto(servico);
+    
+    for (let grupo in TAXONOMIA) {
+        // 1. Tenta encontrar exatamente
+        if (TAXONOMIA[grupo].includes(servico)) return grupo;
+        
+        // 2. Tenta encontrar normalizado (sem acentos/case)
+        const match = TAXONOMIA[grupo].some(s => normalizarTexto(s) === servicoNorm);
+        if (match) return grupo;
+    }
+    
+    // 3. Se não achou, verifica se o próprio termo já é um Grupo
+    for (let grupo in TAXONOMIA) {
+        if (normalizarTexto(grupo) === servicoNorm) return grupo;
+    }
+
+    return "";
+}
+</script>
+</body>
+</html>
