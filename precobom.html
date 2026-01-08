@@ -1922,20 +1922,19 @@ if(typeof installApp === 'function') {
         itens = dadosBrutos.itens || [];
     }
 
-    let html = `<div style="margin-bottom:15px; color:#666">Profissional: <strong>${dadosBrutos.prestador}</strong></div>`;
+    let html = `<div style="margin-bottom:15px; color:#666; border-bottom:1px solid #eee; padding-bottom:10px;">
+        Profissional: <strong style="color:var(--primary); font-size:1.1rem;">${dadosBrutos.prestador}</strong>
+    </div>`;
     
-    // Variáveis para o Resumo
-    let totalMO = 0;
-    let totalMat = 0;
+    // VARIÁVEIS PARA OS RESUMOS (Igual ao Zap)
+    let totalGeralMO = 0;
+    let totalGeralMat = 0;
+    let resumoEquipe = {}; 
 
     const grupos = {};
     itens.forEach(item => {
         if(!grupos[item.ordem]) grupos[item.ordem] = [];
         grupos[item.ordem].push(item);
-        
-        // Soma globais para o resumo final
-        totalMO += (item._fixoMO || 0);
-        totalMat += (item._fixoMat || 0);
     });
 
     const ordens = Object.keys(grupos).sort((a,b) => a-b);
@@ -1947,50 +1946,89 @@ if(typeof installApp === 'function') {
             const listaDaFase = grupos[ordem];
             const nomeFase = listaDaFase[0].cat ? listaDaFase[0].cat.toUpperCase() : "ETAPA";
             
-            html += `<div style="background:#eee; padding:5px 10px; font-weight:bold; margin-top:10px; border-radius:5px;">${ordem}. ${nomeFase}</div>`;
+            html += `<div style="background:#e3f2fd; color:#1565c0; padding:8px 10px; font-weight:bold; margin-top:15px; border-radius:5px; border:1px solid #bbdefb;">
+                ${ordem}. ${nomeFase}
+            </div>`;
             
-            let subTotal = 0;
+            let subFaseMO = 0;
+            let subFaseMat = 0;
+            let subFaseHoras = 0;
 
             listaDaFase.forEach(item => {
-                const custoItem = (item._fixoMO || 0) + (item._fixoMat || 0);
-                subTotal += custoItem;
+                // Cálculo reverso para extrair horas e custos (compatibilidade)
+                const custoItemTotal = (item._fixoMO || 0) + (item._fixoMat || 0);
                 
-                html += `<div style="padding:8px; border-bottom:1px solid #f1f1f1; display:flex; justify-content:space-between;">
+                // Acumula para o Resumo Técnico
+                if(item.equipe) {
+                    item.equipe.forEach(e => {
+                        // Tenta achar o nome do cargo. Se não tiver state.profs acessível aqui (modo cliente), usa ID ou genérico
+                        // Nota: No modo cliente, talvez não tenhamos 'state.profs' populado com os dados do prestador.
+                        // O ideal seria o orçamento salvo já ter o nome do cargo. 
+                        // Vamos usar uma lógica defensiva:
+                        const nomeCargo = e.pid.includes('p') ? "Profissional" : "Ajudante/Técnico"; 
+                        // Se o 'state.profs' for do usuário local (cliente), não serve. 
+                        // *Melhoria*: Assumimos horas totais baseadas no item.
+                        
+                        const hTotal = e.h * item.qtd;
+                        subFaseHoras += hTotal;
+                    });
+                }
+
+                subFaseMO += (item._fixoMO || 0);
+                subFaseMat += (item._fixoMat || 0);
+                
+                html += `<div style="padding:10px; border-bottom:1px solid #f1f1f1; display:flex; justify-content:space-between;">
                             <div>
-                                <div style="font-weight:600">${item.nome}</div>
-                                <div style="font-size:0.75rem; color:#888">${item.qtd}x un.</div>
+                                <div style="font-weight:600; color:#333;">${item.nome}</div>
+                                <div style="font-size:0.75rem; color:#888;">${item.qtd}x un.</div>
                             </div>
-                            ${custoItem > 0 ? `<div>R$ ${custoItem.toFixed(2)}</div>` : ''}
-                            </div>`;
+                            ${custoItemTotal > 0 ? `<div style="font-weight:bold;">R$ ${custoItemTotal.toFixed(2)}</div>` : ''}
+                        </div>`;
                 
-                if(item._fixoMat > 0 && item.mat) {
+                if((item._fixoMat > 0 || item.mat.length > 0) && item.mat) {
                     item.mat.forEach(m => {
-                        html += `<div style="padding-left:15px; font-size:0.7rem; color:#666">• ${m.q * item.qtd}x ${m.n}</div>`;
+                        html += `<div style="padding-left:15px; font-size:0.75rem; color:#666; margin-bottom:2px;">• ${m.q * item.qtd}x ${m.n}</div>`;
                     });
                 }
             });
             
-            if(subTotal > 0) {
-                html += `<div style="text-align:right; font-size:0.8rem; font-weight:bold; color:#555; padding:5px;">Subtotal Fase: R$ ${subTotal.toFixed(2)}</div>`;
-            }
+            // Acumula Globais
+            totalGeralMO += subFaseMO;
+            totalGeralMat += subFaseMat;
+
+            // Subtotal da Fase (Igual ao Zap)
+            const totalFase = subFaseMO + subFaseMat;
+            html += `<div style="background:#f8f9fa; text-align:right; font-size:0.8rem; padding:8px; border-radius:4px; margin-top:5px; color:#555;">
+                        <div style="font-weight:bold; color:#2c3e50;">🔹 Subtotal Fase: R$ ${totalFase.toFixed(2)}</div>
+                        <div style="font-size:0.7rem;">(Tempo: ${subFaseHoras.toFixed(1)}h | MO: ${subFaseMO.toFixed(2)} | Mat: ${subFaseMat.toFixed(2)})</div>
+                     </div>`;
         });
     }
 
-    // --- NOVO: RESUMO FINANCEIRO E TÉCNICO ---
-    html += `<div style="margin-top:20px; background:#f8f9fa; border:1px solid #eee; border-radius:8px; padding:10px;">
-                <div style="font-weight:bold; color:#2c3e50; font-size:0.9rem; margin-bottom:5px;">📊 Resumo do Investimento</div>`;
+    // --- BLOCOS DE RESUMO (IGUAL AO ZAP) ---
     
-    if(totalMat > 0) html += `<div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#555;"><span>📦 Materiais:</span> <span>R$ ${totalMat.toFixed(2)}</span></div>`;
+    // 1. Resumo Financeiro
+    html += `<div style="margin-top:20px; border:1px solid #ddd; border-radius:8px; overflow:hidden;">
+                <div style="background:#eee; padding:8px; font-weight:bold; font-size:0.85rem; color:#333;">💰 RESUMO FINANCEIRO</div>
+                <div style="padding:10px; background:white;">`;
     
-    html += `<div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#555;"><span>🛠️ Mão de Obra:</span> <span>R$ ${totalMO.toFixed(2)}</span></div>`;
-    
-    if (taxas > 0) {
-        html += `<div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#555;"><span>🚚 Taxas/Desloc:</span> <span>R$ ${taxas.toFixed(2)}</span></div>`;
+    if(totalGeralMat > 0) {
+        html += `<div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:0.9rem;">
+                    <span>📦 Total Materiais:</span> <strong>R$ ${totalGeralMat.toFixed(2)}</strong>
+                 </div>`;
     }
-    
-    html += `</div>`;
-    // ------------------------------------------
+    html += `<div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:0.9rem;">
+                <span>🛠️ Total Mão de Obra:</span> <strong>R$ ${totalGeralMO.toFixed(2)}</strong>
+             </div>`;
+             
+    if (taxas > 0) {
+        html += `<div style="display:flex; justify-content:space-between; font-size:0.9rem; color:#e67e22;">
+                    <span>🚚 Taxas/Deslocamento:</span> <strong>R$ ${taxas.toFixed(2)}</strong>
+                 </div>`;
+    }
+    html += `</div></div>`;
 
+    // 2. Condição de Pagamento
     if (dadosBrutos.configPagamento) {
         let textoPag = "A Combinar";
         const p = dadosBrutos.configPagamento;
@@ -1998,16 +2036,17 @@ if(typeof installApp === 'function') {
         else if(p.tipo === 'antecipado') textoPag = "Antecipado (100% no Início)";
         else if(p.tipo === 'sinal') textoPag = "50% Sinal + 50% Entrega";
         else if(p.tipo === 'parcelado') textoPag = `${p.parcelas}x Parcelado`;
-        else if(p.tipo === 'cronograma') textoPag = "Cronograma Físico-Financeiro";
+        else if(p.tipo === 'cronograma') textoPag = "Conforme Cronograma Físico-Financeiro";
 
-        html += `<div style="background:#e3f2fd; border:1px solid #90caf9; padding:10px; border-radius:8px; margin-top:10px; text-align:center;">
-                    <div style="font-size:0.8rem; color:#1565c0;">Forma de Pagamento</div>
-                    <div style="font-weight:bold; color:#0d47a1;">💳 ${textoPag}</div>
+        html += `<div style="margin-top:10px; background:#fff3cd; border:1px solid #ffeeba; padding:10px; border-radius:8px; text-align:center;">
+                    <div style="font-size:0.8rem; color:#856404; font-weight:bold; margin-bottom:3px;">💳 FORMA DE PAGAMENTO</div>
+                    <div style="font-weight:bold; color:#555;">${textoPag}</div>
                  </div>`;
     }
 
-    html += `<div style="background:var(--success); color:white; padding:10px; text-align:center; font-size:1.2rem; font-weight:bold; border-radius:8px; margin-top:10px;">
-                Total: ${dadosBrutos.valor}
+    // 3. Total Final Gigante
+    html += `<div style="background:#27ae60; color:white; padding:15px; text-align:center; font-size:1.4rem; font-weight:bold; border-radius:10px; margin-top:15px; box-shadow:0 4px 10px rgba(39, 174, 96, 0.3);">
+                TOTAL: ${dadosBrutos.valor}
             </div>`;
 
     div.innerHTML = html;
@@ -3868,14 +3907,13 @@ function abrirCaderninho() {
 function renderListaFinanceiro() {
     const div = document.getElementById('lista-financeiro');
     const displaySaldo = document.getElementById('fin-saldo-display');
-    const displayPrevisto = document.getElementById('fin-previsto-display');
-
+    
     // 1. Cálculos Separados
     let saldoReal = 0;
     let aReceber = 0;
 
     state.financeiro.movimentos.forEach(m => {
-        if(m.status === 'REALIZADO' || !m.status) { // !m.status é compatibilidade com dados antigos
+        if(m.status === 'REALIZADO' || !m.status) { 
             if(m.tipo === 'ENTRADA') saldoReal += m.valor;
             else saldoReal -= m.valor;
         } else if (m.status === 'PENDENTE') {
@@ -3883,35 +3921,34 @@ function renderListaFinanceiro() {
         }
     });
 
-    // Atualiza Displays
     displaySaldo.innerText = saldoReal.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
-    // Você precisará adicionar um elemento HTML para mostrar o "A Receber" se quiser
     
-    // 2. Renderização da Lista com Abas/Seções
-    div.innerHTML = `<div style="font-size:0.8rem; font-weight:bold; color:#7f8c8d; margin:10px 0;">PENDENTES (A RECEBER)</div>`;
+    // 2. Renderização da Lista
+    div.innerHTML = `<div style="font-size:0.8rem; font-weight:bold; color:#7f8c8d; margin:10px 0;">PENDENTES (A RECEBER: ${aReceber.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})})</div>`;
     
-    // Filtra e Ordena
     const pendentes = state.financeiro.movimentos.filter(m => m.status === 'PENDENTE').sort((a,b) => new Date(a.data) - new Date(b.data));
     const realizados = state.financeiro.movimentos.filter(m => m.status === 'REALIZADO' || !m.status).reverse();
 
-    // Renderiza Pendentes
     if(pendentes.length === 0) div.innerHTML += "<div style='color:#ccc; font-style:italic; font-size:0.8rem; margin-bottom:15px;'>Nada pendente.</div>";
     
     pendentes.forEach(m => {
         const dataVenc = new Date(m.data).toLocaleDateString('pt-BR');
+        // MUDANÇA AQUI: Adicionado o valor formatado em destaque
+        const valorFormatado = m.valor.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+        
         div.innerHTML += `
-        <div style="background:#fff; border-left:4px solid #f39c12; padding:10px; margin-bottom:5px; border-radius:5px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="background:#fff; border-left:4px solid #f39c12; padding:12px; margin-bottom:8px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
             <div>
-                <div style="font-weight:bold; color:#555;">${m.desc}</div>
-                <div style="font-size:0.75rem; color:#e67e22;">Vence: ${dataVenc}</div>
+                <div style="font-weight:bold; color:#555; font-size:0.9rem;">${m.desc}</div>
+                <div style="font-weight:800; color:#2c3e50; font-size:1.1rem; margin:2px 0;">${valorFormatado}</div>
+                <div style="font-size:0.75rem; color:#e67e22;">📅 Vence: ${dataVenc}</div>
             </div>
-            <button class="btn-sm btn-success" onclick="confirmarRecebimento(${m.id})">💰 Receber</button>
+            <button class="btn-sm btn-success" style="height:40px; padding:0 15px;" onclick="confirmarRecebimento(${m.id})">💰 Receber</button>
         </div>`;
     });
 
     div.innerHTML += `<hr><div style="font-size:0.8rem; font-weight:bold; color:#7f8c8d; margin:10px 0;">EXTRATO (REALIZADO)</div>`;
 
-    // Renderiza Realizados (Código antigo adaptado)
     realizados.forEach((m, i) => {
         const isEntrada = m.tipo === 'ENTRADA';
         const color = isEntrada ? '#27ae60' : '#c0392b';
