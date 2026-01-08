@@ -1912,26 +1912,32 @@ if(typeof installApp === 'function') {
     const dadosBrutos = cacheOrcamentosCliente[idxDemanda].orcamentos[idxOrc];
     const div = document.getElementById('conteudo-detalhes');
     
-    // Tratamento de compatibilidade (Versão antiga vs Nova)
     let itens = [];
     let taxas = 0;
     
-    // Se for o formato novo (Objeto), extrai. Se for antigo (Array), usa direto.
     if (dadosBrutos.itens && !Array.isArray(dadosBrutos.itens) && dadosBrutos.itens.lista) {
         itens = dadosBrutos.itens.lista;
         taxas = dadosBrutos.itens.taxas || 0;
     } else {
-        itens = dadosBrutos.itens || []; // Legado
+        itens = dadosBrutos.itens || [];
     }
 
     let html = `<div style="margin-bottom:15px; color:#666">Profissional: <strong>${dadosBrutos.prestador}</strong></div>`;
     
-    // Agrupamento por Fases (Igual ao Zap)
+    // Variáveis para o Resumo
+    let totalMO = 0;
+    let totalMat = 0;
+
     const grupos = {};
     itens.forEach(item => {
         if(!grupos[item.ordem]) grupos[item.ordem] = [];
         grupos[item.ordem].push(item);
+        
+        // Soma globais para o resumo final
+        totalMO += (item._fixoMO || 0);
+        totalMat += (item._fixoMat || 0);
     });
+
     const ordens = Object.keys(grupos).sort((a,b) => a-b);
 
     if(ordens.length === 0) {
@@ -1941,7 +1947,6 @@ if(typeof installApp === 'function') {
             const listaDaFase = grupos[ordem];
             const nomeFase = listaDaFase[0].cat ? listaDaFase[0].cat.toUpperCase() : "ETAPA";
             
-            // Cabeçalho da Fase
             html += `<div style="background:#eee; padding:5px 10px; font-weight:bold; margin-top:10px; border-radius:5px;">${ordem}. ${nomeFase}</div>`;
             
             let subTotal = 0;
@@ -1958,7 +1963,6 @@ if(typeof installApp === 'function') {
                             ${custoItem > 0 ? `<div>R$ ${custoItem.toFixed(2)}</div>` : ''}
                             </div>`;
                 
-                // Lista Materiais (se houver custo neles)
                 if(item._fixoMat > 0 && item.mat) {
                     item.mat.forEach(m => {
                         html += `<div style="padding-left:15px; font-size:0.7rem; color:#666">• ${m.q * item.qtd}x ${m.n}</div>`;
@@ -1966,54 +1970,49 @@ if(typeof installApp === 'function') {
                 }
             });
             
-            // Subtotal da Fase
             if(subTotal > 0) {
                 html += `<div style="text-align:right; font-size:0.8rem; font-weight:bold; color:#555; padding:5px;">Subtotal Fase: R$ ${subTotal.toFixed(2)}</div>`;
             }
         });
     }
 
-    // Taxas Extras
+    // --- NOVO: RESUMO FINANCEIRO E TÉCNICO ---
+    html += `<div style="margin-top:20px; background:#f8f9fa; border:1px solid #eee; border-radius:8px; padding:10px;">
+                <div style="font-weight:bold; color:#2c3e50; font-size:0.9rem; margin-bottom:5px;">📊 Resumo do Investimento</div>`;
+    
+    if(totalMat > 0) html += `<div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#555;"><span>📦 Materiais:</span> <span>R$ ${totalMat.toFixed(2)}</span></div>`;
+    
+    html += `<div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#555;"><span>🛠️ Mão de Obra:</span> <span>R$ ${totalMO.toFixed(2)}</span></div>`;
+    
     if (taxas > 0) {
-        html += `<div style="margin-top:10px; padding:10px; border-top:2px dashed #ddd; display:flex; justify-content:space-between;">
-                    <span>🚚 Deslocamento/Taxas</span>
-                    <strong>R$ ${taxas.toFixed(2)}</strong>
-                    </div>`;
+        html += `<div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#555;"><span>🚚 Taxas/Desloc:</span> <span>R$ ${taxas.toFixed(2)}</span></div>`;
     }
+    
+    html += `</div>`;
+    // ------------------------------------------
 
-    // --- NOVO: Exibir Condição de Pagamento ---
     if (dadosBrutos.configPagamento) {
         let textoPag = "A Combinar";
         const p = dadosBrutos.configPagamento;
-        
         if(p.tipo === 'vista') textoPag = "À Vista (100% no Final)";
         else if(p.tipo === 'antecipado') textoPag = "Antecipado (100% no Início)";
         else if(p.tipo === 'sinal') textoPag = "50% Sinal + 50% Entrega";
         else if(p.tipo === 'parcelado') textoPag = `${p.parcelas}x Parcelado`;
         else if(p.tipo === 'cronograma') textoPag = "Cronograma Físico-Financeiro";
 
-        html += `<div style="background:#f8f9fa; border:1px solid #ddd; padding:10px; border-radius:8px; margin-top:15px; text-align:center;">
-                    <div style="font-size:0.8rem; color:#666;">Forma de Pagamento</div>
-                    <div style="font-weight:bold; color:#2c3e50;">💳 ${textoPag}</div>
+        html += `<div style="background:#e3f2fd; border:1px solid #90caf9; padding:10px; border-radius:8px; margin-top:10px; text-align:center;">
+                    <div style="font-size:0.8rem; color:#1565c0;">Forma de Pagamento</div>
+                    <div style="font-weight:bold; color:#0d47a1;">💳 ${textoPag}</div>
                  </div>`;
     }
-    // ------------------------------------------
 
-    // Total Final
     html += `<div style="background:var(--success); color:white; padding:10px; text-align:center; font-size:1.2rem; font-weight:bold; border-radius:8px; margin-top:10px;">
                 Total: ${dadosBrutos.valor}
-                </div>`;
+            </div>`;
 
     div.innerHTML = html;
     document.getElementById('modal-detalhes').style.display = 'flex';
 }
-    // Auto-preencher se já tiver logado antes
-    const zapSalvo = localStorage.getItem('cli_zap');
-    if(zapSalvo) document.getElementById('cli-login-zap').value = zapSalvo;
-
-    // --- OPORTUNIDADES ---
-        // Variável para guardar os dados vindos da planilha
-    let listaDemandasCache = [];
 
     function renderOportunidades() {
         const div = document.getElementById('lista-oportunidades');
@@ -2125,120 +2124,103 @@ if(typeof installApp === 'function') {
         }
     }
 
-        function enviarOrcamentoFinal() {
-        if(state.carrinho.length === 0) { alert("Carrinho vazio!"); return; }
-        
-        if(!state.demandaAtiva || !state.demandaAtiva.id) { 
-            alert("Erro: Nenhuma demanda selecionada. Volte ao Feed."); nav('oportunidades'); return; 
-        }
-        
-        // --- LÓGICA DO ZAP AUTOMÁTICO ---
-        let zapInput = "";
-        
-        // 1. Tenta pegar do cadastro
-        if (state.config.zap && state.config.zap.length >= 10) {
-            zapInput = state.config.zap.replace(/\D/g, ''); // Limpa caracteres
-        } 
-        
-        // 2. Se não tiver, pede ao usuário
-        if (!zapInput) {
-            let userZap = prompt("Qual seu WhatsApp para contato? (DDD+Número)", "");
-            if(userZap) zapInput = userZap.replace(/\D/g, '');
-        }
+    function enviarOrcamentoFinal() {
+    if(state.carrinho.length === 0) { alert("Carrinho vazio!"); return; }
+    
+    if(!state.demandaAtiva || !state.demandaAtiva.id) { 
+        alert("Erro: Nenhuma demanda selecionada. Volte ao Feed."); nav('oportunidades'); return; 
+    }
+    
+    // ... (Lógica de Zap e Feedback visual mantida) ...
+    let zapInput = "";
+    if (state.config.zap && state.config.zap.length >= 10) zapInput = state.config.zap.replace(/\D/g, ''); 
+    if (!zapInput) {
+        let userZap = prompt("Qual seu WhatsApp para contato? (DDD+Número)", "");
+        if(userZap) zapInput = userZap.replace(/\D/g, '');
+    }
+    if (!zapInput || zapInput.length < 10) { alert("É necessário um WhatsApp válido."); return; }
+    if (zapInput.length >= 10 && zapInput.length <= 11) zapInput = "55" + zapInput;
 
-        // 3. Validação final
-        if (!zapInput || zapInput.length < 10) {
-            alert("É necessário um WhatsApp válido para enviar o orçamento.");
-            return;
-        }
-        
-        // Adiciona 55 se precisar
-        if (zapInput.length >= 10 && zapInput.length <= 11) zapInput = "55" + zapInput;
-        // --------------------------------
+    const prestadorNome = state.config.pixName || "Profissional";
+    const btn = document.querySelector('#footer-orcamento .btn-action');
+    const txtOriginal = btn.innerText;
+    btn.innerText = "Enviando..."; btn.disabled = true;
 
-        const prestadorNome = state.config.pixName || "Profissional";
-        
-        // Feedback visual no botão
-        const btn = document.querySelector('#footer-orcamento .btn-action');
-        const txtOriginal = btn.innerText;
-        btn.innerText = "Enviando..."; btn.disabled = true;
-
-        // --- CÁLCULOS (MANTIDOS) ---
-        const itensCalculados = state.carrinho.map(item => {
-            let custoMOUnit = 0;
-            item.equipe.forEach(e => {
-                const p = state.profs.find(x => x.id === e.pid);
-                if(p) custoMOUnit += (p.valor * e.h);
-            });
-            const custoMatUnit = item.mat.reduce((acc, m) => acc + (m.q * (m.p||0)), 0);
-            return { ...item, _fixoMO: custoMOUnit * item.qtd, _fixoMat: custoMatUnit * item.qtd };
+    // --- CÁLCULOS (Mantidos) ---
+    const itensCalculados = state.carrinho.map(item => {
+        let custoMOUnit = 0;
+        item.equipe.forEach(e => {
+            const p = state.profs.find(x => x.id === e.pid);
+            if(p) custoMOUnit += (p.valor * e.h);
         });
+        const custoMatUnit = item.mat.reduce((acc, m) => acc + (m.q * (m.p||0)), 0);
+        return { ...item, _fixoMO: custoMOUnit * item.qtd, _fixoMat: custoMatUnit * item.qtd };
+    });
 
-        let valorTaxas = 0;
-        const usaMat = document.getElementById('chk-materiais').checked;
-        if (usaMat) {
-            valorTaxas = (parseFloat(state.config.taxaCompra)||0) + (parseFloat(state.config.taxaVisita)||0);
-        }
+    let valorTaxas = 0;
+    const usaMat = document.getElementById('chk-materiais').checked;
+    if (usaMat) {
+        valorTaxas = (parseFloat(state.config.taxaCompra)||0) + (parseFloat(state.config.taxaVisita)||0);
+    }
 
-        let totalParaHistorico = itensCalculados.reduce((acc, item) => acc + item._fixoMO + item._fixoMat, 0);
-        totalParaHistorico += valorTaxas;
-        const totalValStr = totalParaHistorico.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+    let totalParaHistorico = itensCalculados.reduce((acc, item) => acc + item._fixoMO + item._fixoMat, 0);
+    totalParaHistorico += valorTaxas;
+    const totalValStr = totalParaHistorico.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+    
+    // --- PAYLOAD ---
+    const payload = {
+        tipo: "NOVO_ORCAMENTO",
+        idDemanda: state.demandaAtiva.id,
+        prestadorNome: prestadorNome,
+        prestadorZap: zapInput,
+        prestadorBio: state.config.bio || "Não informada",
+        configPagamento: configPagamentoTemp,
+        valorTotal: totalValStr,
+        itens: { versao: 2, lista: itensCalculados, taxas: valorTaxas, usaMateriais: usaMat }
+    };
+
+    fetch(API_URL, { method: "POST", body: JSON.stringify(payload), mode: "no-cors" })
+    .then(() => {
+        if(!state.historico) state.historico = [];
         
-        // --- PAYLOAD ---
-        const payload = {
-            tipo: "NOVO_ORCAMENTO",
-            idDemanda: state.demandaAtiva.id,
-            prestadorNome: prestadorNome,
-            prestadorZap: zapInput, // USA O ZAP AUTOMÁTICO
-            prestadorBio: state.config.bio || "Não informada",
-			configPagamento: configPagamentoTemp,
-            valorTotal: totalValStr,
-            itens: { versao: 2, lista: itensCalculados, taxas: valorTaxas, usaMateriais: usaMat }
+        const idDemandaAtual = state.demandaAtiva.id;
+        const indexExistente = state.historico.findIndex(h => h.idDemanda === idDemandaAtual);
+
+        const dadosAtualizados = {
+            id: (indexExistente !== -1) ? state.historico[indexExistente].id : Date.now(),
+            idDemanda: idDemandaAtual,
+            cliente: state.demandaAtiva.cliente,
+            titulo: state.demandaAtiva.titulo,
+            valor: totalParaHistorico,
+            pagamento: configPagamentoTemp,
+            data: new Date().toISOString(),
+            status: 'PENDENTE',
+            // MUDANÇA AQUI: Salvamos itensCalculados, não o carrinho cru.
+            itensBackup: itensCalculados, 
+            taxasBackup: valorTaxas // Salvamos as taxas separadamente para facilitar conta
         };
 
-        fetch(API_URL, { method: "POST", body: JSON.stringify(payload), mode: "no-cors" })
-        .then(() => {
-            if(!state.historico) state.historico = [];
-            
-            // Atualiza ou Cria Histórico Local
-            const idDemandaAtual = state.demandaAtiva.id;
-            const indexExistente = state.historico.findIndex(h => h.idDemanda === idDemandaAtual);
+        if (indexExistente !== -1) state.historico[indexExistente] = dadosAtualizados;
+        else state.historico.push(dadosAtualizados);
+        
+        state.demandaAtiva = null; 
+        state.carrinho = []; 
+        saveData(); 
+        renderCarrinho(); 
+        nav('gestao'); 
+        
+        const txt = `Olá! Segue orçamento atualizado: *${payload.valorTotal}*.\nPodemos fechar?`;
+        window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
 
-            const dadosAtualizados = {
-                id: (indexExistente !== -1) ? state.historico[indexExistente].id : Date.now(),
-                idDemanda: idDemandaAtual,
-                cliente: state.demandaAtiva.cliente,
-                titulo: state.demandaAtiva.titulo,
-                valor: totalParaHistorico,
-                pagamento: configPagamentoTemp, 
-               
-                data: new Date().toISOString(),
-                status: 'PENDENTE',
-                itensBackup: JSON.parse(JSON.stringify(state.carrinho))
-            };
+        btn.innerText = txtOriginal; btn.disabled = false;
+    })
+    .catch(err => { 
+        console.error(err);
+        alert("Erro de conexão.");
+        btn.innerText = txtOriginal; btn.disabled = false; 
+    });
+}
 
-            if (indexExistente !== -1) state.historico[indexExistente] = dadosAtualizados;
-            else state.historico.push(dadosAtualizados);
-            
-            // Limpeza e Navegação
-            state.demandaAtiva = null; 
-            state.carrinho = []; 
-            saveData(); 
-            renderCarrinho(); 
-            nav('gestao'); 
-            
-            // Abre o WhatsApp com a mensagem
-            const txt = `Olá! Segue orçamento atualizado: *${payload.valorTotal}*.\nPodemos fechar?`;
-            window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
-
-            btn.innerText = txtOriginal; btn.disabled = false;
-        })
-        .catch(err => { 
-            console.error(err);
-            alert("Erro de conexão. Tente novamente.");
-            btn.innerText = txtOriginal; btn.disabled = false; 
-        });
-    }
 
     // --- LÓGICA PRINCIPAL (CATALOGO/CARRINHO/GESTÃO) ---
         function loadData() {
@@ -2760,66 +2742,87 @@ function toggleStatusHist(id) {
         const confirmar = confirm("Confirmar fechamento? Isso vai gerar o fluxo de caixa previsto.");
         if(!confirmar) return;
 
-        // Pergunta a data base (Início do serviço ou Data da Venda)
         let dataInput = prompt("📅 Data de Referência (Início/Venda)? (AAAA-MM-DD)", new Date().toISOString().split('T')[0]);
         
-        // Validação da data
         if (!dataInput || dataInput.length !== 10) {
             alert("Data inválida. Usando data de hoje.");
             dataInput = new Date().toISOString().split('T')[0];
         }
 
-        // Converte string para objeto Date
         const partes = dataInput.split('-');
         const dataBase = new Date(partes[0], partes[1] - 1, partes[2]);
 
         item.status = 'FECHADO';
         item.dataAgendamento = dataInput; 
         
-        // --- LÓGICA FINANCEIRA DE PARCELAS ---
         const total = item.valor;
-        // Pega o pagamento salvo ou assume À vista
         const condicoes = item.pagamento || { tipo: 'vista', parcelas: 1 }; 
         
         if(!state.financeiro) state.financeiro = { saldo: 0, movimentos: [] };
 
-        // Função auxiliar para lançar
+        // Função auxiliar
         const lancar = (desc, valor, diasParaVencer) => {
-            const dataVenc = new Date(dataBase); // Clona a data base
+            const dataVenc = new Date(dataBase); 
             dataVenc.setDate(dataBase.getDate() + diasParaVencer);
             
             state.financeiro.movimentos.push({
-                id: Date.now() + Math.random(), // ID único para cada parcela
+                id: Date.now() + Math.random(), 
                 tipo: 'ENTRADA',
                 desc: `${item.cliente} - ${desc}`,
                 valor: valor,
                 data: dataVenc.toISOString(),
-                status: 'PENDENTE' // Entra como previsão (amarelo)
+                status: 'PENDENTE'
             });
         };
 
-        // GERAÇÃO DAS PARCELAS
+        // --- GERAÇÃO DAS PARCELAS ---
         if(condicoes.tipo === 'vista') {
             lancar("Pagamento à Vista", total, 0); 
         } 
         else if (condicoes.tipo === 'antecipado') {
-             lancar("Pagamento Antecipado", total, 0); // Vence no dia
+             lancar("Pagamento Antecipado", total, 0);
         }
         else if (condicoes.tipo === 'sinal') {
-            lancar("Sinal (50%)", total / 2, 0); // Vence hoje/inicio
-            lancar("Parcela Final (50%)", total / 2, 15); // Vence em 15 dias (exemplo)
+            lancar("Sinal (50%)", total / 2, 0);
+            lancar("Parcela Final (50%)", total / 2, 15);
         }
         else if (condicoes.tipo === 'parcelado') {
-            const qtd = condicoes.parcelas || 2; // Padrão 2 se falhar
+            const qtd = condicoes.parcelas || 2; 
             const valorParc = total / qtd;
-            
             for(let i=1; i<=qtd; i++) {
-                // Gera: Parcela 1/3 (30 dias), Parcela 2/3 (60 dias)...
                 lancar(`Parcela ${i}/${qtd} (${item.titulo})`, valorParc, i * 30);
             }
         }
+        // --- NOVA LÓGICA DO CRONOGRAMA ---
         else if (condicoes.tipo === 'cronograma') {
-            lancar("Cronograma a definir", total, 7);
+            // Se tivermos os itens calculados salvos (Versão Nova)
+            if (item.itensBackup && item.itensBackup.length > 0) {
+                const fases = {};
+                
+                // 1. Agrupa valores por fase
+                item.itensBackup.forEach(i => {
+                    if(!fases[i.ordem]) fases[i.ordem] = { nome: i.cat || "Fase " + i.ordem, total: 0 };
+                    // Soma MO + Mat
+                    fases[i.ordem].total += (i._fixoMO || 0) + (i._fixoMat || 0);
+                });
+
+                // 2. Lança Taxas Separadas (se houver)
+                if (item.taxasBackup && item.taxasBackup > 0) {
+                     lancar("Entrada / Taxas Iniciais", item.taxasBackup, 0);
+                }
+
+                // 3. Lança cada fase
+                const ordens = Object.keys(fases).sort((a,b) => a-b);
+                ordens.forEach((ordem, index) => {
+                    // Estimativa: cada fase dura 7 dias, então o vencimento escala
+                    const diasPrevistos = (index + 1) * 7; 
+                    lancar(`Fase ${ordem}: ${fases[ordem].nome}`, fases[ordem].total, diasPrevistos);
+                });
+                
+            } else {
+                // Fallback para orçamentos antigos sem backup detalhado
+                lancar("Cronograma Global (A definir)", total, 7);
+            }
         }
         
         alert("✅ Venda Fechada! As previsões de recebimento foram lançadas no Caixa.");
@@ -2829,10 +2832,14 @@ function toggleStatusHist(id) {
             item.status = 'PENDENTE';
             item.dataAgendamento = null;
         }
+    } else if (item.status === 'CONCLUIDO') {
+        // Correção do conflito mencionado anteriormente
+        if(confirm("Reabrir serviço já concluído?")) {
+            item.status = 'FECHADO'; // Volta para a agenda do dia/ativo
+        }
     }
     
     saveData();
-    // Se o modal de histórico estiver aberto, renderiza de novo para atualizar ícone
     if(document.getElementById('modal-historico-full').style.display === 'flex') {
         renderHistoricoCompleto(); 
     } else {
