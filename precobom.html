@@ -1903,9 +1903,9 @@ if(typeof installApp === 'function') {
     const dadosBrutos = cacheOrcamentosCliente[idxDemanda].orcamentos[idxOrc];
     const div = document.getElementById('conteudo-detalhes');
     
+    // Tratamento de compatibilidade de itens
     let itens = [];
     let taxas = 0;
-    
     if (dadosBrutos.itens && !Array.isArray(dadosBrutos.itens) && dadosBrutos.itens.lista) {
         itens = dadosBrutos.itens.lista;
         taxas = dadosBrutos.itens.taxas || 0;
@@ -1913,14 +1913,27 @@ if(typeof installApp === 'function') {
         itens = dadosBrutos.itens || [];
     }
 
-    let html = `<div style="margin-bottom:15px; color:#666; border-bottom:1px solid #eee; padding-bottom:10px;">
-        Profissional: <strong style="color:var(--primary); font-size:1.1rem;">${dadosBrutos.prestador}</strong>
-    </div>`;
+    // --- 1. CABEÇALHO RICO (NOVO) ---
+    // Tenta pegar a nota e selo. Se não tiver, assume "Novo".
+    const estrelas = dadosBrutos.estrelas || "Novo";
+    const selo = dadosBrutos.seloVolume || "Verificado";
     
-    // VARIÁVEIS PARA OS RESUMOS (Igual ao Zap)
+    let html = `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+        <div style="background:#2c3e50; color:white; width:50px; height:50px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+            👷
+        </div>
+        <div>
+            <div style="font-weight:bold; color:var(--primary); font-size:1.1rem;">${dadosBrutos.prestador}</div>
+            <div style="font-size:0.8rem; color:#666;">
+                ⭐ ${estrelas} • <span style="background:#eee; padding:2px 6px; border-radius:4px;">${selo}</span>
+            </div>
+        </div>
+    </div>`;
+
+    // Lógica de Itens (Fases)
     let totalGeralMO = 0;
     let totalGeralMat = 0;
-    let resumoEquipe = {}; 
 
     const grupos = {};
     itens.forEach(item => {
@@ -1946,24 +1959,10 @@ if(typeof installApp === 'function') {
             let subFaseHoras = 0;
 
             listaDaFase.forEach(item => {
-                // Cálculo reverso para extrair horas e custos (compatibilidade)
                 const custoItemTotal = (item._fixoMO || 0) + (item._fixoMat || 0);
                 
-                // Acumula para o Resumo Técnico
-                if(item.equipe) {
-                    item.equipe.forEach(e => {
-                        // Tenta achar o nome do cargo. Se não tiver state.profs acessível aqui (modo cliente), usa ID ou genérico
-                        // Nota: No modo cliente, talvez não tenhamos 'state.profs' populado com os dados do prestador.
-                        // O ideal seria o orçamento salvo já ter o nome do cargo. 
-                        // Vamos usar uma lógica defensiva:
-                        const nomeCargo = e.pid.includes('p') ? "Profissional" : "Ajudante/Técnico"; 
-                        // Se o 'state.profs' for do usuário local (cliente), não serve. 
-                        // *Melhoria*: Assumimos horas totais baseadas no item.
-                        
-                        const hTotal = e.h * item.qtd;
-                        subFaseHoras += hTotal;
-                    });
-                }
+                // Acumula horas (estimativa se não tiver dado preciso)
+                if(item.equipe) item.equipe.forEach(e => subFaseHoras += (e.h * item.qtd));
 
                 subFaseMO += (item._fixoMO || 0);
                 subFaseMat += (item._fixoMat || 0);
@@ -1983,11 +1982,9 @@ if(typeof installApp === 'function') {
                 }
             });
             
-            // Acumula Globais
             totalGeralMO += subFaseMO;
             totalGeralMat += subFaseMat;
 
-            // Subtotal da Fase (Igual ao Zap)
             const totalFase = subFaseMO + subFaseMat;
             html += `<div style="background:#f8f9fa; text-align:right; font-size:0.8rem; padding:8px; border-radius:4px; margin-top:5px; color:#555;">
                         <div style="font-weight:bold; color:#2c3e50;">🔹 Subtotal Fase: R$ ${totalFase.toFixed(2)}</div>
@@ -1996,8 +1993,8 @@ if(typeof installApp === 'function') {
         });
     }
 
-    // --- BLOCOS DE RESUMO (IGUAL AO ZAP) ---
-    
+    // --- BLOCOS FINAIS ---
+
     // 1. Resumo Financeiro
     html += `<div style="margin-top:20px; border:1px solid #ddd; border-radius:8px; overflow:hidden;">
                 <div style="background:#eee; padding:8px; font-weight:bold; font-size:0.85rem; color:#333;">💰 RESUMO FINANCEIRO</div>
@@ -2009,7 +2006,7 @@ if(typeof installApp === 'function') {
                  </div>`;
     }
     html += `<div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:0.9rem;">
-                <span>🛠️ Total Mão de Obra:</span> <strong>R$ ${totalGeralMO.toFixed(2)}</strong>
+                <span>🛠️ Mão de Obra:</span> <strong>R$ ${totalGeralMO.toFixed(2)}</strong>
              </div>`;
              
     if (taxas > 0) {
@@ -2019,23 +2016,31 @@ if(typeof installApp === 'function') {
     }
     html += `</div></div>`;
 
-    // 2. Condição de Pagamento
+    // 2. Condição de Pagamento (CORRIGIDO: Sempre aparece)
+    let textoPag = "A Combinar"; // Padrão
     if (dadosBrutos.configPagamento) {
-        let textoPag = "A Combinar";
         const p = dadosBrutos.configPagamento;
         if(p.tipo === 'vista') textoPag = "À Vista (100% no Final)";
         else if(p.tipo === 'antecipado') textoPag = "Antecipado (100% no Início)";
         else if(p.tipo === 'sinal') textoPag = "50% Sinal + 50% Entrega";
         else if(p.tipo === 'parcelado') textoPag = `${p.parcelas}x Parcelado`;
-        else if(p.tipo === 'cronograma') textoPag = "Conforme Cronograma Físico-Financeiro";
-
-        html += `<div style="margin-top:10px; background:#fff3cd; border:1px solid #ffeeba; padding:10px; border-radius:8px; text-align:center;">
-                    <div style="font-size:0.8rem; color:#856404; font-weight:bold; margin-bottom:3px;">💳 FORMA DE PAGAMENTO</div>
-                    <div style="font-weight:bold; color:#555;">${textoPag}</div>
-                 </div>`;
+        else if(p.tipo === 'cronograma') textoPag = "Cronograma Físico-Financeiro";
     }
 
-    // 3. Total Final Gigante
+    html += `<div style="margin-top:10px; background:#fff3cd; border:1px solid #ffeeba; padding:10px; border-radius:8px; text-align:center;">
+                <div style="font-size:0.8rem; color:#856404; font-weight:bold; margin-bottom:3px;">💳 FORMA DE PAGAMENTO</div>
+                <div style="font-weight:bold; color:#555;">${textoPag}</div>
+             </div>`;
+
+    // 3. Bio do Profissional (NOVO)
+    // Tenta pegar prestadorBio (do envio novo) ou bio (legado)
+    const bio = dadosBrutos.prestadorBio || dadosBrutos.bio || "Bio não informada.";
+    html += `<div style="margin-top:10px; background:#f9f9f9; padding:10px; border-radius:8px; border-left:4px solid var(--primary); font-style:italic;">
+                <div style="font-size:0.75rem; color:#999; font-weight:bold; margin-bottom:3px;">📝 SOBRE O PROFISSIONAL</div>
+                <div style="font-size:0.85rem; color:#555;">"${bio}"</div>
+             </div>`;
+
+    // 4. Total Final Gigante
     html += `<div style="background:#27ae60; color:white; padding:15px; text-align:center; font-size:1.4rem; font-weight:bold; border-radius:10px; margin-top:15px; box-shadow:0 4px 10px rgba(39, 174, 96, 0.3);">
                 TOTAL: ${dadosBrutos.valor}
             </div>`;
