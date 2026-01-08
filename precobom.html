@@ -1345,6 +1345,65 @@ function renderHistoricoCompleto(filtro = "") {
 function filtrarHistorico(texto) {
     renderHistoricoCompleto(texto);
 }
+// --- FUNÇÕES RECUPERADAS (CONFIGURAÇÃO) ---
+
+// Atualiza nome ou valor do profissional ao digitar
+function updateProf(index, campo, valor){
+    // Se for valor, converte para número, senão mantém texto
+    state.profs[index][campo] = campo === 'valor' ? parseFloat(valor) : valor;
+    saveData();
+}
+
+// Remove profissional da lista
+function rmProf(index){
+    if(confirm("Remover este cargo da equipe?")){
+        state.profs.splice(index, 1);
+        saveData();
+        renderListasConfig(); // Atualiza a tela
+    }
+}
+function renderListasConfig() {
+    // 1. Renderiza Lista de Profissionais (Equipe)
+    const dp = document.getElementById('lista-profissionais'); 
+    if(dp) {
+        dp.innerHTML=""; 
+        state.profs.forEach((p,i)=>{ 
+            dp.innerHTML+=`
+            <div class="list-item-row">
+                <input type="text" class="input" style="flex:1; margin-right:5px;" value="${p.nome}" onchange="updateProf(${i},'nome',this.value)">
+                <input type="number" class="input" style="width:30%" value="${p.valor}" onchange="updateProf(${i},'valor',this.value)">
+                <button style="border:none;background:none;color:red;font-weight:bold;padding:0 10px;" onclick="rmProf(${i})">×</button>
+            </div>`;
+        });
+    }
+
+    // 2. Renderiza Lista de Serviços (Para editar/excluir)
+    const ds = document.getElementById('lista-gestao-servicos'); 
+    if(ds) {
+        ds.innerHTML = ""; 
+        // Invertemos para mostrar os mais novos (criados recentemente) no topo, se preferir
+        // Mas vamos manter a ordem padrão para bater com o catálogo
+        state.catalogo.forEach((s, i) => { 
+            ds.innerHTML += `
+            <div class="list-item-row" onclick="abrirEditorServico(${i})" style="cursor:pointer;">
+                <span class="list-text" style="font-weight:600; font-size:0.95rem;">${s.nome}</span>
+                <div class="list-actions">
+                    <span style="font-size:0.8rem; color:#999; margin-right:10px;">${s.cat}</span>
+                    <span style="font-size:1.2rem; color:#7f8c8d;">✏️</span>
+                </div>
+            </div>`;
+        });
+    }
+    
+    // 3. Preenche inputs de Texto da Configuração (Recuperação)
+    if(document.getElementById('cfg-taxa-compra')) document.getElementById('cfg-taxa-compra').value = state.config.taxaCompra;
+    if(document.getElementById('cfg-taxa-visita')) document.getElementById('cfg-taxa-visita').value = state.config.taxaVisita;
+    if(document.getElementById('cfg-pix-key')) document.getElementById('cfg-pix-key').value = state.config.pixKey || "";
+    if(document.getElementById('cfg-pix-name')) document.getElementById('cfg-pix-name').value = state.config.pixName || "";
+    if(document.getElementById('cfg-pix-city')) document.getElementById('cfg-pix-city').value = state.config.pixCity || "";
+}
+
+	
 
     function installApp() {
         // Verifica se é iOS
@@ -2315,6 +2374,7 @@ if(typeof installApp === 'function') {
         
         // --- CORREÇÃO: Incluímos o Radar aqui ---
         renderRadarTags(); 
+		renderListasConfig();
         // ----------------------------------------
     }
 
