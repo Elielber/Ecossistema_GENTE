@@ -980,7 +980,28 @@
         <div id="lista-historico-full" style="padding-bottom:20px;"></div>
     </div>
 </div>
+<div id="modal-feedback-final" class="modal-overlay" onclick="if(event.target.id==='modal-feedback-final')this.style.display='none'">
+    <div class="modal-content" style="text-align:center;">
+        <h3 style="color:var(--primary); margin-top:0;">Como foi o serviço?</h3>
+        <p style="color:#666; font-size:0.9rem;">Ajude a comunidade avaliando <strong id="fb-nome-prestador"></strong>.</p>
+        
+        <div style="font-size:2.5rem; margin:15px 0; cursor:pointer; user-select:none;" id="fb-stars-container">
+            <span onclick="setStarFB(1)">★</span><span onclick="setStarFB(2)">★</span><span onclick="setStarFB(3)">★</span><span onclick="setStarFB(4)">★</span><span onclick="setStarFB(5)">★</span>
+        </div>
+        
+        <input type="hidden" id="fb-nota" value="5">
+        <input type="hidden" id="fb-id-demanda">
+        <input type="hidden" id="fb-zap-prestador">
+        <input type="hidden" id="fb-nome-prestador-val">
 
+        <div class="form-group" style="text-align:left;">
+            <span class="label">Deixe um comentário (Opcional):</span>
+            <textarea id="fb-obs" class="input" rows="3" placeholder="Ex: Foi pontual, serviço bem feito..."></textarea>
+        </div>
+
+        <button class="btn btn-success" onclick="enviarFeedbackReal()">✅ Enviar Avaliação</button>
+    </div>
+</div>
 <div id="modal-parceiros" class="modal-overlay" onclick="if(event.target.id==='modal-parceiros')this.style.display='none'">
     <div class="modal-content" style="background:#f8f9fa;">
         <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
@@ -1953,9 +1974,7 @@ if(typeof installApp === 'function') {
                            <div style="display:flex; gap:10px; margin-top:10px;">
                                <button class="btn btn-outline btn-sm" style="flex:1;" onclick="verDetalhesOrcamento(${indexDemanda}, ${indexOrc})">👁️ Ver</button>
         
-                               <button class="btn btn-success btn-sm" style="flex:1;" onclick="abrirOpcoesContato('${o.prestador}', '${o.zapPrestador}', '${categoriaCorrigida}', '${d.titulo}')">
-                                   💬 Contato / Indicar
-                               </button>
+                               <button class="btn btn-success btn-sm" style="flex:1;" onclick="abrirOpcoesContato('${o.prestador}', '${o.zapPrestador}', '${categoriaCorrigida}', '${d.titulo}')"> 💬 Contato / Indicar </button>
         
                                ${!isFechado ? 
                                  `<button class="btn btn-outline btn-sm" style="flex:1; border-color:#f1c40f; color:#d35400;" onclick="abrirModalAvaliacao('${d.id}', '${o.prestador}', '${o.zapPrestador}')">🏆 Contratar</button>` 
@@ -1966,6 +1985,26 @@ if(typeof installApp === 'function') {
                 } else {
                     htmlOrcamentos = "<div style='font-size:0.8rem; color:#999; margin-top:5px;'>Aguardando orçamentos...</div>";
                 }
+				// --- 2. GERA O BOTÃO DE AVALIAÇÃO (SE ESTIVER FECHADO) ---
+           
+            let botoesAcao = "";
+            if (isFechado) {
+                // Tenta pegar o nome do vencedor dos orçamentos, se possível
+                let nomeVencedor = "Profissional";
+                // Procura nos orçamentos quem tem o mesmo zap do vencedor
+                if(d.orcamentos && d.vencedor) {
+                    const orcVencedor = d.orcamentos.find(o => o.zapPrestador.toString() === d.vencedor.toString());
+                    if(orcVencedor) nomeVencedor = orcVencedor.prestador;
+                }
+
+                botoesAcao = `
+                <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
+                    <button class="btn btn-outline btn-sm" style="width:100%; border-color:#f1c40f; color:#f39c12; background:white;" 
+                        onclick="abrirModalFeedback('${d.id}', '${nomeVencedor}', '${d.vencedor || ''}')">
+                        ⭐ Como foi o serviço? (Avaliar)
+                    </button>
+                </div>`;
+            }
 
                 div.innerHTML += `
                 <div class="notification-card" style="${cardStyle}">
@@ -2591,7 +2630,62 @@ async function salvarConfig(silencioso = false) {
     }
     // ---------------------------------------------------
 }
+// 1. Abre o modal e prepara as variáveis
+function abrirModalFeedback(idDemanda, nomePrestador, zapPrestador) {
+    document.getElementById('fb-id-demanda').value = idDemanda;
+    document.getElementById('fb-zap-prestador').value = zapPrestador;
+    document.getElementById('fb-nome-prestador-val').value = nomePrestador;
+    
+    document.getElementById('fb-nome-prestador').innerText = nomePrestador;
+    document.getElementById('fb-obs').value = ""; // Limpa comentário anterior
+    
+    setStarFB(5); // Começa com 5 estrelas
+    document.getElementById('modal-feedback-final').style.display = 'flex';
+}
 
+// 2. Controla visualmente as estrelas
+function setStarFB(n) {
+    document.getElementById('fb-nota').value = n;
+    const spans = document.querySelectorAll('#fb-stars-container span');
+    spans.forEach((s, i) => {
+        // Se o índice for menor que n, pinta de Dourado, senão Cinza
+        s.style.color = i < n ? "#f1c40f" : "#ccc"; 
+    });
+}
+
+// 3. Envia para a planilha
+function enviarFeedbackReal() {
+    const btn = document.querySelector('#modal-feedback-final .btn-success');
+    const txtOriginal = btn.innerText;
+    btn.innerText = "Enviando..."; btn.disabled = true;
+
+    const payload = {
+        tipo: "SALVAR_FEEDBACK",
+        idDemanda: document.getElementById('fb-id-demanda').value,
+        zapCliente: localStorage.getItem('cli_zap') || "Anonimo",
+        prestador: document.getElementById('fb-zap-prestador').value, // Ou nome
+        nota: document.getElementById('fb-nota').value,
+        obs: document.getElementById('fb-obs').value
+    };
+
+    fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify(payload),
+        mode: "no-cors"
+    })
+    .then(() => {
+        alert("Obrigado! Seu feedback ajuda muito.");
+        document.getElementById('modal-feedback-final').style.display = 'none';
+        btn.innerText = txtOriginal; btn.disabled = false;
+        
+        // Opcional: Remover o botão visualmente para ele não clicar de novo
+        // carregarMeusPedidos(); 
+    })
+    .catch(err => {
+        alert("Erro ao enviar, tente novamente.");
+        btn.innerText = txtOriginal; btn.disabled = false;
+    });
+}
 function renderGestao() {
     const mesAtual = new Date().getMonth();
     const anoAtual = new Date().getFullYear();
