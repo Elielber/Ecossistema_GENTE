@@ -435,6 +435,13 @@
         <div style="background:#fff3cd; padding:10px; border-radius:8px; font-size:0.8rem; color:#856404; margin-bottom:15px;">
             ⚠️ Pedidos compatíveis com a especialidade definida na aba Gestão.
         </div>
+        <div style="background:white; padding:15px; border-radius:10px; border:1px dashed #3498db; text-align:center; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+    <p style="font-size:0.9rem; color:#555; margin:0 0 10px 0;">Cliente pediu direto no seu WhatsApp?</p>
+    <button class="btn btn-primary" onclick="iniciarOrcamentoAvulso()" style="background:#3498db; border:none; position:relative; font-weight:bold;">
+        📝 Criar Orçamento Avulso <span style="position:absolute; top:-8px; right:-5px; font-size:1.2rem;">💎</span>
+    </button>
+</div>
+
         
         <div id="lista-oportunidades"></div>
     </div>
@@ -1346,15 +1353,16 @@ function abrirHistoricoCompleto() {
 
 function renderHistoricoCompleto(filtro = "") {
     const div = document.getElementById('lista-historico-full');
+    if (!div) return; // Segurança caso o elemento não exista
+    
     div.innerHTML = "";
     
-    // Pega TODOS os itens e inverte (mais novos primeiro)
+    // 1. Prepara a lista (Copia, inverte para mais recentes primeiro e filtra)
     const lista = [...state.historico].reverse();
     
-    // Filtro de busca
     const filtrados = lista.filter(h => 
-        h.cliente.toLowerCase().includes(filtro.toLowerCase()) || 
-        h.titulo.toLowerCase().includes(filtro.toLowerCase())
+        (h.cliente && h.cliente.toLowerCase().includes(filtro.toLowerCase())) || 
+        (h.titulo && h.titulo.toLowerCase().includes(filtro.toLowerCase()))
     );
 
     if(filtrados.length === 0) {
@@ -1363,26 +1371,60 @@ function renderHistoricoCompleto(filtro = "") {
     }
 
     filtrados.forEach(h => {
-        const dataF = new Date(h.data).toLocaleDateString('pt-BR');
-        const valorF = h.valor.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+        // 2. Formatação de Dados (Proteção contra dados corrompidos)
+        const dataObj = new Date(h.data);
+        const dataF = isNaN(dataObj) ? "Data Inválida" : dataObj.toLocaleDateString('pt-BR');
+        const valorF = (parseFloat(h.valor) || 0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
         
-        // Status Visual
+        // 3. Definição de Cores e Ícones por Status
         let statusCor = "#95a5a6"; // Cinza (Pendente)
         let statusIcon = "⏳";
+        
         if(h.status === 'FECHADO') { statusCor = "#27ae60"; statusIcon = "✅"; }
-        if(h.status === 'PERDIDO') { statusCor = "#c0392b"; statusIcon = "❌"; }
+        else if(h.status === 'PERDIDO') { statusCor = "#c0392b"; statusIcon = "❌"; }
+        else if(h.status === 'CONCLUIDO') { statusCor = "#34495e"; statusIcon = "🏁"; }
+        else if(h.status === 'CANCELADO') { statusCor = "#7f8c8d"; statusIcon = "🚫"; } // Cinza escuro/morto
 
+        // 4. Lógica da Etiqueta (Badge) - APP vs EXTERNO
+        let badgeOrigem = "";
+        if (h.origem === 'EXTERNO') {
+            badgeOrigem = `<span style="background:#e3f2fd; color:#1565c0; font-size:0.65rem; padding:2px 6px; border-radius:4px; margin-left:5px; border:1px solid #bbdefb; font-weight:bold;">EXTERNO</span>`;
+        } else {
+            // Se não tiver origem definida (legado), assume APP
+            badgeOrigem = `<span style="background:#fff3cd; color:#856404; font-size:0.65rem; padding:2px 6px; border-radius:4px; margin-left:5px; border:1px solid #ffeeba;">APP</span>`;
+        }
+
+        // 5. Lógica do Botão Cancelar
+        // Só exibe se o serviço NÃO estiver cancelado e NÃO for perdido
+        let btnCancelar = "";
+        if (h.status !== 'CANCELADO' && h.status !== 'PERDIDO') {
+            btnCancelar = `
+            <button onclick="cancelarServico(${h.id})" style="background:none; border:none; cursor:pointer; font-size:1.1rem; margin-left:10px; color:#c0392b;" title="Cancelar e Estornar">
+                🚫
+            </button>`;
+        }
+
+        // 6. Montagem do HTML do Card
         div.innerHTML += `
         <div style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border-left:5px solid ${statusCor}; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
             <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                <strong style="color:var(--primary)">${h.cliente}</strong>
-                <span style="font-size:0.8rem; color:#666;">${dataF}</span>
+                <div>
+                    <strong style="color:var(--primary)">${h.cliente}</strong>
+                    ${badgeOrigem}
+                </div>
+                <div style="display:flex; align-items:center;">
+                    <span style="font-size:0.8rem; color:#666;">${dataF}</span>
+                    ${btnCancelar}
+                </div>
             </div>
+            
             <div style="font-size:0.9rem; color:#555; margin-bottom:8px;">${h.titulo}</div>
             
             <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #eee; padding-top:8px;">
                 <div style="font-weight:bold; color:var(--success);">${valorF}</div>
-                <div style="cursor:pointer; font-size:0.8rem; background:#f4f6f7; padding:4px 8px; border-radius:15px;" onclick="toggleStatusHist(${h.id}); renderHistoricoCompleto('${filtro}')">
+                
+                <div style="cursor:${h.status === 'CANCELADO' ? 'default' : 'pointer'}; font-size:0.8rem; background:#f4f6f7; padding:4px 8px; border-radius:15px; opacity:${h.status === 'CANCELADO' ? '0.7' : '1'};" 
+                     onclick="${h.status === 'CANCELADO' ? '' : `toggleStatusHist(${h.id}); renderHistoricoCompleto('${filtro}')`}">
                     ${statusIcon} ${h.status}
                 </div>
             </div>
@@ -1766,6 +1808,38 @@ async function carregarKitPorEspecialidade() {
     })
     .catch(err => console.log("Erro sync:", err));
 }
+function iniciarOrcamentoAvulso() {
+    // 1. TRAVA PRO: Só passa se for Premium
+    if (!state.isPremium) {
+        alert("💎 Recurso Exclusivo PRO\n\nOrganize seus clientes particulares e unifique seu caixa.\nTorne-se PRO para desbloquear!");
+        nav('gestao'); 
+        return; 
+    }
+
+    // 2. Coleta dados básicos
+    const cliente = prompt("Nome do Cliente (Externo):");
+    if (!cliente) return;
+
+    const titulo = prompt("Título do Serviço (Ex: Reforma Banheiro):");
+    if (!titulo) return;
+
+    // 3. Prepara o terreno
+    state.carrinho = [];
+
+    // 4. Cria a Demanda Ativa com a flag 'EXTERNO'
+    state.demandaAtiva = {
+        id: 'ext_' + Date.now(), // ID local para não conflitar com o servidor
+        cliente: cliente,
+        titulo: titulo,
+        origem: 'EXTERNO' // <--- O SEGREDO ESTÁ AQUI
+    };
+
+    saveData();
+    nav('catalogo'); // Leva para escolher os serviços
+    
+    alert(`✅ Orçamento iniciado para ${cliente}.\nAdicione os serviços do catálogo normalmente.`);
+}
+
 
     // --- PRESTADOR NAV (CORRIGIDA) ---
     function nav(tab) {
@@ -2197,7 +2271,7 @@ if(typeof installApp === 'function') {
         });
     }
 
-    function filtrarERenderizar(divElement, areaEspecialidade, badgeElement) {
+        function filtrarERenderizar(divElement, areaEspecialidade, badgeElement) {
         divElement.innerHTML = "";
         let count = 0;
         const hoje = new Date();
@@ -2215,7 +2289,7 @@ if(typeof installApp === 'function') {
             // Se for 'Geral', mostra tudo. Senão, verifica se a categoria da demanda está na lista do prestador.
             if(areaEspecialidade !== 'Geral' && !minhasAreas.includes(d.cat)) return;
 
-            // --- LÓGICA DE EXCLUSIVIDADE & PRAZO (CORRIGIDA) ---
+            // --- LÓGICA DE EXCLUSIVIDADE & PRAZO ---
             let isParaMim = false;
             let styleCard = "";
             let badgeExtra = "";
@@ -2252,6 +2326,27 @@ if(typeof installApp === 'function') {
             const tituloSafe = d.titulo.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             const styleAttr = styleCard ? `style="${styleCard}"` : "";
 
+            // --- INÍCIO DA LÓGICA DE REPUTAÇÃO DO CLIENTE ---
+            // Proteção: Garante que os valores sejam números, mesmo que venham vazios
+            const totPed = Number(d.totalPedidos) || 0;
+            const totFech = Number(d.totalFechados) || 0;
+            let htmlTaxaCli = "";
+
+            if (totPed > 1) {
+                // Calcula %
+                const pct = Math.round((totFech / totPed) * 100);
+                
+                // Define Cor
+                let corTaxa = "#95a5a6"; // Cinza
+                if(pct >= 70) corTaxa = "#27ae60"; // Verde (Bom pagador)
+                else if(pct <= 30) corTaxa = "#e74c3c"; // Vermelho (Só especula)
+
+                htmlTaxaCli = `<span class="badge" style="background:${corTaxa}; color:white; margin-left:5px; font-size:0.7rem;" title="${totFech} fechados de ${totPed} pedidos">${pct}% Fecha</span>`;
+            } else {
+                htmlTaxaCli = `<span class="badge" style="background:#e3f2fd; color:#1565c0; margin-left:5px; font-size:0.7rem;">🆕 Novo</span>`;
+            }
+            // --- FIM DA LÓGICA DE REPUTAÇÃO ---
+
             divElement.innerHTML += `
             <div class="opp-card" ${styleAttr}>
                 <div style="display:flex; justify-content:space-between">
@@ -2261,7 +2356,10 @@ if(typeof installApp === 'function') {
                         ${badgeExtra}
                     </div>
                 </div>
-                <div class="opp-meta"> 📅 ${dataFormatada} • 👤 ${d.cliente} <span class="badge">${d.cat}</span></div>
+                <div class="opp-meta"> 
+                    📅 ${dataFormatada} • 👤 ${d.cliente} ${htmlTaxaCli}
+                    <span class="badge" style="float:right">${d.cat}</span>
+                </div>
                 <div class="opp-desc">${d.desc}</div>
                 <button class="btn btn-primary btn-sm" onclick="iniciarOrcamento('${d.id}', '${tituloSafe}', '${d.cliente}')">📝 Criar Orçamento</button>
             </div>`;
@@ -2272,6 +2370,7 @@ if(typeof installApp === 'function') {
         badgeElement.innerText = count;
         badgeElement.style.display = count > 0 ? 'flex' : 'none';
     }
+
             
 
             function iniciarOrcamento(idDemanda, titulo, nomeCliente) {
@@ -2289,25 +2388,25 @@ if(typeof installApp === 'function') {
     if(state.carrinho.length === 0) { alert("Carrinho vazio!"); return; }
     
     if(!state.demandaAtiva || !state.demandaAtiva.id) { 
-        alert("Erro: Nenhuma demanda selecionada. Volte ao Feed."); nav('oportunidades'); return; 
+        alert("Erro: Nenhuma demanda selecionada."); nav('oportunidades'); return; 
     }
     
-    // ... (Lógica de Zap e Feedback visual mantida) ...
+    // --- DADOS DE CONTATO ---
     let zapInput = "";
     if (state.config.zap && state.config.zap.length >= 10) zapInput = state.config.zap.replace(/\D/g, ''); 
     if (!zapInput) {
-        let userZap = prompt("Qual seu WhatsApp para contato? (DDD+Número)", "");
+        let userZap = prompt("Qual seu WhatsApp?", "");
         if(userZap) zapInput = userZap.replace(/\D/g, '');
     }
-    if (!zapInput || zapInput.length < 10) { alert("É necessário um WhatsApp válido."); return; }
+    if (!zapInput || zapInput.length < 10) { alert("WhatsApp inválido."); return; }
     if (zapInput.length >= 10 && zapInput.length <= 11) zapInput = "55" + zapInput;
 
     const prestadorNome = state.config.pixName || "Profissional";
     const btn = document.querySelector('#footer-orcamento .btn-action');
     const txtOriginal = btn.innerText;
-    btn.innerText = "Enviando..."; btn.disabled = true;
+    btn.innerText = "Finalizando..."; btn.disabled = true;
 
-    // --- CÁLCULOS (Mantidos) ---
+    // --- CÁLCULOS ---
     const itensCalculados = state.carrinho.map(item => {
         let custoMOUnit = 0;
         item.equipe.forEach(e => {
@@ -2326,39 +2425,27 @@ if(typeof installApp === 'function') {
 
     let totalParaHistorico = itensCalculados.reduce((acc, item) => acc + item._fixoMO + item._fixoMat, 0);
     totalParaHistorico += valorTaxas;
-    const totalValStr = totalParaHistorico.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
     
-    // --- PAYLOAD ---
-    const payload = {
-        tipo: "NOVO_ORCAMENTO",
-        idDemanda: state.demandaAtiva.id,
-        prestadorNome: prestadorNome,
-        prestadorZap: zapInput,
-        prestadorBio: state.config.bio || "Não informada",
-        configPagamento: configPagamentoTemp,
-        valorTotal: totalValStr,
-        itens: { versao: 2, lista: itensCalculados, taxas: valorTaxas, usaMateriais: usaMat }
-    };
-
-    fetch(API_URL, { method: "POST", body: JSON.stringify(payload), mode: "no-cors" })
-    .then(() => {
+    // --- FUNÇÃO DE SALVAMENTO LOCAL ---
+    const finalizarProcesso = () => {
         if(!state.historico) state.historico = [];
         
         const idDemandaAtual = state.demandaAtiva.id;
         const indexExistente = state.historico.findIndex(h => h.idDemanda === idDemandaAtual);
+        const origemDemanda = state.demandaAtiva.origem || 'PLATAFORMA'; // Pega a origem
 
         const dadosAtualizados = {
             id: (indexExistente !== -1) ? state.historico[indexExistente].id : Date.now(),
             idDemanda: idDemandaAtual,
             cliente: state.demandaAtiva.cliente,
             titulo: state.demandaAtiva.titulo,
+            origem: origemDemanda, // Salva se é APP ou EXTERNO
             valor: totalParaHistorico,
             pagamento: configPagamentoTemp,
             data: new Date().toISOString(),
             status: 'PENDENTE',
-            // MUDANÇA AQUI: Salvamos itensCalculados, não o carrinho cru.
             itensBackup: itensCalculados, 
-            taxasBackup: valorTaxas // Salvamos as taxas separadamente para facilitar conta
+            taxasBackup: valorTaxas
         };
 
         if (indexExistente !== -1) state.historico[indexExistente] = dadosAtualizados;
@@ -2370,16 +2457,37 @@ if(typeof installApp === 'function') {
         renderCarrinho(); 
         nav('gestao'); 
         
-        const txt = `Olá! Segue orçamento atualizado: *${payload.valorTotal}*.\nPodemos fechar?`;
+        // Abre o Zap com o resumo
+        const txt = `Olá! Segue orçamento atualizado: *${totalParaHistorico.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}*.\nPodemos fechar?`;
         window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
 
         btn.innerText = txtOriginal; btn.disabled = false;
-    })
-    .catch(err => { 
-        console.error(err);
-        alert("Erro de conexão.");
-        btn.innerText = txtOriginal; btn.disabled = false; 
-    });
+    };
+
+    // --- DECISÃO: ENVIAR PARA NUVEM OU NÃO? ---
+    if (state.demandaAtiva.origem === 'EXTERNO') {
+        // É particular: Salva só no celular
+        setTimeout(finalizarProcesso, 500); 
+    } else {
+        // É da rede: Manda pra planilha
+        const payload = {
+            tipo: "NOVO_ORCAMENTO",
+            idDemanda: state.demandaAtiva.id,
+            prestadorNome: prestadorNome,
+            prestadorZap: zapInput,
+            prestadorBio: state.config.bio || "Não informada",
+            configPagamento: configPagamentoTemp,
+            valorTotal: totalParaHistorico.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}),
+            itens: { versao: 2, lista: itensCalculados, taxas: valorTaxas, usaMateriais: usaMat }
+        };
+
+        fetch(API_URL, { method: "POST", body: JSON.stringify(payload), mode: "no-cors" })
+        .then(() => finalizarProcesso())
+        .catch(err => { 
+            alert("Sem internet? Salvando apenas no celular.");
+            finalizarProcesso(); 
+        });
+    }
 }
 
 
@@ -4251,7 +4359,6 @@ function executarBuscaParceiros() {
     const div = document.getElementById('lista-parceiros-result');
     div.innerHTML = "<div style='text-align:center; padding:20px; color:#3f51b5;'>🔄 Buscando na base de ativos...</div>";
 
-    // Chama a API com a nova ação BUSCAR_PARCEIROS
     fetch(API_URL + "?acao=BUSCAR_PARCEIROS&cat=" + encodeURIComponent(cat))
     .then(res => res.json())
     .then(data => {
@@ -4266,15 +4373,17 @@ function executarBuscaParceiros() {
             return;
         }
 
-        // Cabeçalho de resultados
         div.innerHTML = `<div style="font-size:0.8rem; color:#7f8c8d; margin-bottom:10px;">Encontrados: <strong>${data.length} profissionais</strong></div>`;
 
         data.forEach(p => {
-            // Remove o próprio usuário da lista (se vier)
+            // Remove o próprio usuário da lista
             const meuZap = state.config.zap.replace(/\D/g, '');
-            if(p.zap && p.zap.includes(meuZap)) return;
+            
+            // --- CORREÇÃO AQUI ---
+            // Usamos String(p.zap) para garantir que seja texto antes de usar .includes()
+            if(p.zap && String(p.zap).includes(meuZap)) return;
+            // ---------------------
 
-            // Texto de Abordagem Profissional
             const meuNome = state.config.pixName || "Um Colega";
             const msg = `Olá ${p.nome}! Sou ${meuNome}, também uso o Preço Bom. Vi que você é ${p.cat}. Estou buscando parceiros para indicar em obras. Podemos conversar?`;
             
@@ -4297,6 +4406,41 @@ function executarBuscaParceiros() {
         console.error(err);
         div.innerHTML = "<div style='text-align:center; color:red;'>Erro ao buscar. Tente novamente.</div>";
     });
+}
+function cancelarServico(id) {
+    const item = state.historico.find(h => h.id === id);
+    if (!item) return;
+
+    if (!confirm(`⚠️ TEM CERTEZA?\n\nIsso vai cancelar o serviço de "${item.cliente}".\n\n1. O item sairá da Agenda.\n2. Todos os lançamentos financeiros deste serviço serão apagados do Caixa.`)) {
+        return;
+    }
+
+    // 1. Remove do Financeiro (Limpeza Automática)
+    // Procura e remove movimentos que começam com "NomeDoCliente -"
+    const tamanhoOriginal = state.financeiro.movimentos.length;
+    
+    state.financeiro.movimentos = state.financeiro.movimentos.filter(m => {
+        // A lógica de criação usa: `${item.cliente} - ${desc}`
+        // Então removemos tudo que contiver o nome do cliente vinculado a este cancelamento
+        return !m.desc.startsWith(`${item.cliente} -`);
+    });
+    
+    const apagados = tamanhoOriginal - state.financeiro.movimentos.length;
+
+    // 2. Atualiza Status para CANCELADO (Isso tira da Agenda automaticamente)
+    item.status = 'CANCELADO';
+    
+    // 3. Salva e Atualiza a Tela
+    saveData();
+    
+    // Se estiver com o modal de histórico aberto, atualiza ele. Senão, atualiza a gestão.
+    if(document.getElementById('modal-historico-full').style.display === 'flex') {
+        renderHistoricoCompleto();
+    } else {
+        renderGestao();
+    }
+
+    alert(`✅ Serviço Cancelado!\n\n${apagados} lançamentos financeiros foram removidos do seu caixa.`);
 }
 
 // --- FUNÇÕES AUXILIARES DE TEXTO ---
