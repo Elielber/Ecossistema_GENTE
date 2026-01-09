@@ -1909,33 +1909,33 @@ if(typeof installApp === 'function') {
         .then(res => res.json())
         .then(demandas => {
             div.innerHTML = "";
-            cacheOrcamentosCliente = demandas; // Salva no cache
+            cacheOrcamentosCliente = demandas;
 
             if(demandas.length === 0) {
                 div.innerHTML = "<div style='text-align:center;'>Nenhum pedido encontrado.</div>";
                 return;
             }
 
-            // ORDENAÇÃO: Abertas primeiro, Fechadas por último
+            // ORDENAÇÃO
             demandas.sort((a, b) => {
-                if (a.status === 'ABERTA' && b.status === 'FECHADO') return -1;
-                if (a.status === 'FECHADO' && b.status === 'ABERTA') return 1;
-                return new Date(b.data) - new Date(a.data); // Desempate por data
+                const statusA = (a.status || "").toUpperCase();
+                const statusB = (b.status || "").toUpperCase();
+                if (statusA === 'ABERTA' && statusB === 'FECHADO') return -1;
+                if (statusA === 'FECHADO' && statusB === 'ABERTA') return 1;
+                return new Date(b.data) - new Date(a.data);
             });
 
             demandas.forEach((d, indexDemanda) => {
-                // VERIFICA SE ESTÁ FECHADO
-                const isFechado = d.status === 'FECHADO';
+                // CORREÇÃO 1: Normaliza o status para maiúsculo para evitar erro de digitação na planilha
+                // Aceita "FECHADO", "Fechado", "fechado"
+                const statusNormalizado = (d.status || "").toUpperCase();
+                const isFechado = statusNormalizado === 'FECHADO';
                 
-                // --- CORREÇÃO PRINCIPAL: GARANTIR A CATEGORIA ---
-                // Tenta ler 'cat' (padrão do feed) ou 'categoria' (legado)
-                // Se não achar nenhum, usa string vazia para não gerar "undefined"
                 const categoriaCorrigida = d.cat || d.categoria || ""; 
-                // ------------------------------------------------
-                
-                // ESTILO DO CARD
+
+                // Estilo visual (Cinza se fechado, Colorido se aberto)
                 const cardStyle = isFechado 
-                    ? "background:#f4f4f4; border-left:5px solid #7f8c8d; opacity:0.8; filter: grayscale(100%);" 
+                    ? "background:#f4f4f4; border-left:5px solid #7f8c8d; opacity:0.9;" 
                     : "border-left:5px solid var(--cli-accent);";
 
                 const badgeStatus = isFechado
@@ -1946,17 +1946,15 @@ if(typeof installApp === 'function') {
                 
                 if(d.orcamentos.length > 0) {
                     d.orcamentos.forEach((o, indexOrc) => {
+                        // Verifica vencedor de forma segura (converte para string)
                         const isVencedor = isFechado && d.vencedor && d.vencedor.toString() === o.zapPrestador.toString();
                         
-                        // Estrelas
                         let htmlEstrelas = (!o.estrelas || o.estrelas === "Novato") ? "🆕" : `⭐ ${o.estrelas}`;
                         
                         let estiloOrc = isVencedor 
                             ? "background:#d4edda; border:2px solid #28a745;" 
                             : `background:white; border:1px solid #ddd; border-left: 5px solid #ccc;`;
 
-                       // AQUI ESTAVA O ERRO: Chamada da função com d.categoria (que era undefined)
-                       // Agora usamos categoriaCorrigida
                        htmlOrcamentos += `
                        <div style="${estiloOrc} padding:12px; border-radius:8px; margin-top:8px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
                            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -1973,9 +1971,7 @@ if(typeof installApp === 'function') {
     
                            <div style="display:flex; gap:10px; margin-top:10px;">
                                <button class="btn btn-outline btn-sm" style="flex:1;" onclick="verDetalhesOrcamento(${indexDemanda}, ${indexOrc})">👁️ Ver</button>
-        
-                               <button class="btn btn-success btn-sm" style="flex:1;" onclick="abrirOpcoesContato('${o.prestador}', '${o.zapPrestador}', '${categoriaCorrigida}', '${d.titulo}')"> 💬 Contato / Indicar </button>
-        
+                               <button class="btn btn-success btn-sm" style="flex:1;" onclick="abrirOpcoesContato('${o.prestador}', '${o.zapPrestador}', '${categoriaCorrigida}', '${d.titulo}')"> 💬 Contato </button>
                                ${!isFechado ? 
                                  `<button class="btn btn-outline btn-sm" style="flex:1; border-color:#f1c40f; color:#d35400;" onclick="abrirModalAvaliacao('${d.id}', '${o.prestador}', '${o.zapPrestador}')">🏆 Contratar</button>` 
                                  : ''}
@@ -1985,26 +1981,31 @@ if(typeof installApp === 'function') {
                 } else {
                     htmlOrcamentos = "<div style='font-size:0.8rem; color:#999; margin-top:5px;'>Aguardando orçamentos...</div>";
                 }
-				// --- 2. GERA O BOTÃO DE AVALIAÇÃO (SE ESTIVER FECHADO) ---
            
-            let botoesAcao = "";
-            if (isFechado) {
-                // Tenta pegar o nome do vencedor dos orçamentos, se possível
-                let nomeVencedor = "Profissional";
-                // Procura nos orçamentos quem tem o mesmo zap do vencedor
-                if(d.orcamentos && d.vencedor) {
-                    const orcVencedor = d.orcamentos.find(o => o.zapPrestador.toString() === d.vencedor.toString());
-                    if(orcVencedor) nomeVencedor = orcVencedor.prestador;
+                // CORREÇÃO 2: Botão de Feedback
+                let botoesAcao = "";
+                
+                // Se estiver Fechado E NÃO tiver nota ainda (d.nota vazio/null)
+                if (isFechado && !d.nota) {
+                    let nomeVencedor = "Profissional";
+                    if(d.orcamentos && d.vencedor) {
+                        const orcVencedor = d.orcamentos.find(o => o.zapPrestador.toString() === d.vencedor.toString());
+                        if(orcVencedor) nomeVencedor = orcVencedor.prestador;
+                    }
+
+                    botoesAcao = `
+                    <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px; animation:fadeIn 1s;">
+                        <button class="btn btn-outline btn-sm" style="width:100%; border-color:#f1c40f; color:#f39c12; background:white; font-weight:bold;" 
+                            onclick="abrirModalFeedback('${d.id}', '${nomeVencedor}', '${d.vencedor || ''}')">
+                            ⭐ Como foi o serviço? (Avaliar)
+                        </button>
+                    </div>`;
                 }
 
-                botoesAcao = `
-                <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
-                    <button class="btn btn-outline btn-sm" style="width:100%; border-color:#f1c40f; color:#f39c12; background:white;" 
-                        onclick="abrirModalFeedback('${d.id}', '${nomeVencedor}', '${d.vencedor || ''}')">
-                        ⭐ Como foi o serviço? (Avaliar)
-                    </button>
-                </div>`;
-            }
+                // CORREÇÃO 3: Exibe nota se ela existir (Removemos o !d.nota que estava errado)
+                const htmlNota = (isFechado && d.nota) 
+                    ? `<div style="font-size:0.8rem; color:#e67e22; margin-top:5px; font-weight:bold;">⭐ Sua avaliação: ${d.nota}</div>` 
+                    : '';
 
                 div.innerHTML += `
                 <div class="notification-card" style="${cardStyle}">
@@ -2014,16 +2015,15 @@ if(typeof installApp === 'function') {
                     </div>
                     <div style="font-size:0.8rem; color:#666; margin-top:5px;">Data: ${new Date(d.data).toLocaleDateString('pt-BR')}</div>
                     
-                    ${isFechado && !d.nota ? `<div style="font-size:0.8rem; color:#e67e22; margin-top:5px;">⭐ Sua avaliação: ${d.nota}</div>` : ''}
+                    ${htmlNota}
 
                     <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
                     ${htmlOrcamentos}
-					 ${botoesAcao}
-                </div>`;
+                    
+                    ${botoesAcao} </div>`;
             });
         });
     }
-
     // Função Nova: Popula e abre o modal
   function verDetalhesOrcamento(idxDemanda, idxOrc) {
     const dadosBrutos = cacheOrcamentosCliente[idxDemanda].orcamentos[idxOrc];
