@@ -306,6 +306,15 @@
             <div>Sou Prestador</div>
         </div>
     </button>
+    
+    <button class="welcome-btn" onclick="goToScreen('fornecedor-intro')" style="border:1px solid rgba(255,255,255,0.2); background:rgba(0,0,0,0.3); color:white;">
+    <span style="font-size:1.5rem">🏭</span> 
+    <div style="text-align:left">
+        <div style="font-size:0.8rem; opacity:0.7">PARA LOJAS</div>
+        <div>Sou Fornecedor</div>
+    </div>
+</button>
+
 	<div style="text-align: center; margin-top: 15px; width: 100%;">
             <a href="https://www.ecossistemagente.com.br/debriefing.html" target="_blank" style="
                 background-color: rgba(255, 255, 255, 0.2); /* Ajustado para transparente para combinar com a tela */
@@ -470,6 +479,10 @@
                 </label>
             </div>
             <button class="btn btn-outline" onclick="salvarModelo()">💾 Salvar Modelo <span class="premium-lock">💎</span></button>
+            <button class="btn btn-primary" onclick="abrirModalCotacaoFornecedor()" style="background:#e67e22; border:none; margin-bottom:10px; display:flex; align-items:center; justify-content:center; gap:10px;">
+    🏭 Cotar Materiais (ZAP)
+</button>
+
             <button class="btn btn-danger" onclick="limparCarrinho()">🗑️ Limpar</button>
             <div style="margin-top:20px; border-top:1px solid #ddd; padding-top:10px;">
                 <h4 onclick="toggleModelos()" style="margin:0; color:var(--primary); cursor:pointer;">📂 Carregar Modelo (Ver)</h4>
@@ -1035,6 +1048,59 @@
             <div style="text-align:center; color:#999; margin-top:20px;">
                 Selecione uma especialidade acima para ver quem está ativo na plataforma.
             </div>
+        </div>
+    </div>
+</div>
+<div id="screen-fornecedor-intro" class="app-screen" style="background:var(--primary); color:white; padding:20px; overflow-y:auto;">
+    <button class="btn-home" onclick="goToScreen('welcome')" style="position:absolute; top:10px; left:10px;">🏠</button>
+    <div style="text-align:center; margin-top:30px;">
+        <div style="font-size:3rem;">🏭</div>
+        <h2>Portal do Fornecedor</h2>
+    </div>
+
+    <div class="card" style="background:white; color:#333; margin-top:20px; border-left: 5px solid #f1c40f;">
+        <h3 style="margin-top:0; color:#f39c12; font-size:1rem;">Já sou parceiro</h3>
+        <div style="display:flex; gap:10px;">
+            <input type="tel" id="login-forn-input" class="input" placeholder="CNPJ ou WhatsApp cadastrado">
+            <button class="btn btn-primary" style="width:auto; margin:0; background:#f39c12; border:none;" onclick="fazerLoginFornecedor()">Entrar</button>
+        </div>
+    </div>
+
+    <div class="card" style="background:white; color:#333; margin-top:20px; opacity:0.95">
+        <h3 style="margin-top:0; color:var(--primary); font-size:1.1rem;">Cadastre sua Loja (Grátis)</h3>
+        <div class="form-group"><span class="label">CNPJ (Números)</span><input type="tel" id="forn-cnpj" class="input"></div>
+        <div class="form-group"><span class="label">Nome da Loja</span><input type="text" id="forn-nome" class="input"></div>
+        <div class="form-group"><span class="label">WhatsApp Vendas</span><input type="tel" id="forn-zap" class="input" placeholder="(DD) 99999-9999"></div>
+
+        <div class="form-group" style="background:#f8f9fa; padding:10px; border-radius:8px; border:1px dashed #ccc;">
+            <span class="label" style="color:var(--accent)">🎯 O que você vende? (Radar)</span>
+            <div class="row">
+                <select id="forn-radar-grupo" class="input" style="font-size:0.8rem"><option value="">Carregando...</option></select>
+                <button class="btn btn-accent btn-sm" style="width:auto; margin-top:0;" onclick="addFornRadar()">+</button>
+            </div>
+            <div id="lista-radar-forn" class="chip-container"></div>
+        </div>
+        <button class="btn btn-success" onclick="salvarCadastroFornecedor()">✅ Cadastrar</button>
+    </div>
+</div>
+
+<div id="screen-fornecedor-dash" class="app-screen" style="background:#f4f6f7;">
+    <header style="background:#2c3e50; padding:15px; display:flex; align-items:center;">
+        <button class="btn-home" onclick="goToScreen('welcome')">🏠</button>
+        <h1 style="font-size:1rem; flex:1; text-align:center;">Painel do Lojista</h1><div style="width:35px"></div>
+    </header>
+    <div style="padding:20px;">
+        <div style="background:white; padding:15px; border-radius:12px; margin-bottom:15px; border-left:5px solid #27ae60;">
+            <h3 style="margin:0; color:#2c3e50;">Olá, <span id="lbl-forn-nome">Parceiro</span>!</h3>
+            <p style="font-size:0.8rem; color:#666;">Seu radar: <span id="dash-radar-list"></span></p>
+        </div>
+        
+        <div id="area-metricas-reais"></div>
+
+        <div style="background:#e3f2fd; padding:15px; border-radius:10px; text-align:center; margin-top:20px; border:1px solid #bbdefb;">
+            <div style="font-size:2rem;">📲</div>
+            <strong>Aguarde Pedidos</strong>
+            <p style="font-size:0.8rem; color:#1565c0;">Os prestadores enviarão as listas pelo WhatsApp.</p>
         </div>
     </div>
 </div>
@@ -4471,6 +4537,190 @@ function encontrarGrupoPorServico(servico) {
 
     return "";
 }
+/* --- MÓDULO FORNECEDOR & COTAÇÃO --- */
+
+let stateFornecedor = { nome: "", cnpj: "", zap: "", radar: [] };
+
+// 1. INICIALIZAÇÃO E RADAR
+// Substitua a função antiga por esta:
+function initFornecedorScreen() {
+    const sel = document.getElementById('forn-radar-grupo');
+    
+    // Verifica se o select existe e se ainda não foi preenchido (tem tamanho <= 1)
+    if(sel && sel.options.length <= 1) {
+        sel.innerHTML = '<option value="">Escolha a Especialidade...</option>';
+        
+        // 1. Cria uma lista única com TODAS as especialidades de todos os grupos
+        let todasEspecialidades = [];
+        
+        Object.keys(TAXONOMIA).forEach(grupo => {
+            // Pega os itens dentro de cada grupo (ex: Pintura, Elétrica)
+            const itensDoGrupo = TAXONOMIA[grupo];
+            todasEspecialidades.push(...itensDoGrupo);
+        });
+
+        // 2. Ordena alfabeticamente para facilitar a busca
+        todasEspecialidades.sort();
+
+        // 3. Adiciona ao Select
+        todasEspecialidades.forEach(item => {
+            sel.innerHTML += `<option value="${item}">${item}</option>`;
+        });
+    }
+}
+
+
+function addFornRadar() {
+    const val = document.getElementById('forn-radar-grupo').value;
+    if(!val) return;
+    if(stateFornecedor.radar.includes(val)) { alert("Já existe!"); return; }
+    stateFornecedor.radar.push(val);
+    renderFornRadar();
+}
+
+function renderFornRadar() {
+    const div = document.getElementById('lista-radar-forn');
+    if(div) div.innerHTML = stateFornecedor.radar.map((r, i) => 
+        `<div class="chip">${r} <span class="chip-close" onclick="stateFornecedor.radar.splice(${i},1); renderFornRadar()">×</span></div>`
+    ).join('');
+}
+
+// 2. CADASTRO
+function salvarCadastroFornecedor() {
+    const cnpj = document.getElementById('forn-cnpj').value;
+    const nome = document.getElementById('forn-nome').value;
+    const zap = document.getElementById('forn-zap').value;
+
+    if(!cnpj || !nome || !zap || stateFornecedor.radar.length===0) { alert("Preencha tudo!"); return; }
+
+    stateFornecedor = { nome, cnpj, zap, radar: stateFornecedor.radar };
+    
+    const btn = event.currentTarget; btn.innerText = "Cadastrando..."; btn.disabled = true;
+
+    fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({ tipo: "CADASTRAR_FORNECEDOR", cnpj, nome, zap, especialidades: stateFornecedor.radar.join(", ") }),
+        mode: "no-cors"
+    }).then(() => {
+        alert("✅ Sucesso!");
+        carregarDashboardFornecedor();
+    }).catch(e => {
+        alert("Erro conexão (Salvo local)");
+        carregarDashboardFornecedor();
+    });
+}
+
+// 3. LOGIN
+function fazerLoginFornecedor() {
+    const login = document.getElementById('login-forn-input').value;
+    if(!login) { alert("Digite o login"); return; }
+    
+    const btn = event.currentTarget; const txt = btn.innerText;
+    btn.innerText = "🔄"; btn.disabled = true;
+
+    fetch(API_URL + "?acao=LOGIN_FORNECEDOR&login=" + login)
+    .then(res => res.json())
+    .then(data => {
+        btn.innerText = txt; btn.disabled = false;
+        if(data.status === "erro") { alert(data.msg); }
+        else {
+            stateFornecedor = { nome: data.nome, cnpj: data.cnpj, zap: data.zap, radar: data.radar.split(",").map(s=>s.trim()) };
+            carregarDashboardFornecedor();
+        }
+    });
+}
+
+// 4. DASHBOARD COM DADOS REAIS
+function carregarDashboardFornecedor() {
+    goToScreen('fornecedor-dash');
+    document.getElementById('lbl-forn-nome').innerText = stateFornecedor.nome;
+    document.getElementById('dash-radar-list').innerText = stateFornecedor.radar.join(", ");
+    
+    const divRes = document.getElementById('area-metricas-reais');
+    divRes.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando dados reais do mercado...</div>";
+
+    fetch(API_URL + "?acao=BUSCAR_METRICAS_MERCADO&radar=" + encodeURIComponent(stateFornecedor.radar.join(",")))
+    .then(res => res.json())
+    .then(lista => {
+        divRes.innerHTML = "";
+        if(lista.length === 0) {
+            divRes.innerHTML = "<div class='card' style='text-align:center; color:#7f8c8d'>Sem dados recentes para seu radar.</div>";
+            return;
+        }
+        divRes.innerHTML = `<h4 style="color:#7f8c8d; margin-bottom:10px;">📈 Top Materiais (Sua Região)</h4>`;
+        lista.forEach((item, i) => {
+             const badge = i < 3 ? `<span class="badge badge-green">🔥 Alta</span>` : "";
+             divRes.innerHTML += `
+             <div class="card">
+                <div style="display:flex; justify-content:space-between; font-weight:bold; color:#2c3e50;">
+                    <span>${i+1}. ${item.material}</span> ${badge}
+                </div>
+                <div style="font-size:0.8rem; color:#666;">Orçados na rede: <strong>${item.qtd} un</strong></div>
+             </div>`;
+        });
+    });
+}
+
+// 5. COTAÇÃO DO PRESTADOR (Busca Fornecedores)
+function abrirModalCotacaoFornecedor() {
+    const cats = new Set();
+    state.carrinho.forEach(i => {
+        if(i.mat && i.mat.length > 0) {
+            const grp = encontrarGrupoPorServico(i.nome) || i.cat;
+            if(grp) cats.add(grp);
+        }
+    });
+
+    if(cats.size === 0) { alert("Carrinho sem materiais categorizados."); return; }
+    
+    const modal = document.getElementById('modal-parceiros');
+    modal.querySelector('h3').innerText = "🏭 Fornecedores";
+    const div = document.getElementById('lista-parceiros-result');
+    div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando lojas...</div>";
+    modal.style.display = 'flex';
+
+    fetch(API_URL + "?acao=BUSCAR_FORNECEDORES&cats=" + encodeURIComponent(Array.from(cats).join(",")))
+    .then(res => res.json())
+    .then(lojas => {
+        div.innerHTML = "";
+        if(lojas.length === 0) { div.innerHTML = "<div style='text-align:center'>Nenhuma loja encontrada.</div>"; return; }
+        
+        lojas.forEach(l => {
+            div.innerHTML += `
+            <div style="background:white; border-left:4px solid #e67e22; padding:15px; margin-bottom:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-weight:bold;">${l.nome}</div>
+                    <div style="font-size:0.7rem; color:#666;">${l.especialidades}</div>
+                </div>
+                <button onclick="enviarZapFornecedor('${l.zap}', '${l.nome}')" class="btn-sm btn-success">Cotar 📲</button>
+            </div>`;
+        });
+    });
+}
+
+function enviarZapFornecedor(zapLoja, nomeLoja) {
+    let txt = "";
+    state.carrinho.forEach(i => {
+        if(i.mat) i.mat.forEach(m => txt += `📦 ${m.q*i.qtd}x ${m.n}\n`);
+    });
+
+    const nome = state.config.pixName || "Prestador";
+    const zap = state.config.zap ? state.config.zap.replace(/\D/g,'') : "";
+    const cat = state.config.specialty || "";
+    // Link de validação
+    const link = `${window.location.href.split('?')[0]}?indicar=${zap}&nome=${encodeURIComponent(nome)}&cat=${encodeURIComponent(cat)}`;
+    
+    const msg = `Olá *${nomeLoja}*! Sou *${nome}* (Preço Bom).\nPreciso cotar:\n\n${txt}\n----------\nMeu Perfil: ${link}`;
+    window.open(`https://wa.me/${zapLoja.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// Override do goToScreen para inicializar tela
+const _superGoTo = goToScreen;
+goToScreen = function(s) {
+    _superGoTo(s);
+    if(s === 'fornecedor-intro') initFornecedorScreen();
+}
+
 </script>
 </body>
 </html>
