@@ -4417,23 +4417,38 @@ function abrirOpcoesContato(nome, zap, categoria, tituloServico) {
 // --- MÓDULO ESTRATÉGIA (NETWORKING) ---
 
 function abrirBuscaParceiros() {
-    // 1. Popula o Select de Grupos (Reusa a lógica existente)
-	 const inputTexto = document.getElementById('busca-parceiro-input');
-    if(inputTexto) inputTexto.style.display = 'block'; 
-    const select = document.getElementById('busca-parceiro-grupo');
-	
-    if(select.options.length <= 1) {
-        const grupos = Object.keys(TAXONOMIA);
-        select.innerHTML = '<option value="">1. Escolha a Área...</option>';
-        grupos.forEach(g => select.innerHTML += `<option value="${g}">${g}</option>`);
+    // --- RESTAURA O CAMPO DE SERVIÇO ---
+    const campoServico = document.getElementById('busca-parceiro-cat');
+    if(campoServico) {
+        campoServico.style.display = 'block';
+        if(campoServico.parentElement) campoServico.parentElement.style.display = 'block';
+        campoServico.disabled = true; // Reinicia travado até escolher a área
+        campoServico.innerHTML = '<option value="">2. Escolha o Serviço...</option>';
     }
     
-    // 2. Limpa resultados anteriores
+    // Restaura o título original
+    const modal = document.getElementById('modal-parceiros');
+    modal.querySelector('h3').innerText = "🤝 Networking";
+    // ------------------------------------
+
+    const select = document.getElementById('busca-parceiro-grupo');
+	
+    // Reseta o primeiro select para mostrar Grupos (Áreas) em vez de especialidades
+    // (Forçamos limpar para reconstruir a lógica de Grupo -> Serviço)
+    select.innerHTML = '<option value="">1. Escolha a Área...</option>';
+    const grupos = Object.keys(TAXONOMIA);
+    grupos.forEach(g => select.innerHTML += `<option value="${g}">${g}</option>`);
+    
+    // Reseta o evento onchange para o padrão (atualizarSubCategorias)
+    select.onchange = function() { atualizarSubCategorias('busca-parceiro'); };
+    
+    // Limpa resultados anteriores
     document.getElementById('lista-parceiros-result').innerHTML = 
         "<div style='text-align:center; color:#999; margin-top:20px;'>Selecione uma especialidade acima.</div>";
         
-    document.getElementById('modal-parceiros').style.display = 'flex';
+    modal.style.display = 'flex';
 }
+
 
 function executarBuscaParceiros() {
     const cat = document.getElementById('busca-parceiro-cat').value;
@@ -4730,12 +4745,16 @@ function abrirModalCotacaoFornecedor() {
     const modal = document.getElementById('modal-parceiros');
     modal.querySelector('h3').innerText = "🏭 Fornecedores";
     
-    // --- CORREÇÃO: ESCONDE O CAMPO FANTASMA (INPUT DE TEXTO) ---
-    const inputFantasma = document.getElementById('busca-parceiro-input');
-    if(inputFantasma) inputFantasma.style.display = 'none'; 
-    // -----------------------------------------------------------
+    // --- CORREÇÃO REAL: ESCONDE O SEGUNDO SELECT (CAMPO DE SERVIÇO) ---
+    const campoServico = document.getElementById('busca-parceiro-cat');
+    if(campoServico) {
+        // Esconde o campo e a div pai dele (para não deixar buraco)
+        campoServico.style.display = 'none'; 
+        if(campoServico.parentElement) campoServico.parentElement.style.display = 'none';
+    }
+    // ------------------------------------------------------------------
     
-    // Configura o Select Manual
+    // Configura o Select Manual (O Primeiro Campo)
     const select = document.getElementById('busca-parceiro-grupo');
     if(select) {
         select.innerHTML = '<option value="">Filtrar por Especialidade...</option>';
@@ -4759,7 +4778,6 @@ function abrirModalCotacaoFornecedor() {
     // Dispara a busca automática
     buscarFornecedoresNoBackend(Array.from(especialidadesParaBuscar));
 }
-
 
 // Nova função auxiliar para evitar repetição de código
 function buscarFornecedoresNoBackend(listaEspecialidades) {
