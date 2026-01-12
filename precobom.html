@@ -4679,31 +4679,53 @@ function carregarDashboardFornecedor() {
 // Substitua a função abrirModalCotacaoFornecedor antiga por esta:
 
 function abrirModalCotacaoFornecedor() {
-    // 1. Identifica categorias presentes no carrinho
-    const cats = new Set();
+    // 1. Identifica ESPECIALIDADES presentes no carrinho (não Grupos)
+    const especialidadesParaBuscar = new Set();
+    
     state.carrinho.forEach(i => {
         if(i.mat && i.mat.length > 0) {
-            // Tenta achar o grupo pelo nome do serviço ou usa a categoria salva
-            const grp = encontrarGrupoPorServico(i.nome) || i.cat;
-            if(grp) cats.add(grp);
+            // O Pulo do Gato: Usamos i.cat (que é a especialidade, ex: 'Pintor') 
+            // ou i.nome se i.cat falhar. Não usamos mais o Grupo.
+            const especialidade = i.cat || i.nome;
+            if(especialidade) especialidadesParaBuscar.add(especialidade);
         }
     });
 
-    if(cats.size === 0) { 
-        alert("Seu carrinho não tem materiais vinculados a categorias conhecidas."); 
+    if(especialidadesParaBuscar.size === 0) { 
+        alert("Seu carrinho não tem materiais vinculados a serviços conhecidos."); 
         return; 
     }
     
     const modal = document.getElementById('modal-parceiros');
-    modal.querySelector('h3').innerText = "🏭 Fornecedores"; // Muda título para contexto de compra
+    modal.querySelector('h3').innerText = "🏭 Fornecedores";
     
-    // --- CORREÇÃO: POPULA O SELECT DE BUSCA MANUAL ---
-    // Isso garante que os menus de categoria apareçam se o usuário quiser filtrar
+    // --- CORREÇÃO DO SELECT MANUAL (Mostrar Especialidades, não Grupos) ---
     const select = document.getElementById('busca-parceiro-grupo');
-    if(select && select.options.length <= 1) {
-        const grupos = Object.keys(TAXONOMIA);
-        select.innerHTML = '<option value="">1. Escolha a Área...</option>';
-        grupos.forEach(g => select.innerHTML += `<option value="${g}">${g}</option>`);
+    
+    // Só preenche se estiver vazio ou com a opção padrão errada
+    if(select) {
+        // Limpa e recria para garantir que sejam Especialidades
+        select.innerHTML = '<option value="">Filtrar por Especialidade...</option>';
+        
+        let listaOps = [];
+        // Pega todas as especialidades da Taxonomia
+        if (typeof TAXONOMIA !== 'undefined') {
+            Object.keys(TAXONOMIA).forEach(grupo => {
+                listaOps.push(...TAXONOMIA[grupo]);
+            });
+        }
+        listaOps.sort(); // Ordena A-Z
+        
+        listaOps.forEach(op => {
+            select.innerHTML += `<option value="${op}">${op}</option>`;
+        });
+        
+        // Adiciona evento para buscar ao trocar o select
+        select.onchange = function() {
+            if(this.value) {
+                buscarFornecedoresNoBackend([this.value]);
+            }
+        };
     }
     // --------------------------------------------------
 
@@ -4712,8 +4734,16 @@ function abrirModalCotacaoFornecedor() {
     
     modal.style.display = 'flex';
 
-    // 2. Busca Automática baseada no Carrinho
-    fetch(API_URL + "?acao=BUSCAR_FORNECEDORES&cats=" + encodeURIComponent(Array.from(cats).join(",")))
+    // Dispara a busca automática com a lista de especialidades
+    buscarFornecedoresNoBackend(Array.from(especialidadesParaBuscar));
+}
+
+// Nova função auxiliar para evitar repetição de código
+function buscarFornecedoresNoBackend(listaEspecialidades) {
+    const div = document.getElementById('lista-parceiros-result');
+    div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando...</div>";
+
+    fetch(API_URL + "?acao=BUSCAR_FORNECEDORES&cats=" + encodeURIComponent(listaEspecialidades.join(",")))
     .then(res => res.json())
     .then(lojas => {
         div.innerHTML = "";
@@ -4721,13 +4751,13 @@ function abrirModalCotacaoFornecedor() {
         if(lojas.length === 0) { 
             div.innerHTML = `
                 <div style='text-align:center; padding:15px;'>
-                    <p>Nenhuma loja encontrada automaticamente para os itens do carrinho.</p>
-                    <p style='font-size:0.8rem; color:#666;'>Tente usar os filtros acima para buscar manualmente.</p>
+                    <p>Nenhum fornecedor encontrado para: <strong>${listaEspecialidades.join(", ")}</strong></p>
+                    <p style='font-size:0.8rem; color:#666;'>Tente selecionar outra especialidade na lista acima.</p>
                 </div>`; 
             return; 
         }
         
-        div.innerHTML = `<div style="font-size:0.8rem; color:#7f8c8d; margin-bottom:10px;">Encontradas: ${lojas.length} lojas sugeridas</div>`;
+        div.innerHTML = `<div style="font-size:0.8rem; color:#7f8c8d; margin-bottom:10px;">Encontradas: ${lojas.length} lojas</div>`;
 
         lojas.forEach(l => {
             div.innerHTML += `
@@ -4746,7 +4776,6 @@ function abrirModalCotacaoFornecedor() {
         div.innerHTML = "<div style='text-align:center; color:red'>Erro ao buscar fornecedores.</div>";
     });
 }
-
 
 function enviarZapFornecedor(zapLoja, nomeLoja) {
     let txt = "";
