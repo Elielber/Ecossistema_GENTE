@@ -4600,29 +4600,60 @@ function renderFornRadar() {
 }
 
 // 2. CADASTRO
+// Substitua a função salvarCadastroFornecedor por esta:
+
 function salvarCadastroFornecedor() {
     const cnpj = document.getElementById('forn-cnpj').value;
     const nome = document.getElementById('forn-nome').value;
-    const zap = document.getElementById('forn-zap').value;
+    let zapRaw = document.getElementById('forn-zap').value; // Pega o valor original
 
-    if(!cnpj || !nome || !zap || stateFornecedor.radar.length===0) { alert("Preencha tudo!"); return; }
+    if(!cnpj || !nome || !zapRaw || stateFornecedor.radar.length===0) { 
+        alert("Preencha todos os campos e adicione especialidades!"); 
+        return; 
+    }
 
-    stateFornecedor = { nome, cnpj, zap, radar: stateFornecedor.radar };
+    // --- CORREÇÃO AUTOMÁTICA DO ZAP (+55) ---
+    // Remove tudo que não for número
+    let zapLimpo = zapRaw.replace(/\D/g, '');
+
+    // Se tiver entre 10 e 11 dígitos (ex: 22999999999), adiciona 55 do Brasil
+    if (zapLimpo.length >= 10 && zapLimpo.length <= 11) {
+        zapLimpo = "55" + zapLimpo;
+    }
+    // Se ficou muito curto, avisa erro
+    if (zapLimpo.length < 12) {
+        alert("Número de WhatsApp inválido. Digite DDD + Número.");
+        return;
+    }
+    // ------------------------------------------
+
+    // Atualiza o estado com o Zap corrigido
+    stateFornecedor = { nome, cnpj, zap: zapLimpo, radar: stateFornecedor.radar };
     
-    const btn = event.currentTarget; btn.innerText = "Cadastrando..."; btn.disabled = true;
+    const btn = event.currentTarget; 
+    const txtOriginal = btn.innerText;
+    btn.innerText = "Cadastrando..."; 
+    btn.disabled = true;
 
     fetch(API_URL, {
         method: "POST",
-        body: JSON.stringify({ tipo: "CADASTRAR_FORNECEDOR", cnpj, nome, zap, especialidades: stateFornecedor.radar.join(", ") }),
+        body: JSON.stringify({ 
+            tipo: "CADASTRAR_FORNECEDOR", 
+            cnpj: cnpj, 
+            nome: nome, 
+            zap: zapLimpo, // Envia o zap tratado
+            especialidades: stateFornecedor.radar.join(", ") 
+        }),
         mode: "no-cors"
     }).then(() => {
-        alert("✅ Sucesso!");
+        alert("✅ Loja cadastrada com sucesso!");
         carregarDashboardFornecedor();
     }).catch(e => {
-        alert("Erro conexão (Salvo local)");
+        alert("Erro de conexão (Salvo localmente)");
         carregarDashboardFornecedor();
     });
 }
+
 
 // 3. LOGIN
 function fazerLoginFornecedor() {
@@ -4676,16 +4707,13 @@ function carregarDashboardFornecedor() {
 }
 
 // 5. COTAÇÃO DO PRESTADOR (Busca Fornecedores)
-// Substitua a função abrirModalCotacaoFornecedor antiga por esta:
+
 
 function abrirModalCotacaoFornecedor() {
-    // 1. Identifica ESPECIALIDADES presentes no carrinho (não Grupos)
+    // 1. Identifica ESPECIALIDADES
     const especialidadesParaBuscar = new Set();
-    
     state.carrinho.forEach(i => {
         if(i.mat && i.mat.length > 0) {
-            // O Pulo do Gato: Usamos i.cat (que é a especialidade, ex: 'Pintor') 
-            // ou i.nome se i.cat falhar. Não usamos mais o Grupo.
             const especialidade = i.cat || i.nome;
             if(especialidade) especialidadesParaBuscar.add(especialidade);
         }
@@ -4699,44 +4727,36 @@ function abrirModalCotacaoFornecedor() {
     const modal = document.getElementById('modal-parceiros');
     modal.querySelector('h3').innerText = "🏭 Fornecedores";
     
-    // --- CORREÇÃO DO SELECT MANUAL (Mostrar Especialidades, não Grupos) ---
-    const select = document.getElementById('busca-parceiro-grupo');
+    // --- CORREÇÃO: ESCONDE O CAMPO FANTASMA (INPUT DE TEXTO) ---
+    const inputFantasma = document.getElementById('busca-parceiro-input');
+    if(inputFantasma) inputFantasma.style.display = 'none'; 
+    // -----------------------------------------------------------
     
-    // Só preenche se estiver vazio ou com a opção padrão errada
+    // Configura o Select Manual
+    const select = document.getElementById('busca-parceiro-grupo');
     if(select) {
-        // Limpa e recria para garantir que sejam Especialidades
         select.innerHTML = '<option value="">Filtrar por Especialidade...</option>';
-        
         let listaOps = [];
-        // Pega todas as especialidades da Taxonomia
         if (typeof TAXONOMIA !== 'undefined') {
-            Object.keys(TAXONOMIA).forEach(grupo => {
-                listaOps.push(...TAXONOMIA[grupo]);
-            });
+            Object.keys(TAXONOMIA).forEach(grupo => listaOps.push(...TAXONOMIA[grupo]));
         }
-        listaOps.sort(); // Ordena A-Z
+        listaOps.sort();
+        listaOps.forEach(op => select.innerHTML += `<option value="${op}">${op}</option>`);
         
-        listaOps.forEach(op => {
-            select.innerHTML += `<option value="${op}">${op}</option>`;
-        });
-        
-        // Adiciona evento para buscar ao trocar o select
         select.onchange = function() {
-            if(this.value) {
-                buscarFornecedoresNoBackend([this.value]);
-            }
+            if(this.value) buscarFornecedoresNoBackend([this.value]);
         };
     }
-    // --------------------------------------------------
 
     const div = document.getElementById('lista-parceiros-result');
     div.innerHTML = "<div style='text-align:center; padding:20px; color:#e67e22;'>🔄 Buscando lojas compatíveis...</div>";
     
     modal.style.display = 'flex';
 
-    // Dispara a busca automática com a lista de especialidades
+    // Dispara a busca automática
     buscarFornecedoresNoBackend(Array.from(especialidadesParaBuscar));
 }
+
 
 // Nova função auxiliar para evitar repetição de código
 function buscarFornecedoresNoBackend(listaEspecialidades) {
