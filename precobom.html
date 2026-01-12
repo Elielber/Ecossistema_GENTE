@@ -2413,6 +2413,13 @@ if(typeof installApp === 'function') {
             }
             // --- FIM DA LÓGICA DE REPUTAÇÃO ---
 
+                // Define se o botão de visita aparece (Opcional: esconder se for o próprio usuário)
+            const btnVisita = `
+                <button class="btn btn-outline btn-sm" style="flex:1; border-color:#2980b9; color:#2980b9;" 
+                    onclick="agendarVisitaZap('${d.id}', '${tituloSafe}', '${d.cliente}', '${d.zap}')">
+                    📅 Agendar Visita
+                </button>`;
+
             divElement.innerHTML += `
             <div class="opp-card" ${styleAttr}>
                 <div style="display:flex; justify-content:space-between">
@@ -2427,7 +2434,14 @@ if(typeof installApp === 'function') {
                     <span class="badge" style="float:right">${d.cat}</span>
                 </div>
                 <div class="opp-desc">${d.desc}</div>
-                <button class="btn btn-primary btn-sm" onclick="iniciarOrcamento('${d.id}', '${tituloSafe}', '${d.cliente}')">📝 Criar Orçamento</button>
+                
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    ${btnVisita}
+                    <button class="btn btn-primary btn-sm" style="flex:1;" 
+                        onclick="iniciarOrcamento('${d.id}', '${tituloSafe}', '${d.cliente}')">
+                        📝 Orçar Agora
+                    </button>
+                </div>
             </div>`;
         });
 
@@ -4719,6 +4733,26 @@ const _superGoTo = goToScreen;
 goToScreen = function(s) {
     _superGoTo(s);
     if(s === 'fornecedor-intro') initFornecedorScreen();
+}
+// --- FUNÇÃO DE AGENDAR VISITA (NOVA) ---
+function agendarVisitaZap(id, titulo, cliente, zapCliente) {
+    if(!zapCliente) {
+        alert("Este cliente não disponibilizou telefone público. Aguarde ele entrar em contato.");
+        return;
+    }
+
+    const nomePrestador = state.config.pixName || "Profissional";
+    const zapLimpo = zapCliente.replace(/\D/g, '');
+    
+    // Verifica se cobra taxa de visita (configurada nos Ajustes)
+    let textoTaxa = "";
+    if (state.config.taxaVisita > 0) {
+        textoTaxa = `\n(Nota: Trabalho com uma taxa de visita técnica de R$ ${state.config.taxaVisita.toFixed(2)}, que pode ser abatida no fechamento).`;
+    }
+
+    const msg = `Olá ${cliente}! 👋\n\nSou *${nomePrestador}* do App Preço Bom.\nVi seu pedido de *${titulo}*.\n\nPara passar um orçamento exato e justo, eu precisaria fazer uma avaliação no local.\n\nPodemos agendar uma visita?${textoTaxa}`;
+
+    window.open(`https://wa.me/55${zapLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 </script>
