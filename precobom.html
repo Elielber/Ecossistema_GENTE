@@ -4676,41 +4676,77 @@ function carregarDashboardFornecedor() {
 }
 
 // 5. COTAÇÃO DO PRESTADOR (Busca Fornecedores)
+// Substitua a função abrirModalCotacaoFornecedor antiga por esta:
+
 function abrirModalCotacaoFornecedor() {
+    // 1. Identifica categorias presentes no carrinho
     const cats = new Set();
     state.carrinho.forEach(i => {
         if(i.mat && i.mat.length > 0) {
+            // Tenta achar o grupo pelo nome do serviço ou usa a categoria salva
             const grp = encontrarGrupoPorServico(i.nome) || i.cat;
             if(grp) cats.add(grp);
         }
     });
 
-    if(cats.size === 0) { alert("Carrinho sem materiais categorizados."); return; }
+    if(cats.size === 0) { 
+        alert("Seu carrinho não tem materiais vinculados a categorias conhecidas."); 
+        return; 
+    }
     
     const modal = document.getElementById('modal-parceiros');
-    modal.querySelector('h3').innerText = "🏭 Fornecedores";
+    modal.querySelector('h3').innerText = "🏭 Fornecedores"; // Muda título para contexto de compra
+    
+    // --- CORREÇÃO: POPULA O SELECT DE BUSCA MANUAL ---
+    // Isso garante que os menus de categoria apareçam se o usuário quiser filtrar
+    const select = document.getElementById('busca-parceiro-grupo');
+    if(select && select.options.length <= 1) {
+        const grupos = Object.keys(TAXONOMIA);
+        select.innerHTML = '<option value="">1. Escolha a Área...</option>';
+        grupos.forEach(g => select.innerHTML += `<option value="${g}">${g}</option>`);
+    }
+    // --------------------------------------------------
+
     const div = document.getElementById('lista-parceiros-result');
-    div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando lojas...</div>";
+    div.innerHTML = "<div style='text-align:center; padding:20px; color:#e67e22;'>🔄 Buscando lojas compatíveis...</div>";
+    
     modal.style.display = 'flex';
 
+    // 2. Busca Automática baseada no Carrinho
     fetch(API_URL + "?acao=BUSCAR_FORNECEDORES&cats=" + encodeURIComponent(Array.from(cats).join(",")))
     .then(res => res.json())
     .then(lojas => {
         div.innerHTML = "";
-        if(lojas.length === 0) { div.innerHTML = "<div style='text-align:center'>Nenhuma loja encontrada.</div>"; return; }
         
+        if(lojas.length === 0) { 
+            div.innerHTML = `
+                <div style='text-align:center; padding:15px;'>
+                    <p>Nenhuma loja encontrada automaticamente para os itens do carrinho.</p>
+                    <p style='font-size:0.8rem; color:#666;'>Tente usar os filtros acima para buscar manualmente.</p>
+                </div>`; 
+            return; 
+        }
+        
+        div.innerHTML = `<div style="font-size:0.8rem; color:#7f8c8d; margin-bottom:10px;">Encontradas: ${lojas.length} lojas sugeridas</div>`;
+
         lojas.forEach(l => {
             div.innerHTML += `
-            <div style="background:white; border-left:4px solid #e67e22; padding:15px; margin-bottom:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="background:white; border-left:4px solid #e67e22; padding:15px; margin-bottom:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
                 <div>
-                    <div style="font-weight:bold;">${l.nome}</div>
-                    <div style="font-size:0.7rem; color:#666;">${l.especialidades}</div>
+                    <div style="font-weight:bold; color:#333;">${l.nome}</div>
+                    <div style="font-size:0.7rem; color:#666; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${l.especialidades}</div>
                 </div>
-                <button onclick="enviarZapFornecedor('${l.zap}', '${l.nome}')" class="btn-sm btn-success">Cotar 📲</button>
+                <button onclick="enviarZapFornecedor('${l.zap}', '${l.nome}')" class="btn-sm btn-success" style="display:flex; align-items:center; gap:5px;">
+                    Cotar 📲
+                </button>
             </div>`;
         });
+    })
+    .catch(() => {
+        div.innerHTML = "<div style='text-align:center; color:red'>Erro ao buscar fornecedores.</div>";
     });
 }
+
 
 function enviarZapFornecedor(zapLoja, nomeLoja) {
     let txt = "";
