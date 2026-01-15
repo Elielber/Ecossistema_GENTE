@@ -2385,26 +2385,51 @@ if(typeof installApp === 'function') {
 }
 
     function renderOportunidades() {
-        const div = document.getElementById('lista-oportunidades');
-        const badge = document.getElementById('badge-opp');
-        const area = state.config.specialty;
+    const div = document.getElementById('lista-oportunidades');
+    const badge = document.getElementById('badge-opp');
+    const area = state.config.specialty;
+    
+    // --- TRAVA DE CADASTRO (NOVO) ---
+    // Verifica se tem os dados mínimos: Especialidade definida e Chave Pix (indicador de que configurou recebimento)
+    // Se não tiver, mostra o "Cadeado" e para a execução.
+    if (!state.config.specialty || !state.config.pixKey || !state.config.pixName) {
+        div.innerHTML = `
+        <div style="text-align:center; padding:40px 20px; background:white; border-radius:12px; border:1px dashed #ccc; margin-top:20px;">
+            <div style="font-size:3.5rem; margin-bottom:15px; opacity:0.8;">🔒</div>
+            <h3 style="color:#2c3e50; margin:0 0 10px 0;">Área Restrita</h3>
+            <p style="color:#666; font-size:0.9rem; line-height:1.5; margin-bottom:25px;">
+                Temos clientes procurando profissionais na sua região!<br><br>
+                Para ver os pedidos e enviar orçamentos, você precisa ativar seu perfil profissional.
+            </p>
+            <button class="btn btn-primary" onclick="abrirModalCadastro()" style="background:#27ae60; border:none; box-shadow:0 4px 15px rgba(39, 174, 96, 0.4);">
+                🚀 Ativar Meu Cadastro Grátis
+            </button>
+        </div>`;
         
-        div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando oportunidades...</div>";
-
-        // BUSCA REAL NA PLANILHA (GET)
-        fetch(API_URL) 
-        .then(response => response.json())
-        .then(data => {
-            listaDemandasCache = data; // Salva o que veio da nuvem
-            filtrarERenderizar(div, area, badge);
-        })
-        .catch(err => {
-            console.error(err);
-            // Se der erro, tenta mostrar o cache ou mensagem de erro
-            if(listaDemandasCache.length > 0) filtrarERenderizar(div, area, badge);
-            else div.innerHTML = "<div style='text-align:center; color:red'>Erro de conexão. Verifique a internet.</div>";
-        });
+        // Esconde o badge de notificação para não distrair
+        if(badge) badge.style.display = 'none';
+        
+        return; // <--- O SEGREDO: Para a função aqui. Não busca nada no servidor.
     }
+    // --------------------------------
+
+    // SE PASSOU DA TRAVA, SEGUE O FLUXO NORMAL...
+    div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando oportunidades...</div>";
+
+    // BUSCA REAL NA PLANILHA (GET)
+    fetch(API_URL) 
+    .then(response => response.json())
+    .then(data => {
+        listaDemandasCache = data; // Salva o que veio da nuvem
+        filtrarERenderizar(div, area, badge);
+    })
+    .catch(err => {
+        console.error(err);
+        // Se der erro, tenta mostrar o cache ou mensagem de erro
+        if(listaDemandasCache.length > 0) filtrarERenderizar(div, area, badge);
+        else div.innerHTML = "<div style='text-align:center; color:red'>Erro de conexão. Verifique a internet.</div>";
+    });
+}
 
         function filtrarERenderizar(divElement, areaEspecialidade, badgeElement) {
         divElement.innerHTML = "";
