@@ -5840,9 +5840,9 @@ function renderGraficoMercado(containerId) {
 function desenharGrafico(div, dados, isUpdating) {
     if (!dados || dados.length === 0) return;
 
-    // Descobre o maior valor entre todas as demandas E ofertas para criar a escala correta (100%)
+    // Escala baseada no maior valor (Demanda Total ou Oferta)
     const maxVal = Math.max(
-        ...dados.map(d => d.demand || 0), 
+        ...dados.map(d => d.demandTotal || 0), 
         ...dados.map(d => d.supply || 0)
     ) || 1;
 
@@ -5852,22 +5852,38 @@ function desenharGrafico(div, dados, isUpdating) {
             <span style="font-size:0.65rem; color:#7f8c8d; align-self:center;">${isUpdating ? 'Atualizando...' : 'Região Atual'}</span>
         </div>
         
-        <div style="display:flex; justify-content:flex-end; gap:15px; font-size:0.6rem; color:#666; margin-bottom:5px;">
-            <div style="display:flex; align-items:center; gap:4px;"><div style="width:8px; height:8px; background:#2980b9; border-radius:2px;"></div> Pedidos (Clientes)</div>
-            <div style="display:flex; align-items:center; gap:4px;"><div style="width:8px; height:8px; background:#e67e22; border-radius:2px;"></div> Ativos (Concorrência)</div>
+        <div style="display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; font-size:0.6rem; color:#666; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:4px;">
+                <div style="width:8px; height:8px; background:#64b5f6; border-radius:2px;"></div> Abertas
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+                <div style="width:8px; height:8px; background:#1565c0; border-radius:2px;"></div> Fechadas
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+                <div style="width:8px; height:8px; background:#e67e22; border-radius:2px;"></div> Prestadores
+            </div>
         </div>`;
 
     dados.forEach(d => {
         if (!d.label) return;
 
-        const dem = d.demand || 0;
+        const demTotal = d.demandTotal || 0;
+        const demOpen = d.demandOpen || 0;
+        const demClosed = d.demandClosed || 0;
         const sup = d.supply || 0;
         
-        // Regra de três para largura
-        const pctDem = Math.max(Math.round((dem / maxVal) * 100), 1); // Mínimo 1% pra aparecer
+        // Cálculos de Porcentagem para a Barra Empilhada
+        // A largura total da barra azul é baseada no Total
+        // Dentro dela, dividimos proporcionalmente entre Aberta e Fechada
+        const pctTotalWidth = Math.max(Math.round((demTotal / maxVal) * 100), 1);
+        
+        // Proporção interna (Flexbox resolve isso visualmente, mas precisamos dos dados)
+        // Se demTotal for 0, evita divisão por zero
+        const flexOpen = demTotal > 0 ? demOpen : 0;
+        const flexClosed = demTotal > 0 ? demClosed : 0;
+
         const pctSup = Math.max(Math.round((sup / maxVal) * 100), 1);
 
-        // Ícone de temperatura
         let icon = ""; 
         if(d.temp && d.temp.includes("Quente")) icon = "🔥";
         if(d.temp && d.temp.includes("Saturado")) icon = "❄️";
@@ -5879,14 +5895,16 @@ function desenharGrafico(div, dados, isUpdating) {
             </div>
             
             <div style="display:flex; align-items:center; height:12px; margin-bottom:2px;">
-                <div style="width:100%; background:#ecf0f1; border-radius:3px; height:6px; overflow:hidden;">
-                    <div style="width:${pctDem}%; background:#2980b9; height:100%;"></div>
+                <div style="width:100%; background:#ecf0f1; border-radius:3px; height:6px; overflow:hidden; display:flex;">
+                    <div style="flex:${flexOpen}; background:#64b5f6; height:100%;"></div>
+                    <div style="flex:${flexClosed}; background:#1565c0; height:100%;"></div>
+                    <div style="flex:${maxVal - demTotal}; background:transparent;"></div>
                 </div>
-                <span style="width:25px; text-align:right; font-size:0.65rem; color:#2980b9; font-weight:bold;">${dem}</span>
+                <span style="width:25px; text-align:right; font-size:0.65rem; color:#1565c0; font-weight:bold;">${demTotal}</span>
             </div>
 
             <div style="display:flex; align-items:center; height:12px;">
-                <div style="width:100%; background:#ecf0f1; border-radius:3px; height:6px; overflow:hidden;">
+                <div style="width:100%; background:#ecf0f1; border-radius:3px; height:6px; overflow:hidden; display:flex;">
                     <div style="width:${pctSup}%; background:#e67e22; height:100%;"></div>
                 </div>
                 <span style="width:25px; text-align:right; font-size:0.65rem; color:#e67e22;">${sup}</span>
@@ -5894,12 +5912,13 @@ function desenharGrafico(div, dados, isUpdating) {
         </div>`;
     });
     
+    // Rodapé
     const cacheRaw = localStorage.getItem('pb_cache_mercado');
     let txtData = "Recente";
     try { if(cacheRaw) txtData = new Date(JSON.parse(cacheRaw).timestamp).toLocaleDateString(); } catch(e){}
 
     html += `<div style="text-align:center; margin-top:8px; padding-top:5px; border-top:1px dashed #ccc; font-style:italic; color:#777; font-size:0.65rem;">
-                Dados de: ${txtData} • 🔥 = Muita procura, pouca gente.
+                Dados de: ${txtData} • Azul Claro = Oportunidades Abertas
              </div></div>`;
 
     div.innerHTML = html;
