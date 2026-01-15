@@ -5838,52 +5838,72 @@ function renderGraficoMercado(containerId) {
 }
 
 function desenharGrafico(div, dados, isUpdating) {
-    // Proteção Extra: Se chegou aqui vazio por algum motivo, aborta.
     if (!dados || dados.length === 0) return;
 
-    const maxVal = Math.max(...dados.map(d => d.count || 0)) || 1;
-    const minhaEspecialidade = state.config.specialty || "Geral";
+    // Descobre o maior valor entre todas as demandas E ofertas para criar a escala correta (100%)
+    const maxVal = Math.max(
+        ...dados.map(d => d.demand || 0), 
+        ...dados.map(d => d.supply || 0)
+    ) || 1;
 
     let html = `<div class="market-chart-box">
-        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-            <strong style="color:#303f9f;">📊 Top 5 Região ${isUpdating ? ' (Atualizando...)' : ''}</strong>
-            <span style="color:#7986cb;">Ativos</span>
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid #dce1e9; padding-bottom:5px;">
+            <strong style="color:#303f9f;">📊 Termômetro do Mercado</strong>
+            <span style="font-size:0.65rem; color:#7f8c8d; align-self:center;">${isUpdating ? 'Atualizando...' : 'Região Atual'}</span>
+        </div>
+        
+        <div style="display:flex; justify-content:flex-end; gap:15px; font-size:0.6rem; color:#666; margin-bottom:5px;">
+            <div style="display:flex; align-items:center; gap:4px;"><div style="width:8px; height:8px; background:#2980b9; border-radius:2px;"></div> Pedidos (Clientes)</div>
+            <div style="display:flex; align-items:center; gap:4px;"><div style="width:8px; height:8px; background:#e67e22; border-radius:2px;"></div> Ativos (Concorrência)</div>
         </div>`;
 
     dados.forEach(d => {
-        // Se o item estiver quebrado, pula (evita o "undefined")
-        if (!d.label) return; 
+        if (!d.label) return;
 
-        const count = d.count || 0;
-        const pct = Math.round((count / maxVal) * 100);
-        const isMe = d.label === minhaEspecialidade;
-        const corBarra = isMe ? "background:#f1c40f;" : ""; 
-        const textoLabel = isMe ? `<strong>${d.label}</strong>` : d.label;
+        const dem = d.demand || 0;
+        const sup = d.supply || 0;
+        
+        // Regra de três para largura
+        const pctDem = Math.max(Math.round((dem / maxVal) * 100), 1); // Mínimo 1% pra aparecer
+        const pctSup = Math.max(Math.round((sup / maxVal) * 100), 1);
+
+        // Ícone de temperatura
+        let icon = ""; 
+        if(d.temp && d.temp.includes("Quente")) icon = "🔥";
+        if(d.temp && d.temp.includes("Saturado")) icon = "❄️";
 
         html += `
-        <div class="chart-row">
-            <div class="chart-label">${textoLabel}</div>
-            <div class="chart-bar-bg">
-                <div class="chart-bar-fill" style="width:${pct}%; ${corBarra}"></div>
+        <div style="margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; font-size:0.75rem; font-weight:bold; color:#34495e; margin-bottom:2px;">
+                <span>${d.label} ${icon}</span>
             </div>
-            <div class="chart-value">${count}</div>
+            
+            <div style="display:flex; align-items:center; height:12px; margin-bottom:2px;">
+                <div style="width:100%; background:#ecf0f1; border-radius:3px; height:6px; overflow:hidden;">
+                    <div style="width:${pctDem}%; background:#2980b9; height:100%;"></div>
+                </div>
+                <span style="width:25px; text-align:right; font-size:0.65rem; color:#2980b9; font-weight:bold;">${dem}</span>
+            </div>
+
+            <div style="display:flex; align-items:center; height:12px;">
+                <div style="width:100%; background:#ecf0f1; border-radius:3px; height:6px; overflow:hidden;">
+                    <div style="width:${pctSup}%; background:#e67e22; height:100%;"></div>
+                </div>
+                <span style="width:25px; text-align:right; font-size:0.65rem; color:#e67e22;">${sup}</span>
+            </div>
         </div>`;
     });
     
-    // Mostra data apenas se o cache for válido
     const cacheRaw = localStorage.getItem('pb_cache_mercado');
     let txtData = "Recente";
-    if(cacheRaw) {
-        try { txtData = new Date(JSON.parse(cacheRaw).timestamp).toLocaleDateString(); } catch(e){}
-    }
+    try { if(cacheRaw) txtData = new Date(JSON.parse(cacheRaw).timestamp).toLocaleDateString(); } catch(e){}
 
-    html += `<div style="text-align:center; margin-top:5px; font-style:italic; color:#777; font-size:0.65rem;">
-                Dados de: ${txtData} • Busque parceiros onde há mais demanda.
+    html += `<div style="text-align:center; margin-top:8px; padding-top:5px; border-top:1px dashed #ccc; font-style:italic; color:#777; font-size:0.65rem;">
+                Dados de: ${txtData} • 🔥 = Muita procura, pouca gente.
              </div></div>`;
 
     div.innerHTML = html;
 }
-
 // Função que vai ao servidor buscar a verdade (Assíncrona)
 function atualizarCacheMercado() {
     const grupo = encontrarGrupoPorServico(state.config.specialty);
