@@ -280,7 +280,19 @@
     font-weight: bold; margin-top: 15px; cursor: pointer;
     box-shadow: 0 4px 15px rgba(241, 196, 15, 0.3);
 }
+/* --- ETAPA 3: ESTILO DOS CARDS BLOQUEADOS E NOVOS --- */
+.locked-layer { position: relative; overflow: hidden; user-select: none; }
+.locked-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255,255,255,0.85); z-index: 10;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; backdrop-filter: blur(3px);
+}
+.lock-icon { font-size: 2.5rem; margin-bottom: 10px; animation: pulse 2s infinite; }
+.lock-msg { font-size: 0.95rem; color: #2c3e50; font-weight: bold; padding: 0 20px; }
+.lock-sub { font-size: 0.75rem; color: #7f8c8d; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px; }
 
+@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
     
     </style>
 </head>
@@ -534,6 +546,7 @@
     </div>
 
     <div id="panel-pro" style="display:none;">
+	<div id="hud-gamificacao"></div>
         
         <div class="gestao-module" style="border-left: 5px solid #27ae60;">
             <div class="gestao-header">
@@ -617,7 +630,7 @@
         </div>
                 <div class="gestao-module" style="border-left: 5px solid #3f51b5;">
             <div class="gestao-header">
-                <div class="gestao-title"><span class="gestao-icon">♟️</span> Estratégia</div>
+                <div class="gestao-title"><span class="gestao-icon">♟️</span>Parcerias</div>
             </div>
             
             <div style="background:#e8eaf6; padding:15px; border-radius:10px; text-align:center; margin-bottom:15px; border:1px solid #c5cae9;">
@@ -636,12 +649,10 @@
         </div>
         
         
-    </div>
-
-    <div style="height:80px"></div>
-</div>
-
-
+     <div id="deck-estrategico"></div>
+	 </div>
+	 </div>
+	 
 
     <div id="tab-config" class="container">
     <h3 style="color:var(--primary); margin-top:0;">⚙️ Ajustes do Negócio</h3>
@@ -949,11 +960,7 @@
                 </button>
             </div>
             
-        </div>
-
-        <button class="btn btn-primary" onclick="document.getElementById('modal-declaracao').style.display='none'" style="margin-top:15px;">Entendi e Apoio! 🤝</button>
-    </div>
-</div>
+       </div>
 
         <button class="btn btn-primary" onclick="document.getElementById('modal-declaracao').style.display='none'">Fechar</button>
     </div>
@@ -1102,7 +1109,7 @@
             <strong>Aguarde Pedidos</strong>
             <p style="font-size:0.8rem; color:#1565c0;">Os prestadores enviarão as listas pelo WhatsApp.</p>
         </div>
-    </div>
+</div>
 </div>
 
 <script>
@@ -1148,9 +1155,15 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
     };
   
     let state = {
+        version: "10.0", // Controle de versão para migrações futuras
         isPremium: false,
+        // --- NOVAS CHAVES DA ETAPA 1 ---
+        gamificacao: { nivel: 1, xp: 0, titulo: "Aprendiz", pontos: 0 },
+        futuro: { objetivos: [], swot: {} }, // Card 5
+        equipe: [], // Reforço para o Card 6 (mesmo que já exista profs, vamos padronizar aqui futuramente)
+        // -------------------------------
         config: { specialty: "Geral", taxaCompra: 0, taxaVisita: 0, pixKey: "", pixName: "", pixCity: "" , zap: "", nota: "5.0", totalAvaliacoes: 0},
-        profs: [{id: "p1", nome: "Mão de Obra", valor: 50}],
+        profs: [{id: "p1", nome: "Mão de Obra", valor: 50}], // Mantido para compatibilidade
         catalogo: [{ id: 1, nome: "Serviço Exemplo", cat: "Geral", ordem: 1, equipe: [{pid: "p1", h: 2}], mat: [] }],
         carrinho: [],
         modelos: [],
@@ -1917,6 +1930,10 @@ function iniciarOrcamentoAvulso() {
             document.getElementById('tab-config').classList.add('active');
             document.getElementById('footer-orcamento').style.display = 'none';
             
+            // --- CORREÇÃO: Adicione esta linha abaixo ---
+            renderListasConfig(); // <--- ESTA É A LINHA QUE FALTA
+            // --------------------------------------------
+
             // --- CORREÇÃO: Força renderizar o radar ao entrar na tela ---
             renderRadarTags();
             // ------------------------------------------------------------
@@ -2413,6 +2430,13 @@ if(typeof installApp === 'function') {
             }
             // --- FIM DA LÓGICA DE REPUTAÇÃO ---
 
+                // Define se o botão de visita aparece (Opcional: esconder se for o próprio usuário)
+            const btnVisita = `
+                <button class="btn btn-outline btn-sm" style="flex:1; border-color:#2980b9; color:#2980b9;" 
+                    onclick="agendarVisitaZap('${d.id}', '${tituloSafe}', '${d.cliente}', '${d.zap}')">
+                    📅 Agendar Visita
+                </button>`;
+
             divElement.innerHTML += `
             <div class="opp-card" ${styleAttr}>
                 <div style="display:flex; justify-content:space-between">
@@ -2427,7 +2451,14 @@ if(typeof installApp === 'function') {
                     <span class="badge" style="float:right">${d.cat}</span>
                 </div>
                 <div class="opp-desc">${d.desc}</div>
-                <button class="btn btn-primary btn-sm" onclick="iniciarOrcamento('${d.id}', '${tituloSafe}', '${d.cliente}')">📝 Criar Orçamento</button>
+                
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    ${btnVisita}
+                    <button class="btn btn-primary btn-sm" style="flex:1;" 
+                        onclick="iniciarOrcamento('${d.id}', '${tituloSafe}', '${d.cliente}')">
+                        📝 Orçar Agora
+                    </button>
+                </div>
             </div>`;
         });
 
@@ -2599,9 +2630,152 @@ if(typeof installApp === 'function') {
         
         // --- RENDERIZA O RADAR RECUPERADO ---
         renderRadarTags(); 
+		initMigration();
     }
 
+// --- ETAPA 1: FUNÇÃO DE MIGRAÇÃO E BLINDAGEM ---
+    function initMigration() {
+        console.log("🛡️ Verificando integridade dos dados...");
+        let mudouAlgo = false;
 
+        // 1. BACKUP DE SEGURANÇA (Só roda uma vez)
+        // Se existe dado antigo mas não existe backup, cria uma cópia "congelada"
+        const dadosAtuais = localStorage.getItem('precobom');
+        if (dadosAtuais && !localStorage.getItem('precobom_v9_backup')) {
+            localStorage.setItem('precobom_v9_backup', dadosAtuais);
+            console.log("📦 Backup de segurança (v9) criado com sucesso.");
+        }
+
+        // 2. INJEÇÃO DE ESTRUTURAS NOVAS (Se faltar, cria)
+        
+        // Gamificação (Etapa 2)
+        if (!state.gamificacao) {
+            state.gamificacao = { nivel: 1, xp: 0, titulo: "Aprendiz", pontos: 0 };
+            mudouAlgo = true;
+        }
+
+        // Futuro/Estratégia (Etapa 3)
+        if (!state.futuro) {
+            state.futuro = { objetivos: [], swot: {} };
+            mudouAlgo = true;
+        }
+
+        // Correção de chaves vitais (caso estejam null em usuários muito antigos)
+        if (!state.financeiro) { state.financeiro = { saldo: 0, movimentos: [] }; mudouAlgo = true; }
+        if (!state.radar) { state.radar = []; mudouAlgo = true; }
+        if (!state.historico) { state.historico = []; mudouAlgo = true; }
+
+        // Atualiza versão
+        if (state.version !== "10.0") {
+            state.version = "10.0";
+            mudouAlgo = true;
+        }
+
+        // 3. SALVAR SE HOUVE MUDANÇA
+        if (mudouAlgo) {
+            console.log("✅ Estrutura de dados atualizada para v10.0");
+            saveData(); 
+        } else {
+            console.log("👍 Dados íntegros.");
+        }
+    }
+	// --- ETAPA 2: MOTOR DE GAMIFICAÇÃO E CONTROLE DE ACESSO ---
+
+// Tabelas de Configuração (Regras do Jogo)
+const GAMIFICATION_RULES = {
+    xp: {
+        CRIAR_ORCAMENTO: 50,    // Aumentei para facilitar o início
+        FECHAR_VENDA: 200,      // Valorização da venda
+        CONCLUIR_SERVICO: 300, 
+        BONUS_META: 500
+    },
+    niveis: [
+        { nivel: 1, titulo: "Aprendiz", xp: 0 },       // Base
+        { nivel: 2, titulo: "Estrategista", xp: 500 }, // Desbloqueia Card 5 (Futuro)
+        { nivel: 3, titulo: "Gestor", xp: 1500 },      // Desbloqueia Card 6 (Equipe)
+        { nivel: 4, titulo: "Empresário", xp: 5000 },  // Desbloqueia Card 7 (Formalização)
+        { nivel: 5, titulo: "Magnata", xp: 15000 }
+    ]
+};
+
+// 2.1. Função Pura de Cálculo de Nível
+// Lê o histórico e retorna o status atual do jogador [cite: 13, 52]
+function calcularGamificacao() {
+    if (!state.historico) return state.gamificacao;
+
+    let xpTotal = 0;
+    
+    // Calcula XP baseado no histórico real
+    state.historico.forEach(h => {
+        // Todo orçamento criado já vale XP
+        xpTotal += GAMIFICATION_RULES.xp.CRIAR_ORCAMENTO;
+
+        if (h.status === 'FECHADO') {
+            xpTotal += GAMIFICATION_RULES.xp.FECHAR_VENDA;
+        } else if (h.status === 'CONCLUIDO') {
+            xpTotal += GAMIFICATION_RULES.xp.FECHAR_VENDA; // Acumula o da venda
+            xpTotal += GAMIFICATION_RULES.xp.CONCLUIR_SERVICO; // + Bônus da conclusão
+        }
+    });
+
+    // Define o Nível
+    let nivelAtual = GAMIFICATION_RULES.niveis[0];
+    let proximoNivel = GAMIFICATION_RULES.niveis[1];
+
+    for (let i = 0; i < GAMIFICATION_RULES.niveis.length; i++) {
+        if (xpTotal >= GAMIFICATION_RULES.niveis[i].xp) {
+            nivelAtual = GAMIFICATION_RULES.niveis[i];
+            proximoNivel = GAMIFICATION_RULES.niveis[i+1] || { xp: xpTotal * 1.5 }; // Teto infinito
+        }
+    }
+
+    // Calcula % de progresso para a barra
+    const base = nivelAtual.xp;
+    const alvo = proximoNivel.xp;
+    const pct = Math.min(((xpTotal - base) / (alvo - base)) * 100, 100);
+
+    return {
+        nivel: nivelAtual.nivel,
+        titulo: nivelAtual.titulo,
+        xp: xpTotal,
+        proximoXp: alvo,
+        progressoPct: Math.floor(pct)
+    };
+}
+
+// 2.2. O Guardião (AccessControl)
+// Decide o que desbloquear baseado no Nível ou Faturamento [cite: 14, 44]
+const AccessControl = {
+    check: function(funcionalidade) {
+        const game = calcularGamificacao();
+        
+        switch(funcionalidade) {
+            // CARD 5: FUTURO (Primeiro a desbloquear - Nível 2)
+            case 'card_futuro':
+                return game.nivel >= 2; 
+
+            // CARD 6: EQUIPE (Intermediário - Nível 3)
+            case 'card_equipe': 
+                // Exige Nível 3 OU muitos serviços (Atalho operacional)
+                return game.nivel >= 3 || (state.historico && state.historico.length >= 10);
+            
+            // CARD 7: FORMALIZAÇÃO (Avançado - Nível 4)
+            case 'card_formalizacao':
+                // Exige Nível 4 OU Faturamento alto (Gatilho financeiro de risco)
+                const faturamento = state.financeiro.saldo || 0;
+                return game.nivel >= 4 || faturamento > 6500; 
+                
+            default:
+                return true;
+        }
+    }
+};
+// Atualiza o state com os dados calculados (Chamar no renderAll)
+function atualizarEstadoGamificacao() {
+    state.gamificacao = calcularGamificacao();
+    // Não salvamos (saveData) aqui para evitar loop infinito, 
+    // apenas atualizamos a memória para exibição.
+}
     
     function saveData() {
         localStorage.setItem('precobom', JSON.stringify(state));
@@ -2609,7 +2783,8 @@ if(typeof installApp === 'function') {
     }
     
         function renderAll() { 
-        renderCatalogo(); 
+        atualizarEstadoGamificacao();
+		renderCatalogo(); 
         renderCarrinho(); 
         renderGestao(); 
         
@@ -2936,8 +3111,390 @@ function renderGestao() {
         // 2. NOVO: Renderiza Agenda do Dia
         renderAgendaHoje();
     }
+	if (state.isPremium) {
+        renderCardsAvancados();
+    }
 }
 
+// --- ETAPA 3: RENDERIZAÇÃO DOS CARDS ESTRATÉGICOS ---
+
+// 3.1. Template HTML Padronizado (O Cadeado)
+function getCardBloqueadoHTML(titulo, nivelNecessario, msg) {
+    return `
+    <div class="gestao-module locked-layer" style="border-left: 5px solid #bdc3c7;">
+        <div class="gestao-header" style="opacity:0.5">
+            <div class="gestao-title"><span class="gestao-icon">🔒</span> ${titulo}</div>
+        </div>
+        <div style="padding:15px; opacity:0.2; filter:blur(2px)">
+            <p>Lorem ipsum dolor sit amet, conteudo oculto estratégico.</p>
+            <div class="row"><button class="btn">Bloqueado</button></div>
+        </div>
+        <div class="locked-overlay">
+            <div class="lock-icon">🔒</div>
+            <div class="lock-msg">${msg}</div>
+            <div class="lock-sub">Requer Nível ${nivelNecessario}</div>
+        </div>
+    </div>`;
+}
+
+// --- VERSÃO DEFINITIVA (V3): MATRIZ SWOT COMPLETA + COFRE ---
+function renderCardsAvancados() {
+const faturamentoAtual = state.historico 
+        ? state.historico.reduce((acc, item) => acc + (item.valor || 0), 0) 
+        : 0;
+     const div = document.getElementById('deck-estrategico');
+     if(!div) return;
+     div.innerHTML = ""; 
+
+     // =================================================================================
+     // 1. CARD 5: INTELIGÊNCIA ESTRATÉGICA (COFRE + SWOT REAL)
+     // =================================================================================
+     if(AccessControl.check('card_futuro')) {
+          
+          // --- A. DADOS PARA O COFRE ---
+          const totalGuardado = state.financeiro.movimentos
+              .filter(m => m.tag === 'INVESTIMENTO')
+              .reduce((acc, m) => acc + m.valor, 0);
+
+          // --- B. MOTOR DE ANÁLISE SWOT (CRITÉRIOS MÚLTIPLOS) ---
+          const nota = parseFloat(state.config.nota) || 5.0;
+          const saldo = state.financeiro.saldo || 0;
+          const totalHistorico = state.historico.length;
+          
+          // Taxa de Conversão (Fechados vs Total)
+          const fechados = state.historico.filter(h => h.status === 'FECHADO' || h.status === 'CONCLUIDO').length;
+          const taxaConversao = totalHistorico > 0 ? (fechados / totalHistorico) * 100 : 0;
+
+          // Ticket Médio
+          const faturamentoTotal = state.financeiro.movimentos.filter(m => m.tipo === 'ENTRADA').reduce((a,b)=>a+b.valor,0);
+          const ticketMedio = fechados > 0 ? faturamentoTotal / fechados : 0;
+
+          // GERAÇÃO DOS 4 QUADRANTES
+          let forcas = [], fraquezas = [], oportunidades = [], ameacas = [];
+
+          // 1. FORÇAS (O que você garante)
+          if(nota >= 4.8) forcas.push("Excelência no atendimento (Nota 4.8+)");
+          if(taxaConversao > 60) forcas.push(`Alta taxa de fechamento (${Math.floor(taxaConversao)}%)`);
+          if(totalHistorico > 10) forcas.push("Experiência de mercado consolidada");
+          if(forcas.length === 0) forcas.push("Em construção...");
+
+          // 2. FRAQUEZAS (Onde melhorar internamente)
+          if(nota < 4.5) fraquezas.push("Nota de avaliação abaixo da média");
+          if(taxaConversao < 30 && totalHistorico > 5) fraquezas.push("Dificuldade em fechar vendas");
+          if(state.profs.length === 0 && totalHistorico > 20) fraquezas.push("Sobrecarga (Trabalha sozinho)");
+          if(fraquezas.length === 0) fraquezas.push("Nenhuma crítica crítica detectada.");
+
+          // 3. OPORTUNIDADES (Potencial externo/Financeiro)
+          if(saldo > 2000) oportunidades.push("Capital disponível para compras à vista");
+          if(ticketMedio < 200 && fechados > 5) oportunidades.push("Criar pacotes para subir o Ticket Médio");
+          if(!state.isPremium) oportunidades.push("Profissionalizar gestão (Versão PRO)");
+          if(oportunidades.length === 0) oportunidades.push("Manter fluxo constante.");
+
+          // 4. AMEAÇAS (Riscos externos)
+          if(saldo < 200) ameacas.push("Fluxo de caixa perigoso (Baixa liquidez)");
+          if(totalHistorico > 0 && fechados === 0) ameacas.push("Modelo de negócio não validado");
+          if(ticketMedio > 5000 && fechados < 3) ameacas.push("Dependência de poucos clientes grandes");
+          if(ameacas.length === 0) ameacas.push("Ambiente estável.");
+
+          // Helper para renderizar listas
+          const renderList = (lista) => lista.map(item => `<div>• ${item}</div>`).join('');
+
+
+          // --- C. RENDERIZAÇÃO VISUAL (LAYOUT GRID) ---
+          let conteudoFuturo = "";
+          
+          if(state.futuro && state.futuro.objetivos && state.futuro.objetivos.length > 0) {
+              const obj = state.futuro.objetivos[0];
+              const pct = Math.min((totalGuardado / obj.valor) * 100, 100);
+              let corBarra = pct > 50 ? (pct >= 100 ? "#2ecc71" : "#f1c40f") : "#8e24aa";
+
+              conteudoFuturo = `
+                <div style="background:white; padding:15px; border-radius:12px; margin-bottom:15px; border:1px solid #eee; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                        <span style="font-weight:bold; color:#2c3e50;">🚀 ${obj.nome}</span>
+                        <span style="font-size:0.8rem; color:#666;">${Math.floor(pct)}%</span>
+                    </div>
+                    <div class="progress-bar-bg" style="height:10px; background:#f3e5f5; margin-top:5px; border-radius:5px;">
+                        <div class="progress-fill" style="width:${pct}%; background:${corBarra};"></div>
+                    </div>
+                    <div style="font-size:0.7rem; color:#888; margin-top:5px;">
+                        Guardado: <strong style="color:${corBarra}">R$ ${totalGuardado.toFixed(2)}</strong> / Meta: R$ ${obj.valor.toFixed(2)}
+                    </div>
+                </div>
+
+                <div style="background:#f8f9fa; border-radius:8px; padding:10px; border:1px solid #e9ecef;">
+                    <div style="font-size:0.8rem; font-weight:bold; color:#34495e; margin-bottom:10px; text-align:center; text-transform:uppercase;">
+                        📊 Diagnóstico Estratégico (SWOT)
+                    </div>
+                    
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                        <div style="background:#e8f5e9; padding:8px; border-radius:6px; font-size:0.65rem; color:#1b5e20;">
+                            <div style="font-weight:bold; margin-bottom:4px;">💪 FORÇAS</div>
+                            ${renderList(forcas)}
+                        </div>
+                        
+                        <div style="background:#ffebee; padding:8px; border-radius:6px; font-size:0.65rem; color:#b71c1c;">
+                            <div style="font-weight:bold; margin-bottom:4px;">📉 FRAQUEZAS</div>
+                            ${renderList(fraquezas)}
+                        </div>
+
+                        <div style="background:#e3f2fd; padding:8px; border-radius:6px; font-size:0.65rem; color:#0d47a1;">
+                            <div style="font-weight:bold; margin-bottom:4px;">🚀 OPORTUNIDADES</div>
+                            ${renderList(oportunidades)}
+                        </div>
+
+                        <div style="background:#fff3e0; padding:8px; border-radius:6px; font-size:0.65rem; color:#e65100;">
+                            <div style="font-weight:bold; margin-bottom:4px;">⛈️ AMEAÇAS</div>
+                            ${renderList(ameacas)}
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top:10px; text-align:right;">
+                    <button class="btn btn-sm btn-outline" onclick="definirObjetivo()">🎯 Novo Objetivo</button>
+                </div>
+              `;
+          } else {
+             // Caso sem objetivo definido (Visão inicial)
+             conteudoFuturo = `
+                <div style="text-align:center; padding:20px;">
+                    <div style="font-size:2rem; margin-bottom:10px;">🧠</div>
+                    <p style="font-size:0.9rem; color:#666;">Defina um objetivo para liberar sua Matriz SWOT e o Cofre Inteligente.</p>
+                    <button class="btn btn-primary" onclick="definirObjetivo()">Configurar Estratégia</button>
+                </div>
+              `;
+          }
+
+          div.innerHTML += `
+         <div class="gestao-module" style="border-left: 5px solid #9b59b6;">
+            <div class="gestao-header">
+                <div class="gestao-title"><span class="gestao-icon">🧠</span>Futuro (SWOT)</div>
+            </div>
+            ${conteudoFuturo}
+         </div>`;
+     } else {
+         div.innerHTML += getCardBloqueadoHTML("1. Inteligência Estratégica", 2, "Diagnóstico SWOT Completo");
+     }
+
+     // =================================================================================
+    // 2. CARD 6: GESTÃO DE EQUIPE (PAINEL DE LIDERANÇA + ALOCAÇÃO)
+    // =================================================================================
+    if(AccessControl.check('card_equipe')) {
+        
+        // 1. CÁLCULO DO "DELEGÔMETRO" (Mantido original)
+        const totalServicos = state.historico ? state.historico.length : 0;
+        const servicosDelegados = state.historico.filter(h => h.equipe && h.equipe.length > 0).length;
+        
+        let nivelDelegacao = 0;
+        if (totalServicos > 0) nivelDelegacao = (servicosDelegados / totalServicos) * 100;
+
+        // Diagnóstico de Liderança
+        let msgLideranca = "";
+        let corLider = "";
+        
+        if (nivelDelegacao < 20) {
+            msgLideranca = "Centralizador (Você faz tudo)";
+            corLider = "#e74c3c"; // Vermelho
+        } else if (nivelDelegacao < 60) {
+            msgLideranca = "Líder em Evolução (Começando a delegar)";
+            corLider = "#f39c12"; // Laranja
+        } else {
+            msgLideranca = "Gestor Profissional (Sabe distribuir tarefas)";
+            corLider = "#27ae60"; // Verde
+        }
+
+       
+       // 2. RENDERIZAÇÃO DA LISTA (Com Status e Botão Alocar)
+        let htmlEquipe = "";
+        if (state.profs.length === 0) {
+            htmlEquipe = `<div style="font-size:0.8rem; color:#666; font-style:italic; padding:10px;">Nenhum colaborador. Vá em Ajustes para adicionar.</div>`;
+        } else {
+            htmlEquipe = state.profs.map(p => {
+                const nota = p.nota || 5.0;
+                const estrelas = "⭐".repeat(Math.round(nota));
+                const feedbackCurto = p.ultimoFeedback ? `"${p.ultimoFeedback}"` : "Sem feedback registrado.";
+                
+                // --- NOVA LÓGICA DE STATUS ---
+                const tarefa = p.tarefaAtual || "Disponível";
+                const isOcupado = tarefa !== "Disponível";
+                const corStatus = isOcupado ? "#e67e22" : "#27ae60"; // Laranja ou Verde
+                const iconStatus = isOcupado ? "🔨" : "✅";
+                // -----------------------------
+
+                return `
+                <div style="padding:10px 0; border-bottom:1px solid #eee;">
+                   <div style="display:flex; justify-content:space-between; align-items:center;">
+                       <div>
+                           <div style="font-weight:bold; font-size:0.9rem;">${p.nome}</div>
+                           <div style="font-size:0.75rem; color:${corStatus}; font-weight:bold; margin-top:2px;">
+                               ${iconStatus} ${tarefa}
+                           </div>
+                       </div>
+                       <div style="text-align:right;">
+                           <div style="font-size:0.75rem; color:#f1c40f;">${estrelas}</div>
+                           <span style="font-size:0.65rem; color:#999;">(${nota})</span>
+                       </div>
+                   </div>
+                   
+                   <div style="background:#f9f9f9; padding:6px; border-radius:4px; margin-top:5px;">
+                       <div style="font-size:0.7rem; color:#555; font-style:italic; margin-bottom:5px;">${feedbackCurto}</div>
+                       
+                       <div style="display:flex; gap:5px; justify-content:flex-end;">
+                           <button class="btn-sm btn-outline" 
+                                   style="padding:4px 8px; font-size:0.7rem; border-color:${corStatus}; color:${corStatus};" 
+                                   onclick="alocarColaborador('${p.id}')"> 
+                               📍 ${isOcupado ? 'Mudar' : 'Alocar'}
+                           </button>
+                           
+                           <button class="btn-sm btn-outline" 
+                                   style="padding:4px 8px; font-size:0.7rem;" 
+                                   onclick="avaliarColaborador('${p.id}')">
+                               ⭐ Avaliar
+                           </button>
+                       </div>
+                   </div>
+                </div>`;
+            }).join('');
+        }
+
+        // 3. DICA ROTATIVA (Mantida original)
+        const dicasGestao = [
+            "⏰ <strong>Gestão de Tempo:</strong> Delegar tarefas operacionais libera você para negociar.",
+            "👁️ <strong>Gestão Visual:</strong> Use o botão 'Alocar' para saber sempre quem está fazendo o quê.",
+            "🗣️ <strong>Comunicação:</strong> Alinhamento diário de 5 min evita 'gente parada'.",
+            "💰 <strong>Custo x Lucro:</strong> Ajudante parado é prejuízo. Ajudante produzindo é lucro."
+        ];
+        const dicaDoDia = dicasGestao[new Date().getSeconds() % dicasGestao.length];
+
+        div.innerHTML += `
+        <div class="gestao-module" style="border-left: 5px solid #e67e22;">
+           <div class="gestao-header">
+               <div class="gestao-title"><span class="gestao-icon">👷</span>Equipe</div>
+               <button class="btn-sm btn-outline" onclick="nav('config')">⚙️ Gerenciar</button>
+           </div>
+           
+           <div style="background:#fff3e0; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ffe0b2;">
+               <div style="font-size:0.7rem; color:#e65100; font-weight:bold; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">Diagnóstico de Liderança</div>
+               <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:3px;">
+                   <span style="color:#d35400;">Seu Perfil: <strong>${msgLideranca}</strong></span>
+               </div>
+               <div class="progress-bar-bg" style="height:8px; background:#ffe0b2;">
+                   <div class="progress-fill" style="width:${nivelDelegacao}%; background:${corLider};"></div>
+               </div>
+               <div style="font-size:0.65rem; color:#888; margin-top:3px;">
+                   Você delegou tarefas em ${servicosDelegados} de ${totalServicos} serviços.
+               </div>
+           </div>
+
+           <div style="max-height:200px; overflow-y:auto; margin-bottom:10px;">
+               ${htmlEquipe}
+           </div>
+
+           <div style="background:#f9f9f9; padding:8px; border-radius:5px; font-size:0.75rem; color:#555; border-left:3px solid #bdc3c7;">
+               💡 ${dicaDoDia}
+           </div>
+           
+           <div style="margin-top:10px;">
+               <button class="btn-sm btn-primary" style="width:100%;" onclick="gerarReciboEquipe()">📄 Recibo Pagamento</button>
+           </div>
+        </div>`;
+    } else {
+        div.innerHTML += getCardBloqueadoHTML("2. Gestão de Equipe", 3, "Aprenda a Liderar e Delegar");
+    }
+
+     // =================================================================================
+     // 3. CARD 7: FORMALIZAÇÃO (Mantido igual)
+     // =================================================================================
+     const custoMEI = 75.00;
+     let impostoPF = faturamentoAtual > 2259 ? faturamentoAtual * 0.075 : 0;
+     const economia = impostoPF - custoMEI;
+
+     if(AccessControl.check('card_formalizacao')) {
+         let htmlCalculo = economia > 0 ? 
+             `<div style="color:#2e7d32; font-size:0.85rem; background:#e8f5e9; padding:8px; border-radius:5px;">💡 Economia de R$ ${(economia).toFixed(2)}/mês virando MEI!</div>` :
+             `<div style="color:#666; font-size:0.85rem;">Faturamento isento de IR. MEI opcional.</div>`;
+
+         div.innerHTML += `
+         <div class="gestao-module" style="border-left: 5px solid #2ecc71;">
+             <div class="gestao-header">
+                <div class="gestao-title"><span class="gestao-icon">📝</span>Formalização</div>
+            </div>
+            ${htmlCalculo}
+            <button class="btn btn-outline" style="margin-top:10px;" onclick="window.open('https://www.gov.br/empresas-e-negocios/pt-br/empreendedor', '_blank')">🏛️ Portal Gov.br</button>
+         </div>`;
+     } else {
+         div.innerHTML += getCardBloqueadoHTML("3. Formalização", 4, "Calculadora Fiscal");
+     }
+}
+
+// --- VERSÃO 2: RECIBO PEDAGÓGICO (COM FEEDBACK) ---
+function gerarReciboEquipe() {
+    if(state.profs.length <= 0) { alert("Cadastre alguém na equipe primeiro."); return; }
+    
+    // 1. Seleção do Colaborador (Melhorada)
+    // Cria uma string numerada para o usuário escolher fácil
+    const listaNomes = state.profs.map((p, i) => `${i+1}. ${p.nome}`).join('\n');
+    const escolha = prompt(`PARA QUEM É O PAGAMENTO?\nDigite o número:\n\n${listaNomes}`);
+    
+    if(!escolha) return;
+    const index = parseInt(escolha) - 1;
+    if(index < 0 || index >= state.profs.length) return;
+    
+    const prof = state.profs[index];
+
+    // 2. Dados do Pagamento
+    const valor = prompt(`💰 Qual o valor a pagar para ${prof.nome}? (R$)`);
+    if(!valor) return;
+    
+    const servicoRef = prompt("🛠️ Referente a qual obra/serviço?");
+    const dataHoje = new Date().toLocaleDateString('pt-BR');
+    
+    // 3. MONTAGEM DO FEEDBACK (O Pulo do Gato)
+    let blocoFeedback = "";
+    if (prof.ultimoFeedback) {
+        const estrelas = "⭐".repeat(Math.round(prof.nota || 5));
+        blocoFeedback = `\n--------------------------------\n📊 *AVALIAÇÃO DE DESEMPENHO*\nNota: ${estrelas} (${prof.nota})\n💬 *Feedback:* "${prof.ultimoFeedback}"\n--------------------------------`;
+    } else {
+        blocoFeedback = `\n--------------------------------\n📊 *AVALIAÇÃO DE DESEMPENHO*\n(Sem avaliação recente registrada)\n--------------------------------`;
+    }
+
+    // 4. Texto Final do Zap
+    const textoRecibo = `*RECIBO DE PAGAMENTO*\n\nEu, *${state.config.pixName || 'O Contratante'}*, confirmo o pagamento a:\n👷 *${prof.nome}*\n\nValor: *R$ ${valor}*\nData: ${dataHoje}\nRef: ${servicoRef || 'Diária/Serviço'}\n${blocoFeedback}\n\n✅ *Assinado Digitalmente via App Preço Bom*`;
+    
+    // Envia
+    window.open(`https://wa.me/?text=${encodeURIComponent(textoRecibo)}`, '_blank');
+}
+
+// --- ETAPA 4: O HUD DE GAMIFICAÇÃO (Barra de XP) ---
+function renderGamificacaoHUD() {
+    const game = state.gamificacao || calcularGamificacao();
+    const div = document.getElementById('hud-gamificacao');
+    
+    if(!div) return;
+
+    div.innerHTML = `
+    <div class="gestao-module" style="background: linear-gradient(135deg, #2c3e50, #34495e); color: white; border-left: none;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-size:0.75rem; color:#f1c40f; font-weight:bold; letter-spacing:1px;">NÍVEL ${game.nivel}</div>
+                <div style="font-weight:bold; font-size:1.3rem;">${game.titulo}</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:1.5rem; text-shadow:0 0 10px rgba(241, 196, 15, 0.5);">🏆</div>
+                <div style="font-size:0.7rem; font-weight:bold;">${game.xp} XP</div>
+            </div>
+        </div>
+        
+        <div class="progress-bar-bg" style="background:rgba(255,255,255,0.15); margin-top:10px; height:8px;">
+            <div class="progress-fill" style="width:${game.progressoPct}%; background: linear-gradient(90deg, #f1c40f, #f39c12); box-shadow: 0 0 10px #f1c40f;"></div>
+        </div>
+        
+        <div style="display:flex; justify-content:space-between; font-size:0.65rem; margin-top:5px; color:#bdc3c7;">
+            <span>Evolução</span>
+            <span>Próximo: ${game.proximoXp} XP</span>
+        </div>
+    </div>`;
+}
 // --- FUNÇÕES NOVAS DE OPERAÇÃO E CRM ---
 
 function renderAgendaHoje() {
@@ -4318,15 +4875,46 @@ function renderListaFinanceiro() {
 }
 
 // Função para transformar Previsão em Realidade
+// --- CORREÇÃO: CONEXÃO CAIXA <-> FUTURO (INTEGRAÇÃO REAL) ---
 function confirmarRecebimento(idMovimento) {
     const mov = state.financeiro.movimentos.find(m => m.id === idMovimento);
-    if(mov) {
-        if(confirm(`Confirmar recebimento de R$ ${mov.valor.toFixed(2)}?`)) {
-            mov.status = 'REALIZADO';
-            mov.data = new Date().toISOString(); // Atualiza para data real do recebimento
-            saveData();
-            renderListaFinanceiro();
+    if (!mov) return;
+
+    if (confirm(`Confirmar recebimento de R$ ${mov.valor.toFixed(2)}?`)) {
+        // 1. Efetiva a Entrada
+        mov.status = 'REALIZADO';
+        mov.data = new Date().toISOString(); 
+
+        // 2. INTELIGÊNCIA ESTRATÉGICA (O "Cérebro" atua aqui)
+        // Verifica se existe objetivo e meta definida
+        if (state.futuro && state.futuro.objetivos && state.futuro.objetivos.length > 0 && state.futuro.metaAtual > 0) {
+            const objetivo = state.futuro.objetivos[0];
+            const valorReserva = state.futuro.metaAtual;
+
+            // Só sugere se o valor recebido for maior que a reserva (pra não ficar negativo)
+            if (mov.valor > valorReserva) {
+                const msg = `🤖 INTELIGÊNCIA FINANCEIRA:\n\nSeu objetivo é '${objetivo.nome}'.\nO plano diz para guardar R$ ${valorReserva.toFixed(2)} por serviço.\n\nDeseja lançar essa reserva agora? (Isso vai debitar do saldo disponível e marcar como 'Guardado')`;
+                
+                if (confirm(msg)) {
+                    // Cria o lançamento de saída (Reserva)
+                    state.financeiro.movimentos.push({
+                        id: Date.now() + 1, // ID único
+                        tipo: 'SAIDA',
+                        desc: `🔒 Reserva: ${objetivo.nome}`,
+                        valor: valorReserva,
+                        data: new Date().toISOString(),
+                        status: 'REALIZADO',
+                        tag: 'INVESTIMENTO' // Tag interna para relatórios futuros
+                    });
+                    alert("✅ Dinheiro separado com sucesso! Você está mais perto do seu sonho.");
+                }
+            }
         }
+
+        saveData();
+        renderListaFinanceiro();
+        // Atualiza também os cards, pois o saldo mudou
+        if (state.isPremium) renderGestao(); 
     }
 }
 
@@ -4403,20 +4991,38 @@ function abrirOpcoesContato(nome, zap, categoria, tituloServico) {
 // --- MÓDULO ESTRATÉGIA (NETWORKING) ---
 
 function abrirBuscaParceiros() {
-    // 1. Popula o Select de Grupos (Reusa a lógica existente)
-    const select = document.getElementById('busca-parceiro-grupo');
-    if(select.options.length <= 1) {
-        const grupos = Object.keys(TAXONOMIA);
-        select.innerHTML = '<option value="">1. Escolha a Área...</option>';
-        grupos.forEach(g => select.innerHTML += `<option value="${g}">${g}</option>`);
+    // --- RESTAURA O CAMPO DE SERVIÇO ---
+    const campoServico = document.getElementById('busca-parceiro-cat');
+    if(campoServico) {
+        campoServico.style.display = 'block';
+        if(campoServico.parentElement) campoServico.parentElement.style.display = 'block';
+        campoServico.disabled = true; // Reinicia travado até escolher a área
+        campoServico.innerHTML = '<option value="">2. Escolha o Serviço...</option>';
     }
     
-    // 2. Limpa resultados anteriores
+    // Restaura o título original
+    const modal = document.getElementById('modal-parceiros');
+    modal.querySelector('h3').innerText = "🤝 Networking";
+    // ------------------------------------
+
+    const select = document.getElementById('busca-parceiro-grupo');
+	
+    // Reseta o primeiro select para mostrar Grupos (Áreas) em vez de especialidades
+    // (Forçamos limpar para reconstruir a lógica de Grupo -> Serviço)
+    select.innerHTML = '<option value="">1. Escolha a Área...</option>';
+    const grupos = Object.keys(TAXONOMIA);
+    grupos.forEach(g => select.innerHTML += `<option value="${g}">${g}</option>`);
+    
+    // Reseta o evento onchange para o padrão (atualizarSubCategorias)
+    select.onchange = function() { atualizarSubCategorias('busca-parceiro'); };
+    
+    // Limpa resultados anteriores
     document.getElementById('lista-parceiros-result').innerHTML = 
         "<div style='text-align:center; color:#999; margin-top:20px;'>Selecione uma especialidade acima.</div>";
         
-    document.getElementById('modal-parceiros').style.display = 'flex';
+    modal.style.display = 'flex';
 }
+
 
 function executarBuscaParceiros() {
     const cat = document.getElementById('busca-parceiro-cat').value;
@@ -4542,13 +5148,33 @@ function encontrarGrupoPorServico(servico) {
 let stateFornecedor = { nome: "", cnpj: "", zap: "", radar: [] };
 
 // 1. INICIALIZAÇÃO E RADAR
+// Substitua a função antiga por esta:
 function initFornecedorScreen() {
     const sel = document.getElementById('forn-radar-grupo');
+    
+    // Verifica se o select existe e se ainda não foi preenchido (tem tamanho <= 1)
     if(sel && sel.options.length <= 1) {
-        sel.innerHTML = '<option value="">Escolha a Categoria...</option>';
-        Object.keys(TAXONOMIA).forEach(k => sel.innerHTML += `<option value="${k}">${k}</option>`);
+        sel.innerHTML = '<option value="">Escolha a Especialidade...</option>';
+        
+        // 1. Cria uma lista única com TODAS as especialidades de todos os grupos
+        let todasEspecialidades = [];
+        
+        Object.keys(TAXONOMIA).forEach(grupo => {
+            // Pega os itens dentro de cada grupo (ex: Pintura, Elétrica)
+            const itensDoGrupo = TAXONOMIA[grupo];
+            todasEspecialidades.push(...itensDoGrupo);
+        });
+
+        // 2. Ordena alfabeticamente para facilitar a busca
+        todasEspecialidades.sort();
+
+        // 3. Adiciona ao Select
+        todasEspecialidades.forEach(item => {
+            sel.innerHTML += `<option value="${item}">${item}</option>`;
+        });
     }
 }
+
 
 function addFornRadar() {
     const val = document.getElementById('forn-radar-grupo').value;
@@ -4566,29 +5192,60 @@ function renderFornRadar() {
 }
 
 // 2. CADASTRO
+// Substitua a função salvarCadastroFornecedor por esta:
+
 function salvarCadastroFornecedor() {
     const cnpj = document.getElementById('forn-cnpj').value;
     const nome = document.getElementById('forn-nome').value;
-    const zap = document.getElementById('forn-zap').value;
+    let zapRaw = document.getElementById('forn-zap').value; // Pega o valor original
 
-    if(!cnpj || !nome || !zap || stateFornecedor.radar.length===0) { alert("Preencha tudo!"); return; }
+    if(!cnpj || !nome || !zapRaw || stateFornecedor.radar.length===0) { 
+        alert("Preencha todos os campos e adicione especialidades!"); 
+        return; 
+    }
 
-    stateFornecedor = { nome, cnpj, zap, radar: stateFornecedor.radar };
+    // --- CORREÇÃO AUTOMÁTICA DO ZAP (+55) ---
+    // Remove tudo que não for número
+    let zapLimpo = zapRaw.replace(/\D/g, '');
+
+    // Se tiver entre 10 e 11 dígitos (ex: 22999999999), adiciona 55 do Brasil
+    if (zapLimpo.length >= 10 && zapLimpo.length <= 11) {
+        zapLimpo = "55" + zapLimpo;
+    }
+    // Se ficou muito curto, avisa erro
+    if (zapLimpo.length < 12) {
+        alert("Número de WhatsApp inválido. Digite DDD + Número.");
+        return;
+    }
+    // ------------------------------------------
+
+    // Atualiza o estado com o Zap corrigido
+    stateFornecedor = { nome, cnpj, zap: zapLimpo, radar: stateFornecedor.radar };
     
-    const btn = event.currentTarget; btn.innerText = "Cadastrando..."; btn.disabled = true;
+    const btn = event.currentTarget; 
+    const txtOriginal = btn.innerText;
+    btn.innerText = "Cadastrando..."; 
+    btn.disabled = true;
 
     fetch(API_URL, {
         method: "POST",
-        body: JSON.stringify({ tipo: "CADASTRAR_FORNECEDOR", cnpj, nome, zap, especialidades: stateFornecedor.radar.join(", ") }),
+        body: JSON.stringify({ 
+            tipo: "CADASTRAR_FORNECEDOR", 
+            cnpj: cnpj, 
+            nome: nome, 
+            zap: zapLimpo, // Envia o zap tratado
+            especialidades: stateFornecedor.radar.join(", ") 
+        }),
         mode: "no-cors"
     }).then(() => {
-        alert("✅ Sucesso!");
+        alert("✅ Loja cadastrada com sucesso!");
         carregarDashboardFornecedor();
     }).catch(e => {
-        alert("Erro conexão (Salvo local)");
+        alert("Erro de conexão (Salvo localmente)");
         carregarDashboardFornecedor();
     });
 }
+
 
 // 3. LOGIN
 function fazerLoginFornecedor() {
@@ -4642,39 +5299,96 @@ function carregarDashboardFornecedor() {
 }
 
 // 5. COTAÇÃO DO PRESTADOR (Busca Fornecedores)
+
+
 function abrirModalCotacaoFornecedor() {
-    const cats = new Set();
+    // 1. Identifica ESPECIALIDADES
+    const especialidadesParaBuscar = new Set();
     state.carrinho.forEach(i => {
         if(i.mat && i.mat.length > 0) {
-            const grp = encontrarGrupoPorServico(i.nome) || i.cat;
-            if(grp) cats.add(grp);
+            const especialidade = i.cat || i.nome;
+            if(especialidade) especialidadesParaBuscar.add(especialidade);
         }
     });
 
-    if(cats.size === 0) { alert("Carrinho sem materiais categorizados."); return; }
+    if(especialidadesParaBuscar.size === 0) { 
+        alert("Seu carrinho não tem materiais vinculados a serviços conhecidos."); 
+        return; 
+    }
     
     const modal = document.getElementById('modal-parceiros');
     modal.querySelector('h3').innerText = "🏭 Fornecedores";
+    
+    // --- CORREÇÃO REAL: ESCONDE O SEGUNDO SELECT (CAMPO DE SERVIÇO) ---
+    const campoServico = document.getElementById('busca-parceiro-cat');
+    if(campoServico) {
+        // Esconde o campo e a div pai dele (para não deixar buraco)
+        campoServico.style.display = 'none'; 
+        if(campoServico.parentElement) campoServico.parentElement.style.display = 'none';
+    }
+    // ------------------------------------------------------------------
+    
+    // Configura o Select Manual (O Primeiro Campo)
+    const select = document.getElementById('busca-parceiro-grupo');
+    if(select) {
+        select.innerHTML = '<option value="">Filtrar por Especialidade...</option>';
+        let listaOps = [];
+        if (typeof TAXONOMIA !== 'undefined') {
+            Object.keys(TAXONOMIA).forEach(grupo => listaOps.push(...TAXONOMIA[grupo]));
+        }
+        listaOps.sort();
+        listaOps.forEach(op => select.innerHTML += `<option value="${op}">${op}</option>`);
+        
+        select.onchange = function() {
+            if(this.value) buscarFornecedoresNoBackend([this.value]);
+        };
+    }
+
     const div = document.getElementById('lista-parceiros-result');
-    div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando lojas...</div>";
+    div.innerHTML = "<div style='text-align:center; padding:20px; color:#e67e22;'>🔄 Buscando lojas compatíveis...</div>";
+    
     modal.style.display = 'flex';
 
-    fetch(API_URL + "?acao=BUSCAR_FORNECEDORES&cats=" + encodeURIComponent(Array.from(cats).join(",")))
+    // Dispara a busca automática
+    buscarFornecedoresNoBackend(Array.from(especialidadesParaBuscar));
+}
+
+// Nova função auxiliar para evitar repetição de código
+function buscarFornecedoresNoBackend(listaEspecialidades) {
+    const div = document.getElementById('lista-parceiros-result');
+    div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando...</div>";
+
+    fetch(API_URL + "?acao=BUSCAR_FORNECEDORES&cats=" + encodeURIComponent(listaEspecialidades.join(",")))
     .then(res => res.json())
     .then(lojas => {
         div.innerHTML = "";
-        if(lojas.length === 0) { div.innerHTML = "<div style='text-align:center'>Nenhuma loja encontrada.</div>"; return; }
         
+        if(lojas.length === 0) { 
+            div.innerHTML = `
+                <div style='text-align:center; padding:15px;'>
+                    <p>Nenhum fornecedor encontrado para: <strong>${listaEspecialidades.join(", ")}</strong></p>
+                    <p style='font-size:0.8rem; color:#666;'>Tente selecionar outra especialidade na lista acima.</p>
+                </div>`; 
+            return; 
+        }
+        
+        div.innerHTML = `<div style="font-size:0.8rem; color:#7f8c8d; margin-bottom:10px;">Encontradas: ${lojas.length} lojas</div>`;
+
         lojas.forEach(l => {
             div.innerHTML += `
-            <div style="background:white; border-left:4px solid #e67e22; padding:15px; margin-bottom:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="background:white; border-left:4px solid #e67e22; padding:15px; margin-bottom:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
                 <div>
-                    <div style="font-weight:bold;">${l.nome}</div>
-                    <div style="font-size:0.7rem; color:#666;">${l.especialidades}</div>
+                    <div style="font-weight:bold; color:#333;">${l.nome}</div>
+                    <div style="font-size:0.7rem; color:#666; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${l.especialidades}</div>
                 </div>
-                <button onclick="enviarZapFornecedor('${l.zap}', '${l.nome}')" class="btn-sm btn-success">Cotar 📲</button>
+                <button onclick="enviarZapFornecedor('${l.zap}', '${l.nome}')" class="btn-sm btn-success" style="display:flex; align-items:center; gap:5px;">
+                    Cotar 📲
+                </button>
             </div>`;
         });
+    })
+    .catch(() => {
+        div.innerHTML = "<div style='text-align:center; color:red'>Erro ao buscar fornecedores.</div>";
     });
 }
 
@@ -4700,7 +5414,123 @@ goToScreen = function(s) {
     _superGoTo(s);
     if(s === 'fornecedor-intro') initFornecedorScreen();
 }
+// --- FUNÇÃO DE AGENDAR VISITA (NOVA) ---
+function agendarVisitaZap(id, titulo, cliente, zapCliente) {
+    if(!zapCliente) {
+        alert("Este cliente não disponibilizou telefone público. Aguarde ele entrar em contato.");
+        return;
+    }
 
+    const nomePrestador = state.config.pixName || "Profissional";
+    const zapLimpo = zapCliente.replace(/\D/g, '');
+    
+    // Verifica se cobra taxa de visita (configurada nos Ajustes)
+    let textoTaxa = "";
+    if (state.config.taxaVisita > 0) {
+        textoTaxa = `\n(Nota: Trabalho com uma taxa de visita técnica de R$ ${state.config.taxaVisita.toFixed(2)}, que pode ser abatida no fechamento).`;
+    }
+
+    const msg = `Olá ${cliente}! 👋\n\nSou *${nomePrestador}* do App Preço Bom.\nVi seu pedido de *${titulo}*.\n\nPara passar um orçamento exato e justo, eu precisaria fazer uma avaliação no local.\n\nPodemos agendar uma visita?${textoTaxa}`;
+
+    window.open(`https://wa.me/55${zapLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+// --- ETAPA 4: REFATORAÇÃO DE SEGURANÇA (INTEGRAÇÃO) ---
+    function addEq(){
+        // Verifica no "Guardião" se o módulo está liberado
+        if (!AccessControl.check('card_equipe')) {
+            alert("🔒 RECURSO BLOQUEADO!\n\nVocê precisa atingir o Nível 2 (Praticante) ou fazer 5 orçamentos para contratar ajudantes.");
+            return;
+        }
+
+        const pid=document.getElementById('s-p').value;
+        if(pid){
+            tempItem.equipe.push({pid:pid,h:1});
+            renderModLists();
+        }
+    }
+	// --- FUNÇÃO QUE FALTAVA (CORREÇÃO DO ERRO) ---
+function definirObjetivo() {
+    // 1. Captura os dados
+    const sonho = prompt("🏆 OBJETIVO DE CRESCIMENTO (OKR)\n\nO que você quer conquistar para a empresa?\nEx: Comprar uma Van, Kit de Ferramentas Dewalt, Férias...");
+    if (!sonho) return;
+
+    const valorStr = prompt(`💰 Qual o valor do investimento '${sonho}'? (R$)`);
+    if (!valorStr) return;
+    const valorSonho = parseFloat(valorStr.replace(',', '.').replace('R$','').trim());
+    
+    if (isNaN(valorSonho) || valorSonho <= 0) { alert("Valor inválido."); return; }
+
+    const prazoServicos = prompt("📅 Em quantos serviços você quer pagar isso?\nEx: Pagar em 10 serviços.");
+    if (!prazoServicos) return;
+
+    // 2. Inteligência: Calcula a retenção necessária
+    const metaPorServico = valorSonho / parseInt(prazoServicos);
+
+    // 3. Salva
+    state.futuro = {
+        objetivos: [{ nome: sonho, valor: valorSonho, prazo: parseInt(prazoServicos) }],
+        metaAtual: metaPorServico
+    };
+    saveData();
+    
+    // 4. Feedback Estratégico
+    alert(`✅ ESTRATÉGIA DEFINIDA!\n\nPara conquistar '${sonho}', o sistema calculou que você deve separar:\n\n👉 R$ ${metaPorServico.toFixed(2)} de lucro em cada serviço.\n\nIsso aparecerá no seu Dashboard.`);
+    
+    renderGestao(); // Atualiza a tela
+}
+// --- NOVA FUNÇÃO: AVALIAÇÃO DE DESEMPENHO (RH) ---
+
+function avaliarColaborador(id) {
+    const profIndex = state.profs.findIndex(p => p.id === id);
+    if (profIndex === -1) return;
+
+    const prof = state.profs[profIndex];
+    
+    // 1. Pergunta a Nota
+    const novaNota = prompt(`📊 AVALIAÇÃO DE: ${prof.nome}\n\nDe 1 a 5, qual nota você dá para o serviço de hoje?`, prof.nota || 5);
+    
+    if (novaNota && !isNaN(novaNota) && novaNota >= 1 && novaNota <= 5) {
+        
+        // 2. Pergunta a Justificativa (Obrigatório para ensinar)
+        let justificativa = prompt(`💬 FEEDBACK PARA O RECIBO:\n\nPor que nota ${novaNota}?\nEscreva um elogio ou o que ele precisa melhorar na próxima.\n(Isso sairá no comprovante de pagamento)`);
+        
+        if(!justificativa) justificativa = "Desempenho dentro do esperado.";
+
+        // Salva os dados
+        state.profs[profIndex].nota = parseFloat(novaNota);
+        state.profs[profIndex].ultimoFeedback = justificativa; // Nova chave
+        state.profs[profIndex].dataFeedback = new Date().toLocaleDateString('pt-BR');
+        
+        saveData();
+        renderGestao(); // Atualiza a tela
+        
+        alert(`✅ Feedback Salvo!\n\nQuando você gerar o recibo de pagamento, essa mensagem irá junto para o colaborador.`);
+    }
+}
+function alocarColaborador(id) {
+    const profIndex = state.profs.findIndex(p => p.id === id);
+    if (profIndex === -1) return;
+    const prof = state.profs[profIndex];
+    
+    // Pergunta simples para manter o fluxo rápido
+    const novaTarefa = prompt(
+        `👷 ALOCAÇÃO DE TAREFA: ${prof.nome}\n\n` +
+        `O que ele deve fazer AGORA?\n(Ex: Lixando, Pintando, Intervalo)\n` +
+        `Deixe em branco para marcar como 'Disponível'.`, 
+        prof.tarefaAtual && prof.tarefaAtual !== "Disponível" ? prof.tarefaAtual : ""
+    );
+
+    if (novaTarefa !== null) { // Se não cancelou
+        state.profs[profIndex].tarefaAtual = novaTarefa.trim() || "Disponível";
+        state.profs[profIndex].horaAlocacao = new Date().toLocaleTimeString();
+        saveData();
+        
+        // RECARREGA A TELA PARA MOSTRAR A MUDANÇA
+        // Se sua função principal for renderGestao(), use ela.
+        // Se este card estiver em uma sub-função, chame a principal.
+        renderGestao(); 
+    }
+}
 </script>
 </body>
 </html>
