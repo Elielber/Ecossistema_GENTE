@@ -280,7 +280,27 @@
     font-weight: bold; margin-top: 15px; cursor: pointer;
     box-shadow: 0 4px 15px rgba(241, 196, 15, 0.3);
 }
+/* --- ETAPA 3: ESTILO DOS CARDS BLOQUEADOS E NOVOS --- */
+.locked-layer { position: relative; overflow: hidden; user-select: none; }
+.locked-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255,255,255,0.85); z-index: 10;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; backdrop-filter: blur(3px);
+}
+.lock-icon { font-size: 2.5rem; margin-bottom: 10px; animation: pulse 2s infinite; }
+.lock-msg { font-size: 0.95rem; color: #2c3e50; font-weight: bold; padding: 0 20px; }
+.lock-sub { font-size: 0.75rem; color: #7f8c8d; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px; }
 
+@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+/* --- GRÁFICO DE MERCADO (CSS PURO) --- */
+.market-chart-box {  background: #e8eaf6;   border-radius: 8px;  padding: 10px;  margin: 10px 0; font-size: 0.75rem;}
+.chart-row {    display: flex;     align-items: center;     margin-bottom: 6px;    gap: 8px;}
+.chart-label {    width: 80px;     text-align: right;     color: #3949ab;     font-weight: 600;    white-space: nowrap;     overflow: hidden;     text-overflow: ellipsis;}
+.chart-bar-bg {    flex: 1;     height: 8px;     background: #c5cae9;     border-radius: 4px;     overflow: hidden;}
+.chart-bar-fill {    height: 100%;     background: linear-gradient(90deg, #3f51b5, #5c6bc0);     border-radius: 4px;    width: 0%; /* Animado via JS */    transition: width 1s ease-out;}
+.chart-value {    width: 30px;     font-weight: bold;     color: #2c3e50;    font-size: 0.7rem;}
     
     </style>
 </head>
@@ -314,9 +334,22 @@
         <div>Sou Fornecedor</div>
     </div>
 </button>
+<div id="card-inspiracao" style="margin-top: 25px; width: 100%; max-width: 320px; background: rgba(255,255,255,0.1); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(5px); display:none;">
+    <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 2px; color: #f1c40f; margin-bottom: 8px;">💡 Inspiração do Dia</div>
+    
+    <div id="txt-frase-dia" style="font-size: 1rem; font-style: italic; line-height: 1.4; margin-bottom: 8px; min-height:40px;">
+        </div>
+    
+    <div id="txt-autor-dia" style="font-size: 0.8rem; font-weight: bold; text-align: right; color: rgba(255,255,255,0.8);">
+        </div>
+
+    <button onclick="compartilharFraseImagem()" style="margin-top: 12px; background: #27ae60; border: none; padding: 10px 20px; border-radius: 20px; color: white; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+        📸 Compartilhar Imagem
+    </button>
+</div>
 
 	<div style="text-align: center; margin-top: 15px; width: 100%;">
-            <a href="https://www.ecossistemagente.com.br/debriefing.html" target="_blank" style="
+            <a href="https://.ecossistemagente.com.br/debriefing.html" target="_blank" style="
                 background-color: rgba(255, 255, 255, 0.2); /* Ajustado para transparente para combinar com a tela */
                 color: #ffffff;
                 padding: 10px 20px;
@@ -534,11 +567,12 @@
     </div>
 
     <div id="panel-pro" style="display:none;">
+	<div id="hud-gamificacao"></div>
         
         <div class="gestao-module" style="border-left: 5px solid #27ae60;">
             <div class="gestao-header">
-                <div class="gestao-title"><span class="gestao-icon">💰</span> Financeiro</div>
-                <button class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="abrirCaderninho()">🗳️ Abrir Caixa</button>
+                <div class="gestao-title"><span class="gestao-icon">💰</span>1. Financeiro</div>
+                <button class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="abrirCaderninho()">✍️ Caderno</button>
             </div>
             <div class="row">
                 <div class="col" style="text-align:center; border-right:1px solid #eee;">
@@ -564,7 +598,7 @@
 
         <div class="gestao-module" style="border-left: 5px solid #3498db;">
             <div class="gestao-header">
-                <div class="gestao-title"><span class="gestao-icon">🛠️</span> Operação</div>
+                <div class="gestao-title"><span class="gestao-icon">🛠️</span>2. Operação</div>
                 <button class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="abrirHistoricoCompleto()">📅 Agenda</button>
             </div>
             
@@ -590,7 +624,7 @@
 
         <div class="gestao-module" style="border-left: 5px solid #9b59b6;">
             <div class="gestao-header">
-                <div class="gestao-title"><span class="gestao-icon">📣</span> Marketing</div>
+                <div class="gestao-title"><span class="gestao-icon">📣</span>3. Marketing</div>
                  <button class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="gerarLinkDivulgacao()">🔗 Divulgar</button>
             </div>
             
@@ -613,35 +647,43 @@
                 <button class="btn btn-primary" onclick="abrirMenuCRM()" style="flex:1; background:#8e44ad; border:none; color:white;">
                     📢 Contactar
                 </button>
+				</div>
+				<div style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
+    <button class="btn btn-outline" style="border-color:#2c3e50; color:#2c3e50; display:flex; align-items:center; justify-content:center; gap:10px;" onclick="verificarRequisitosDossie()">
+        📄 Gerar Dossiê Técnico (PDF)
+    </button>
+    <div style="font-size:0.7rem; color:#999; text-align:center; margin-top:5px;">Requer mín. 5 serviços concluídos</div>
             </div>
         </div>
-                <div class="gestao-module" style="border-left: 5px solid #3f51b5;">
-            <div class="gestao-header">
-                <div class="gestao-title"><span class="gestao-icon">♟️</span> Estratégia</div>
-            </div>
-            
-            <div style="background:#e8eaf6; padding:15px; border-radius:10px; text-align:center; margin-bottom:15px; border:1px solid #c5cae9;">
-                <div style="font-size:0.75rem; color:#3949ab; font-weight:bold; letter-spacing:1px;">REDE DE PARCEIROS</div>
-                <div style="font-size:1.8rem; font-weight:bold; color:#1a237e; margin:5px 0;">🤝 Preço Bom</div>
-                <div style="font-size:0.65rem; color:#7986cb;">Base de prestadores ativos</div>
-            </div>
-
-            <p style="font-size:0.8rem; color:#666; margin-bottom:15px; line-height:1.4;">
-                Conecte-se com outros profissionais para montar equipes ou indicar serviços que você não faz.
-            </p>
-
-            <button class="btn btn-primary" onclick="abrirBuscaParceiros()" style="background:#3f51b5; border:none; color:white; width:100%; box-shadow:0 4px 10px rgba(63, 81, 181, 0.3);">
-                💎 Buscar Parceiro
-            </button>
-        </div>
-        
-        
+		
+		<div class="gestao-module" style="border-left: 5px solid #3f51b5;">
+    <div class="gestao-header">
+        <div class="gestao-title"><span class="gestao-icon">🤝</span>4. Parcerias</div>
+        <button class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="forcarAtualizacaoMercado()">
+            🔄 Atualizar
+        </button>
     </div>
+    
+    <div id="grafico-mercado-container"></div>
+    
+    <p style="font-size:0.8rem; color:#666; margin: 15px 0 15px 0; line-height:1.4;">
+        Conecte-se com outros profissionais para montar equipes ou indicar serviços.
+    </p>
 
-    <div style="height:80px"></div>
+    <button class="btn btn-primary" onclick="abrirBuscaParceiros()" style="background:#3f51b5; border:none; color:white; width:100%; box-shadow:0 4px 10px rgba(63, 81, 181, 0.3);">
+        🔍 Buscar Parceiro
+    </button>
 </div>
 
-
+<script>
+    setTimeout(() => renderGraficoMercado('grafico-mercado-container'), 500);
+</script>
+        
+        
+     <div id="deck-estrategico"></div>
+	 </div>
+	 </div>
+	 
 
     <div id="tab-config" class="container">
     <h3 style="color:var(--primary); margin-top:0;">⚙️ Ajustes do Negócio</h3>
@@ -949,11 +991,7 @@
                 </button>
             </div>
             
-        </div>
-
-        <button class="btn btn-primary" onclick="document.getElementById('modal-declaracao').style.display='none'" style="margin-top:15px;">Entendi e Apoio! 🤝</button>
-    </div>
-</div>
+       </div>
 
         <button class="btn btn-primary" onclick="document.getElementById('modal-declaracao').style.display='none'">Fechar</button>
     </div>
@@ -1102,6 +1140,40 @@
             <strong>Aguarde Pedidos</strong>
             <p style="font-size:0.8rem; color:#1565c0;">Os prestadores enviarão as listas pelo WhatsApp.</p>
         </div>
+</div>
+</div>
+<div id="modal-dossie" class="modal-overlay" onclick="if(event.target.id==='modal-dossie')this.style.display='none'">
+    <div class="modal-content" style="max-height:90vh; display:flex; flex-direction:column;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3 style="margin:0; color:#2c3e50;">📄 Montar Dossiê</h3>
+            <button onclick="document.getElementById('modal-dossie').style.display='none'" style="border:none; background:none; font-size:1.5rem;">&times;</button>
+        </div>
+
+        <div style="background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:15px; border:1px solid #eee;">
+            <div style="font-size:0.8rem; font-weight:bold; color:#7f8c8d; margin-bottom:5px;">CONFIGURAÇÕES DE PRIVACIDADE</div>
+            
+            <label style="display:flex; align-items:center; gap:10px; margin-bottom:5px; font-size:0.9rem;">
+                <input type="checkbox" id="dos-ocultar-valores" onchange="salvarPrefsDossie()"> 
+                🙈 Ocultar valores financeiros (R$)
+            </label>
+            
+            <label style="display:flex; align-items:center; gap:10px; font-size:0.9rem;">
+                <input type="checkbox" id="dos-abreviar-nomes" onchange="salvarPrefsDossie()"> 
+                🔤 Abreviar clientes (Ex: Maria S.)
+            </label>
+        </div>
+
+        <div style="font-size:0.8rem; font-weight:bold; color:#7f8c8d; margin-bottom:5px;">SELECIONE AS OBRAS PARA O PORTFÓLIO:</div>
+        
+        <div id="lista-obras-dossie" style="overflow-y:auto; flex:1; border:1px solid #eee; border-radius:8px; padding:5px; background:#fff;">
+            </div>
+
+        <div style="margin-top:15px; text-align:center;">
+             <div style="font-size:0.8rem; color:#666; margin-bottom:5px;">
+                 Selecionados: <strong id="contador-dossie">0</strong>
+             </div>
+             <button class="btn btn-primary" onclick="gerarPDFDossie()">🖨️ Gerar Documento</button>
+        </div>
     </div>
 </div>
 
@@ -1148,9 +1220,15 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
     };
   
     let state = {
+        version: "10.0", // Controle de versão para migrações futuras
         isPremium: false,
+        // --- NOVAS CHAVES DA ETAPA 1 ---
+        gamificacao: { nivel: 1, xp: 0, titulo: "Aprendiz", pontos: 0 },
+        futuro: { objetivos: [], swot: {} }, // Card 5
+        equipe: [], // Reforço para o Card 6 (mesmo que já exista profs, vamos padronizar aqui futuramente)
+        // -------------------------------
         config: { specialty: "Geral", taxaCompra: 0, taxaVisita: 0, pixKey: "", pixName: "", pixCity: "" , zap: "", nota: "5.0", totalAvaliacoes: 0},
-        profs: [{id: "p1", nome: "Mão de Obra", valor: 50}],
+        profs: [{id: "p1", nome: "Mão de Obra", valor: 50}], // Mantido para compatibilidade
         catalogo: [{ id: 1, nome: "Serviço Exemplo", cat: "Geral", ordem: 1, equipe: [{pid: "p1", h: 2}], mat: [] }],
         carrinho: [],
         modelos: [],
@@ -1158,7 +1236,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
 		radar: [],
 		financeiro: { saldo: 0, movimentos: [] }
     };
-	
+	let listaDemandasCache = [];
 	let configPagamentoTemp = { tipo: 'vista', parcelas: 1 };
 	
     // --- SISTEMA DE SEGURANÇA E RISCO (V3 - COM PLANO B) ---
@@ -1265,6 +1343,7 @@ function checkPremiumLimit() {
     // 1. Inicialização
     popularCategorias(); 
     loadData();
+	carregarFraseDoDia();
 
   // 2. LÓGICA DE PWA (ATUALIZADA PARA 2 TELAS)
     
@@ -1917,6 +1996,10 @@ function iniciarOrcamentoAvulso() {
             document.getElementById('tab-config').classList.add('active');
             document.getElementById('footer-orcamento').style.display = 'none';
             
+            // --- CORREÇÃO: Adicione esta linha abaixo ---
+            renderListasConfig(); // <--- ESTA É A LINHA QUE FALTA
+            // --------------------------------------------
+
             // --- CORREÇÃO: Força renderizar o radar ao entrar na tela ---
             renderRadarTags();
             // ------------------------------------------------------------
@@ -2316,26 +2399,51 @@ if(typeof installApp === 'function') {
 }
 
     function renderOportunidades() {
-        const div = document.getElementById('lista-oportunidades');
-        const badge = document.getElementById('badge-opp');
-        const area = state.config.specialty;
+    const div = document.getElementById('lista-oportunidades');
+    const badge = document.getElementById('badge-opp');
+    const area = state.config.specialty;
+    
+    // --- TRAVA DE CADASTRO (NOVO) ---
+    // Verifica se tem os dados mínimos: Especialidade definida e Chave Pix (indicador de que configurou recebimento)
+    // Se não tiver, mostra o "Cadeado" e para a execução.
+    if (!state.config.specialty || !state.config.pixKey || !state.config.pixName) {
+        div.innerHTML = `
+        <div style="text-align:center; padding:40px 20px; background:white; border-radius:12px; border:1px dashed #ccc; margin-top:20px;">
+            <div style="font-size:3.5rem; margin-bottom:15px; opacity:0.8;">🔒</div>
+            <h3 style="color:#2c3e50; margin:0 0 10px 0;">Área Restrita</h3>
+            <p style="color:#666; font-size:0.9rem; line-height:1.5; margin-bottom:25px;">
+                Temos clientes procurando profissionais na sua região!<br><br>
+                Para ver os pedidos e enviar orçamentos, você precisa ativar seu perfil profissional.
+            </p>
+            <button class="btn btn-primary" onclick="abrirModalCadastro()" style="background:#27ae60; border:none; box-shadow:0 4px 15px rgba(39, 174, 96, 0.4);">
+                🚀 Ativar Meu Cadastro Grátis
+            </button>
+        </div>`;
         
-        div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando oportunidades...</div>";
-
-        // BUSCA REAL NA PLANILHA (GET)
-        fetch(API_URL) 
-        .then(response => response.json())
-        .then(data => {
-            listaDemandasCache = data; // Salva o que veio da nuvem
-            filtrarERenderizar(div, area, badge);
-        })
-        .catch(err => {
-            console.error(err);
-            // Se der erro, tenta mostrar o cache ou mensagem de erro
-            if(listaDemandasCache.length > 0) filtrarERenderizar(div, area, badge);
-            else div.innerHTML = "<div style='text-align:center; color:red'>Erro de conexão. Verifique a internet.</div>";
-        });
+        // Esconde o badge de notificação para não distrair
+        if(badge) badge.style.display = 'none';
+        
+        return; // <--- O SEGREDO: Para a função aqui. Não busca nada no servidor.
     }
+    // --------------------------------
+
+    // SE PASSOU DA TRAVA, SEGUE O FLUXO NORMAL...
+    div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando oportunidades...</div>";
+
+    // BUSCA REAL NA PLANILHA (GET)
+    fetch(API_URL) 
+    .then(response => response.json())
+    .then(data => {
+        listaDemandasCache = data; // Salva o que veio da nuvem
+        filtrarERenderizar(div, area, badge);
+    })
+    .catch(err => {
+        console.error(err);
+        // Se der erro, tenta mostrar o cache ou mensagem de erro
+        if(listaDemandasCache.length > 0) filtrarERenderizar(div, area, badge);
+        else div.innerHTML = "<div style='text-align:center; color:red'>Erro de conexão. Verifique a internet.</div>";
+    });
+}
 
         function filtrarERenderizar(divElement, areaEspecialidade, badgeElement) {
         divElement.innerHTML = "";
@@ -2613,9 +2721,159 @@ if(typeof installApp === 'function') {
         
         // --- RENDERIZA O RADAR RECUPERADO ---
         renderRadarTags(); 
+		initMigration();
     }
 
+// --- ETAPA 1: FUNÇÃO DE MIGRAÇÃO E BLINDAGEM ---
+    function initMigration() {
+        console.log("🛡️ Verificando integridade dos dados...");
+        let mudouAlgo = false;
 
+        // 1. BACKUP DE SEGURANÇA (Só roda uma vez)
+        // Se existe dado antigo mas não existe backup, cria uma cópia "congelada"
+        const dadosAtuais = localStorage.getItem('precobom');
+        if (dadosAtuais && !localStorage.getItem('precobom_v9_backup')) {
+            localStorage.setItem('precobom_v9_backup', dadosAtuais);
+            console.log("📦 Backup de segurança (v9) criado com sucesso.");
+        }
+
+        // 2. INJEÇÃO DE ESTRUTURAS NOVAS (Se faltar, cria)
+		if (!state.dossie) {
+    state.dossie = { 
+        ocultarValores: false, 
+        abreviarNomes: true, // Padrão mais seguro
+        idsSelecionados: []  // Lembra quais ele marcou da última vez
+    };
+}
+        
+        // Gamificação (Etapa 2)
+        if (!state.gamificacao) {
+            state.gamificacao = { nivel: 1, xp: 0, titulo: "Aprendiz", pontos: 0 };
+            mudouAlgo = true;
+        }
+
+        // Futuro/Estratégia (Etapa 3)
+        if (!state.futuro) {
+            state.futuro = { objetivos: [], swot: {} };
+            mudouAlgo = true;
+        }
+
+        // Correção de chaves vitais (caso estejam null em usuários muito antigos)
+        if (!state.financeiro) { state.financeiro = { saldo: 0, movimentos: [] }; mudouAlgo = true; }
+        if (!state.radar) { state.radar = []; mudouAlgo = true; }
+        if (!state.historico) { state.historico = []; mudouAlgo = true; }
+
+        // Atualiza versão
+        if (state.version !== "10.0") {
+            state.version = "10.0";
+            mudouAlgo = true;
+        }
+
+        // 3. SALVAR SE HOUVE MUDANÇA
+        if (mudouAlgo) {
+            console.log("✅ Estrutura de dados atualizada para v10.0");
+            saveData(); 
+        } else {
+            console.log("👍 Dados íntegros.");
+        }
+    }
+	// --- ETAPA 2: MOTOR DE GAMIFICAÇÃO E CONTROLE DE ACESSO ---
+
+// Tabelas de Configuração (Regras do Jogo)
+const GAMIFICATION_RULES = {
+    xp: {
+        CRIAR_ORCAMENTO: 50,    // Aumentei para facilitar o início
+        FECHAR_VENDA: 200,      // Valorização da venda
+        CONCLUIR_SERVICO: 300, 
+        BONUS_META: 500
+    },
+    niveis: [
+        { nivel: 1, titulo: "Aprendiz", xp: 0 },       // Base
+        { nivel: 2, titulo: "Estrategista", xp: 500 }, // Desbloqueia Card 5 (Futuro)
+        { nivel: 3, titulo: "Gestor", xp: 1500 },      // Desbloqueia Card 6 (Equipe)
+        { nivel: 4, titulo: "Empresário", xp: 5000 },  // Desbloqueia Card 7 (Formalização)
+        { nivel: 5, titulo: "Magnata", xp: 15000 }
+    ]
+};
+
+// 2.1. Função Pura de Cálculo de Nível
+// Lê o histórico e retorna o status atual do jogador [cite: 13, 52]
+function calcularGamificacao() {
+    if (!state.historico) return state.gamificacao;
+
+    let xpTotal = 0;
+    
+    // Calcula XP baseado no histórico real
+    state.historico.forEach(h => {
+        // Todo orçamento criado já vale XP
+        xpTotal += GAMIFICATION_RULES.xp.CRIAR_ORCAMENTO;
+
+        if (h.status === 'FECHADO') {
+            xpTotal += GAMIFICATION_RULES.xp.FECHAR_VENDA;
+        } else if (h.status === 'CONCLUIDO') {
+            xpTotal += GAMIFICATION_RULES.xp.FECHAR_VENDA; // Acumula o da venda
+            xpTotal += GAMIFICATION_RULES.xp.CONCLUIR_SERVICO; // + Bônus da conclusão
+        }
+    });
+
+    // Define o Nível
+    let nivelAtual = GAMIFICATION_RULES.niveis[0];
+    let proximoNivel = GAMIFICATION_RULES.niveis[1];
+
+    for (let i = 0; i < GAMIFICATION_RULES.niveis.length; i++) {
+        if (xpTotal >= GAMIFICATION_RULES.niveis[i].xp) {
+            nivelAtual = GAMIFICATION_RULES.niveis[i];
+            proximoNivel = GAMIFICATION_RULES.niveis[i+1] || { xp: xpTotal * 1.5 }; // Teto infinito
+        }
+    }
+
+    // Calcula % de progresso para a barra
+    const base = nivelAtual.xp;
+    const alvo = proximoNivel.xp;
+    const pct = Math.min(((xpTotal - base) / (alvo - base)) * 100, 100);
+
+    return {
+        nivel: nivelAtual.nivel,
+        titulo: nivelAtual.titulo,
+        xp: xpTotal,
+        proximoXp: alvo,
+        progressoPct: Math.floor(pct)
+    };
+}
+
+// 2.2. O Guardião (AccessControl)
+// Decide o que desbloquear baseado no Nível ou Faturamento [cite: 14, 44]
+const AccessControl = {
+    check: function(funcionalidade) {
+        const game = calcularGamificacao();
+        
+        switch(funcionalidade) {
+            // CARD 5: FUTURO (Primeiro a desbloquear - Nível 2)
+            case 'card_futuro':
+                return game.nivel >= 2; 
+
+            // CARD 6: EQUIPE (Intermediário - Nível 3)
+            case 'card_equipe': 
+                // Exige Nível 3 OU muitos serviços (Atalho operacional)
+                return game.nivel >= 3 || (state.historico && state.historico.length >= 10);
+            
+            // CARD 7: FORMALIZAÇÃO (Avançado - Nível 4)
+            case 'card_formalizacao':
+                // Exige Nível 4 OU Faturamento alto (Gatilho financeiro de risco)
+                const faturamento = state.financeiro.saldo || 0;
+                return game.nivel >= 4 || faturamento > 6500; 
+                
+            default:
+                return true;
+        }
+    }
+};
+// Atualiza o state com os dados calculados (Chamar no renderAll)
+function atualizarEstadoGamificacao() {
+    state.gamificacao = calcularGamificacao();
+    // Não salvamos (saveData) aqui para evitar loop infinito, 
+    // apenas atualizamos a memória para exibição.
+}
     
     function saveData() {
         localStorage.setItem('precobom', JSON.stringify(state));
@@ -2623,7 +2881,8 @@ if(typeof installApp === 'function') {
     }
     
         function renderAll() { 
-        renderCatalogo(); 
+        atualizarEstadoGamificacao();
+		renderCatalogo(); 
         renderCarrinho(); 
         renderGestao(); 
         
@@ -2919,7 +3178,7 @@ function renderGestao() {
     if (!state.isPremium) {
         panelFree.style.display = 'block';
         panelPro.style.display = 'none';
-        
+		       
         document.getElementById('free-kpi-vendas').innerText = vendasMes.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
         document.getElementById('free-kpi-clientes').innerText = "👥 " + clientesUnicos;
         document.getElementById('free-kpi-nota').innerText = "⭐ " + nota;
@@ -2927,7 +3186,9 @@ function renderGestao() {
     else {
         panelFree.style.display = 'none';
         panelPro.style.display = 'block';
-        
+
+		renderGamificacaoHUD();
+		
         document.getElementById('pro-saldo').innerText = saldoCaixa.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
         document.getElementById('pro-receber').innerText = previsaoReceber.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
         
@@ -2950,8 +3211,389 @@ function renderGestao() {
         // 2. NOVO: Renderiza Agenda do Dia
         renderAgendaHoje();
     }
+	if (state.isPremium) {
+        renderCardsAvancados();
+    }
 }
 
+// --- ETAPA 3: RENDERIZAÇÃO DOS CARDS ESTRATÉGICOS ---
+
+// 3.1. Template HTML Padronizado (O Cadeado)
+function getCardBloqueadoHTML(titulo, nivelNecessario, msg) {
+    return `
+    <div class="gestao-module locked-layer" style="border-left: 5px solid #bdc3c7;">
+        <div class="gestao-header" style="opacity:0.5">
+            <div class="gestao-title"><span class="gestao-icon">🔒</span> ${titulo}</div>
+        </div>
+        <div style="padding:15px; opacity:0.2; filter:blur(2px)">
+            <p>Lorem ipsum dolor sit amet, conteudo oculto estratégico.</p>
+            <div class="row"><button class="btn">Bloqueado</button></div>
+        </div>
+        <div class="locked-overlay">
+            <div class="lock-icon">🔒</div>
+            <div class="lock-msg">${msg}</div>
+            <div class="lock-sub">Requer Nível ${nivelNecessario}</div>
+        </div>
+    </div>`;
+}
+
+// --- VERSÃO DEFINITIVA (V3): MATRIZ SWOT COMPLETA + COFRE ---
+function renderCardsAvancados() {
+const faturamentoAtual = state.historico 
+        ? state.historico.reduce((acc, item) => acc + (item.valor || 0), 0) 
+        : 0;
+     const div = document.getElementById('deck-estrategico');
+     if(!div) return;
+     div.innerHTML = ""; 
+
+     // =================================================================================
+     // 1. CARD 5: INTELIGÊNCIA ESTRATÉGICA (COFRE + SWOT REAL)
+     // =================================================================================
+     if(AccessControl.check('card_futuro')) {
+          
+          // --- A. DADOS PARA O COFRE ---
+          const totalGuardado = state.financeiro.movimentos
+              .filter(m => m.tag === 'INVESTIMENTO')
+              .reduce((acc, m) => acc + m.valor, 0);
+
+          // --- B. MOTOR DE ANÁLISE SWOT (CRITÉRIOS MÚLTIPLOS) ---
+          const nota = parseFloat(state.config.nota) || 5.0;
+          const saldo = state.financeiro.saldo || 0;
+          const totalHistorico = state.historico.length;
+          
+          // Taxa de Conversão (Fechados vs Total)
+          const fechados = state.historico.filter(h => h.status === 'FECHADO' || h.status === 'CONCLUIDO').length;
+          const taxaConversao = totalHistorico > 0 ? (fechados / totalHistorico) * 100 : 0;
+
+          // Ticket Médio
+          const faturamentoTotal = state.financeiro.movimentos.filter(m => m.tipo === 'ENTRADA').reduce((a,b)=>a+b.valor,0);
+          const ticketMedio = fechados > 0 ? faturamentoTotal / fechados : 0;
+
+          // GERAÇÃO DOS 4 QUADRANTES
+          let forcas = [], fraquezas = [], oportunidades = [], ameacas = [];
+
+          // 1. FORÇAS (O que você garante)
+          if(nota >= 4.8) forcas.push("Excelência no atendimento (Nota 4.8+)");
+          if(taxaConversao > 60) forcas.push(`Alta taxa de fechamento (${Math.floor(taxaConversao)}%)`);
+          if(totalHistorico > 10) forcas.push("Experiência de mercado consolidada");
+          if(forcas.length === 0) forcas.push("Em construção...");
+
+          // 2. FRAQUEZAS (Onde melhorar internamente)
+          if(nota < 4.5) fraquezas.push("Nota de avaliação abaixo da média");
+          if(taxaConversao < 30 && totalHistorico > 5) fraquezas.push("Dificuldade em fechar vendas");
+          if(state.profs.length === 0 && totalHistorico > 20) fraquezas.push("Sobrecarga (Trabalha sozinho)");
+          if(fraquezas.length === 0) fraquezas.push("Nenhuma crítica crítica detectada.");
+
+          // 3. OPORTUNIDADES (Potencial externo/Financeiro)
+          if(saldo > 2000) oportunidades.push("Capital disponível para compras à vista");
+          if(ticketMedio < 200 && fechados > 5) oportunidades.push("Criar pacotes para subir o Ticket Médio");
+          if(!state.isPremium) oportunidades.push("Profissionalizar gestão (Versão PRO)");
+          if(oportunidades.length === 0) oportunidades.push("Manter fluxo constante.");
+
+          // 4. AMEAÇAS (Riscos externos)
+          if(saldo < 200) ameacas.push("Fluxo de caixa perigoso (Baixa liquidez)");
+          if(totalHistorico > 0 && fechados === 0) ameacas.push("Modelo de negócio não validado");
+          if(ticketMedio > 5000 && fechados < 3) ameacas.push("Dependência de poucos clientes grandes");
+          if(ameacas.length === 0) ameacas.push("Ambiente estável.");
+
+          // Helper para renderizar listas
+          const renderList = (lista) => lista.map(item => `<div>• ${item}</div>`).join('');
+
+
+          // --- C. RENDERIZAÇÃO VISUAL (LAYOUT GRID) ---
+          let conteudoFuturo = "";
+          
+          if(state.futuro && state.futuro.objetivos && state.futuro.objetivos.length > 0) {
+              const obj = state.futuro.objetivos[0];
+              const pct = Math.min((totalGuardado / obj.valor) * 100, 100);
+              let corBarra = pct > 50 ? (pct >= 100 ? "#2ecc71" : "#f1c40f") : "#8e24aa";
+
+              conteudoFuturo = `
+                <div style="background:white; padding:15px; border-radius:12px; margin-bottom:15px; border:1px solid #eee; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                        <span style="font-weight:bold; color:#2c3e50;">🚀 ${obj.nome}</span>
+                        <span style="font-size:0.8rem; color:#666;">${Math.floor(pct)}%</span>
+                    </div>
+                    <div class="progress-bar-bg" style="height:10px; background:#f3e5f5; margin-top:5px; border-radius:5px;">
+                        <div class="progress-fill" style="width:${pct}%; background:${corBarra};"></div>
+                    </div>
+                    <div style="font-size:0.7rem; color:#888; margin-top:5px;">
+                        Guardado: <strong style="color:${corBarra}">R$ ${totalGuardado.toFixed(2)}</strong> / Meta: R$ ${obj.valor.toFixed(2)}
+                    </div>
+                </div>
+
+                <div style="background:#f8f9fa; border-radius:8px; padding:10px; border:1px solid #e9ecef;">
+                    <div style="font-size:0.8rem; font-weight:bold; color:#34495e; margin-bottom:10px; text-align:center; text-transform:uppercase;">
+                        📊 Diagnóstico Estratégico (SWOT)
+                    </div>
+                    
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                        <div style="background:#e8f5e9; padding:8px; border-radius:6px; font-size:0.65rem; color:#1b5e20;">
+                            <div style="font-weight:bold; margin-bottom:4px;">💪 FORÇAS</div>
+                            ${renderList(forcas)}
+                        </div>
+                        
+                        <div style="background:#ffebee; padding:8px; border-radius:6px; font-size:0.65rem; color:#b71c1c;">
+                            <div style="font-weight:bold; margin-bottom:4px;">📉 FRAQUEZAS</div>
+                            ${renderList(fraquezas)}
+                        </div>
+
+                        <div style="background:#e3f2fd; padding:8px; border-radius:6px; font-size:0.65rem; color:#0d47a1;">
+                            <div style="font-weight:bold; margin-bottom:4px;">🚀 OPORTUNIDADES</div>
+                            ${renderList(oportunidades)}
+                        </div>
+
+                        <div style="background:#fff3e0; padding:8px; border-radius:6px; font-size:0.65rem; color:#e65100;">
+                            <div style="font-weight:bold; margin-bottom:4px;">⛈️ AMEAÇAS</div>
+                            ${renderList(ameacas)}
+                        </div>
+                    </div>
+                </div>
+
+                
+              `;
+          } else {
+             // Caso sem objetivo definido (Visão inicial)
+             conteudoFuturo = `
+                <div style="text-align:center; padding:20px;">
+                    <div style="font-size:2rem; margin-bottom:10px;">♟️</div>
+                    <p style="font-size:0.9rem; color:#666;">Defina um objetivo para liberar sua Matriz SWOT e o Cofre Inteligente.</p>
+                    <button class="btn btn-primary" onclick="definirObjetivo()">Configurar Estratégia</button>
+                </div>
+              `;
+          }
+
+          div.innerHTML += `
+         <div class="gestao-module" style="border-left: 5px solid #9b59b6;">
+            <div class="gestao-header">
+                <div class="gestao-title"><span class="gestao-icon">♟️</span>5. Planejamento</div>
+<button class="btn btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="definirObjetivo()">🎯 Objetivo</button>
+            </div>
+            ${conteudoFuturo}
+         </div>`;
+     } else {
+         div.innerHTML += getCardBloqueadoHTML("1. Inteligência Estratégica", 2, "Diagnóstico SWOT Completo");
+     }
+
+     // =================================================================================
+    // 2. CARD 6: GESTÃO DE EQUIPE (PAINEL DE LIDERANÇA + ALOCAÇÃO)
+    // =================================================================================
+    if(AccessControl.check('card_equipe')) {
+        
+        // 1. CÁLCULO DO "DELEGÔMETRO" (Mantido original)
+        const totalServicos = state.historico ? state.historico.length : 0;
+        const servicosDelegados = state.historico.filter(h => h.equipe && h.equipe.length > 0).length;
+        
+        let nivelDelegacao = 0;
+        if (totalServicos > 0) nivelDelegacao = (servicosDelegados / totalServicos) * 100;
+
+        // Diagnóstico de Liderança
+        let msgLideranca = "";
+        let corLider = "";
+        
+        if (nivelDelegacao < 20) {
+            msgLideranca = "Centralizador (Você faz tudo)";
+            corLider = "#e74c3c"; // Vermelho
+        } else if (nivelDelegacao < 60) {
+            msgLideranca = "Líder em Evolução (Começando a delegar)";
+            corLider = "#f39c12"; // Laranja
+        } else {
+            msgLideranca = "Gestor Profissional (Sabe distribuir tarefas)";
+            corLider = "#27ae60"; // Verde
+        }
+
+       
+       // 2. RENDERIZAÇÃO DA LISTA (Com Status e Botão Alocar)
+        let htmlEquipe = "";
+        if (state.profs.length === 0) {
+            htmlEquipe = `<div style="font-size:0.8rem; color:#666; font-style:italic; padding:10px;">Nenhum colaborador. Vá em Ajustes para adicionar.</div>`;
+        } else {
+            htmlEquipe = state.profs.map(p => {
+                const nota = p.nota || 5.0;
+                const estrelas = "⭐".repeat(Math.round(nota));
+                const feedbackCurto = p.ultimoFeedback ? `"${p.ultimoFeedback}"` : "Sem feedback registrado.";
+                
+                // --- NOVA LÓGICA DE STATUS ---
+                const tarefa = p.tarefaAtual || "Disponível";
+                const isOcupado = tarefa !== "Disponível";
+                const corStatus = isOcupado ? "#e67e22" : "#27ae60"; // Laranja ou Verde
+                const iconStatus = isOcupado ? "🔨" : "✅";
+                // -----------------------------
+
+                return `
+                <div style="padding:10px 0; border-bottom:1px solid #eee;">
+                   <div style="display:flex; justify-content:space-between; align-items:center;">
+                       <div>
+                           <div style="font-weight:bold; font-size:0.9rem;">${p.nome}</div>
+                           <div style="font-size:0.75rem; color:${corStatus}; font-weight:bold; margin-top:2px;">
+                               ${iconStatus} ${tarefa}
+                           </div>
+                       </div>
+                       <div style="text-align:right;">
+                           <div style="font-size:0.75rem; color:#f1c40f;">${estrelas}</div>
+                           <span style="font-size:0.65rem; color:#999;">(${nota})</span>
+                       </div>
+                   </div>
+                   
+                   <div style="background:#f9f9f9; padding:6px; border-radius:4px; margin-top:5px;">
+                       <div style="font-size:0.7rem; color:#555; font-style:italic; margin-bottom:5px;">${feedbackCurto}</div>
+                       
+                       <div style="display:flex; gap:5px; justify-content:flex-end;">
+                           <button class="btn-sm btn-outline" 
+                                   style="padding:4px 8px; font-size:0.7rem; border-color:${corStatus}; color:${corStatus};" 
+                                   onclick="alocarColaborador('${p.id}')"> 
+                               📍 ${isOcupado ? 'Mudar' : 'Alocar'}
+                           </button>
+                           
+                           <button class="btn-sm btn-outline" 
+                                   style="padding:4px 8px; font-size:0.7rem;" 
+                                   onclick="avaliarColaborador('${p.id}')">
+                               ⭐ Avaliar
+                           </button>
+                       </div>
+                   </div>
+                </div>`;
+            }).join('');
+        }
+
+        // 3. DICA ROTATIVA (Mantida original)
+        const dicasGestao = [
+            "⏰ <strong>Gestão de Tempo:</strong> Delegar tarefas operacionais libera você para negociar.",
+            "👁️ <strong>Gestão Visual:</strong> Use o botão 'Alocar' para saber sempre quem está fazendo o quê.",
+            "🗣️ <strong>Comunicação:</strong> Alinhamento diário de 5 min evita 'gente parada'.",
+            "💰 <strong>Custo x Lucro:</strong> Ajudante parado é prejuízo. Ajudante produzindo é lucro."
+        ];
+        const dicaDoDia = dicasGestao[new Date().getSeconds() % dicasGestao.length];
+
+        div.innerHTML += `
+        <div class="gestao-module" style="border-left: 5px solid #e67e22;">
+           <div class="gestao-header">
+               <div class="gestao-title"><span class="gestao-icon">👷</span>6. Equipe</div>
+               <button class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="nav('config')">⚙️ Gerenciar</button>
+           </div>
+           
+           <div style="background:#fff3e0; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #ffe0b2;">
+               <div style="font-size:0.7rem; color:#e65100; font-weight:bold; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">Diagnóstico de Liderança</div>
+               <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:3px;">
+                   <span style="color:#d35400;">Seu Perfil: <strong>${msgLideranca}</strong></span>
+               </div>
+               <div class="progress-bar-bg" style="height:8px; background:#ffe0b2;">
+                   <div class="progress-fill" style="width:${nivelDelegacao}%; background:${corLider};"></div>
+               </div>
+               <div style="font-size:0.65rem; color:#888; margin-top:3px;">
+                   Você delegou tarefas em ${servicosDelegados} de ${totalServicos} serviços.
+               </div>
+           </div>
+
+           <div style="max-height:200px; overflow-y:auto; margin-bottom:10px;">
+               ${htmlEquipe}
+           </div>
+
+           <div style="background:#f9f9f9; padding:8px; border-radius:5px; font-size:0.75rem; color:#555; border-left:3px solid #bdc3c7;">
+               💡 ${dicaDoDia}
+           </div>
+           
+           <div style="margin-top:10px;">
+               <button class="btn btn-outline" style="flex:1; background:#e67e22; border:none; color:white;" onclick="gerarReciboEquipe()">📄 Recibo Pagamento</button>
+           </div>
+        </div>`;
+    } else {
+        div.innerHTML += getCardBloqueadoHTML("2. Gestão de Equipe", 3, "Aprenda a Liderar e Delegar");
+    }
+
+     // =================================================================================
+     // 3. CARD 7: FORMALIZAÇÃO (Mantido igual)
+     // =================================================================================
+     const custoMEI = 75.00;
+     let impostoPF = faturamentoAtual > 2259 ? faturamentoAtual * 0.075 : 0;
+     const economia = impostoPF - custoMEI;
+
+     if(AccessControl.check('card_formalizacao')) {
+         let htmlCalculo = economia > 0 ? 
+             `<div style="color:#2e7d32; font-size:0.85rem; background:#e8f5e9; padding:8px; border-radius:5px;">💡 Economia de R$ ${(economia).toFixed(2)}/mês virando MEI!</div>` :
+             `<div style="color:#666; font-size:0.85rem;">Faturamento isento de IR. MEI opcional.</div>`;
+
+         div.innerHTML += `
+         <div class="gestao-module" style="border-left: 5px solid #2ecc71;">
+             <div class="gestao-header">
+                <div class="gestao-title"><span class="gestao-icon">📝</span>7. Formalização</div>
+            </div>
+            ${htmlCalculo}
+            <button class="btn btn-outline" style="margin-top:10px;" onclick="window.open('https://www.gov.br/empresas-e-negocios/pt-br/empreendedor/meu-mei-digital', '_blank')">🏛️ Portal Gov.br</button>
+         </div>`;
+     } else {
+         div.innerHTML += getCardBloqueadoHTML("3. Formalização", 4, "Calculadora Fiscal");
+     }
+}
+
+// --- VERSÃO 2: RECIBO PEDAGÓGICO (COM FEEDBACK) ---
+function gerarReciboEquipe() {
+    if(state.profs.length <= 0) { alert("Cadastre alguém na equipe primeiro."); return; }
+    
+    // 1. Seleção do Colaborador (Melhorada)
+    // Cria uma string numerada para o usuário escolher fácil
+    const listaNomes = state.profs.map((p, i) => `${i+1}. ${p.nome}`).join('\n');
+    const escolha = prompt(`PARA QUEM É O PAGAMENTO?\nDigite o número:\n\n${listaNomes}`);
+    
+    if(!escolha) return;
+    const index = parseInt(escolha) - 1;
+    if(index < 0 || index >= state.profs.length) return;
+    
+    const prof = state.profs[index];
+
+    // 2. Dados do Pagamento
+    const valor = prompt(`💰 Qual o valor a pagar para ${prof.nome}? (R$)`);
+    if(!valor) return;
+    
+    const servicoRef = prompt("🛠️ Referente a qual obra/serviço?");
+    const dataHoje = new Date().toLocaleDateString('pt-BR');
+    
+    // 3. MONTAGEM DO FEEDBACK (O Pulo do Gato)
+    let blocoFeedback = "";
+    if (prof.ultimoFeedback) {
+        const estrelas = "⭐".repeat(Math.round(prof.nota || 5));
+        blocoFeedback = `\n--------------------------------\n📊 *AVALIAÇÃO DE DESEMPENHO*\nNota: ${estrelas} (${prof.nota})\n💬 *Feedback:* "${prof.ultimoFeedback}"\n--------------------------------`;
+    } else {
+        blocoFeedback = `\n--------------------------------\n📊 *AVALIAÇÃO DE DESEMPENHO*\n(Sem avaliação recente registrada)\n--------------------------------`;
+    }
+
+    // 4. Texto Final do Zap
+    const textoRecibo = `*RECIBO DE PAGAMENTO*\n\nEu, *${state.config.pixName || 'O Contratante'}*, confirmo o pagamento a:\n👷 *${prof.nome}*\n\nValor: *R$ ${valor}*\nData: ${dataHoje}\nRef: ${servicoRef || 'Diária/Serviço'}\n${blocoFeedback}\n\n✅ *Registrado via App Preço Bom*`;
+    
+    // Envia
+    window.open(`https://wa.me/?text=${encodeURIComponent(textoRecibo)}`, '_blank');
+}
+
+// --- ETAPA 4: O HUD DE GAMIFICAÇÃO (Barra de XP) ---
+function renderGamificacaoHUD() {
+    const game = state.gamificacao || calcularGamificacao();
+    const div = document.getElementById('hud-gamificacao');
+    
+    if(!div) return;
+
+    div.innerHTML = `
+    <div class="gestao-module" style="background: linear-gradient(135deg, #2c3e50, #34495e); color: white; border-left: none;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-size:0.75rem; color:#f1c40f; font-weight:bold; letter-spacing:1px;">NÍVEL ${game.nivel}</div>
+                <div style="font-weight:bold; font-size:1.3rem;">${game.titulo}</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:1.5rem; text-shadow:0 0 10px rgba(241, 196, 15, 0.5);">🏆</div>
+                <div style="font-size:0.7rem; font-weight:bold;">${game.xp} XP</div>
+            </div>
+        </div>
+        
+        <div class="progress-bar-bg" style="background:rgba(255,255,255,0.15); margin-top:10px; height:8px;">
+            <div class="progress-fill" style="width:${game.progressoPct}%; background: linear-gradient(90deg, #f1c40f, #f39c12); box-shadow: 0 0 10px #f1c40f;"></div>
+        </div>
+        
+        <div style="display:flex; justify-content:space-between; font-size:0.65rem; margin-top:5px; color:#bdc3c7;">
+            <span>Evolução</span>
+            <span>Próximo: ${game.proximoXp} XP</span>
+        </div>
+    </div>`;
+}
 // --- FUNÇÕES NOVAS DE OPERAÇÃO E CRM ---
 
 function renderAgendaHoje() {
@@ -3907,7 +4549,7 @@ function enviarAvaliacao() {
         saveData(); 
         document.getElementById('modal-cadastro').style.display = 'none';
         renderGestao(); 
-        
+        renderOportunidades();
         alert("✅ App Configurado para " + spec + "!");
         btn.innerText = txtOriginal; 
         btn.disabled = false;
@@ -4332,15 +4974,46 @@ function renderListaFinanceiro() {
 }
 
 // Função para transformar Previsão em Realidade
+// --- CORREÇÃO: CONEXÃO CAIXA <-> FUTURO (INTEGRAÇÃO REAL) ---
 function confirmarRecebimento(idMovimento) {
     const mov = state.financeiro.movimentos.find(m => m.id === idMovimento);
-    if(mov) {
-        if(confirm(`Confirmar recebimento de R$ ${mov.valor.toFixed(2)}?`)) {
-            mov.status = 'REALIZADO';
-            mov.data = new Date().toISOString(); // Atualiza para data real do recebimento
-            saveData();
-            renderListaFinanceiro();
+    if (!mov) return;
+
+    if (confirm(`Confirmar recebimento de R$ ${mov.valor.toFixed(2)}?`)) {
+        // 1. Efetiva a Entrada
+        mov.status = 'REALIZADO';
+        mov.data = new Date().toISOString(); 
+
+        // 2. INTELIGÊNCIA ESTRATÉGICA (O "Cérebro" atua aqui)
+        // Verifica se existe objetivo e meta definida
+        if (state.futuro && state.futuro.objetivos && state.futuro.objetivos.length > 0 && state.futuro.metaAtual > 0) {
+            const objetivo = state.futuro.objetivos[0];
+            const valorReserva = state.futuro.metaAtual;
+
+            // Só sugere se o valor recebido for maior que a reserva (pra não ficar negativo)
+            if (mov.valor > valorReserva) {
+                const msg = `🤖 INTELIGÊNCIA FINANCEIRA:\n\nSeu objetivo é '${objetivo.nome}'.\nO plano diz para guardar R$ ${valorReserva.toFixed(2)} por serviço.\n\nDeseja lançar essa reserva agora? (Isso vai debitar do saldo disponível e marcar como 'Guardado')`;
+                
+                if (confirm(msg)) {
+                    // Cria o lançamento de saída (Reserva)
+                    state.financeiro.movimentos.push({
+                        id: Date.now() + 1, // ID único
+                        tipo: 'SAIDA',
+                        desc: `🔒 Reserva: ${objetivo.nome}`,
+                        valor: valorReserva,
+                        data: new Date().toISOString(),
+                        status: 'REALIZADO',
+                        tag: 'INVESTIMENTO' // Tag interna para relatórios futuros
+                    });
+                    alert("✅ Dinheiro separado com sucesso! Você está mais perto do seu sonho.");
+                }
+            }
         }
+
+        saveData();
+        renderListaFinanceiro();
+        // Atualiza também os cards, pois o saldo mudou
+        if (state.isPremium) renderGestao(); 
     }
 }
 
@@ -4840,8 +5513,13 @@ goToScreen = function(s) {
     _superGoTo(s);
     if(s === 'fornecedor-intro') initFornecedorScreen();
 }
-// --- FUNÇÃO DE AGENDAR VISITA (NOVA) ---
+// --- FUNÇÃO DE AGENDAR VISITA (COM TRAVA DE CADASTRO) ---
 function agendarVisitaZap(id, titulo, cliente, zapCliente) {
+    
+    // 1. O GUARDIÃO: Verifica se o prestador tem cadastro completo
+    // Se não tiver, o checkCadastro() abre o modal automaticamente e retorna false.
+    if (!checkCadastro()) return; 
+
     if(!zapCliente) {
         alert("Este cliente não disponibilizou telefone público. Aguarde ele entrar em contato.");
         return;
@@ -4860,7 +5538,601 @@ function agendarVisitaZap(id, titulo, cliente, zapCliente) {
 
     window.open(`https://wa.me/55${zapLimpo}?text=${encodeURIComponent(msg)}`, '_blank');
 }
+// --- ETAPA 4: REFATORAÇÃO DE SEGURANÇA (INTEGRAÇÃO) ---
+    function addEq(){
+        // Verifica no "Guardião" se o módulo está liberado
+        if (!AccessControl.check('card_equipe')) {
+            alert("🔒 RECURSO BLOQUEADO!\n\nVocê precisa atingir o Nível 2 (Praticante) ou fazer 5 orçamentos para contratar ajudantes.");
+            return;
+        }
 
+        const pid=document.getElementById('s-p').value;
+        if(pid){
+            tempItem.equipe.push({pid:pid,h:1});
+            renderModLists();
+        }
+    }
+	// --- FUNÇÃO QUE FALTAVA (CORREÇÃO DO ERRO) ---
+function definirObjetivo() {
+    // 1. Captura os dados
+    const sonho = prompt("🏆 OBJETIVO DE CRESCIMENTO (OKR)\n\nO que você quer conquistar para a empresa?\nEx: Comprar uma Van, Kit de Ferramentas Dewalt, Férias...");
+    if (!sonho) return;
+
+    const valorStr = prompt(`💰 Qual o valor do investimento '${sonho}'? (R$)`);
+    if (!valorStr) return;
+    const valorSonho = parseFloat(valorStr.replace(',', '.').replace('R$','').trim());
+    
+    if (isNaN(valorSonho) || valorSonho <= 0) { alert("Valor inválido."); return; }
+
+    const prazoServicos = prompt("📅 Em quantos serviços você quer pagar isso?\nEx: Pagar em 10 serviços.");
+    if (!prazoServicos) return;
+
+    // 2. Inteligência: Calcula a retenção necessária
+    const metaPorServico = valorSonho / parseInt(prazoServicos);
+
+    // 3. Salva
+    state.futuro = {
+        objetivos: [{ nome: sonho, valor: valorSonho, prazo: parseInt(prazoServicos) }],
+        metaAtual: metaPorServico
+    };
+    saveData();
+    
+    // 4. Feedback Estratégico
+    alert(`✅ ESTRATÉGIA DEFINIDA!\n\nPara conquistar '${sonho}', o sistema calculou que você deve separar:\n\n👉 R$ ${metaPorServico.toFixed(2)} de lucro em cada serviço.\n\nIsso aparecerá no seu Dashboard.`);
+    
+    renderGestao(); // Atualiza a tela
+}
+// --- NOVA FUNÇÃO: AVALIAÇÃO DE DESEMPENHO (RH) ---
+
+function avaliarColaborador(id) {
+    const profIndex = state.profs.findIndex(p => p.id === id);
+    if (profIndex === -1) return;
+
+    const prof = state.profs[profIndex];
+    
+    // 1. Pergunta a Nota
+    const novaNota = prompt(`📊 AVALIAÇÃO DE: ${prof.nome}\n\nDe 1 a 5, qual nota você dá para o serviço de hoje?`, prof.nota || 5);
+    
+    if (novaNota && !isNaN(novaNota) && novaNota >= 1 && novaNota <= 5) {
+        
+        // 2. Pergunta a Justificativa (Obrigatório para ensinar)
+        let justificativa = prompt(`💬 FEEDBACK PARA O RECIBO:\n\nPor que nota ${novaNota}?\nEscreva um elogio ou o que ele precisa melhorar na próxima.\n(Isso sairá no comprovante de pagamento)`);
+        
+        if(!justificativa) justificativa = "Desempenho dentro do esperado.";
+
+        // Salva os dados
+        state.profs[profIndex].nota = parseFloat(novaNota);
+        state.profs[profIndex].ultimoFeedback = justificativa; // Nova chave
+        state.profs[profIndex].dataFeedback = new Date().toLocaleDateString('pt-BR');
+        
+        saveData();
+        renderGestao(); // Atualiza a tela
+        
+        alert(`✅ Feedback Salvo!\n\nQuando você gerar o recibo de pagamento, essa mensagem irá junto para o colaborador.`);
+    }
+}
+function alocarColaborador(id) {
+    const profIndex = state.profs.findIndex(p => p.id === id);
+    if (profIndex === -1) return;
+    const prof = state.profs[profIndex];
+    
+    // Pergunta simples para manter o fluxo rápido
+    const novaTarefa = prompt(
+        `👷 ALOCAÇÃO DE TAREFA: ${prof.nome}\n\n` +
+        `O que ele deve fazer AGORA?\n(Ex: Lixando, Pintando, Intervalo)\n` +
+        `Deixe em branco para marcar como 'Disponível'.`, 
+        prof.tarefaAtual && prof.tarefaAtual !== "Disponível" ? prof.tarefaAtual : ""
+    );
+
+    if (novaTarefa !== null) { // Se não cancelou
+        state.profs[profIndex].tarefaAtual = novaTarefa.trim() || "Disponível";
+        state.profs[profIndex].horaAlocacao = new Date().toLocaleTimeString();
+        saveData();
+        
+        // RECARREGA A TELA PARA MOSTRAR A MUDANÇA
+        // Se sua função principal for renderGestao(), use ela.
+        // Se este card estiver em uma sub-função, chame a principal.
+        renderGestao(); 
+    }
+}
+// --- MÓDULO DOSSIÊ TÉCNICO (FASE 1) ---
+
+function verificarRequisitosDossie() {
+    // 1. Filtra apenas serviços que contam como experiência real (Fechados ou Concluídos)
+    const aptos = state.historico.filter(h => h.status === 'FECHADO' || h.status === 'CONCLUIDO');
+    
+    // 2. Trava de Maturidade (Mínimo 5)
+    if (aptos.length < 5) {
+        const faltam = 5 - aptos.length;
+        alert(`⏳ Construindo Carreira...\n\nPara gerar um Dossiê Técnico robusto, você precisa de no mínimo 5 serviços concluídos.\n\nFaltam: ${faltam} serviços.\nContinue trabalhando!`);
+        return;
+    }
+
+    abrirConstrutorDossie(aptos);
+}
+
+function abrirConstrutorDossie(listaAptos) {
+    // Carrega preferências salvas
+    document.getElementById('dos-ocultar-valores').checked = state.dossie.ocultarValores;
+    document.getElementById('dos-abreviar-nomes').checked = state.dossie.abreviarNomes;
+
+    const div = document.getElementById('lista-obras-dossie');
+    div.innerHTML = "";
+
+    // Ordena do mais recente para o mais antigo
+    listaAptos.sort((a,b) => new Date(b.data) - new Date(a.data));
+
+    listaAptos.forEach(item => {
+        // Verifica se estava selecionado antes (Persistência)
+        const isChecked = state.dossie.idsSelecionados.includes(item.id) ? 'checked' : '';
+        
+        // Formata data
+        const dataF = new Date(item.data).toLocaleDateString('pt-BR');
+        
+        // Renderiza item
+        div.innerHTML += `
+        <div style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee;">
+            <input type="checkbox" class="chk-dossie" value="${item.id}" ${isChecked} onchange="atualizarContadorDossie()" style="transform:scale(1.3); margin-right:10px;">
+            <div style="flex:1;">
+                <div style="font-weight:bold; color:#2c3e50; font-size:0.9rem;">${item.titulo}</div>
+                <div style="font-size:0.8rem; color:#666;">${item.cliente} • ${dataF}</div>
+                <div style="font-size:0.75rem; color:#27ae60;">${item.valor.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</div>
+            </div>
+        </div>`;
+    });
+
+    atualizarContadorDossie();
+    document.getElementById('modal-dossie').style.display = 'flex';
+}
+
+function atualizarContadorDossie() {
+    const total = document.querySelectorAll('.chk-dossie:checked').length;
+    document.getElementById('contador-dossie').innerText = total;
+    
+    // Salva automaticamente a seleção no state para não perder se fechar
+    salvarPrefsDossie();
+}
+
+function salvarPrefsDossie() {
+    // Captura IDs selecionados
+    const checkboxes = document.querySelectorAll('.chk-dossie:checked');
+    const ids = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+    // Atualiza State
+    state.dossie = {
+        ocultarValores: document.getElementById('dos-ocultar-valores').checked,
+        abreviarNomes: document.getElementById('dos-abreviar-nomes').checked,
+        idsSelecionados: ids
+    };
+    
+    saveData(); // Persiste no LocalStorage/Backup
+}
+
+function gerarPDFDossie() {
+    const checkboxes = document.querySelectorAll('.chk-dossie:checked');
+    if(checkboxes.length === 0) { alert("Selecione pelo menos 1 obra."); return; }
+
+    const ocultarValores = document.getElementById('dos-ocultar-valores').checked;
+    const abreviar = document.getElementById('dos-abreviar-nomes').checked;
+    
+    let htmlItens = "";
+
+    checkboxes.forEach(cb => {
+        const id = parseInt(cb.value);
+        const item = state.historico.find(h => h.id === id);
+        if(item) {
+            // Tratamento de Nome (Privacidade)
+            let nomeCliente = item.cliente;
+            if (abreviar) {
+                const partes = nomeCliente.split(' ');
+                if(partes.length > 1) nomeCliente = partes[0] + " " + partes[1][0] + ".";
+            }
+
+            // Tratamento de Valor
+            const txtValor = ocultarValores ? "" : `• <span style="font-weight:bold">${item.valor.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</span>`;
+
+            // Descrição técnica (se houver itens no backup, mostra resumo)
+            let descTecnica = "";
+            if(item.itensBackup && item.itensBackup.length > 0) {
+                 // Pega as 3 primeiras fases/itens para não poluir
+                 const resumo = item.itensBackup.slice(0,3).map(i => i.nome).join(', ');
+                 descTecnica = `<div style="font-size:0.85rem; color:#555; margin-top:2px;">Execução: ${resumo}...</div>`;
+            }
+
+            htmlItens += `
+            <div class="item">
+                <div class="item-header">
+                    <span class="item-title">${item.titulo}</span>
+                    <span class="item-date">${new Date(item.data).toLocaleDateString('pt-BR')}</span>
+                </div>
+                <div class="item-meta">Cliente: ${nomeCliente} ${txtValor}</div>
+                ${descTecnica}
+            </div>`;
+        }
+    });
+
+    // Monta o Layout de Impressão (Clean e Acadêmico)
+    const conteudo = `
+    <html>
+    <head>
+        <title>Dossiê Técnico - ${state.config.pixName}</title>
+        <style>
+            body { font-family: 'Times New Roman', serif; padding: 40px; color: #000; max-width: 800px; margin: 0 auto; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
+            h1 { margin: 0; font-size: 24px; text-transform: uppercase; }
+            .sub { font-size: 14px; color: #444; margin-top: 5px; }
+            .section-title { font-size: 16px; font-weight: bold; border-bottom: 1px solid #ccc; margin-top: 30px; padding-bottom: 5px; text-transform: uppercase; }
+            .item { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dotted #eee; }
+            .item-header { display: flex; justify-content: space-between; }
+            .item-title { font-weight: bold; font-size: 16px; }
+            .item-meta { font-size: 14px; color: #333; font-style: italic; }
+            .footer { margin-top: 50px; font-size: 10px; text-align: center; color: #666; border-top: 1px solid #eee; padding-top: 10px; }
+            
+            /* Badge de Nível */
+            .nivel-badge { border: 1px solid #000; padding: 5px 10px; display: inline-block; margin-top: 10px; font-size: 12px; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>${state.config.pixName}</h1>
+            <div class="sub">${state.config.specialty} • ${state.config.pixCity}</div>
+            <div class="sub">Contato: ${state.config.zap}</div>
+            <div class="nivel-badge">NÍVEL: ${state.gamificacao ? state.gamificacao.titulo.toUpperCase() : 'PROFISSIONAL'}</div>
+        </div>
+
+        <div class="section-title">Resumo de Qualificações</div>
+        <p style="font-size:14px; line-height:1.5;">
+            Profissional cadastrado na plataforma Preço Bom, atuando com especialidade em <strong>${state.config.specialty}</strong>. 
+            Possui registro de <strong>${state.historico.length} serviços</strong> no histórico geral, mantendo nota média de avaliação <strong>${state.config.nota || 5.0}</strong>.
+        </p>
+
+        <div class="section-title">Portfólio de Serviços Selecionados</div>
+        ${htmlItens}
+
+        <div class="footer">
+            Documento gerado eletronicamente via Plataforma Preço Bom (Tecnologia Social).<br>
+            A veracidade das informações é baseada nos registros operacionais do usuário.
+        </div>
+        
+        <script>window.print();<\/script>
+    </body>
+    </html>`;
+
+    // Abre janela de impressão
+    const win = window.open('', '_blank');
+    win.document.write(conteudo);
+    win.document.close();
+}
+// --- INTELIGÊNCIA DE MERCADO (VERSÃO BLINDADA CONTRA ERROS) ---
+function renderGraficoMercado(containerId) {
+    const div = document.getElementById(containerId);
+    if (!div) return;
+
+    // 1. Tenta recuperar dados reais salvos no Cache
+    const cacheRaw = localStorage.getItem('pb_cache_mercado');
+    let dadosMercado = [];
+    let precisaAtualizar = true;
+
+    if (cacheRaw) {
+        try {
+            const cache = JSON.parse(cacheRaw);
+            const idadeHoras = (Date.now() - cache.timestamp) / (1000 * 60 * 60);
+            
+            // Validação Profunda: Garante que é um array e tem conteúdo válido inside
+            if (Array.isArray(cache.dados) && cache.dados.length > 0) {
+                // Filtra itens quebrados (que geram o undefined)
+                dadosMercado = cache.dados.filter(item => item && item.label && item.count !== undefined);
+            }
+
+            if (idadeHoras < 24 && dadosMercado.length > 0) {
+                precisaAtualizar = false; 
+            }
+        } catch (e) {
+            console.warn("Cache de mercado inválido, resetando.");
+            dadosMercado = [];
+        }
+    }
+
+    // 2. DECISÃO DE RENDERIZAÇÃO
+    // Só chama o desenhista se tivermos dados VÁLIDOS. Se for array vazio, cai no else.
+    if (dadosMercado.length > 0) {
+        desenharGrafico(div, dadosMercado, precisaAtualizar);
+    } else {
+        // FALLBACK SEGURO: Banner Institucional
+        div.innerHTML = `
+            <div style="background:#e8eaf6; padding:15px; border-radius:10px; text-align:center; margin-bottom:15px; border:1px solid #c5cae9;">
+                <div style="font-size:0.75rem; color:#3949ab; font-weight:bold; letter-spacing:1px;">REDE DE PARCEIROS</div>
+                <div style="font-size:1.8rem; font-weight:bold; color:#1a237e; margin:5px 0;">🤝 Preço Bom</div>
+                <div style="font-size:0.65rem; color:#7986cb;">Base de prestadores ativos</div>
+            </div>`;
+    }
+
+    // 3. ATUALIZAÇÃO EM BACKGROUND
+    if (precisaAtualizar) {
+        atualizarCacheMercado(); 
+    }
+}
+
+function desenharGrafico(div, dados, isUpdating) {
+    if (!dados || dados.length === 0) return;
+
+    // Escala baseada no maior valor (Demanda Total ou Oferta)
+    const maxVal = Math.max(
+        ...dados.map(d => d.demandTotal || 0), 
+        ...dados.map(d => d.supply || 0)
+    ) || 1;
+
+    let html = `<div class="market-chart-box">
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px; border-bottom:1px solid #dce1e9; padding-bottom:5px;">
+            <strong style="color:#303f9f;">📊 Termômetro do Mercado</strong>
+            <span style="font-size:0.65rem; color:#7f8c8d; align-self:center;">${isUpdating ? 'Atualizando...' : 'Região Atual'}</span>
+        </div>
+        
+        <div style="display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; font-size:0.6rem; color:#666; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:4px;">
+                <div style="width:8px; height:8px; background:#64b5f6; border-radius:2px;"></div> Abertas
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+                <div style="width:8px; height:8px; background:#1565c0; border-radius:2px;"></div> Fechadas
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+                <div style="width:8px; height:8px; background:#e67e22; border-radius:2px;"></div> Prestadores
+            </div>
+        </div>`;
+
+    dados.forEach(d => {
+        if (!d.label) return;
+
+        const demTotal = d.demandTotal || 0;
+        const demOpen = d.demandOpen || 0;
+        const demClosed = d.demandClosed || 0;
+        const sup = d.supply || 0;
+        
+        // Cálculos de Porcentagem para a Barra Empilhada
+        // A largura total da barra azul é baseada no Total
+        // Dentro dela, dividimos proporcionalmente entre Aberta e Fechada
+        const pctTotalWidth = Math.max(Math.round((demTotal / maxVal) * 100), 1);
+        
+        // Proporção interna (Flexbox resolve isso visualmente, mas precisamos dos dados)
+        // Se demTotal for 0, evita divisão por zero
+        const flexOpen = demTotal > 0 ? demOpen : 0;
+        const flexClosed = demTotal > 0 ? demClosed : 0;
+
+        const pctSup = Math.max(Math.round((sup / maxVal) * 100), 1);
+
+        let icon = ""; 
+        if(d.temp && d.temp.includes("Quente")) icon = "🔥";
+        if(d.temp && d.temp.includes("Saturado")) icon = "❄️";
+
+        html += `
+        <div style="margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; font-size:0.75rem; font-weight:bold; color:#34495e; margin-bottom:2px;">
+                <span>${d.label} ${icon}</span>
+            </div>
+            
+            <div style="display:flex; align-items:center; height:12px; margin-bottom:2px;">
+                <div style="width:100%; background:#ecf0f1; border-radius:3px; height:6px; overflow:hidden; display:flex;">
+                    <div style="flex:${flexOpen}; background:#64b5f6; height:100%;"></div>
+                    <div style="flex:${flexClosed}; background:#1565c0; height:100%;"></div>
+                    <div style="flex:${maxVal - demTotal}; background:transparent;"></div>
+                </div>
+                <span style="width:25px; text-align:right; font-size:0.65rem; color:#1565c0; font-weight:bold;">${demTotal}</span>
+            </div>
+
+            <div style="display:flex; align-items:center; height:12px;">
+                <div style="width:100%; background:#ecf0f1; border-radius:3px; height:6px; overflow:hidden; display:flex;">
+                    <div style="width:${pctSup}%; background:#e67e22; height:100%;"></div>
+                </div>
+                <span style="width:25px; text-align:right; font-size:0.65rem; color:#e67e22;">${sup}</span>
+            </div>
+        </div>`;
+    });
+    
+    // Rodapé
+    const cacheRaw = localStorage.getItem('pb_cache_mercado');
+    let txtData = "Recente";
+    try { if(cacheRaw) txtData = new Date(JSON.parse(cacheRaw).timestamp).toLocaleDateString(); } catch(e){}
+
+    html += `<div style="text-align:center; margin-top:8px; padding-top:5px; border-top:1px dashed #ccc; font-style:italic; color:#777; font-size:0.65rem;">
+                Dados de: ${txtData} • Azul Claro = Oportunidades Abertas
+             </div></div>`;
+
+    div.innerHTML = html;
+}
+// Função que vai ao servidor buscar a verdade (Assíncrona)
+function atualizarCacheMercado() {
+    const grupo = encontrarGrupoPorServico(state.config.specialty);
+
+    // Fetch silencioso (não trava a tela)
+    fetch(API_URL + "?acao=STATS_MERCADO&grupo=" + encodeURIComponent(grupo))
+    .then(res => res.json())
+    .then(novosDados => {
+        // Salva
+        const cache = { timestamp: Date.now(), dados: novosDados };
+        localStorage.setItem('pb_cache_mercado', JSON.stringify(cache));
+        
+        // ATUALIZA A TELA MAGIÇAMENTE:
+        // Se o usuário ainda estiver olhando para o banner, 
+        // ele será substituído pelo gráfico agora.
+        const container = document.getElementById('grafico-mercado-container');
+        if(container && novosDados.length > 0) {
+            desenharGrafico(container, novosDados, false);
+        }
+    })
+    .catch(err => console.log("Mantendo banner ou cache antigo (Offline)."));
+}
+// Mantemos a simulação apenas como fallback de segurança
+function simularDadosMercado() {
+    const meuGrupo = encontrarGrupoPorServico(state.config.specialty);
+    let dados = [];
+    if (meuGrupo && TAXONOMIA[meuGrupo]) {
+        dados = TAXONOMIA[meuGrupo].map(cat => ({ label: cat, count: Math.floor(Math.random() * 40) + 5 }));
+        dados.sort((a, b) => b.count - a.count);
+    }
+    return dados.slice(0, 5);
+}
+// Função para o botão "Atualizar" do card de Parcerias
+function forcarAtualizacaoMercado() {
+    const div = document.getElementById('grafico-mercado-container');
+    
+    // 1. Feedback visual imediato para o usuário saber que clicou
+    if(div) {
+        div.innerHTML = `
+        <div style="text-align:center; padding:20px; color:#3f51b5;">
+            <div style="font-size:1.5rem; animation:spin 1s linear infinite;">🔄</div>
+            <div style="font-size:0.8rem; margin-top:5px;">Atualizando mercado...</div>
+        </div>`;
+    }
+
+    // 2. Apaga o cache antigo (O SEGREDO ESTÁ AQUI)
+    localStorage.removeItem('pb_cache_mercado');
+
+    // 3. Chama a função principal
+    // Como ela não vai achar cache (porque apagamos acima), 
+    // ela vai mostrar o Banner "Rede de Parceiros" e disparar o fetch na nuvem automaticamente.
+    setTimeout(() => {
+        renderGraficoMercado('grafico-mercado-container');
+    }, 500); // Pequeno delay só para o usuário ver a animação
+}
+// --- VARIÁVEL GLOBAL PARA GUARDAR A FRASE ATUAL ---
+let fraseAtualObj = null;
+
+// Função assíncrona para buscar o JSON externo
+async function carregarFraseDoDia() {
+    const card = document.getElementById('card-inspiracao');
+    
+    try {
+        // 1. Busca o arquivo no mesmo diretório
+        const response = await fetch('./frases_reais_confirmadas.json');
+        
+        if (!response.ok) throw new Error("Erro ao carregar frases");
+        
+        const data = await response.json();
+        
+        // O seu JSON tem a estrutura { "mensagens": [...] }
+        const listaFrases = data.mensagens; 
+        
+        if(!listaFrases || listaFrases.length === 0) return;
+
+        // 2. Lógica do Dia do Ano (Para a frase ser fixa por 24h)
+        const hoje = new Date();
+        const inicioAno = new Date(hoje.getFullYear(), 0, 0);
+        const diff = hoje - inicioAno;
+        const umDia = 1000 * 60 * 60 * 24;
+        const diaDoAno = Math.floor(diff / umDia);
+
+        // 3. Seleciona a frase baseada no dia (Matemática circular)
+        const indice = diaDoAno % listaFrases.length;
+        fraseAtualObj = listaFrases[indice];
+
+        // 4. Exibe na tela
+        document.getElementById('txt-frase-dia').innerText = `"${fraseAtualObj.frase}"`;
+        document.getElementById('txt-autor-dia').innerText = `- ${fraseAtualObj.autor}`;
+        
+        // Mostra o card (que começa oculto para não piscar vazio)
+        card.style.display = 'block';
+
+    } catch (erro) {
+        console.error("Falha ao buscar frase do dia:", erro);
+        // Opcional: Esconder o card se der erro
+        card.style.display = 'none';
+    }
+}
+
+// Função para gerar imagem e compartilhar
+function compartilharFraseImagem() {
+    if (!fraseAtualObj) return;
+
+    const btn = event.currentTarget;
+    const txtOriginal = btn.innerText;
+    btn.innerText = "🎨 Gerando...";
+    btn.disabled = true;
+
+    // Configura o Canvas (1080x1080 para Instagram/Zap)
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1080;
+    canvas.height = 1080;
+
+    // Fundo Elegante (Gradiente)
+    const grd = ctx.createLinearGradient(0, 0, 0, 1080);
+    grd.addColorStop(0, "#2c3e50"); // Azul Petróleo
+    grd.addColorStop(1, "#1a1a1a"); // Preto Suave
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, 1080, 1080);
+
+    // Marca D'água Gigante (Fundo Sutil)
+    ctx.font = "bold 400px sans-serif";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+    ctx.textAlign = "center";
+    ctx.fillText("🤝", 540, 680);
+
+    // Cabeçalho (Logo Preço Bom)
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "80px sans-serif";
+    ctx.fillText("🤝", 540, 150);
+    
+    ctx.fillStyle = "#f1c40f"; // Dourado
+    ctx.font = "bold 50px sans-serif";
+    ctx.fillText("PREÇO BOM", 540, 220);
+
+    ctx.fillStyle = "#bdc3c7"; // Cinza claro
+    ctx.font = "30px sans-serif";
+    ctx.fillText("Inspiração do Dia", 540, 270);
+
+    // A Frase (Centralizada e Quebrada)
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "italic 55px serif"; // Fonte com serifa para citação
+    
+    // Usa a função wrapText que já existe no seu código (usada na carteirinha)
+    // Ajustamos a posição Y baseada no tamanho do texto
+    const texto = `"${fraseAtualObj.frase}"`;
+    let startY = 450;
+    if(texto.length < 50) startY = 500; // Se for curta, desce um pouco
+    
+    // Chama a função wrapText existente no seu código
+    // wrapText(contexto, texto, x, y, larguraMax, alturaLinha)
+    wrapText(ctx, texto, 540, startY, 900, 75);
+
+    // Autor
+    ctx.fillStyle = "#f1c40f";
+    ctx.font = "bold 40px sans-serif";
+    // Colocamos numa posição fixa na parte inferior
+    ctx.fillText(`— ${fraseAtualObj.autor}`, 540, 850);
+
+    // Rodapé
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.font = "28px sans-serif";
+    ctx.fillText("Encontre profissionais qualificados no App", 540, 1000);
+
+    // Exportação
+    canvas.toBlob(async function(blob) {
+        const file = new File([blob], "frase-do-dia.jpg", { type: "image/jpeg" });
+
+        // Tenta Compartilhamento Nativo (Mobile)
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: 'Frase do Dia - Preço Bom',
+                    text: `💡 "${fraseAtualObj.frase}"\n\nBaixe o App Preço Bom!`
+                });
+            } catch (err) {
+                console.log("Compartilhamento cancelado.");
+            }
+        } else {
+            // Fallback Desktop (Download)
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = "frase-preco-bom.jpg";
+            a.click();
+            alert("Imagem salva! Compartilhe manualmente.");
+        }
+        
+        btn.innerText = txtOriginal;
+        btn.disabled = false;
+    }, 'image/jpeg', 0.9);
+}
 </script>
 </body>
 </html>
