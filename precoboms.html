@@ -334,6 +334,19 @@
         <div>Sou Fornecedor</div>
     </div>
 </button>
+<div id="card-inspiracao" style="margin-top: 25px; width: 100%; max-width: 320px; background: rgba(255,255,255,0.1); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(5px); display:none;">
+    <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 2px; color: #f1c40f; margin-bottom: 8px;">💡 Inspiração do Dia</div>
+    
+    <div id="txt-frase-dia" style="font-size: 1rem; font-style: italic; line-height: 1.4; margin-bottom: 8px; min-height:40px;">
+        </div>
+    
+    <div id="txt-autor-dia" style="font-size: 0.8rem; font-weight: bold; text-align: right; color: rgba(255,255,255,0.8);">
+        </div>
+
+    <button onclick="compartilharFraseImagem()" style="margin-top: 12px; background: #27ae60; border: none; padding: 10px 20px; border-radius: 20px; color: white; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+        📸 Compartilhar Imagem
+    </button>
+</div>
 
 	<div style="text-align: center; margin-top: 15px; width: 100%;">
             <a href="https://.ecossistemagente.com.br/debriefing.html" target="_blank" style="
@@ -1330,6 +1343,7 @@ function checkPremiumLimit() {
     // 1. Inicialização
     popularCategorias(); 
     loadData();
+	carregarFraseDoDia();
 
   // 2. LÓGICA DE PWA (ATUALIZADA PARA 2 TELAS)
     
@@ -5979,6 +5993,145 @@ function forcarAtualizacaoMercado() {
     setTimeout(() => {
         renderGraficoMercado('grafico-mercado-container');
     }, 500); // Pequeno delay só para o usuário ver a animação
+}
+// --- VARIÁVEL GLOBAL PARA GUARDAR A FRASE ATUAL ---
+let fraseAtualObj = null;
+
+// Função assíncrona para buscar o JSON externo
+async function carregarFraseDoDia() {
+    const card = document.getElementById('card-inspiracao');
+    
+    try {
+        // 1. Busca o arquivo no mesmo diretório
+        const response = await fetch('./frases_reais_confirmadas.json');
+        
+        if (!response.ok) throw new Error("Erro ao carregar frases");
+        
+        const data = await response.json();
+        
+        // O seu JSON tem a estrutura { "mensagens": [...] }
+        const listaFrases = data.mensagens; 
+        
+        if(!listaFrases || listaFrases.length === 0) return;
+
+        // 2. Lógica do Dia do Ano (Para a frase ser fixa por 24h)
+        const hoje = new Date();
+        const inicioAno = new Date(hoje.getFullYear(), 0, 0);
+        const diff = hoje - inicioAno;
+        const umDia = 1000 * 60 * 60 * 24;
+        const diaDoAno = Math.floor(diff / umDia);
+
+        // 3. Seleciona a frase baseada no dia (Matemática circular)
+        const indice = diaDoAno % listaFrases.length;
+        fraseAtualObj = listaFrases[indice];
+
+        // 4. Exibe na tela
+        document.getElementById('txt-frase-dia').innerText = `"${fraseAtualObj.frase}"`;
+        document.getElementById('txt-autor-dia').innerText = `- ${fraseAtualObj.autor}`;
+        
+        // Mostra o card (que começa oculto para não piscar vazio)
+        card.style.display = 'block';
+
+    } catch (erro) {
+        console.error("Falha ao buscar frase do dia:", erro);
+        // Opcional: Esconder o card se der erro
+        card.style.display = 'none';
+    }
+}
+
+// Função para gerar imagem e compartilhar
+function compartilharFraseImagem() {
+    if (!fraseAtualObj) return;
+
+    const btn = event.currentTarget;
+    const txtOriginal = btn.innerText;
+    btn.innerText = "🎨 Gerando...";
+    btn.disabled = true;
+
+    // Configura o Canvas (1080x1080 para Instagram/Zap)
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1080;
+    canvas.height = 1080;
+
+    // Fundo Elegante (Gradiente)
+    const grd = ctx.createLinearGradient(0, 0, 0, 1080);
+    grd.addColorStop(0, "#2c3e50"); // Azul Petróleo
+    grd.addColorStop(1, "#1a1a1a"); // Preto Suave
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, 1080, 1080);
+
+    // Marca D'água Gigante (Fundo Sutil)
+    ctx.font = "bold 400px sans-serif";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+    ctx.textAlign = "center";
+    ctx.fillText("🤝", 540, 680);
+
+    // Cabeçalho (Logo Preço Bom)
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "80px sans-serif";
+    ctx.fillText("🤝", 540, 150);
+    
+    ctx.fillStyle = "#f1c40f"; // Dourado
+    ctx.font = "bold 50px sans-serif";
+    ctx.fillText("PREÇO BOM", 540, 220);
+
+    ctx.fillStyle = "#bdc3c7"; // Cinza claro
+    ctx.font = "30px sans-serif";
+    ctx.fillText("Inspiração do Dia", 540, 270);
+
+    // A Frase (Centralizada e Quebrada)
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "italic 55px serif"; // Fonte com serifa para citação
+    
+    // Usa a função wrapText que já existe no seu código (usada na carteirinha)
+    // Ajustamos a posição Y baseada no tamanho do texto
+    const texto = `"${fraseAtualObj.frase}"`;
+    let startY = 450;
+    if(texto.length < 50) startY = 500; // Se for curta, desce um pouco
+    
+    // Chama a função wrapText existente no seu código
+    // wrapText(contexto, texto, x, y, larguraMax, alturaLinha)
+    wrapText(ctx, texto, 540, startY, 900, 75);
+
+    // Autor
+    ctx.fillStyle = "#f1c40f";
+    ctx.font = "bold 40px sans-serif";
+    // Colocamos numa posição fixa na parte inferior
+    ctx.fillText(`— ${fraseAtualObj.autor}`, 540, 850);
+
+    // Rodapé
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    ctx.font = "28px sans-serif";
+    ctx.fillText("Encontre profissionais qualificados no App", 540, 1000);
+
+    // Exportação
+    canvas.toBlob(async function(blob) {
+        const file = new File([blob], "frase-do-dia.jpg", { type: "image/jpeg" });
+
+        // Tenta Compartilhamento Nativo (Mobile)
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: 'Frase do Dia - Preço Bom',
+                    text: `💡 "${fraseAtualObj.frase}"\n\nBaixe o App Preço Bom!`
+                });
+            } catch (err) {
+                console.log("Compartilhamento cancelado.");
+            }
+        } else {
+            // Fallback Desktop (Download)
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = "frase-preco-bom.jpg";
+            a.click();
+            alert("Imagem salva! Compartilhe manualmente.");
+        }
+        
+        btn.innerText = txtOriginal;
+        btn.disabled = false;
+    }, 'image/jpeg', 0.9);
 }
 </script>
 </body>
