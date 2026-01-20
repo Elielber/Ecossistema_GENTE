@@ -4250,6 +4250,31 @@ function atualizarProximoServico() {
     }
 }
 
+function atualizarDataAgenda(dados, output) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Demandas");
+  
+  // Pega todos os dados para garantir que acharemos o ID correto
+  var rows = sheet.getDataRange().getValues();
+
+  // Começa do 1 para pular o cabeçalho
+  for (var i = 1; i < rows.length; i++) {
+    
+    // Coluna B é o índice [1]. Comparamos como texto para evitar erro de tipo.
+    if (rows[i][1].toString() == dados.idDemanda.toString()) {
+
+      // A linha na planilha é i + 1 (porque array começa em 0 e planilha em 1)
+      // A Coluna O (Data Agendamento) é a coluna 15
+      
+      // Usamos aspas simples "'" antes da data para forçar o Excel a ler como texto
+      // e não inverter dia/mês (ex: 05/02 virar 02/05)
+      sheet.getRange(i + 1, 15).setValue("'" + dados.novaData);
+
+      return output({ sucesso: true });
+    }
+  }
+
+  return output({ erro: "Demanda não encontrada para agendar." });
+}
 
 
 function toggleStatusHist(id) {
