@@ -3949,11 +3949,10 @@ function sincronizarAgenda(callback) {
 
     console.log("🔄 Iniciando Sync via POST...");
 
-    // MUDANÇA: Agora usamos POST para pedir especificamente "MEUS SERVIÇOS"
     fetch(API_URL, {
         method: 'POST',
         body: JSON.stringify({
-            tipo: "SYNC_MEUS_SERVICOS", // O comando novo que criamos no script
+            tipo: "SYNC_MEUS_SERVICOS",
             zap: state.config.zap
         })
     }) 
@@ -3962,10 +3961,7 @@ function sincronizarAgenda(callback) {
         let novosItens = 0;
         let atualizados = 0;
         
-        // A lista já vem filtrada do servidor, só processamos
         lista.forEach(remoto => {
-            
-            // Procura nos meus serviços locais
             const itemLocal = state.historico.find(h => h.idDemanda == remoto.id);
             const statusRemoto = String(remoto.status).toUpperCase().trim();
 
@@ -3978,9 +3974,9 @@ function sincronizarAgenda(callback) {
                         cliente: remoto.nome || remoto.cliente,
                         titulo: remoto.titulo,
                         zap: remoto.zap,
-                        valor: 0, // O script precisa retornar valor se quiser somar caixa
+                        valor: 0,
                         status: statusRemoto,
-                        dataAgendamento: "", // VEM VAZIO PARA FORÇAR "COMBINAR"
+                        dataAgendamento: remoto.dataAgendamento || "", // Tenta pegar a data já na criação
                         origem: 'PLATAFORMA',
                         data: new Date().toISOString()
                     });
@@ -3988,16 +3984,23 @@ function sincronizarAgenda(callback) {
                 }
             } 
             else {
-                // --- CASO 2: ATUALIZAÇÃO ---
-                // O status mudou na planilha? Atualiza aqui.
+                // --- CASO 2: ATUALIZAÇÃO (ALTERADO AQUI) ---
+                
+                // 1. ATUALIZAÇÃO DA DATA (CORREÇÃO APLICADA)
+                // Se veio uma data do servidor, atualizamos o local, independente do status
+                if (remoto.dataAgendamento && remoto.dataAgendamento !== itemLocal.dataAgendamento) {
+                    itemLocal.dataAgendamento = remoto.dataAgendamento;
+                    atualizados++; 
+                }
+
+                // 2. ATUALIZAÇÃO DE STATUS
                 if (itemLocal.status !== statusRemoto) {
-                    // Só atualiza se for uma evolução (Pendente -> Fechado -> Concluido)
-                    // Evita voltar status se houver delay
                     if (statusRemoto === 'FECHADO' || statusRemoto === 'CONCLUIDO') {
                         itemLocal.status = statusRemoto;
                         itemLocal.origem = 'PLATAFORMA';
                         
                         // Se virou FECHADO e não tem data, limpa para forçar agendamento
+                        // (Mas se já veio data no passo 1 acima, ele vai manter a data correta)
                         if(statusRemoto === 'FECHADO' && !itemLocal.dataAgendamento) {
                             itemLocal.dataAgendamento = "";
                         }
@@ -4020,7 +4023,6 @@ function sincronizarAgenda(callback) {
     })
     .catch(err => {
         console.error("Erro no sync:", err);
-        // Fallback: Se der erro no POST, tenta seguir a vida
         if (callback) callback();
     })
     .finally(() => {
