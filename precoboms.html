@@ -4077,7 +4077,7 @@ function definirDataInicio(idDemanda) {
 }
 
 
-function concluirServico(id, nomeCliente, zapCliente) {
+function concluirServico(idDemanda, nomeCliente, zapCliente) {
     // 1. Confirmação simples
     if (!confirm(`Confirmar a conclusão do serviço para ${nomeCliente}?`)) {
         return;
@@ -4101,7 +4101,7 @@ function concluirServico(id, nomeCliente, zapCliente) {
         carregando(false);
         
         // 3. Atualiza interface local (tira da agenda imediatamente)
-        const itemIdx = state.historico.findIndex(h => h.id === id);
+        const itemIdx = state.historico.findIndex(h => h.idDemanda === idDemanda);
         if(itemIdx !== -1) {
             state.historico[itemIdx].status = 'CONCLUIDO';
         }
@@ -4117,9 +4117,17 @@ function concluirServico(id, nomeCliente, zapCliente) {
         window.open(`https://wa.me/${zapCliente}?text=${encodeURIComponent(msg)}`, '_blank');
 
     })
-    .catch(err => {
+   .catch(err => {
         carregando(false);
         alert("Erro de conexão, mas registrei localmente.");
+        
+        // --- ADICIONE ISTO AQUI PARA FUNCIONAR SEM INTERNET ---
+        const itemIdx = state.historico.findIndex(h => h.idDemanda === idDemanda);
+        if(itemIdx !== -1) {
+            state.historico[itemIdx].status = 'CONCLUIDO';
+            renderGestao();
+        }
+        // -----------------------------------------------------
     });
 }
 
