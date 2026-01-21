@@ -2202,112 +2202,111 @@ if(typeof installApp === 'function') {
     // Variável global para guardar os orçamentos carregados e podermos clicar em "Ver Detalhes"
     let cacheOrcamentosCliente = [];
 
-  function carregarMeusPedidos() {
-        const zap = document.getElementById('cli-login-zap').value;
-        if(!zap) { alert("Digite seu telefone!"); return; }
-        localStorage.setItem('cli_zap', zap);
+function carregarMeusPedidos() {
+    const zap = document.getElementById('cli-login-zap').value;
+    if(!zap) { alert("Digite seu telefone!"); return; }
+    localStorage.setItem('cli_zap', zap);
 
-        const div = document.getElementById('lista-pedidos-cliente');
-        div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando...</div>";
+    const div = document.getElementById('lista-pedidos-cliente');
+    div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando...</div>";
 
-        fetch(API_URL + "?acao=BUSCAR_MEUS_PEDIDOS&zap=" + zap)
-        .then(res => res.json())
-        .then(demandas => {
-            div.innerHTML = "";
-            cacheOrcamentosCliente = demandas; // Salva no cache
+    fetch(API_URL + "?acao=BUSCAR_MEUS_PEDIDOS&zap=" + zap)
+    .then(res => res.json())
+    .then(demandas => {
+        div.innerHTML = "";
+        cacheOrcamentosCliente = demandas; // Salva no cache
 
-            if(demandas.length === 0) {
-                div.innerHTML = "<div style='text-align:center;'>Nenhum pedido encontrado.</div>";
-                return;
+        if(demandas.length === 0) {
+            div.innerHTML = "<div style='text-align:center;'>Nenhum pedido encontrado.</div>";
+            return;
+        }
+
+        // ORDENAÇÃO: Abertas primeiro, Fechadas/Concluídas por último
+        demandas.sort((a, b) => {
+            const statusA = a.status;
+            const statusB = b.status;
+            
+            // Lógica para manter Abertas no topo
+            if (statusA === 'ABERTA' && statusB !== 'ABERTA') return -1;
+            if (statusA !== 'ABERTA' && statusB === 'ABERTA') return 1;
+            return new Date(b.data) - new Date(a.data); // Desempate por data
+        });
+
+        demandas.forEach((d, indexDemanda) => {
+            // VERIFICA SE ESTÁ FECHADO OU CONCLUÍDO
+            const isFechado = d.status === 'FECHADO' || d.status === 'CONCLUIDO';
+            
+            // GARANTIR A CATEGORIA
+            const categoriaCorrigida = d.cat || d.categoria || ""; 
+            
+            // ESTILO DO CARD
+            const cardStyle = isFechado 
+                ? "background:#f9f9f9; border-left:5px solid #7f8c8d; opacity:0.9;" 
+                : "border-left:5px solid var(--cli-accent);";
+
+            // BADGE DINÂMICO (Melhoria Visual)
+            let badgeStatus = `<span class="badge badge-green">ABERTA</span>`;
+            if (isFechado) {
+                if (d.status === 'CONCLUIDO') {
+                    badgeStatus = `<span class="badge" style="background:#2c3e50; color:white;">🏁 CONCLUÍDO</span>`;
+                } else {
+                    badgeStatus = `<span class="badge" style="background:#7f8c8d; color:white;">🔒 CANCELADO</span>`;
+                }
             }
 
-            // ORDENAÇÃO: Abertas primeiro, Fechadas por último
-            demandas.sort((a, b) => {
-                if (a.status === 'ABERTA' && b.status === 'FECHADO') return -1;
-                if (a.status === 'FECHADO' && b.status === 'ABERTA') return 1;
-                return new Date(b.data) - new Date(a.data); // Desempate por data
-            });
+            let htmlOrcamentos = "";
+            
+            if(d.orcamentos.length > 0) {
+                d.orcamentos.forEach((o, indexOrc) => {
+                    // Verifica vencedor considerando os dois status
+                    const isVencedor = isFechado && d.vencedor && d.vencedor.toString() === o.zapPrestador.toString();
+                    
+                    let htmlEstrelas = (!o.estrelas || o.estrelas === "Profissional") ? "🆕" : `⭐ ${o.estrelas}`;
+                    
+                    let estiloOrc = isVencedor 
+                        ? "background:#d4edda; border:2px solid #28a745;" 
+                        : `background:white; border:1px solid #ddd; border-left: 5px solid #ccc;`;
 
-            demandas.forEach((d, indexDemanda) => {
-                // VERIFICA SE ESTÁ FECHADO
-                const isFechado = d.status === 'FECHADO';
-                
-                // --- CORREÇÃO PRINCIPAL: GARANTIR A CATEGORIA ---
-                // Tenta ler 'cat' (padrão do feed) ou 'categoria' (legado)
-                // Se não achar nenhum, usa string vazia para não gerar "undefined"
-                const categoriaCorrigida = d.cat || d.categoria || ""; 
-                // ------------------------------------------------
-                
-                // ESTILO DO CARD
-                const cardStyle = isFechado 
-                    ? "background:#f4f4f4; border-left:5px solid #7f8c8d; opacity:0.8; filter: grayscale(100%);" 
-                    : "border-left:5px solid var(--cli-accent);";
+                    // Sanitização de texto
+                    const nomeSafe = o.prestador
+                        .replace(/"/g, '&quot;')  
+                        .replace(/'/g, "\\'");     
 
-                const badgeStatus = isFechado
-                    ? `<span class="badge" style="background:#7f8c8d; color:white;">🔒 CONCLUÍDO</span>`
-                    : `<span class="badge badge-green">ABERTA</span>`;
+                    const zapSafe = o.zapPrestador.replace(/[^0-9]/g, ''); 
 
-                let htmlOrcamentos = "";
-                
-                if(d.orcamentos.length > 0) {
-                    d.orcamentos.forEach((o, indexOrc) => {
-                        const isVencedor = isFechado && d.vencedor && d.vencedor.toString() === o.zapPrestador.toString();
-                        
-                        // Estrelas
-                        let htmlEstrelas = (!o.estrelas || o.estrelas === "Profissional") ? "🆕" : `⭐ ${o.estrelas}`;
-                        
-                        let estiloOrc = isVencedor 
-                            ? "background:#d4edda; border:2px solid #28a745;" 
-                            : `background:white; border:1px solid #ddd; border-left: 5px solid #ccc;`;
+                    htmlOrcamentos += `
+                    <div style="${estiloOrc} padding:12px; border-radius:8px; margin-top:8px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                            <div>
+                                <div style="font-weight:bold; color:var(--primary)">
+                                    ${isVencedor ? '🏆 ' : '👷 '}${o.prestador}
+                                </div>
+                                <div style="font-size:0.75rem; color:#666; margin-top:2px;">
+                                    ${o.seloVolume || ''} • ${htmlEstrelas}
+                                </div>
+                            </div>
+                            <div style="font-weight:bold; font-size:1.1rem; color:var(--success)">${o.valor}</div>
+                        </div>
 
-                      
-   // --- A CORREÇÃO MÁGICA COMEÇA AQUI ---
-    // Cria uma versão do nome que não quebra o HTML (troca aspas por códigos seguros)
-    // &quot; é o código HTML para aspas duplas (")
-    // \\' é o código para escapar aspas simples (')
-    const nomeSafe = o.prestador
-        .replace(/"/g, '&quot;')  
-        .replace(/'/g, "\\'");    
+                        <div style="display:flex; gap:10px; margin-top:10px;">
+                            <button class="btn btn-outline btn-sm" style="flex:1;" onclick="verDetalhesOrcamento(${indexDemanda}, ${indexOrc})">👁️ Ver</button>
 
-    const zapSafe = o.zapPrestador.replace(/[^0-9]/g, ''); 
-    // -------------------------------------
+                            <button class="btn btn-success btn-sm" style="flex:1;" onclick="abrirOpcoesContato('${nomeSafe}', '${zapSafe}', '${categoriaCorrigida}', '${d.titulo.replace(/'/g, "\\'")}')"> 💬 Contato </button>
 
-   // Agora usamos 'nomeSafe' dentro dos onlicks em vez de o.prestador
-   htmlOrcamentos += `
-   <div style="${estiloOrc} padding:12px; border-radius:8px; margin-top:8px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-       <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-           <div>
-               <div style="font-weight:bold; color:var(--primary)">
-                   ${isVencedor ? '🏆 ' : '👷 '}${o.prestador}
-               </div>
-               <div style="font-size:0.75rem; color:#666; margin-top:2px;">
-                   ${o.seloVolume || ''} • ${htmlEstrelas}
-               </div>
-           </div>
-           <div style="font-weight:bold; font-size:1.1rem; color:var(--success)">${o.valor}</div>
-       </div>
+                            ${!isFechado ? 
+                             `<button class="btn btn-outline btn-sm" style="flex:1; border-color:#f1c40f; color:#d35400;" onclick="abrirModalAvaliacao('${d.id}', '${nomeSafe}', '${zapSafe}')">🏆 Contratar</button>` 
+                             : ''}
+                        </div>
+                    </div>`;
+                });
+            } else {
+                htmlOrcamentos = "<div style='font-size:0.8rem; color:#999; margin-top:5px;'>Aguardando orçamentos...</div>";
+            }
 
-       <div style="display:flex; gap:10px; margin-top:10px;">
-           <button class="btn btn-outline btn-sm" style="flex:1;" onclick="verDetalhesOrcamento(${indexDemanda}, ${indexOrc})">👁️ Ver</button>
-
-           <button class="btn btn-success btn-sm" style="flex:1;" onclick="abrirOpcoesContato('${nomeSafe}', '${zapSafe}', '${categoriaCorrigida}', '${d.titulo.replace(/'/g, "\\'")}')"> 💬 Contato / Indicar </button>
-
-           ${!isFechado ? 
-             `<button class="btn btn-outline btn-sm" style="flex:1; border-color:#f1c40f; color:#d35400;" onclick="abrirModalAvaliacao('${d.id}', '${nomeSafe}', '${zapSafe}')">🏆 Contratar</button>` 
-             : ''}
-       </div>
-   </div>`;
-});
-                } else {
-                    htmlOrcamentos = "<div style='font-size:0.8rem; color:#999; margin-top:5px;'>Aguardando orçamentos...</div>";
-                }
-				// --- 2. GERA O BOTÃO DE AVALIAÇÃO (SE ESTIVER FECHADO) ---
-           
+            // --- 2. GERA O BOTÃO DE AVALIAÇÃO (SE ESTIVER FECHADO/CONCLUIDO) ---
             let botoesAcao = "";
             if (isFechado) {
-                // Tenta pegar o nome do vencedor dos orçamentos, se possível
                 let nomeVencedor = "Profissional";
-                // Procura nos orçamentos quem tem o mesmo zap do vencedor
                 if(d.orcamentos && d.vencedor) {
                     const orcVencedor = d.orcamentos.find(o => o.zapPrestador.toString() === d.vencedor.toString());
                     if(orcVencedor) nomeVencedor = orcVencedor.prestador;
@@ -2322,23 +2321,23 @@ if(typeof installApp === 'function') {
                 </div>`;
             }
 
-                div.innerHTML += `
-                <div class="notification-card" style="${cardStyle}">
-                    <div style="display:flex; justify-content:space-between;">
-                        <strong>${d.titulo}</strong>
-                        <div>${badgeStatus} <span class="badge">${d.orcamentos.length} Props</span></div>
-                    </div>
-                    <div style="font-size:0.8rem; color:#666; margin-top:5px;">Data: ${new Date(d.data).toLocaleDateString('pt-BR')}</div>
-                    
-                    ${isFechado && !d.nota ? `<div style="font-size:0.8rem; color:#e67e22; margin-top:5px;">⭐ Sua avaliação: ${d.nota}</div>` : ''}
+            div.innerHTML += `
+            <div class="notification-card" style="${cardStyle}">
+                <div style="display:flex; justify-content:space-between;">
+                    <strong>${d.titulo}</strong>
+                    <div>${badgeStatus} <span class="badge">${d.orcamentos.length} Props</span></div>
+                </div>
+                <div style="font-size:0.8rem; color:#666; margin-top:5px;">Data: ${new Date(d.data).toLocaleDateString('pt-BR')}</div>
+                
+                ${isFechado && d.nota ? `<div style="font-size:0.8rem; color:#e67e22; margin-top:5px;">⭐ Sua avaliação: ${d.nota}</div>` : ''}
 
-                    <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
-                    ${htmlOrcamentos}
-					 ${botoesAcao}
-                </div>`;
-            });
+                <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+                ${htmlOrcamentos}
+                ${botoesAcao}
+            </div>`;
         });
-    }
+    });
+}
 
     // Função Nova: Popula e abre o modal
   function verDetalhesOrcamento(idxDemanda, idxOrc) {
