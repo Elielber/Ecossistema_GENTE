@@ -2216,8 +2216,8 @@ function carregarMeusPedidos() {
         div.innerHTML = "";
         cacheOrcamentosCliente = demandas; 
 
-        if(demandas.length === 0) {
-            div.innerHTML = "<div style='text-align:center;'>Nenhum pedido encontrado.</div>";
+        if(!demandas || demandas.length === 0) {
+            div.innerHTML = "<div style='text-align:center; color:#666; margin-top:20px;'>Nenhum pedido encontrado.</div>";
             return;
         }
 
@@ -2231,154 +2231,161 @@ function carregarMeusPedidos() {
         });
 
         demandas.forEach((d, indexDemanda) => {
-            const isFechado = d.status === 'FECHADO' || d.status === 'CONCLUIDO';
-            const categoriaCorrigida = d.cat || d.categoria || ""; 
-            
-            // ESTILO DO CARD
-            const cardStyle = isFechado 
-                ? "background:#f9f9f9; border-left:5px solid #bdc3c7; opacity:0.9;" 
-                : "border-left:5px solid var(--cli-accent);"; 
+            try {
+                // BLINDAGEM DE DADOS (Evita travamento se vier null)
+                const isFechado = d.status === 'FECHADO' || d.status === 'CONCLUIDO';
+                const vencedorSafe = String(d.vencedor || ""); // Garante que é texto
+                const tituloSafe = (d.titulo || "Sem título").replace(/'/g, "\\'"); 
+                const categoriaCorrigida = d.cat || d.categoria || "Geral";
 
-            // ETIQUETAS
-            let badgeStatus = `<span class="badge badge-green">ABERTA</span>`;
-            if (isFechado) {
-                if (d.status === 'CONCLUIDO') {
-                    badgeStatus = `<span class="badge" style="background:#7f8c8d; color:white;">🏁 CONCLUÍDO</span>`;
-                } else {
-                    badgeStatus = `<span class="badge" style="background:#95a5a6; color:white;">🔒 ENCERRADO</span>`;
-                }
-            }
+                // ESTILO DO CARD
+                const cardStyle = isFechado 
+                    ? "background:#f9f9f9; border-left:5px solid #bdc3c7; opacity:0.95;" 
+                    : "border-left:5px solid var(--cli-accent);"; 
 
-            // --- EXIBIÇÃO DAS NOTAS (DUPLA AVALIAÇÃO) ---
-            let htmlNotas = "";
-            if (isFechado) {
-                htmlNotas += `<div style="display:flex; gap:10px; margin-top:5px; font-size:0.75rem;">`;
-                
-                // Nota 1: Expectativa (Dada na contratação)
-                if (d.notaExpectativa) {
-                    htmlNotas += `<div style="background:#fff3cd; padding:4px 8px; border-radius:4px; border:1px solid #ffeeba; color:#856404;">
-                        🤝 Expectativa: <strong>${d.notaExpectativa}⭐</strong>
-                    </div>`;
-                }
-                
-                // Nota 2: Realidade (Final)
-                if (d.notaFinal) {
-                    htmlNotas += `<div style="background:#d4edda; padding:4px 8px; border-radius:4px; border:1px solid #c3e6cb; color:#155724;">
-                        🏁 Final: <strong>${d.notaFinal}⭐</strong>
-                    </div>`;
-                }
-                
-                htmlNotas += `</div>`;
-            }
-            // ---------------------------------------------
-
-            let htmlOrcamentos = "";
-            
-            if(d.orcamentos.length > 0) {
-                d.orcamentos.forEach((o, indexOrc) => {
-                    const isVencedor = isFechado && d.vencedor && d.vencedor.toString() === o.zapPrestador.toString();
-                    let htmlEstrelas = (!o.estrelas || o.estrelas === "Profissional") ? "🆕" : `⭐ ${o.estrelas}`;
-                    
-                    let estiloOrc = "";
-                    let corTexto = "";
-                    let btnContatoClass = "btn btn-success btn-sm"; 
-                    let btnContatoStyle = "flex:1;"; 
-
-                    if (isFechado) {
-                        // MODO CINZA (INATIVO)
-                        btnContatoClass = "btn btn-sm"; 
-                        btnContatoStyle = "flex:1; background:#bdc3c7; color:white; border:none;"; 
-                        corTexto = "color:#7f8c8d;"; 
-
-                        if (isVencedor) {
-                            estiloOrc = "background:#ecf0f1; border:2px solid #bdc3c7;"; 
-                        } else {
-                            estiloOrc = "background:#fdfdfd; border:1px solid #eee; opacity:0.6;";
-                        }
+                // ETIQUETAS
+                let badgeStatus = `<span class="badge badge-green">ABERTA</span>`;
+                if (isFechado) {
+                    if (d.status === 'CONCLUIDO') {
+                        badgeStatus = `<span class="badge" style="background:#7f8c8d; color:white;">🏁 CONCLUÍDO</span>`;
+                    } else if (d.status === 'CANCELADO') {
+                        badgeStatus = `<span class="badge" style="background:#e74c3c; color:white;">🚫 CANCELADO</span>`;
                     } else {
-                        // MODO COLORIDO (ATIVO)
-                        corTexto = "color:var(--primary);";
-                        estiloOrc = "background:white; border:1px solid #ddd; border-left: 5px solid #ccc;";
+                        badgeStatus = `<span class="badge" style="background:#95a5a6; color:white;">🔒 ENCERRADO</span>`;
+                    }
+                }
+
+                // --- EXIBIÇÃO DAS NOTAS (DUPLA AVALIAÇÃO) ---
+                let htmlNotas = "";
+                if (isFechado) {
+                    htmlNotas += `<div style="display:flex; gap:10px; margin-top:5px; font-size:0.75rem;">`;
+                    if (d.notaExpectativa) {
+                        htmlNotas += `<div style="background:#fff3cd; padding:4px 8px; border-radius:4px; border:1px solid #ffeeba; color:#856404;">🤝 Expectativa: <strong>${d.notaExpectativa}⭐</strong></div>`;
+                    }
+                    if (d.notaFinal) {
+                        htmlNotas += `<div style="background:#d4edda; padding:4px 8px; border-radius:4px; border:1px solid #c3e6cb; color:#155724;">🏁 Final: <strong>${d.notaFinal}⭐</strong></div>`;
+                    }
+                    htmlNotas += `</div>`;
+                }
+
+                let htmlOrcamentos = "";
+                if(d.orcamentos && d.orcamentos.length > 0) {
+                    d.orcamentos.forEach((o, indexOrc) => {
+                        // Comparação segura de vencedor
+                        const zapPrestadorSafe = String(o.zapPrestador || "");
+                        const isVencedor = isFechado && vencedorSafe.length > 5 && vencedorSafe.includes(zapPrestadorSafe);
+                        
+                        let htmlEstrelas = (!o.estrelas || o.estrelas === "Profissional") ? "🆕" : `⭐ ${o.estrelas}`;
+                        let estiloOrc = "";
+                        let corTexto = "";
+                        let btnContatoClass = "btn btn-success btn-sm"; 
+                        let btnContatoStyle = "flex:1;"; 
+
+                        if (isFechado) {
+                            btnContatoClass = "btn btn-sm"; 
+                            btnContatoStyle = "flex:1; background:#bdc3c7; color:white; border:none;"; 
+                            corTexto = "color:#7f8c8d;"; 
+                            estiloOrc = isVencedor ? "background:#ecf0f1; border:2px solid #bdc3c7;" : "background:#fdfdfd; border:1px solid #eee; opacity:0.6;";
+                        } else {
+                            corTexto = "color:var(--primary);";
+                            estiloOrc = "background:white; border:1px solid #ddd; border-left: 5px solid #ccc;";
+                        }
+
+                        const nomeSafe = (o.prestador||"Prestador").replace(/"/g, '&quot;').replace(/'/g, "\\'");     
+                        const zapClean = zapPrestadorSafe.replace(/[^0-9]/g, ''); 
+
+                        htmlOrcamentos += `
+                        <div style="${estiloOrc} padding:12px; border-radius:8px; margin-top:8px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                                <div>
+                                    <div style="font-weight:bold; ${corTexto}">
+                                        ${isVencedor ? '🏆 ' : '👷 '}${o.prestador}
+                                    </div>
+                                    <div style="font-size:0.75rem; color:#999; margin-top:2px;">
+                                        ${o.seloVolume || ''} • ${htmlEstrelas}
+                                    </div>
+                                </div>
+                                <div style="font-weight:bold; font-size:1.1rem; color:#7f8c8d">${o.valor}</div>
+                            </div>
+                            <div style="display:flex; gap:10px; margin-top:10px;">
+                                <button class="btn btn-outline btn-sm" style="flex:1; border-color:#bdc3c7; color:#7f8c8d;" onclick="verDetalhesOrcamento(${indexDemanda}, ${indexOrc})">👁️ Ver</button>
+                                <button class="${btnContatoClass}" style="${btnContatoStyle}" onclick="abrirOpcoesContato('${nomeSafe}', '${zapClean}', '${categoriaCorrigida}', '${tituloSafe}')"> 💬 Contato </button>
+                                ${!isFechado ? 
+                                `<button class="btn btn-outline btn-sm" style="flex:1; border-color:#f1c40f; color:#d35400;" onclick="abrirModalAvaliacao('${d.id}', '${nomeSafe}', '${zapClean}')">🏆 Contratar</button>` 
+                                : ''}
+                            </div>
+                        </div>`;
+                    });
+                } else {
+                    htmlOrcamentos = "<div style='font-size:0.8rem; color:#999; margin-top:5px;'>Aguardando orçamentos...</div>";
+                }
+
+                // --- 3. BOTÕES DE AÇÃO ---
+                let botoesAcao = "";
+                
+                // A. CONCLUÍDO e SEM NOTA FINAL -> AVALIAR
+                if (d.status === 'CONCLUIDO' && !d.notaFinal) { 
+                    let nomeVencedor = "Profissional";
+                    // Tenta achar nome do vencedor com segurança
+                    if(d.orcamentos && vencedorSafe) {
+                        const orcVencedor = d.orcamentos.find(o => String(o.zapPrestador).includes(vencedorSafe));
+                        if(orcVencedor) nomeVencedor = orcVencedor.prestador;
                     }
 
-                    const nomeSafe = o.prestador.replace(/"/g, '&quot;').replace(/'/g, "\\'");     
-                    const zapSafe = o.zapPrestador.replace(/[^0-9]/g, ''); 
-
-                    htmlOrcamentos += `
-                    <div style="${estiloOrc} padding:12px; border-radius:8px; margin-top:8px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                            <div>
-                                <div style="font-weight:bold; ${corTexto}">
-                                    ${isVencedor ? '🏆 ' : '👷 '}${o.prestador}
-                                </div>
-                                <div style="font-size:0.75rem; color:#999; margin-top:2px;">
-                                    ${o.seloVolume || ''} • ${htmlEstrelas}
-                                </div>
-                            </div>
-                            <div style="font-weight:bold; font-size:1.1rem; color:#7f8c8d">${o.valor}</div>
-                        </div>
-
-                        <div style="display:flex; gap:10px; margin-top:10px;">
-                            <button class="btn btn-outline btn-sm" style="flex:1; border-color:#bdc3c7; color:#7f8c8d;" onclick="verDetalhesOrcamento(${indexDemanda}, ${indexOrc})">👁️ Ver</button>
-
-                            <button class="${btnContatoClass}" style="${btnContatoStyle}" onclick="abrirOpcoesContato('${nomeSafe}', '${zapSafe}', '${categoriaCorrigida}', '${d.titulo.replace(/'/g, "\\'")}')"> 💬 Contato </button>
-
-                            ${!isFechado ? 
-                             `<button class="btn btn-outline btn-sm" style="flex:1; border-color:#f1c40f; color:#d35400;" onclick="abrirModalAvaliacao('${d.id}', '${nomeSafe}', '${zapSafe}')">🏆 Contratar</button>` 
-                             : ''}
-                        </div>
+                    botoesAcao = `
+                    <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
+                        <button class="btn btn-sm" style="width:100%; background:#f1c40f; color:white; border:none; font-weight:bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" 
+                            onclick="abrirModalFeedback('${d.id}', '${nomeVencedor}', '${d.vencedor || ''}')">
+                            ⭐ Avaliar Serviço Realizado
+                        </button>
                     </div>`;
-                });
-            } else {
-                htmlOrcamentos = "<div style='font-size:0.8rem; color:#999; margin-top:5px;'>Aguardando orçamentos...</div>";
-            }
-
-           // --- 3. BOTÕES DE AÇÃO ---
-            let botoesAcao = "";
-            
-            // A. SE ESTIVER CONCLUÍDO (JÁ ACABOU) -> MOSTRA AVALIAÇÃO
-            if (d.status === 'CONCLUIDO' && !d.notaFinal) { 
-                let nomeVencedor = "Profissional";
-                if(d.orcamentos && d.vencedor) {
-                    const orcVencedor = d.orcamentos.find(o => o.zapPrestador.toString() === d.vencedor.toString());
-                    if(orcVencedor) nomeVencedor = orcVencedor.prestador;
+                }
+                
+                // B. FECHADO -> CANCELAR
+                else if (d.status === 'FECHADO') {
+                    botoesAcao = `
+                    <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
+                        <button class="btn btn-sm btn-outline" style="width:100%; border-color:#e74c3c; color:#e74c3c;" 
+                            onclick="cancelarPedidoCliente('${d.id}', '${tituloSafe}')">
+                            🚫 Cancelar / Desistir do Serviço
+                        </button>
+                    </div>`;
+                }
+                
+                // C. ABERTA -> EXCLUIR
+                else if (d.status === 'ABERTA') {
+                    botoesAcao = `
+                    <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
+                        <button class="btn btn-sm btn-outline" style="width:100%; border-color:#95a5a6; color:#95a5a6;" 
+                            onclick="cancelarPedidoCliente('${d.id}', '${tituloSafe}')">
+                            🗑️ Excluir Pedido
+                        </button>
+                    </div>`;
                 }
 
-                botoesAcao = `
-                <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
-                    <button class="btn btn-sm" style="width:100%; background:#f1c40f; color:white; border:none; font-weight:bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" 
-                        onclick="abrirModalFeedback('${d.id}', '${nomeVencedor}', '${d.vencedor || ''}')">
-                        ⭐ Avaliar Serviço Realizado
-                    </button>
+                div.innerHTML += `
+                <div class="notification-card" style="${cardStyle}">
+                    <div style="display:flex; justify-content:space-between;">
+                        <strong>${d.titulo}</strong>
+                        <div>${badgeStatus} <span class="badge">${d.orcamentos ? d.orcamentos.length : 0} Props</span></div>
+                    </div>
+                    <div style="font-size:0.8rem; color:#666; margin-top:5px;">Data: ${new Date(d.data).toLocaleDateString('pt-BR')}</div>
+                    ${htmlNotas}
+                    <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+                    ${htmlOrcamentos}
+                    ${botoesAcao}
                 </div>`;
+            } catch (e) {
+                console.error("Erro ao renderizar item:", e);
+                // Continua para o próximo item sem travar tudo
             }
-            
-            // B. SE ESTIVER FECHADO (EM ANDAMENTO) -> MOSTRA CANCELAR
-            else if (d.status === 'FECHADO') {
-                 botoesAcao = `
-                <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
-                    <button class="btn btn-sm btn-outline" style="width:100%; border-color:#e74c3c; color:#e74c3c;" 
-                        onclick="cancelarPedidoCliente('${d.id}', '${d.titulo.replace(/'/g, "\\'")}')">
-                        🚫 Cancelar / Desistir do Serviço
-                    </button>
-                </div>`;
-            }
-            
-            // C. SE ESTIVER ABERTA (AINDA NÃO CONTRATOU) -> MOSTRA EXCLUIR
-            else if (d.status === 'ABERTA') {
-                 botoesAcao = `
-                <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
-                    <button class="btn btn-sm btn-outline" style="width:100%; border-color:#95a5a6; color:#95a5a6;" 
-                        onclick="cancelarPedidoCliente('${d.id}', '${d.titulo.replace(/'/g, "\\'")}')">
-                        🗑️ Excluir Pedido
-                    </button>
-                </div>`;
-            }
-               
         });
+    })
+    .catch(err => {
+        console.error(err);
+        div.innerHTML = "<div style='text-align:center; color:red'>Erro de conexão ao buscar pedidos.</div>";
     });
 }
-
     // Função Nova: Popula e abre o modal
   function verDetalhesOrcamento(idxDemanda, idxOrc) {
     const dadosBrutos = cacheOrcamentosCliente[idxDemanda].orcamentos[idxOrc];
