@@ -2333,50 +2333,48 @@ function carregarMeusPedidos() {
                 htmlOrcamentos = "<div style='font-size:0.8rem; color:#999; margin-top:5px;'>Aguardando orçamentos...</div>";
             }
 
-            // --- 3. BOTÕES DE AÇÃO ---
+           // --- 3. BOTÕES DE AÇÃO ---
             let botoesAcao = "";
             
-            // CORREÇÃO CRÍTICA: Só esconde o botão se JÁ TEM NOTA FINAL (!d.notaFinal)
-            // Antes estava checando !d.nota (que é a expectativa)
-            if (isFechado && !d.notaFinal) { 
+            // A. SE ESTIVER CONCLUÍDO (JÁ ACABOU) -> MOSTRA AVALIAÇÃO
+            if (d.status === 'CONCLUIDO' && !d.notaFinal) { 
                 let nomeVencedor = "Profissional";
                 if(d.orcamentos && d.vencedor) {
                     const orcVencedor = d.orcamentos.find(o => o.zapPrestador.toString() === d.vencedor.toString());
                     if(orcVencedor) nomeVencedor = orcVencedor.prestador;
                 }
 
-                let btnStyle = "";
-                let btnTexto = "";
-                
-                if (d.status === 'CONCLUIDO') {
-                    btnStyle = "width:100%; background:#f1c40f; color:white; border:none; font-weight:bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1);";
-                    btnTexto = "⭐ Avaliar Serviço Realizado";
-                } else {
-                    btnStyle = "width:100%; border:1px solid #ccc; color:#7f8c8d; background:white;";
-                    btnTexto = "💬 Avaliar Atendimento";
-                }
-
                 botoesAcao = `
                 <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
-                    <button class="btn btn-sm" style="${btnStyle}" 
+                    <button class="btn btn-sm" style="width:100%; background:#f1c40f; color:white; border:none; font-weight:bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" 
                         onclick="abrirModalFeedback('${d.id}', '${nomeVencedor}', '${d.vencedor || ''}')">
-                        ${btnTexto}
+                        ⭐ Avaliar Serviço Realizado
                     </button>
                 </div>`;
             }
-
-            div.innerHTML += `
-            <div class="notification-card" style="${cardStyle}">
-                <div style="display:flex; justify-content:space-between;">
-                    <strong>${d.titulo}</strong>
-                    <div>${badgeStatus} <span class="badge">${d.orcamentos.length} Props</span></div>
-                </div>
-                <div style="font-size:0.8rem; color:#666; margin-top:5px;">Data: ${new Date(d.data).toLocaleDateString('pt-BR')}</div>
-                
-                ${htmlNotas} <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
-                ${htmlOrcamentos}
-                ${botoesAcao}
-            </div>`;
+            
+            // B. SE ESTIVER FECHADO (EM ANDAMENTO) -> MOSTRA CANCELAR
+            else if (d.status === 'FECHADO') {
+                 botoesAcao = `
+                <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
+                    <button class="btn btn-sm btn-outline" style="width:100%; border-color:#e74c3c; color:#e74c3c;" 
+                        onclick="cancelarPedidoCliente('${d.id}', '${d.titulo.replace(/'/g, "\\'")}')">
+                        🚫 Cancelar / Desistir do Serviço
+                    </button>
+                </div>`;
+            }
+            
+            // C. SE ESTIVER ABERTA (AINDA NÃO CONTRATOU) -> MOSTRA EXCLUIR
+            else if (d.status === 'ABERTA') {
+                 botoesAcao = `
+                <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
+                    <button class="btn btn-sm btn-outline" style="width:100%; border-color:#95a5a6; color:#95a5a6;" 
+                        onclick="cancelarPedidoCliente('${d.id}', '${d.titulo.replace(/'/g, "\\'")}')">
+                        🗑️ Excluir Pedido
+                    </button>
+                </div>`;
+            }
+               
         });
     });
 }
