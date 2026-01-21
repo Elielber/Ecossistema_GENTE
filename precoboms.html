@@ -6688,6 +6688,42 @@ function carregando(ativar) {
     // Mostra ou esconde
     overlay.style.display = ativar ? 'flex' : 'none';
 }
+	function cancelarPedidoCliente(idDemanda, titulo) {
+    // 1. Confirmação
+    if (!confirm(`⚠️ Deseja realmente cancelar o pedido "${titulo}"?\n\nIsso encerrará a negociação com qualquer prestador.`)) {
+        return;
+    }
+
+    // 2. Motivo (Fundamental para proteger reputação)
+    const motivo = prompt("Por favor, conte o motivo do cancelamento:\n(Ex: Fechei por fora, Prestador sumiu, Desisti da obra...)", "Outros");
+    
+    if (!motivo) return; // Se cancelar o prompt, não faz nada
+
+    // 3. Feedback Visual
+    const divLista = document.getElementById('lista-pedidos-cliente');
+    divLista.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Processando cancelamento...</div>";
+
+    // 4. Envia para a Nuvem
+    // Usamos o mesmo tipo 'CANCELAR_SERVICO' que já configuramos no App Script
+    fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+            tipo: 'CANCELAR_SERVICO',
+            idDemanda: idDemanda,
+            motivo: "[CLIENTE]: " + motivo, // Prefixo para saber quem cancelou
+            // Não precisa de 'prestador' aqui, pois é o dono da demanda
+        }, sanitizador)
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("✅ Pedido cancelado com sucesso.");
+        carregarMeusPedidos(); // Recarrega a lista para atualizar o status visual
+    })
+    .catch(err => {
+        alert("Erro de conexão. Tente novamente.");
+        carregarMeusPedidos(); // Restaura a lista
+    });
+}
 
 </script>
 </body>
