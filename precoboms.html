@@ -2214,64 +2214,57 @@ function carregarMeusPedidos() {
     .then(res => res.json())
     .then(demandas => {
         div.innerHTML = "";
-        cacheOrcamentosCliente = demandas; // Salva no cache
+        cacheOrcamentosCliente = demandas; 
 
         if(demandas.length === 0) {
             div.innerHTML = "<div style='text-align:center;'>Nenhum pedido encontrado.</div>";
             return;
         }
 
-        // ORDENAÇÃO: Abertas primeiro, Fechadas/Concluídas por último
+        // ORDENAÇÃO: Abertas no topo, o resto embaixo
         demandas.sort((a, b) => {
             const statusA = a.status;
             const statusB = b.status;
-            
-            // Lógica para manter Abertas no topo
             if (statusA === 'ABERTA' && statusB !== 'ABERTA') return -1;
             if (statusA !== 'ABERTA' && statusB === 'ABERTA') return 1;
-            return new Date(b.data) - new Date(a.data); // Desempate por data
+            return new Date(b.data) - new Date(a.data); 
         });
 
         demandas.forEach((d, indexDemanda) => {
-            // VERIFICA SE ESTÁ FECHADO OU CONCLUÍDO
+            // Define se o card é "passado" (não editável)
             const isFechado = d.status === 'FECHADO' || d.status === 'CONCLUIDO';
-            
-            // GARANTIR A CATEGORIA
             const categoriaCorrigida = d.cat || d.categoria || ""; 
             
-            // ESTILO DO CARD
+            // --- 1. VISUAL DO CARD (CINZA PARA AMBOS OS CASOS) ---
             const cardStyle = isFechado 
-                ? "background:#f9f9f9; border-left:5px solid #7f8c8d; opacity:0.9;" 
-                : "border-left:5px solid var(--cli-accent);";
+                ? "background:#f9f9f9; border-left:5px solid #bdc3c7; opacity:0.95;" // Cinza para Encerrado/Concluído
+                : "border-left:5px solid var(--cli-accent);"; // Azul para Aberta
 
-            // BADGE DINÂMICO (Melhoria Visual)
+            // --- 2. ETIQUETAS E TEXTOS (DIFERENCIAÇÃO) ---
             let badgeStatus = `<span class="badge badge-green">ABERTA</span>`;
+            
             if (isFechado) {
                 if (d.status === 'CONCLUIDO') {
-                    badgeStatus = `<span class="badge" style="background:#2c3e50; color:white;">🏁 CONCLUÍDO</span>`;
+                    // Verde/Azul escuro para sucesso
+                    badgeStatus = `<span class="badge" style="background:#27ae60; color:white;">🏁 CONCLUÍDO</span>`;
                 } else {
-                    badgeStatus = `<span class="badge" style="background:#7f8c8d; color:white;">🔒 CANCELADO</span>`;
+                    // Cinza para apenas encerrado (antigo Fechado)
+                    badgeStatus = `<span class="badge" style="background:#95a5a6; color:white;">🔒 ENCERRADO</span>`;
                 }
             }
 
+            // HTML dos orçamentos (Lógica padrão mantida)
             let htmlOrcamentos = "";
-            
             if(d.orcamentos.length > 0) {
                 d.orcamentos.forEach((o, indexOrc) => {
-                    // Verifica vencedor considerando os dois status
                     const isVencedor = isFechado && d.vencedor && d.vencedor.toString() === o.zapPrestador.toString();
-                    
                     let htmlEstrelas = (!o.estrelas || o.estrelas === "Profissional") ? "🆕" : `⭐ ${o.estrelas}`;
                     
                     let estiloOrc = isVencedor 
                         ? "background:#d4edda; border:2px solid #28a745;" 
                         : `background:white; border:1px solid #ddd; border-left: 5px solid #ccc;`;
 
-                    // Sanitização de texto
-                    const nomeSafe = o.prestador
-                        .replace(/"/g, '&quot;')  
-                        .replace(/'/g, "\\'");     
-
+                    const nomeSafe = o.prestador.replace(/"/g, '&quot;').replace(/'/g, "\\'");     
                     const zapSafe = o.zapPrestador.replace(/[^0-9]/g, ''); 
 
                     htmlOrcamentos += `
@@ -2287,12 +2280,9 @@ function carregarMeusPedidos() {
                             </div>
                             <div style="font-weight:bold; font-size:1.1rem; color:var(--success)">${o.valor}</div>
                         </div>
-
                         <div style="display:flex; gap:10px; margin-top:10px;">
                             <button class="btn btn-outline btn-sm" style="flex:1;" onclick="verDetalhesOrcamento(${indexDemanda}, ${indexOrc})">👁️ Ver</button>
-
                             <button class="btn btn-success btn-sm" style="flex:1;" onclick="abrirOpcoesContato('${nomeSafe}', '${zapSafe}', '${categoriaCorrigida}', '${d.titulo.replace(/'/g, "\\'")}')"> 💬 Contato </button>
-
                             ${!isFechado ? 
                              `<button class="btn btn-outline btn-sm" style="flex:1; border-color:#f1c40f; color:#d35400;" onclick="abrirModalAvaliacao('${d.id}', '${nomeSafe}', '${zapSafe}')">🏆 Contratar</button>` 
                              : ''}
@@ -2303,7 +2293,7 @@ function carregarMeusPedidos() {
                 htmlOrcamentos = "<div style='font-size:0.8rem; color:#999; margin-top:5px;'>Aguardando orçamentos...</div>";
             }
 
-            // --- 2. GERA O BOTÃO DE AVALIAÇÃO (SE ESTIVER FECHADO/CONCLUIDO) ---
+            // --- 3. BOTÕES DE AÇÃO (DIFERENCIAÇÃO VISUAL) ---
             let botoesAcao = "";
             if (isFechado) {
                 let nomeVencedor = "Profissional";
@@ -2312,11 +2302,25 @@ function carregarMeusPedidos() {
                     if(orcVencedor) nomeVencedor = orcVencedor.prestador;
                 }
 
+                // Lógica de estilo do botão "Como foi?"
+                let btnStyle = "";
+                let btnTexto = "";
+                
+                if (d.status === 'CONCLUIDO') {
+                    // CONCLUÍDO: Botão Amarelo/Dourado CHEIO (Chama atenção para avaliar)
+                    btnStyle = "width:100%; background:#f1c40f; color:white; border:none; font-weight:bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1);";
+                    btnTexto = "⭐ Avaliar Serviço Realizado";
+                } else {
+                    // ENCERRADO: Botão Cinza/Outline (Discreto)
+                    btnStyle = "width:100%; border:1px solid #ccc; color:#7f8c8d; background:white;";
+                    btnTexto = "💬 Avaliar Atendimento";
+                }
+
                 botoesAcao = `
                 <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
-                    <button class="btn btn-outline btn-sm" style="width:100%; border-color:#f1c40f; color:#f39c12; background:white;" 
+                    <button class="btn btn-sm" style="${btnStyle}" 
                         onclick="abrirModalFeedback('${d.id}', '${nomeVencedor}', '${d.vencedor || ''}')">
-                        ⭐ Como foi o serviço? (Avaliar)
+                        ${btnTexto}
                     </button>
                 </div>`;
             }
