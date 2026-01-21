@@ -607,7 +607,11 @@
         <div class="gestao-module" style="border-left: 5px solid #3498db;">
             <div class="gestao-header">
                 <div class="gestao-title"><span class="gestao-icon">🛠️</span>1. Operação</div>
-                <button class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" onclick="abrirHistoricoCompleto()">📅 Agendar</button>
+                <button id="btn-main-agendar" class="btn-sm btn-outline" style="border-radius:20px; font-size:0.75rem;" 
+    onclick="sincronizarAgenda(abrirHistoricoCompleto)">
+    📅 Sincronizar
+</button>
+
             </div>
             
             <div style="margin-bottom:10px; font-size:0.75rem; font-weight:bold; color:#7f8c8d; display:flex; justify-content:space-between;">
@@ -828,7 +832,7 @@
     <div class="modal-content" style="text-align:center;">
         <h3>Confirmar Contratação</h3>
         <p>Você fechou com <strong id="aval-prestador"></strong>?</p>
-        <p style="font-size:0.9rem; color:#666;">Avalie para encerrar este pedido:</p>
+        <p style="font-size:0.9rem; color:#666;">Qual sua expectativa?:</p>
         
         <div style="font-size:2rem; margin:15px 0; cursor:pointer;" id="stars-container">
             <span onclick="setStar(1)">⭐</span><span onclick="setStar(2)">⭐</span><span onclick="setStar(3)">⭐</span><span onclick="setStar(4)">⭐</span><span onclick="setStar(5)">⭐</span>
@@ -2198,144 +2202,193 @@ if(typeof installApp === 'function') {
     // Variável global para guardar os orçamentos carregados e podermos clicar em "Ver Detalhes"
     let cacheOrcamentosCliente = [];
 
-  function carregarMeusPedidos() {
-        const zap = document.getElementById('cli-login-zap').value;
-        if(!zap) { alert("Digite seu telefone!"); return; }
-        localStorage.setItem('cli_zap', zap);
+function carregarMeusPedidos() {
+    const zap = document.getElementById('cli-login-zap').value;
+    if(!zap) { alert("Digite seu telefone!"); return; }
+    localStorage.setItem('cli_zap', zap);
 
-        const div = document.getElementById('lista-pedidos-cliente');
-        div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando...</div>";
+    const div = document.getElementById('lista-pedidos-cliente');
+    div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando...</div>";
 
-        fetch(API_URL + "?acao=BUSCAR_MEUS_PEDIDOS&zap=" + zap)
-        .then(res => res.json())
-        .then(demandas => {
-            div.innerHTML = "";
-            cacheOrcamentosCliente = demandas; // Salva no cache
+    fetch(API_URL + "?acao=BUSCAR_MEUS_PEDIDOS&zap=" + zap)
+    .then(res => res.json())
+    .then(demandas => {
+        div.innerHTML = "";
+        cacheOrcamentosCliente = demandas; 
 
-            if(demandas.length === 0) {
-                div.innerHTML = "<div style='text-align:center;'>Nenhum pedido encontrado.</div>";
-                return;
-            }
+        if(!demandas || demandas.length === 0) {
+            div.innerHTML = "<div style='text-align:center; color:#666; margin-top:20px;'>Nenhum pedido encontrado.</div>";
+            return;
+        }
 
-            // ORDENAÇÃO: Abertas primeiro, Fechadas por último
-            demandas.sort((a, b) => {
-                if (a.status === 'ABERTA' && b.status === 'FECHADO') return -1;
-                if (a.status === 'FECHADO' && b.status === 'ABERTA') return 1;
-                return new Date(b.data) - new Date(a.data); // Desempate por data
-            });
+        // ORDENAÇÃO: Abertas no topo
+        demandas.sort((a, b) => {
+            const statusA = a.status;
+            const statusB = b.status;
+            if (statusA === 'ABERTA' && statusB !== 'ABERTA') return -1;
+            if (statusA !== 'ABERTA' && statusB === 'ABERTA') return 1;
+            return new Date(b.data) - new Date(a.data); 
+        });
 
-            demandas.forEach((d, indexDemanda) => {
-                // VERIFICA SE ESTÁ FECHADO
-                const isFechado = d.status === 'FECHADO';
+        demandas.forEach((d, indexDemanda) => {
+            try {
+                // CORREÇÃO AQUI: Incluímos CANCELADO na lista de "Fechados"
+                const isFechado = d.status === 'FECHADO' || d.status === 'CONCLUIDO' || d.status === 'CANCELADO';
                 
-                // --- CORREÇÃO PRINCIPAL: GARANTIR A CATEGORIA ---
-                // Tenta ler 'cat' (padrão do feed) ou 'categoria' (legado)
-                // Se não achar nenhum, usa string vazia para não gerar "undefined"
-                const categoriaCorrigida = d.cat || d.categoria || ""; 
-                // ------------------------------------------------
-                
-                // ESTILO DO CARD
+                const vencedorSafe = String(d.vencedor || ""); 
+                const tituloSafe = (d.titulo || "Sem título").replace(/'/g, "\\'"); 
+                const categoriaCorrigida = d.cat || d.categoria || "Geral";
+
+                // ESTILO DO CARD (Cinza se não estiver ativa)
                 const cardStyle = isFechado 
-                    ? "background:#f4f4f4; border-left:5px solid #7f8c8d; opacity:0.8; filter: grayscale(100%);" 
-                    : "border-left:5px solid var(--cli-accent);";
+                    ? "background:#f9f9f9; border-left:5px solid #bdc3c7; opacity:0.8;" // Opacidade menor para cancelados
+                    : "border-left:5px solid var(--cli-accent);"; 
 
-                const badgeStatus = isFechado
-                    ? `<span class="badge" style="background:#7f8c8d; color:white;">🔒 CONCLUÍDO</span>`
-                    : `<span class="badge badge-green">ABERTA</span>`;
-
-                let htmlOrcamentos = "";
+                // ETIQUETAS (Lógica do Semáforo)
+                let badgeStatus = `<span class="badge badge-green">ABERTA</span>`;
                 
-                if(d.orcamentos.length > 0) {
+                if (isFechado) {
+                    if (d.status === 'CONCLUIDO') {
+                        badgeStatus = `<span class="badge" style="background:#2c3e50; color:white;">🏁 CONCLUÍDO</span>`;
+                    } else if (d.status === 'CANCELADO') {
+                        // ETIQUETA VERMELHA PARA CANCELADO
+                        badgeStatus = `<span class="badge" style="background:#c0392b; color:white;">🚫 CANCELADO</span>`;
+                    } else {
+                        badgeStatus = `<span class="badge" style="background:#95a5a6; color:white;">🔒 ENCERRADO</span>`;
+                    }
+                }
+
+                // --- EXIBIÇÃO DAS NOTAS ---
+                let htmlNotas = "";
+                // Se foi cancelado, mostra o motivo (usando o campo nota se tiver texto lá)
+                if (d.status === 'CANCELADO' && d.notaExpectativa && d.notaExpectativa.includes('[')) {
+                     htmlNotas += `<div style="margin-top:5px; font-size:0.75rem; color:#c0392b; background:#ffebee; padding:5px; border-radius:4px;">${d.notaExpectativa}</div>`;
+                }
+                else if (isFechado && d.status !== 'CANCELADO') {
+                    htmlNotas += `<div style="display:flex; gap:10px; margin-top:5px; font-size:0.75rem;">`;
+                    if (d.notaExpectativa) {
+                        htmlNotas += `<div style="background:#fff3cd; padding:4px 8px; border-radius:4px; border:1px solid #ffeeba; color:#856404;">🤝 Expectativa: <strong>${d.notaExpectativa}⭐</strong></div>`;
+                    }
+                    if (d.notaFinal) {
+                        htmlNotas += `<div style="background:#d4edda; padding:4px 8px; border-radius:4px; border:1px solid #c3e6cb; color:#155724;">🏁 Final: <strong>${d.notaFinal}⭐</strong></div>`;
+                    }
+                    htmlNotas += `</div>`;
+                }
+
+                // --- ORÇAMENTOS ---
+                let htmlOrcamentos = "";
+                if(d.orcamentos && d.orcamentos.length > 0) {
                     d.orcamentos.forEach((o, indexOrc) => {
-                        const isVencedor = isFechado && d.vencedor && d.vencedor.toString() === o.zapPrestador.toString();
+                        const zapPrestadorSafe = String(o.zapPrestador || "");
+                        const isVencedor = isFechado && vencedorSafe.length > 5 && vencedorSafe.includes(zapPrestadorSafe);
                         
-                        // Estrelas
                         let htmlEstrelas = (!o.estrelas || o.estrelas === "Profissional") ? "🆕" : `⭐ ${o.estrelas}`;
-                        
-                        let estiloOrc = isVencedor 
-                            ? "background:#d4edda; border:2px solid #28a745;" 
-                            : `background:white; border:1px solid #ddd; border-left: 5px solid #ccc;`;
+                        let estiloOrc = "";
+                        let corTexto = "";
+                        let btnContatoClass = "btn btn-success btn-sm"; 
+                        let btnContatoStyle = "flex:1;"; 
 
-                      
-   // --- A CORREÇÃO MÁGICA COMEÇA AQUI ---
-    // Cria uma versão do nome que não quebra o HTML (troca aspas por códigos seguros)
-    // &quot; é o código HTML para aspas duplas (")
-    // \\' é o código para escapar aspas simples (')
-    const nomeSafe = o.prestador
-        .replace(/"/g, '&quot;')  
-        .replace(/'/g, "\\'");    
+                        if (isFechado) {
+                            btnContatoClass = "btn btn-sm"; 
+                            btnContatoStyle = "flex:1; background:#bdc3c7; color:white; border:none;"; 
+                            corTexto = "color:#7f8c8d;"; 
+                            estiloOrc = isVencedor ? "background:#ecf0f1; border:2px solid #bdc3c7;" : "background:#fdfdfd; border:1px solid #eee; opacity:0.6;";
+                        } else {
+                            corTexto = "color:var(--primary);";
+                            estiloOrc = "background:white; border:1px solid #ddd; border-left: 5px solid #ccc;";
+                        }
 
-    const zapSafe = o.zapPrestador.replace(/[^0-9]/g, ''); 
-    // -------------------------------------
+                        const nomeSafe = (o.prestador||"Prestador").replace(/"/g, '&quot;').replace(/'/g, "\\'");     
+                        const zapClean = zapPrestadorSafe.replace(/[^0-9]/g, ''); 
 
-   // Agora usamos 'nomeSafe' dentro dos onlicks em vez de o.prestador
-   htmlOrcamentos += `
-   <div style="${estiloOrc} padding:12px; border-radius:8px; margin-top:8px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-       <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-           <div>
-               <div style="font-weight:bold; color:var(--primary)">
-                   ${isVencedor ? '🏆 ' : '👷 '}${o.prestador}
-               </div>
-               <div style="font-size:0.75rem; color:#666; margin-top:2px;">
-                   ${o.seloVolume || ''} • ${htmlEstrelas}
-               </div>
-           </div>
-           <div style="font-weight:bold; font-size:1.1rem; color:var(--success)">${o.valor}</div>
-       </div>
-
-       <div style="display:flex; gap:10px; margin-top:10px;">
-           <button class="btn btn-outline btn-sm" style="flex:1;" onclick="verDetalhesOrcamento(${indexDemanda}, ${indexOrc})">👁️ Ver</button>
-
-           <button class="btn btn-success btn-sm" style="flex:1;" onclick="abrirOpcoesContato('${nomeSafe}', '${zapSafe}', '${categoriaCorrigida}', '${d.titulo.replace(/'/g, "\\'")}')"> 💬 Contato / Indicar </button>
-
-           ${!isFechado ? 
-             `<button class="btn btn-outline btn-sm" style="flex:1; border-color:#f1c40f; color:#d35400;" onclick="abrirModalAvaliacao('${d.id}', '${nomeSafe}', '${zapSafe}')">🏆 Contratar</button>` 
-             : ''}
-       </div>
-   </div>`;
-});
+                        htmlOrcamentos += `
+                        <div style="${estiloOrc} padding:12px; border-radius:8px; margin-top:8px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                                <div>
+                                    <div style="font-weight:bold; ${corTexto}">
+                                        ${isVencedor ? '🏆 ' : '👷 '}${o.prestador}
+                                    </div>
+                                    <div style="font-size:0.75rem; color:#999; margin-top:2px;">
+                                        ${o.seloVolume || ''} • ${htmlEstrelas}
+                                    </div>
+                                </div>
+                                <div style="font-weight:bold; font-size:1.1rem; color:#7f8c8d">${o.valor}</div>
+                            </div>
+                            <div style="display:flex; gap:10px; margin-top:10px;">
+                                <button class="btn btn-outline btn-sm" style="flex:1; border-color:#bdc3c7; color:#7f8c8d;" onclick="verDetalhesOrcamento(${indexDemanda}, ${indexOrc})">👁️ Ver</button>
+                                <button class="${btnContatoClass}" style="${btnContatoStyle}" onclick="abrirOpcoesContato('${nomeSafe}', '${zapClean}', '${categoriaCorrigida}', '${tituloSafe}')"> 💬 Contato </button>
+                                ${!isFechado ? 
+                                `<button class="btn btn-outline btn-sm" style="flex:1; border-color:#f1c40f; color:#d35400;" onclick="abrirModalAvaliacao('${d.id}', '${nomeSafe}', '${zapClean}')">🏆 Contratar</button>` 
+                                : ''}
+                            </div>
+                        </div>`;
+                    });
                 } else {
                     htmlOrcamentos = "<div style='font-size:0.8rem; color:#999; margin-top:5px;'>Aguardando orçamentos...</div>";
                 }
-				// --- 2. GERA O BOTÃO DE AVALIAÇÃO (SE ESTIVER FECHADO) ---
-           
-            let botoesAcao = "";
-            if (isFechado) {
-                // Tenta pegar o nome do vencedor dos orçamentos, se possível
-                let nomeVencedor = "Profissional";
-                // Procura nos orçamentos quem tem o mesmo zap do vencedor
-                if(d.orcamentos && d.vencedor) {
-                    const orcVencedor = d.orcamentos.find(o => o.zapPrestador.toString() === d.vencedor.toString());
-                    if(orcVencedor) nomeVencedor = orcVencedor.prestador;
-                }
 
-                botoesAcao = `
-                <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
-                    <button class="btn btn-outline btn-sm" style="width:100%; border-color:#f1c40f; color:#f39c12; background:white;" 
-                        onclick="abrirModalFeedback('${d.id}', '${nomeVencedor}', '${d.vencedor || ''}')">
-                        ⭐ Como foi o serviço? (Avaliar)
-                    </button>
-                </div>`;
-            }
+                // --- 3. BOTÕES DE AÇÃO ---
+                let botoesAcao = "";
+                
+                // A. CONCLUÍDO e SEM NOTA FINAL -> AVALIAR
+                if (d.status === 'CONCLUIDO' && !d.notaFinal) { 
+                    let nomeVencedor = "Profissional";
+                    if(d.orcamentos && vencedorSafe) {
+                        const orcVencedor = d.orcamentos.find(o => String(o.zapPrestador).includes(vencedorSafe));
+                        if(orcVencedor) nomeVencedor = orcVencedor.prestador;
+                    }
+                    botoesAcao = `
+                    <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
+                        <button class="btn btn-sm" style="width:100%; background:#f1c40f; color:white; border:none; font-weight:bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" 
+                            onclick="abrirModalFeedback('${d.id}', '${nomeVencedor}', '${d.vencedor || ''}')">
+                            ⭐ Avaliar Serviço Realizado
+                        </button>
+                    </div>`;
+                }
+                // B. FECHADO (EM ANDAMENTO) -> CANCELAR
+                else if (d.status === 'FECHADO') {
+                    botoesAcao = `
+                    <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
+                        <button class="btn btn-sm btn-outline" style="width:100%; border-color:#e74c3c; color:#e74c3c;" 
+                            onclick="cancelarPedidoCliente('${d.id}', '${tituloSafe}')">
+                            🚫 Cancelar / Desistir do Serviço
+                        </button>
+                    </div>`;
+                }
+                // C. ABERTA -> EXCLUIR
+                else if (d.status === 'ABERTA') {
+                    botoesAcao = `
+                    <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
+                        <button class="btn btn-sm btn-outline" style="width:100%; border-color:#95a5a6; color:#95a5a6;" 
+                            onclick="cancelarPedidoCliente('${d.id}', '${tituloSafe}')">
+                            🗑️ Excluir Pedido
+                        </button>
+                    </div>`;
+                }
+                // D. CANCELADO -> (Sem botões, apenas histórico)
 
                 div.innerHTML += `
                 <div class="notification-card" style="${cardStyle}">
                     <div style="display:flex; justify-content:space-between;">
                         <strong>${d.titulo}</strong>
-                        <div>${badgeStatus} <span class="badge">${d.orcamentos.length} Props</span></div>
+                        <div>${badgeStatus} <span class="badge">${d.orcamentos ? d.orcamentos.length : 0} Props</span></div>
                     </div>
                     <div style="font-size:0.8rem; color:#666; margin-top:5px;">Data: ${new Date(d.data).toLocaleDateString('pt-BR')}</div>
-                    
-                    ${isFechado && !d.nota ? `<div style="font-size:0.8rem; color:#e67e22; margin-top:5px;">⭐ Sua avaliação: ${d.nota}</div>` : ''}
-
+                    ${htmlNotas}
                     <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
                     ${htmlOrcamentos}
-					 ${botoesAcao}
+                    ${botoesAcao}
                 </div>`;
-            });
+            } catch (e) {
+                console.error("Erro ao renderizar item:", e);
+            }
         });
-    }
-
+    })
+    .catch(err => {
+        console.error(err);
+        div.innerHTML = "<div style='text-align:center; color:red'>Erro de conexão ao buscar pedidos.</div>";
+    });
+}
     // Função Nova: Popula e abre o modal
   function verDetalhesOrcamento(idxDemanda, idxOrc) {
     const dadosBrutos = cacheOrcamentosCliente[idxDemanda].orcamentos[idxOrc];
@@ -3245,7 +3298,7 @@ function enviarFeedbackReal() {
         alert("Obrigado! Seu feedback ajuda muito.");
         document.getElementById('modal-feedback-final').style.display = 'none';
         btn.innerText = txtOriginal; btn.disabled = false;
-        
+        carregarMeusPedidos();
         // Opcional: Remover o botão visualmente para ele não clicar de novo
         // carregarMeusPedidos(); 
     })
@@ -3813,132 +3866,320 @@ function renderAgendaSemana() {
     div.innerHTML = "";
     let totalAgendado = 0;
     
-    // 1. DEFINIR A DATA DE HOJE (ISO YYYY-MM-DD)
+    // Datas de referência
     const hoje = new Date();
-    const ano = hoje.getFullYear();
-    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-    const dia = String(hoje.getDate()).padStart(2, '0');
-    const hojeIso = `${ano}-${mes}-${dia}`;
+    const hojeIso = hoje.toISOString().split('T')[0];
 
-    // ---------------------------------------------------------
-    // ETAPA 1: RECUPERAR ATRASADOS (PASSADO)
-    // ---------------------------------------------------------
-    const atrasados = state.historico.filter(h => 
-        h.status === 'FECHADO' && 
-        h.dataAgendamento && 
-        h.dataAgendamento < hojeIso // Menor que hoje
+    // =========================================================
+    // 1. PONTO 5: SERVIÇOS "FECHADOS" SEM DATA (A AGENDAR)
+    // =========================================================
+    const semData = state.historico.filter(h => 
+        h.status === 'FECHADO' && (!h.dataAgendamento || h.dataAgendamento === "")
     );
 
-    if (atrasados.length > 0) {
-        totalAgendado += atrasados.length;
-        
+    if (semData.length > 0) {
         div.innerHTML += `
-        <div style="background:#ffebee; color:#c0392b; padding:8px 10px; border-radius:5px; font-weight:bold; font-size:0.75rem; margin-bottom:10px; border:1px solid #ffcdd2; display:flex; align-items:center; gap:5px;">
-            <span>⚠️</span> SERVICOS EM EXECUÇÃO (${atrasados.length})
+        <div style="background:#e3f2fd; color:#1565c0; padding:8px 10px; border-radius:5px; font-weight:bold; font-size:0.75rem; margin-bottom:10px; border:1px solid #bbdefb; display:flex; align-items:center; gap:5px;">
+            <span>📅</span> COMBINAR INÍCIO (${semData.length})
         </div>`;
 
-        atrasados.forEach(item => {
-            // Formata a data antiga para mostrar ao usuário
-            const partes = item.dataAgendamento.split('-');
-            const dataBr = `${partes[2]}/${partes[1]}`; // Dia/Mês
-
+        semData.forEach(item => {
             div.innerHTML += `
-            <div style="background:white; border-left:4px solid #c0392b; padding:10px; border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+            <div style="background:white; border-left:4px solid #3498db; padding:10px; border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
                 <div style="flex:1;">
-                    <div style="font-size:0.65rem; color:#c0392b; font-weight:bold; margin-bottom:2px;">INICIOU EM: ${dataBr}</div>
                     <div style="font-weight:bold; color:#2c3e50;">${item.cliente}</div>
                     <div style="font-size:0.8rem; color:#555;">${item.titulo}</div>
+                    <div style="font-size:0.65rem; color:#e67e22; margin-top:2px;">Aguardando data</div>
                 </div>
                 
                 <div style="display:flex; gap:5px;">
-                    <button onclick="confirmarAgendamentoZap(${item.id})" class="btn-sm" style="background:#25D366; color:white; border:none; border-radius:50%; width:32px; height:32px; font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                    <button onclick="window.open('https://wa.me/${item.targetZap || item.zap}?text=Olá ${item.cliente.split(' ')[0]}, sobre o serviço de ${item.titulo}... qual seria o melhor dia para iniciarmos?')" class="btn-sm" style="background:#25D366; color:white; border:none; border-radius:50%; width:32px; height:32px; font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">
                         📲
                     </button>
-                    <button onclick="concluirServico(${item.id})" class="btn-sm" style="background:#ecf0f1; border:1px solid #ccc; color:#2c3e50; border-radius:50%; width:32px; height:32px; font-size:0.9rem; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Marcar como Feito">
-                        ✅
+                    <button onclick="definirDataInicio(${item.idDemanda})" class="btn-sm" style="background:#3498db; color:white; border:none; border-radius:8px; padding:0 10px; height:32px; font-size:0.75rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                        📅 Agendar
                     </button>
                 </div>
             </div>`;
         });
     }
 
-    // ---------------------------------------------------------
-    // ETAPA 2: HOJE E FUTURO (PRÓXIMOS 7 DIAS)
-    // ---------------------------------------------------------
-    const nomesDias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    // =========================================================
+    // 2. Executando (Mantém sua lógica anterior)
+    // =========================================================
+    const atrasados = state.historico.filter(h => 
+        h.status === 'FECHADO' && h.dataAgendamento && h.dataAgendamento < hojeIso
+    );
+    // ... (Seu código existente de atrasados aqui ou copie do anterior) ...
+    if (atrasados.length > 0) {
+        totalAgendado += atrasados.length;
+        div.innerHTML += `<div style="background:#ffebee; color:#c0392b; padding:8px 10px; border-radius:5px; font-weight:bold; font-size:0.75rem; margin-bottom:10px; border:1px solid #ffcdd2;">⚠️ EXECUTANDO (${atrasados.length})</div>`;
+        atrasados.forEach(item => {
+             div.innerHTML += renderItemAgenda(item, 'ATRASADO');
+        });
+    }
 
+    // =========================================================
+    // 3. DIAS DA SEMANA (Mantém a lógica)
+    // =========================================================
+    const nomesDias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
     for (let i = 0; i < 7; i++) {
         const dataCheck = new Date();
         dataCheck.setDate(dataCheck.getDate() + i);
-        
-        // Monta o ISO manualmente para garantir compatibilidade
         const a = dataCheck.getFullYear();
         const m = String(dataCheck.getMonth() + 1).padStart(2, '0');
         const d = String(dataCheck.getDate()).padStart(2, '0');
         const dataLoopIso = `${a}-${m}-${d}`;
         
-        const diaSemana = nomesDias[dataCheck.getDay()];
-        const labelDia = i === 0 ? "HOJE" : `${diaSemana}, ${d}/${m}`;
+        const labelDia = i === 0 ? "HOJE" : `${nomesDias[dataCheck.getDay()]}, ${d}/${m}`;
 
-        const doDia = state.historico.filter(h => 
-            h.status === 'FECHADO' && h.dataAgendamento === dataLoopIso
-        );
+        const doDia = state.historico.filter(h => h.status === 'FECHADO' && h.dataAgendamento === dataLoopIso);
 
         if (doDia.length > 0) {
             totalAgendado += doDia.length;
-
             div.innerHTML += `
             <div style="font-size:0.75rem; font-weight:bold; color:#95a5a6; margin: 15px 0 5px 0; border-bottom:1px solid #eee; text-transform:uppercase;">
                 ${labelDia}
             </div>`;
-
             doDia.forEach(item => {
-                div.innerHTML += `
-                <div style="background:#f8f9fa; border-left:4px solid ${i===0 ? '#3498db' : '#bdc3c7'}; padding:10px; border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                    <div style="flex:1;">
-                        <div style="font-weight:bold; color:#2c3e50;">${item.cliente}</div>
-                        <div style="font-size:0.8rem; color:#555;">${item.titulo}</div>
-                    </div>
-                    
-                    <div style="display:flex; gap:5px;">
-                        <button onclick="confirmarAgendamentoZap(${item.id})" class="btn-sm" style="background:#25D366; color:white; border:none; border-radius:50%; width:32px; height:32px; font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">
-                            📲
-                        </button>
-                        <button onclick="concluirServico(${item.id})" class="btn-sm" style="background:white; border:1px solid #ccc; color:#ccc; border-radius:50%; width:32px; height:32px; font-size:0.9rem; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Concluir">
-                            ✅
-                        </button>
-                    </div>
-                </div>`;
+                div.innerHTML += renderItemAgenda(item, 'DIA');
             });
         }
     }
 
-    // 3. ATUALIZA NOTIFICAÇÃO
-    if (totalAgendado > 0) {
+    // Atualiza Badge
+    const totalPendencias = semData.length + totalAgendado;
+    if (totalPendencias > 0) {
         badge.style.display = 'inline-block';
-        badge.innerText = totalAgendado;
-        // Se tiver atrasados, muda a cor da bolinha para vermelho para chamar atenção
-        badge.style.background = atrasados.length > 0 ? '#e74c3c' : '#e74c3c'; 
+        badge.innerText = totalPendencias;
     } else {
         badge.style.display = 'none';
-        if(atrasados.length === 0) {
-            div.innerHTML = "<div style='color:#ccc; font-size:0.8rem; text-align:center; padding:15px;'>Agenda livre e em dia! ✅</div>";
+        if(semData.length === 0) div.innerHTML = "<div style='color:#ccc; font-size:0.8rem; text-align:center; padding:15px;'>Agenda livre! ✅</div>";
+    }
+}
+
+// Função auxiliar para desenhar o item (para não repetir código)
+function renderItemAgenda(item, tipo) {
+    // Escapa aspas para evitar erro no onclick
+    const clienteSafe = item.cliente.replace(/'/g, "\\'"); 
+    const zapSafe = String(item.targetZap || item.zap || "").replace(/[^0-9]/g, "");
+
+    return `
+    <div style="background:${tipo === 'ATRASADO' ? 'white' : '#f8f9fa'}; border-left:4px solid ${tipo === 'ATRASADO' ? '#c0392b' : '#27ae60'}; padding:10px; border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+        <div style="flex:1;">
+            <div style="font-weight:bold; color:#2c3e50;">${item.cliente}</div>
+            <div style="font-size:0.8rem; color:#555;">${item.titulo}</div>
+        </div>
+        
+        <div style="display:flex; gap:5px;">
+            <button onclick="window.open('https://wa.me/${zapSafe}')" class="btn-sm" style="background:#25D366; color:white; border:none; border-radius:50%; width:32px; height:32px; font-size:1.1rem; cursor:pointer;">
+                📲
+            </button>
+            <button onclick="concluirServico('${item.idDemanda || item.id}', '${clienteSafe}', '${zapSafe}')" class="btn-sm" style="background:white; border:1px solid #ccc; color:#2c3e50; border-radius:50%; width:32px; height:32px; font-size:0.9rem; cursor:pointer;" title="Concluir">
+                ✅
+            </button>
+        </div>
+    </div>`;
+}
+function sincronizarAgenda(callback) {
+    if (!state.config.zap || state.config.zap.length < 8) {
+        if(callback) callback(); 
+        return;
+    }
+    
+    // Feedback visual
+    const btnAgendar = document.getElementById('btn-main-agendar');
+    let textoOriginal = "";
+    if(btnAgendar) {
+        textoOriginal = btnAgendar.innerHTML;
+        btnAgendar.innerHTML = "🔄 ...";
+        btnAgendar.disabled = true;
+    }
+
+    console.log("🔄 Iniciando Sync via POST...");
+
+    fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+            tipo: "SYNC_MEUS_SERVICOS",
+            zap: state.config.zap
+        })
+    }) 
+    .then(res => res.json())
+    .then(lista => {
+        let novosItens = 0;
+        let atualizados = 0;
+        
+        lista.forEach(remoto => {
+            const itemLocal = state.historico.find(h => h.idDemanda == remoto.id);
+            const statusRemoto = String(remoto.status).toUpperCase().trim();
+
+            if (!itemLocal) {
+                // --- CASO 1: SERVIÇO NOVO ---
+                if (statusRemoto === 'FECHADO' || statusRemoto === 'CONCLUIDO') {
+                    state.historico.push({
+                        id: Date.now() + Math.random(),
+                        idDemanda: remoto.id,
+                        cliente: remoto.nome || remoto.cliente,
+                        titulo: remoto.titulo,
+                        zap: remoto.zap,
+                        valor: 0,
+                        status: statusRemoto,
+                        dataAgendamento: remoto.dataAgendamento || "", // Tenta pegar a data já na criação
+                        origem: 'PLATAFORMA',
+                        data: new Date().toISOString()
+                    });
+                    novosItens++;
+                }
+            } 
+            else {
+                // --- CASO 2: ATUALIZAÇÃO (ALTERADO AQUI) ---
+                
+                // 1. ATUALIZAÇÃO DA DATA (CORREÇÃO APLICADA)
+                // Se veio uma data do servidor, atualizamos o local, independente do status
+                if (remoto.dataAgendamento && remoto.dataAgendamento !== itemLocal.dataAgendamento) {
+                    itemLocal.dataAgendamento = remoto.dataAgendamento;
+                    atualizados++; 
+                }
+
+                // 2. ATUALIZAÇÃO DE STATUS
+                if (itemLocal.status !== statusRemoto) {
+                    if (statusRemoto === 'FECHADO' || statusRemoto === 'CONCLUIDO') {
+                        itemLocal.status = statusRemoto;
+                        itemLocal.origem = 'PLATAFORMA';
+                        
+                        // Se virou FECHADO e não tem data, limpa para forçar agendamento
+                        // (Mas se já veio data no passo 1 acima, ele vai manter a data correta)
+                        if(statusRemoto === 'FECHADO' && !itemLocal.dataAgendamento) {
+                            itemLocal.dataAgendamento = "";
+                        }
+                        atualizados++;
+                    }
+                }
+            }
+        });
+
+        if (novosItens > 0 || atualizados > 0) {
+            saveData();
+            renderGestao();
+            const msg = novosItens > 0 
+                ? `🎉 Você tem ${novosItens} serviço(s) atualizados!` 
+                : `✅ Agenda sincronizada com sucesso!`;
+            alert(msg);
         }
+        
+        if (callback) callback();
+    })
+    .catch(err => {
+        console.error("Erro no sync:", err);
+        if (callback) callback();
+    })
+    .finally(() => {
+        if(btnAgendar) {
+            btnAgendar.innerHTML = textoOriginal;
+            btnAgendar.disabled = false;
+        }
+    });
+}
+
+function definirDataInicio(idDemanda) {
+    const dataInput = prompt("Para quando combinou este serviço? (Formato: DD/MM/AAAA ou YYYY-MM-DD)", new Date().toLocaleDateString('pt-BR'));
+    
+    if (!dataInput) return;
+
+    // Converte DD/MM/AAAA para YYYY-MM-DD se necessário
+    let dataIso = dataInput;
+    if (dataInput.includes('/')) {
+        const partes = dataInput.split('/');
+        dataIso = `${partes[2]}-${partes[1]}-${partes[0]}`;
     }
+
+    carregando(true);
+    // Chamada ao Backend para salvar a data
+    fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+            tipo: 'ATUALIZAR_DATA_AGENDA', // Precisa tratar isso no app script ou usar 'EDITAR'
+            idDemanda: idDemanda,
+            novaData: dataIso
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        carregando(false);
+        const item = state.historico.find(h => h.idDemanda == idDemanda || h.id == idDemanda);
+        if(item) {
+            item.dataAgendamento = dataIso;
+         }
+         alert("🗓️ Agendado com sucesso!");
+        renderGestao();
+    })
+    .catch(err => {
+        carregando(false);
+        // Fallback local caso não tenha internet, para não travar o uso
+        const item = state.historico.find(h => h.id === id);
+        if(item) {
+            item.dataAgendamento = dataIso;
+            renderAgendaSemana();
+        }
+    });
 }
 
 
-function concluirServico(id) {
-    if(!confirm("Marcar serviço como CONCLUÍDO? \nIsso remove ele da agenda do dia, mas mantém o valor nas vendas.")) return;
-
-    const idx = state.historico.findIndex(h => h.id === id);
-    if(idx > -1) {
-        // Muda status para CONCLUIDO (sai do filtro de 'FECHADO' da agenda, mas contamos na meta)
-        state.historico[idx].status = 'CONCLUIDO'; 
-        saveData();
-        renderGestao(); // Atualiza a tela
+function concluirServico(idDemanda, nomeCliente, zapCliente) {
+    // 1. Confirmação simples
+    if (!confirm(`Confirmar a conclusão do serviço para ${nomeCliente}?`)) {
+        return;
     }
+
+    // 2. Atualiza Backend
+    carregando(true);
+    
+    const payload = {
+        tipo: "CONCLUIR_SERVICO", 
+        idDemanda: idDemanda,
+        prestador: state.config.zap
+    };
+
+    fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload, sanitizador)
+    })
+    .then(res => res.json())
+    .then(data => {
+        carregando(false);
+        
+        // 3. Atualiza interface local
+        // CORREÇÃO: Usa '==' e verifica ambos os campos para garantir que acha
+        const itemIdx = state.historico.findIndex(h => h.idDemanda == idDemanda || h.id == idDemanda);
+        
+        if(itemIdx !== -1) {
+            state.historico[itemIdx].status = 'CONCLUIDO';
+        }
+        renderGestao(); 
+
+        // 4. ENVIAR ZAP DE AVALIAÇÃO
+        const linkApp = "https://www.ecossistemagente.com.br/precoboms.html"; 
+        const msg = `Olá ${nomeCliente.split(' ')[0]}! 👋\n\nAcabei de finalizar o serviço aqui no aplicativo. ✅\n\nPara mim é muito importante saber o que achou. Poderia clicar no link abaixo e avaliar meu atendimento na aba "Meus Pedidos"?\n\n${linkApp}\n\nObrigado!`;
+        
+        window.open(`https://wa.me/${zapCliente}?text=${encodeURIComponent(msg)}`, '_blank');
+
+    })
+    .catch(err => {
+        carregando(false);
+        alert("Erro de conexão, mas registrei localmente.");
+        
+        // --- FALLBACK SEM INTERNET ---
+        // CORREÇÃO: Mesma lógica de busca segura aqui
+        const itemIdx = state.historico.findIndex(h => h.idDemanda == idDemanda || h.id == idDemanda);
+        
+        if(itemIdx !== -1) {
+            state.historico[itemIdx].status = 'CONCLUIDO';
+            renderGestao();
+        }
+    });
 }
+
 
 function abrirMenuCRM() {
     const opcao = prompt(
@@ -4068,39 +4309,49 @@ function atualizarProximoServico() {
     }
 }
 
-
-
 function toggleStatusHist(id) {
     const item = state.historico.find(h => h.id === id);
     if(!item) return;
 
+    // --- CENÁRIO 1: TENTATIVA DE FECHAR UM ORÇAMENTO PENDENTE ---
     if(item.status === 'PENDENTE') {
-        const confirmar = confirm("Confirmar fechamento? Isso vai gerar o fluxo de caixa previsto.");
-        if(!confirmar) return;
-
-        let dataInput = prompt("📅 Data de Referência (Início/Venda)? (AAAA-MM-DD)", new Date().toISOString().split('T')[0]);
         
-        if (!dataInput || dataInput.length !== 10) {
-            alert("Data inválida. Usando data de hoje.");
-            dataInput = new Date().toISOString().split('T')[0];
+        // [TRAVA DE SEGURANÇA]
+        // Se NÃO for externo (ou seja, é da Plataforma), bloqueia a mudança manual.
+        if (item.origem !== 'EXTERNO') {
+            alert("✋ Aguarde a Contratação!\n\nEste orçamento foi enviado pela Plataforma.\n\nO status mudará para FECHADO (Verde) automaticamente assim que o cliente clicar em 'Contratar' no aplicativo dele.\n\nSe necessário, clique em 'Atualizar' no painel.");
+            return;
         }
 
-        const partes = dataInput.split('-');
-        const dataBase = new Date(partes[0], partes[1] - 1, partes[2]);
+        // SE FOR EXTERNO (MANUAL), SEGUE O FLUXO NORMAL...
+        const confirmar = confirm("Confirmar fechamento deste serviço externo?\nIsso vai gerar o fluxo de caixa previsto.");
+        if(!confirmar) return;
+
+        let dataDefinida = "";
+        
+        // Pergunta se quer agendar agora (Lógica do 'A Combinar')
+        if(confirm("Deseja definir a data de início AGORA?\n\n[OK] Sim, agendar\n[Cancelar] Deixar 'A Combinar'")) {
+             let dataInput = prompt("📅 Data de Início? (AAAA-MM-DD)", new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-'));
+             if (dataInput && dataInput.length === 10) {
+                 dataDefinida = dataInput;
+             }
+        }
 
         item.status = 'FECHADO';
-        item.dataAgendamento = dataInput; 
+        item.dataAgendamento = dataDefinida;
         
+        // Lança previsão no financeiro (Código padrão mantido)
         const total = item.valor;
         const condicoes = item.pagamento || { tipo: 'vista', parcelas: 1 }; 
-        
         if(!state.financeiro) state.financeiro = { saldo: 0, movimentos: [] };
+        
+        const dataRef = dataDefinida || new Date().toISOString().split('T')[0];
+        const partes = dataRef.split('-');
+        const dataBaseFinanceiro = new Date(partes[0], partes[1]-1, partes[2]);
 
-        // Função auxiliar
         const lancar = (desc, valor, diasParaVencer) => {
-            const dataVenc = new Date(dataBase); 
-            dataVenc.setDate(dataBase.getDate() + diasParaVencer);
-            
+            const dataVenc = new Date(dataBaseFinanceiro); 
+            dataVenc.setDate(dataBaseFinanceiro.getDate() + diasParaVencer);
             state.financeiro.movimentos.push({
                 id: Date.now() + Math.random(), 
                 tipo: 'ENTRADA',
@@ -4111,67 +4362,35 @@ function toggleStatusHist(id) {
             });
         };
 
-        // --- GERAÇÃO DAS PARCELAS ---
-        if(condicoes.tipo === 'vista') {
-            lancar("Pagamento à Vista", total, 0); 
-        } 
-        else if (condicoes.tipo === 'antecipado') {
-             lancar("Pagamento Antecipado", total, 0);
-        }
-        else if (condicoes.tipo === 'sinal') {
-            lancar("Sinal (50%)", total / 2, 0);
-            lancar("Parcela Final (50%)", total / 2, 15);
-        }
+        if(condicoes.tipo === 'vista') lancar("Pagamento à Vista", total, 0); 
+        else if (condicoes.tipo === 'antecipado') lancar("Pagamento Antecipado", total, 0);
+        else if (condicoes.tipo === 'sinal') { lancar("Sinal (50%)", total / 2, 0); lancar("Parcela Final (50%)", total / 2, 15); }
         else if (condicoes.tipo === 'parcelado') {
-            const qtd = condicoes.parcelas || 2; 
-            const valorParc = total / qtd;
-            for(let i=1; i<=qtd; i++) {
-                lancar(`Parcela ${i}/${qtd} (${item.titulo})`, valorParc, i * 30);
-            }
+            const qtd = condicoes.parcelas || 2; const valorParc = total / qtd;
+            for(let i=1; i<=qtd; i++) lancar(`Parcela ${i}/${qtd} (${item.titulo})`, valorParc, i * 30);
         }
-        // --- NOVA LÓGICA DO CRONOGRAMA ---
-        else if (condicoes.tipo === 'cronograma') {
-            // Se tivermos os itens calculados salvos (Versão Nova)
-            if (item.itensBackup && item.itensBackup.length > 0) {
-                const fases = {};
-                
-                // 1. Agrupa valores por fase
-                item.itensBackup.forEach(i => {
-                    if(!fases[i.ordem]) fases[i.ordem] = { nome: i.cat || "Fase " + i.ordem, total: 0 };
-                    // Soma MO + Mat
-                    fases[i.ordem].total += (i._fixoMO || 0) + (i._fixoMat || 0);
-                });
-
-                // 2. Lança Taxas Separadas (se houver)
-                if (item.taxasBackup && item.taxasBackup > 0) {
-                     lancar("Entrada / Taxas Iniciais", item.taxasBackup, 0);
-                }
-
-                // 3. Lança cada fase
-                const ordens = Object.keys(fases).sort((a,b) => a-b);
-                ordens.forEach((ordem, index) => {
-                    // Estimativa: cada fase dura 7 dias, então o vencimento escala
-                    const diasPrevistos = (index + 1) * 7; 
-                    lancar(`Fase ${ordem}: ${fases[ordem].nome}`, fases[ordem].total, diasPrevistos);
-                });
-                
-            } else {
-                // Fallback para orçamentos antigos sem backup detalhado
-                lancar("Cronograma Global (A definir)", total, 7);
-            }
-        }
+        else if (condicoes.tipo === 'cronograma') lancar("Cronograma (A definir)", total, 7);
         
-        alert("✅ Venda Fechada! As previsões de recebimento foram lançadas no Caixa.");
+        alert("✅ Venda Externa Fechada! Previsões lançadas no Caixa.");
 
-    } else if(item.status === 'FECHADO') {
-        if(confirm("Reabrir orçamento? (Nota: Os lançamentos financeiros terão que ser apagados manualmente no Caixa)")) {
+    } 
+    // --- CENÁRIO 2: REABRIR (DE FECHADO PARA PENDENTE) ---
+    else if(item.status === 'FECHADO') {
+        // Aqui também podemos bloquear se for Plataforma, para evitar bagunça
+        if (item.origem !== 'EXTERNO') {
+             alert("🔒 Ação Bloqueada\nServiços da plataforma só podem ser cancelados ou concluídos.");
+             return;
+        }
+
+        if(confirm("Reabrir orçamento manual (Voltar para Pendente)?")) {
             item.status = 'PENDENTE';
             item.dataAgendamento = null;
         }
-    } else if (item.status === 'CONCLUIDO') {
-        // Correção do conflito mencionado anteriormente
+    } 
+    // --- CENÁRIO 3: REABRIR (DE CONCLUÍDO PARA FECHADO) ---
+    else if (item.status === 'CONCLUIDO') {
         if(confirm("Reabrir serviço já concluído?")) {
-            item.status = 'FECHADO'; // Volta para a agenda do dia/ativo
+            item.status = 'FECHADO'; 
         }
     }
     
@@ -4182,6 +4401,7 @@ function toggleStatusHist(id) {
         renderGestao();
     }
 }
+
 function definirMeta() {
     if(!state.isPremium) { simularCompraPremium(); return; }
     
@@ -4341,21 +4561,6 @@ function definirMeta() {
             updatePremiumUI();
         });
     } 
-}
-
-
-function concluirServico(id) {
-    if(!confirm("Marcar serviço como CONCLUÍDO? \nIsso remove ele da agenda do dia.")) return;
-
-    const idx = state.historico.findIndex(h => h.id === id);
-    if(idx > -1) {
-        // Muda status para REALIZADO (sai do filtro de 'FECHADO' da agenda)
-        // OBS: Isso mantém o valor financeiro, apenas organiza a operação.
-        state.historico[idx].status = 'CONCLUIDO'; // Novo status interno
-        saveData();
-        renderGestao(); // Atualiza a tela
-        alert("✅ Serviço marcado como concluído!");
-    }
 }
 
 
@@ -5428,36 +5633,59 @@ function cancelarServico(id) {
     const item = state.historico.find(h => h.id === id);
     if (!item) return;
 
-    if (!confirm(`⚠️ TEM CERTEZA?\n\nIsso vai cancelar o serviço de "${item.cliente}".\n\n1. O item sairá da Agenda.\n2. Todos os lançamentos financeiros deste serviço serão apagados do Caixa.`)) {
+    // 1. Pergunta Confirmação
+    if (!confirm(`⚠️ TEM CERTEZA?\n\nIsso vai cancelar o serviço de "${item.cliente}".\n\nO item sairá da Agenda e os lançamentos financeiros serão estornados.`)) {
         return;
     }
 
-    // 1. Remove do Financeiro (Limpeza Automática)
-    // Procura e remove movimentos que começam com "NomeDoCliente -"
-    const tamanhoOriginal = state.financeiro.movimentos.length;
+    // 2. Pergunta o Motivo (Obrigatório para inteligência)
+    const motivo = prompt("Por favor, digite o motivo do cancelamento:\n(Ex: Cliente desistiu, Chuva, Imprevisto...)", "Outros");
     
-    state.financeiro.movimentos = state.financeiro.movimentos.filter(m => {
-        // A lógica de criação usa: `${item.cliente} - ${desc}`
-        // Então removemos tudo que contiver o nome do cliente vinculado a este cancelamento
-        return !m.desc.startsWith(`${item.cliente} -`);
+    if (!motivo) return; // Se cancelar o prompt, não faz nada
+
+    // 3. Feedback Visual
+    carregando(true);
+
+    // 4. Envia para a Planilha (Se for serviço da plataforma)
+    const acaoRemota = () => {
+        if (item.origem !== 'EXTERNO') {
+            return fetch(API_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    tipo: 'CANCELAR_SERVICO',
+                    idDemanda: item.idDemanda,
+                    motivo: motivo,
+                    prestador: state.config.zap
+                }, sanitizador)
+            }).catch(err => console.log("Erro ao avisar servidor (Offline?)"));
+        }
+        return Promise.resolve(); // Se for externo, resolve direto
+    };
+
+    acaoRemota().finally(() => {
+        carregando(false);
+
+        // 5. Limpeza Financeira (Mantive sua lógica original)
+        const tamanhoOriginal = state.financeiro.movimentos.length;
+        state.financeiro.movimentos = state.financeiro.movimentos.filter(m => {
+            return !m.desc.startsWith(`${item.cliente} -`);
+        });
+        const apagados = tamanhoOriginal - state.financeiro.movimentos.length;
+
+        // 6. Atualiza Status Local
+        item.status = 'CANCELADO';
+        
+        // 7. Salva e Renderiza
+        saveData();
+        
+        if(document.getElementById('modal-historico-full').style.display === 'flex') {
+            renderHistoricoCompleto();
+        } else {
+            renderGestao();
+        }
+
+        alert(`✅ Serviço Cancelado na Plataforma!\nMotivo registrado: "${motivo}"\n\n${apagados} lançamentos financeiros removidos.`);
     });
-    
-    const apagados = tamanhoOriginal - state.financeiro.movimentos.length;
-
-    // 2. Atualiza Status para CANCELADO (Isso tira da Agenda automaticamente)
-    item.status = 'CANCELADO';
-    
-    // 3. Salva e Atualiza a Tela
-    saveData();
-    
-    // Se estiver com o modal de histórico aberto, atualiza ele. Senão, atualiza a gestão.
-    if(document.getElementById('modal-historico-full').style.display === 'flex') {
-        renderHistoricoCompleto();
-    } else {
-        renderGestao();
-    }
-
-    alert(`✅ Serviço Cancelado!\n\n${apagados} lançamentos financeiros foram removidos do seu caixa.`);
 }
 
 // --- FUNÇÕES AUXILIARES DE TEXTO ---
@@ -6429,6 +6657,84 @@ function enviarSuporteZap() {
     // Limpa campo
     document.getElementById('suporte-msg').value = "";
 }
+// --- FUNÇÃO DE LOADING QUE ESTAVA FALTANDO ---
+function carregando(ativar) {
+    // Tenta pegar o elemento de loading
+    let overlay = document.getElementById('overlay-loading-geral');
+    
+    // Se o elemento não existir, cria ele dinamicamente no HTML
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'overlay-loading-geral';
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); z-index: 10001;
+            display: none; align-items: center; justify-content: center; flex-direction: column;
+            color: white; font-weight: bold; backdrop-filter: blur(2px);
+        `;
+        
+        // Adiciona o ícone girando e o texto
+        overlay.innerHTML = `
+    <div style="font-size: 5rem; animation: handshake 1.5s ease-in-out infinite;">🤝</div>
+    
+    <div style="margin-top: 15px; background: rgba(255,255,255,0.95); color:#2c3e50; padding: 10px 25px; border-radius: 50px; font-weight:bold; box-shadow:0 5px 15px rgba(0,0,0,0.2); font-family: sans-serif;">
+        Fechando negócio...
+    </div>
+
+    <style>
+        @keyframes handshake { 
+            0% { transform: rotate(0deg) scale(1); }
+            25% { transform: rotate(-15deg) scale(1.1); } /* Inclina p/ esquerda e cresce */
+            50% { transform: rotate(0deg) scale(1); }     /* Volta ao normal */
+            75% { transform: rotate(15deg) scale(1.1); }  /* Inclina p/ direita e cresce */
+            100% { transform: rotate(0deg) scale(1); }
+        }
+    </style>
+`;
+        
+        document.body.appendChild(overlay);
+    }
+    
+    // Mostra ou esconde
+    overlay.style.display = ativar ? 'flex' : 'none';
+}
+	function cancelarPedidoCliente(idDemanda, titulo) {
+    // 1. Confirmação
+    if (!confirm(`⚠️ Deseja realmente cancelar o pedido "${titulo}"?\n\nIsso encerrará a negociação com qualquer prestador.`)) {
+        return;
+    }
+
+    // 2. Motivo (Fundamental para proteger reputação)
+    const motivo = prompt("Por favor, conte o motivo do cancelamento:\n(Ex: Fechei por fora, Prestador sumiu, Desisti da obra...)", "Outros");
+    
+    if (!motivo) return; // Se cancelar o prompt, não faz nada
+
+    // 3. Feedback Visual
+    const divLista = document.getElementById('lista-pedidos-cliente');
+    divLista.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Processando cancelamento...</div>";
+
+    // 4. Envia para a Nuvem
+    // Usamos o mesmo tipo 'CANCELAR_SERVICO' que já configuramos no App Script
+    fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+            tipo: 'CANCELAR_SERVICO',
+            idDemanda: idDemanda,
+            motivo: "[CLIENTE]: " + motivo, // Prefixo para saber quem cancelou
+            // Não precisa de 'prestador' aqui, pois é o dono da demanda
+        }, sanitizador)
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("✅ Pedido cancelado com sucesso.");
+        carregarMeusPedidos(); // Recarrega a lista para atualizar o status visual
+    })
+    .catch(err => {
+        alert("Erro de conexão. Tente novamente.");
+        carregarMeusPedidos(); // Restaura a lista
+    });
+}
+
 </script>
 </body>
 </html>
