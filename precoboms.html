@@ -2234,20 +2234,43 @@ function carregarMeusPedidos() {
             const isFechado = d.status === 'FECHADO' || d.status === 'CONCLUIDO';
             const categoriaCorrigida = d.cat || d.categoria || ""; 
             
-            // 1. ESTILO DO CARD PRINCIPAL
+            // ESTILO DO CARD
             const cardStyle = isFechado 
-                ? "background:#f9f9f9; border-left:5px solid #bdc3c7; opacity:0.9;" // Cinza
-                : "border-left:5px solid var(--cli-accent);"; // Azul
+                ? "background:#f9f9f9; border-left:5px solid #bdc3c7; opacity:0.9;" 
+                : "border-left:5px solid var(--cli-accent);"; 
 
-            // 2. ETIQUETAS
+            // ETIQUETAS
             let badgeStatus = `<span class="badge badge-green">ABERTA</span>`;
             if (isFechado) {
                 if (d.status === 'CONCLUIDO') {
-                    badgeStatus = `<span class="badge" style="background:#7f8c8d; color:white;">🏁 CONCLUÍDO</span>`; // Cinza Chumbo
+                    badgeStatus = `<span class="badge" style="background:#7f8c8d; color:white;">🏁 CONCLUÍDO</span>`;
                 } else {
-                    badgeStatus = `<span class="badge" style="background:#95a5a6; color:white;">🔒 ENCERRADO</span>`; // Cinza Claro
+                    badgeStatus = `<span class="badge" style="background:#95a5a6; color:white;">🔒 ENCERRADO</span>`;
                 }
             }
+
+            // --- EXIBIÇÃO DAS NOTAS (DUPLA AVALIAÇÃO) ---
+            let htmlNotas = "";
+            if (isFechado) {
+                htmlNotas += `<div style="display:flex; gap:10px; margin-top:5px; font-size:0.75rem;">`;
+                
+                // Nota 1: Expectativa (Dada na contratação)
+                if (d.notaExpectativa) {
+                    htmlNotas += `<div style="background:#fff3cd; padding:4px 8px; border-radius:4px; border:1px solid #ffeeba; color:#856404;">
+                        🤝 Expectativa: <strong>${d.notaExpectativa}⭐</strong>
+                    </div>`;
+                }
+                
+                // Nota 2: Realidade (Final)
+                if (d.notaFinal) {
+                    htmlNotas += `<div style="background:#d4edda; padding:4px 8px; border-radius:4px; border:1px solid #c3e6cb; color:#155724;">
+                        🏁 Final: <strong>${d.notaFinal}⭐</strong>
+                    </div>`;
+                }
+                
+                htmlNotas += `</div>`;
+            }
+            // ---------------------------------------------
 
             let htmlOrcamentos = "";
             
@@ -2256,30 +2279,26 @@ function carregarMeusPedidos() {
                     const isVencedor = isFechado && d.vencedor && d.vencedor.toString() === o.zapPrestador.toString();
                     let htmlEstrelas = (!o.estrelas || o.estrelas === "Profissional") ? "🆕" : `⭐ ${o.estrelas}`;
                     
-                    // --- MUDANÇA AQUI: ESTILO DOS ORÇAMENTOS ---
                     let estiloOrc = "";
                     let corTexto = "";
-                    let btnContatoClass = "btn btn-success btn-sm"; // Padrão Verde
+                    let btnContatoClass = "btn btn-success btn-sm"; 
                     let btnContatoStyle = "flex:1;"; 
 
                     if (isFechado) {
                         // MODO CINZA (INATIVO)
-                        btnContatoClass = "btn btn-sm"; // Remove o verde
-                        btnContatoStyle = "flex:1; background:#bdc3c7; color:white; border:none;"; // Botão Cinza
-                        corTexto = "color:#7f8c8d;"; // Texto Cinza
+                        btnContatoClass = "btn btn-sm"; 
+                        btnContatoStyle = "flex:1; background:#bdc3c7; color:white; border:none;"; 
+                        corTexto = "color:#7f8c8d;"; 
 
                         if (isVencedor) {
-                            // Vencedor: Cinza Médio (Destaque sutil)
                             estiloOrc = "background:#ecf0f1; border:2px solid #bdc3c7;"; 
                         } else {
-                            // Outros: Cinza Claro (Apagado)
                             estiloOrc = "background:#fdfdfd; border:1px solid #eee; opacity:0.6;";
                         }
                     } else {
                         // MODO COLORIDO (ATIVO)
                         corTexto = "color:var(--primary);";
                         estiloOrc = "background:white; border:1px solid #ddd; border-left: 5px solid #ccc;";
-                        // Nota: Se estiver ABERTA, ninguém é vencedor ainda visualmente
                     }
 
                     const nomeSafe = o.prestador.replace(/"/g, '&quot;').replace(/'/g, "\\'");     
@@ -2317,8 +2336,9 @@ function carregarMeusPedidos() {
             // --- 3. BOTÕES DE AÇÃO ---
             let botoesAcao = "";
             
-            // Só mostra botões se estiver fechado E AINDA NÃO TIVER NOTA (!d.nota)
-            if (isFechado && !d.nota) { 
+            // CORREÇÃO CRÍTICA: Só esconde o botão se JÁ TEM NOTA FINAL (!d.notaFinal)
+            // Antes estava checando !d.nota (que é a expectativa)
+            if (isFechado && !d.notaFinal) { 
                 let nomeVencedor = "Profissional";
                 if(d.orcamentos && d.vencedor) {
                     const orcVencedor = d.orcamentos.find(o => o.zapPrestador.toString() === d.vencedor.toString());
@@ -2353,9 +2373,7 @@ function carregarMeusPedidos() {
                 </div>
                 <div style="font-size:0.8rem; color:#666; margin-top:5px;">Data: ${new Date(d.data).toLocaleDateString('pt-BR')}</div>
                 
-                ${isFechado && d.nota ? `<div style="font-size:0.8rem; color:#e67e22; margin-top:5px;">⭐ Você avaliou o serviço com nota:: ${d.nota}</div>` : ''}
-
-                <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
+                ${htmlNotas} <hr style="border:0; border-top:1px solid #eee; margin:10px 0;">
                 ${htmlOrcamentos}
                 ${botoesAcao}
             </div>`;
