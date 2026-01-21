@@ -3949,7 +3949,7 @@ function renderItemAgenda(item, tipo) {
             <button onclick="window.open('https://wa.me/${zapSafe}')" class="btn-sm" style="background:#25D366; color:white; border:none; border-radius:50%; width:32px; height:32px; font-size:1.1rem; cursor:pointer;">
                 📲
             </button>
-            <button onclick="concluirServico(${item.idDemanda || item.id}, '${clienteSafe}', '${zapSafe}')" class="btn-sm" style="background:white; border:1px solid #ccc; color:#2c3e50; border-radius:50%; width:32px; height:32px; font-size:0.9rem; cursor:pointer;" title="Concluir">
+            <button onclick="concluirServico('${item.idDemanda || item.id}', '${clienteSafe}', '${zapSafe}')" class="btn-sm" style="background:white; border:1px solid #ccc; color:#2c3e50; border-radius:50%; width:32px; height:32px; font-size:0.9rem; cursor:pointer;" title="Concluir">
                 ✅
             </button>
         </div>
@@ -4110,7 +4110,7 @@ function concluirServico(idDemanda, nomeCliente, zapCliente) {
     carregando(true);
     
     const payload = {
-        tipo: "CONCLUIR_SERVICO", // Seu backend deve mudar status para 'CONCLUIDO'
+        tipo: "CONCLUIR_SERVICO", 
         idDemanda: idDemanda,
         prestador: state.config.zap
     };
@@ -4123,34 +4123,34 @@ function concluirServico(idDemanda, nomeCliente, zapCliente) {
     .then(data => {
         carregando(false);
         
-        // 3. Atualiza interface local (tira da agenda imediatamente)
-        const itemIdx = state.historico.findIndex(h => h.idDemanda === idDemanda);
+        // 3. Atualiza interface local
+        // CORREÇÃO: Usa '==' e verifica ambos os campos para garantir que acha
+        const itemIdx = state.historico.findIndex(h => h.idDemanda == idDemanda || h.id == idDemanda);
+        
         if(itemIdx !== -1) {
             state.historico[itemIdx].status = 'CONCLUIDO';
         }
-        renderGestao(); // Recarrega gráficos e agenda
+        renderGestao(); 
 
-        // 4. PONTO 6: ENVIAR ZAP DE AVALIAÇÃO
-        // Link genérico para o app (ajuste para o link real do seu app cliente)
+        // 4. ENVIAR ZAP DE AVALIAÇÃO
         const linkApp = "https://www.ecossistemagente.com.br/precoboms.html"; 
-        
         const msg = `Olá ${nomeCliente.split(' ')[0]}! 👋\n\nAcabei de finalizar o serviço aqui no aplicativo. ✅\n\nPara mim é muito importante saber o que achou. Poderia clicar no link abaixo e avaliar meu atendimento na aba "Meus Pedidos"?\n\n${linkApp}\n\nObrigado!`;
         
-        // Abre o WhatsApp
         window.open(`https://wa.me/${zapCliente}?text=${encodeURIComponent(msg)}`, '_blank');
 
     })
-   .catch(err => {
+    .catch(err => {
         carregando(false);
         alert("Erro de conexão, mas registrei localmente.");
         
-        // --- ADICIONE ISTO AQUI PARA FUNCIONAR SEM INTERNET ---
-        const itemIdx = state.historico.findIndex(h => h.idDemanda === idDemanda);
+        // --- FALLBACK SEM INTERNET ---
+        // CORREÇÃO: Mesma lógica de busca segura aqui
+        const itemIdx = state.historico.findIndex(h => h.idDemanda == idDemanda || h.id == idDemanda);
+        
         if(itemIdx !== -1) {
             state.historico[itemIdx].status = 'CONCLUIDO';
             renderGestao();
         }
-        // -----------------------------------------------------
     });
 }
 
