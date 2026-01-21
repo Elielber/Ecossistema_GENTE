@@ -2221,7 +2221,7 @@ function carregarMeusPedidos() {
             return;
         }
 
-        // ORDENAÇÃO
+        // ORDENAÇÃO: Abertas no topo
         demandas.sort((a, b) => {
             const statusA = a.status;
             const statusB = b.status;
@@ -2232,32 +2232,39 @@ function carregarMeusPedidos() {
 
         demandas.forEach((d, indexDemanda) => {
             try {
-                // BLINDAGEM DE DADOS (Evita travamento se vier null)
-                const isFechado = d.status === 'FECHADO' || d.status === 'CONCLUIDO';
-                const vencedorSafe = String(d.vencedor || ""); // Garante que é texto
+                // CORREÇÃO AQUI: Incluímos CANCELADO na lista de "Fechados"
+                const isFechado = d.status === 'FECHADO' || d.status === 'CONCLUIDO' || d.status === 'CANCELADO';
+                
+                const vencedorSafe = String(d.vencedor || ""); 
                 const tituloSafe = (d.titulo || "Sem título").replace(/'/g, "\\'"); 
                 const categoriaCorrigida = d.cat || d.categoria || "Geral";
 
-                // ESTILO DO CARD
+                // ESTILO DO CARD (Cinza se não estiver ativa)
                 const cardStyle = isFechado 
-                    ? "background:#f9f9f9; border-left:5px solid #bdc3c7; opacity:0.95;" 
+                    ? "background:#f9f9f9; border-left:5px solid #bdc3c7; opacity:0.8;" // Opacidade menor para cancelados
                     : "border-left:5px solid var(--cli-accent);"; 
 
-                // ETIQUETAS
+                // ETIQUETAS (Lógica do Semáforo)
                 let badgeStatus = `<span class="badge badge-green">ABERTA</span>`;
+                
                 if (isFechado) {
                     if (d.status === 'CONCLUIDO') {
-                        badgeStatus = `<span class="badge" style="background:#7f8c8d; color:white;">🏁 CONCLUÍDO</span>`;
+                        badgeStatus = `<span class="badge" style="background:#2c3e50; color:white;">🏁 CONCLUÍDO</span>`;
                     } else if (d.status === 'CANCELADO') {
-                        badgeStatus = `<span class="badge" style="background:#e74c3c; color:white;">🚫 CANCELADO</span>`;
+                        // ETIQUETA VERMELHA PARA CANCELADO
+                        badgeStatus = `<span class="badge" style="background:#c0392b; color:white;">🚫 CANCELADO</span>`;
                     } else {
                         badgeStatus = `<span class="badge" style="background:#95a5a6; color:white;">🔒 ENCERRADO</span>`;
                     }
                 }
 
-                // --- EXIBIÇÃO DAS NOTAS (DUPLA AVALIAÇÃO) ---
+                // --- EXIBIÇÃO DAS NOTAS ---
                 let htmlNotas = "";
-                if (isFechado) {
+                // Se foi cancelado, mostra o motivo (usando o campo nota se tiver texto lá)
+                if (d.status === 'CANCELADO' && d.notaExpectativa && d.notaExpectativa.includes('[')) {
+                     htmlNotas += `<div style="margin-top:5px; font-size:0.75rem; color:#c0392b; background:#ffebee; padding:5px; border-radius:4px;">${d.notaExpectativa}</div>`;
+                }
+                else if (isFechado && d.status !== 'CANCELADO') {
                     htmlNotas += `<div style="display:flex; gap:10px; margin-top:5px; font-size:0.75rem;">`;
                     if (d.notaExpectativa) {
                         htmlNotas += `<div style="background:#fff3cd; padding:4px 8px; border-radius:4px; border:1px solid #ffeeba; color:#856404;">🤝 Expectativa: <strong>${d.notaExpectativa}⭐</strong></div>`;
@@ -2268,10 +2275,10 @@ function carregarMeusPedidos() {
                     htmlNotas += `</div>`;
                 }
 
+                // --- ORÇAMENTOS ---
                 let htmlOrcamentos = "";
                 if(d.orcamentos && d.orcamentos.length > 0) {
                     d.orcamentos.forEach((o, indexOrc) => {
-                        // Comparação segura de vencedor
                         const zapPrestadorSafe = String(o.zapPrestador || "");
                         const isVencedor = isFechado && vencedorSafe.length > 5 && vencedorSafe.includes(zapPrestadorSafe);
                         
@@ -2326,12 +2333,10 @@ function carregarMeusPedidos() {
                 // A. CONCLUÍDO e SEM NOTA FINAL -> AVALIAR
                 if (d.status === 'CONCLUIDO' && !d.notaFinal) { 
                     let nomeVencedor = "Profissional";
-                    // Tenta achar nome do vencedor com segurança
                     if(d.orcamentos && vencedorSafe) {
                         const orcVencedor = d.orcamentos.find(o => String(o.zapPrestador).includes(vencedorSafe));
                         if(orcVencedor) nomeVencedor = orcVencedor.prestador;
                     }
-
                     botoesAcao = `
                     <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
                         <button class="btn btn-sm" style="width:100%; background:#f1c40f; color:white; border:none; font-weight:bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1);" 
@@ -2340,8 +2345,7 @@ function carregarMeusPedidos() {
                         </button>
                     </div>`;
                 }
-                
-                // B. FECHADO -> CANCELAR
+                // B. FECHADO (EM ANDAMENTO) -> CANCELAR
                 else if (d.status === 'FECHADO') {
                     botoesAcao = `
                     <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
@@ -2351,7 +2355,6 @@ function carregarMeusPedidos() {
                         </button>
                     </div>`;
                 }
-                
                 // C. ABERTA -> EXCLUIR
                 else if (d.status === 'ABERTA') {
                     botoesAcao = `
@@ -2362,6 +2365,7 @@ function carregarMeusPedidos() {
                         </button>
                     </div>`;
                 }
+                // D. CANCELADO -> (Sem botões, apenas histórico)
 
                 div.innerHTML += `
                 <div class="notification-card" style="${cardStyle}">
@@ -2377,7 +2381,6 @@ function carregarMeusPedidos() {
                 </div>`;
             } catch (e) {
                 console.error("Erro ao renderizar item:", e);
-                // Continua para o próximo item sem travar tudo
             }
         });
     })
