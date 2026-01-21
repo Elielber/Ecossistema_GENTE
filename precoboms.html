@@ -5625,36 +5625,59 @@ function cancelarServico(id) {
     const item = state.historico.find(h => h.id === id);
     if (!item) return;
 
-    if (!confirm(`⚠️ TEM CERTEZA?\n\nIsso vai cancelar o serviço de "${item.cliente}".\n\n1. O item sairá da Agenda.\n2. Todos os lançamentos financeiros deste serviço serão apagados do Caixa.`)) {
+    // 1. Pergunta Confirmação
+    if (!confirm(`⚠️ TEM CERTEZA?\n\nIsso vai cancelar o serviço de "${item.cliente}".\n\nO item sairá da Agenda e os lançamentos financeiros serão estornados.`)) {
         return;
     }
 
-    // 1. Remove do Financeiro (Limpeza Automática)
-    // Procura e remove movimentos que começam com "NomeDoCliente -"
-    const tamanhoOriginal = state.financeiro.movimentos.length;
+    // 2. Pergunta o Motivo (Obrigatório para inteligência)
+    const motivo = prompt("Por favor, digite o motivo do cancelamento:\n(Ex: Cliente desistiu, Chuva, Imprevisto...)", "Outros");
     
-    state.financeiro.movimentos = state.financeiro.movimentos.filter(m => {
-        // A lógica de criação usa: `${item.cliente} - ${desc}`
-        // Então removemos tudo que contiver o nome do cliente vinculado a este cancelamento
-        return !m.desc.startsWith(`${item.cliente} -`);
+    if (!motivo) return; // Se cancelar o prompt, não faz nada
+
+    // 3. Feedback Visual
+    carregando(true);
+
+    // 4. Envia para a Planilha (Se for serviço da plataforma)
+    const acaoRemota = () => {
+        if (item.origem !== 'EXTERNO') {
+            return fetch(API_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    tipo: 'CANCELAR_SERVICO',
+                    idDemanda: item.idDemanda,
+                    motivo: motivo,
+                    prestador: state.config.zap
+                }, sanitizador)
+            }).catch(err => console.log("Erro ao avisar servidor (Offline?)"));
+        }
+        return Promise.resolve(); // Se for externo, resolve direto
+    };
+
+    acaoRemota().finally(() => {
+        carregando(false);
+
+        // 5. Limpeza Financeira (Mantive sua lógica original)
+        const tamanhoOriginal = state.financeiro.movimentos.length;
+        state.financeiro.movimentos = state.financeiro.movimentos.filter(m => {
+            return !m.desc.startsWith(`${item.cliente} -`);
+        });
+        const apagados = tamanhoOriginal - state.financeiro.movimentos.length;
+
+        // 6. Atualiza Status Local
+        item.status = 'CANCELADO';
+        
+        // 7. Salva e Renderiza
+        saveData();
+        
+        if(document.getElementById('modal-historico-full').style.display === 'flex') {
+            renderHistoricoCompleto();
+        } else {
+            renderGestao();
+        }
+
+        alert(`✅ Serviço Cancelado na Plataforma!\nMotivo registrado: "${motivo}"\n\n${apagados} lançamentos financeiros removidos.`);
     });
-    
-    const apagados = tamanhoOriginal - state.financeiro.movimentos.length;
-
-    // 2. Atualiza Status para CANCELADO (Isso tira da Agenda automaticamente)
-    item.status = 'CANCELADO';
-    
-    // 3. Salva e Atualiza a Tela
-    saveData();
-    
-    // Se estiver com o modal de histórico aberto, atualiza ele. Senão, atualiza a gestão.
-    if(document.getElementById('modal-historico-full').style.display === 'flex') {
-        renderHistoricoCompleto();
-    } else {
-        renderGestao();
-    }
-
-    alert(`✅ Serviço Cancelado!\n\n${apagados} lançamentos financeiros foram removidos do seu caixa.`);
 }
 
 // --- FUNÇÕES AUXILIARES DE TEXTO ---
