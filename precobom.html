@@ -1324,85 +1324,96 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
 	let configPagamentoTemp = { tipo: 'vista', parcelas: 1 };
 	
     // --- SISTEMA DE SEGURANÇA E RISCO (V3 - COM PLANO B) ---
-    const Security = {
-        getDeviceID: function() {
-            let id = localStorage.getItem('pb_device_id');
-            if (!id) {
-                id = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-                localStorage.setItem('pb_device_id', id);
-            }
-            return id;
-        },
-
-        // Função interna para tentar buscar IP em várias fontes
-        fetchLocation: async function() {
-            try {
-                // TENTATIVA 1: ipapi.co (Muito preciso)
-                const res1 = await fetch('https://ipapi.co/json/');
-                if(res1.ok) return await res1.json();
-                throw new Error("Falha API 1");
-            } catch (e) {
-                try {
-                    // TENTATIVA 2: ipwho.is (Plano B - Gratuito e rápido)
-                    const res2 = await fetch('https://ipwho.is/');
-                    if(res2.ok) return await res2.json();
-                    throw new Error("Falha API 2");
-                } catch (e2) {
-                    return null; // Desiste se ambos falharem
-                }
-            }
-        },
-
-        analyzeRisk: async function() {
-            let riskFlags = [];
-            let currentGeo = "Desconhecida";
-            let currentIP = "Oculto";
-            let data = null;
-
-            try {
-                // Chama a função blindada acima
-                data = await this.fetchLocation();
-
-                if (data) {
-                    // Normaliza os dados (pois cada API retorna nomes diferentes)
-                    currentIP = data.ip || 'Oculto';
-                    const cidade = data.city || 'Cidade?';
-                    const regiao = data.region_code || data.region || 'UF';
-                    currentGeo = `${cidade}/${regiao}`;
-
-                    // Lógica de Risco
-                    const lastDevice = localStorage.getItem('pb_device_id'); 
-                    const lastGeo = localStorage.getItem('pb_last_geo');
-                    const currentDevice = this.getDeviceID();
-
-                    if (lastDevice && (lastDevice !== currentDevice)) riskFlags.push("TROCA_APARELHO");
-                    if (lastGeo && (lastGeo !== currentGeo)) riskFlags.push("NOVA_LOCALIZACAO");
-                    
-                    // Salva para a próxima
-                    localStorage.setItem('pb_last_geo', currentGeo);
-                } else {
-                    riskFlags.push("BLOQUEIO_RASTREIO"); // Identifica que o usuário usa bloqueador
-                }
-
-            } catch (e) {
-                console.warn("Falha total na segurança");
-                riskFlags.push("ERRO_CRITICO");
-            }
-
-            // Se não houve erro mas a lista está vazia, é acesso padrão
-            const detalhesFinal = riskFlags.length > 0 ? riskFlags.join(", ") : "Acesso Seguro";
-
-            return {
-                deviceID: this.getDeviceID(),
-                ip: currentIP,
-                geo: currentGeo,
-                risco: riskFlags.length > 0 ? "MEDIO" : "BAIXO", // Sobe o risco se tiver flag
-                detalhes: detalhesFinal, 
-                pix: state.config.pixKey || "Sem Pix", // Garante que não vá vazio
-                userAgent: navigator.userAgent
-            };
+   // --- SISTEMA DE SEGURANÇA E RISCO (V3.1 - COM TIMEOUT) ---
+const Security = {
+    getDeviceID: function() {
+        let id = localStorage.getItem('pb_device_id');
+        if (!id) {
+            id = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            localStorage.setItem('pb_device_id', id);
         }
-    };
+        return id;
+    },
+
+    // Função interna com TIMEOUT de 2 segundos para não travar
+    fetchWithTimeout: async function(url, ms = 2000) {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), ms);
+        try {
+            const response = await fetch(url, { signal: controller.signal });
+            clearTimeout(id);
+            return response;
+        } catch (error) {
+            clearTimeout(id);
+            throw error;
+        }
+    },
+
+    fetchLocation: async function() {
+        try {
+            // TENTATIVA 1: ipapi.co (Muito preciso)
+            const res1 = await this.fetchWithTimeout('https://ipapi.co/json/');
+            if(res1.ok) return await res1.json();
+            throw new Error("Falha API 1");
+        } catch (e) {
+            try {
+                // TENTATIVA 2: ipwho.is (Plano B - Gratuito e rápido)
+                const res2 = await this.fetchWithTimeout('https://ipwho.is/');
+                if(res2.ok) return await res2.json();
+                throw new Error("Falha API 2");
+            } catch (e2) {
+                return null; // Desiste se ambos falharem, sem travar o app
+            }
+        }
+    },
+
+    analyzeRisk: async function() {
+        let riskFlags = [];
+        let currentGeo = "Desconhecida";
+        let currentIP = "Oculto";
+        let data = null;
+
+        try {
+            // Chama a função blindada com timeout
+            data = await this.fetchLocation();
+
+            if (data) {
+                currentIP = data.ip || 'Oculto';
+                const cidade = data.city || 'Cidade?';
+                const regiao = data.region_code || data.region || 'UF';
+                currentGeo = `${cidade}/${regiao}`;
+
+                const lastDevice = localStorage.getItem('pb_device_id'); 
+                const lastGeo = localStorage.getItem('pb_last_geo');
+                const currentDevice = this.getDeviceID();
+
+                if (lastDevice && (lastDevice !== currentDevice)) riskFlags.push("TROCA_APARELHO");
+                if (lastGeo && (lastGeo !== currentGeo)) riskFlags.push("NOVA_LOCALIZACAO");
+                
+                localStorage.setItem('pb_last_geo', currentGeo);
+            } else {
+                // Se falhou silenciosamente, não marca risco, apenas segue
+                console.log("Ignorando geolocalização (Timeout/Erro)"); 
+            }
+
+        } catch (e) {
+            console.warn("Falha segurança não-bloqueante");
+        }
+
+        // Se não houve erro mas a lista está vazia, é acesso padrão
+        const detalhesFinal = riskFlags.length > 0 ? riskFlags.join(", ") : "Acesso Seguro";
+
+        return {
+            deviceID: this.getDeviceID(),
+            ip: currentIP,
+            geo: currentGeo,
+            risco: riskFlags.length > 0 ? "MEDIO" : "BAIXO",
+            detalhes: detalhesFinal, 
+            pix: (state && state.config && state.config.pixKey) ? state.config.pixKey : "Sem Pix",
+            userAgent: navigator.userAgent
+        };
+    }
+};
 // Função que faltava para verificar limites do plano Grátis vs PRO
 function checkPremiumLimit() {
     // Se for Premium, não tem limite
