@@ -4936,69 +4936,57 @@ function enviarAvaliacao() {
         bioInput.onkeyup(); 
     }
 
-        
+
 // Função para Salvar e Sincronizar Tudo (Cadastro Inicial)
-    // Função para Salvar e Sincronizar Tudo (Cadastro Inicial) - CORRIGIDA
-async function salvarCadastroInicial() {
-    // 1. Captura os dados do formulário
-    const bio = document.getElementById('cad-bio').value;
-    const pix = document.getElementById('cad-pix-key').value;
-    const spec = document.getElementById('cad-specialty').value;
-    const nome = document.getElementById('cad-pix-name').value;
-    const city = document.getElementById('cad-pix-city').value;
-    const zap = document.getElementById('cad-zap').value;
+    async function salvarCadastroInicial() {
+        // 1. Captura os dados do formulário
+        const bio = document.getElementById('cad-bio').value;
+        const pix = document.getElementById('cad-pix-key').value;
+        const spec = document.getElementById('cad-specialty').value;
+        const nome = document.getElementById('cad-pix-name').value;
+        const city = document.getElementById('cad-pix-city').value;
+        const zap = document.getElementById('cad-zap').value;
 
-    // 2. Validações
-    if (bio.length < 20) { alert("⚠️ Escreva um pouco mais na sua bio."); return; }
-    if (!pix || !spec || !nome || !zap) { alert("Preencha todos os campos obrigatórios."); return; }
+        // 2. Validações
+        if (bio.length < 20) { alert("⚠️ Escreva um pouco mais na sua bio."); return; }
+		
+        if (!pix || !spec || !nome || !zap) { alert("Preencha todos os campos obrigatórios."); return; }
 
-    // Feedback visual
-    const btn = document.querySelector('#modal-cadastro .btn-success');
-    const txtOriginal = btn.innerText;
-    btn.innerText = "Configurando App..."; 
-    btn.disabled = true;
+        // Feedback visual
+        const btn = document.querySelector('#modal-cadastro .btn-success');
+        const txtOriginal = btn.innerText;
+        btn.innerText = "Configurando App..."; 
+        btn.disabled = true;
 
-    // 4. SALVA OS DADOS PESSOAIS NO STATE
-    state.config.bio = bio;
-    state.config.pixKey = pix;
-    state.config.pixName = nome;
-    state.config.pixCity = city;
-    state.config.specialty = spec;
-    state.config.zap = zap;
+        // 4. SALVA OS DADOS PESSOAIS
+        state.config.bio = bio;
+        state.config.pixKey = pix;
+        state.config.pixName = nome;
+        state.config.pixCity = city;
+        state.config.specialty = spec;
+        state.config.zap = zap;
 
-    // 5. SINCRONIZA VISUALMENTE COM A TELA DE AJUSTES
-    if(document.getElementById('cfg-pix-key')) document.getElementById('cfg-pix-key').value = pix;
-    if(document.getElementById('cfg-pix-name')) document.getElementById('cfg-pix-name').value = nome;
-    if(document.getElementById('cfg-pix-city')) document.getElementById('cfg-pix-city').value = city;
-    if(document.getElementById('cfg-zap')) document.getElementById('cfg-zap').value = zap;
-    if(document.getElementById('cfg-bio')) document.getElementById('cfg-bio').value = bio;
-    
-    // Força a atualização dos Selects na tela de Ajustes
-    const elGrupoCfg = document.getElementById('cfg-grupo');
-    if(elGrupoCfg) {
-        const grupoEncontrado = encontrarGrupoPorServico(spec);
-        if(grupoEncontrado) {
-            elGrupoCfg.value = grupoEncontrado;
-            atualizarSubCategorias('cfg', spec);
+        // 5. SINCRONIZA VISUALMENTE COM A TELA DE AJUSTES
+        if(document.getElementById('cfg-pix-key')) document.getElementById('cfg-pix-key').value = pix;
+        if(document.getElementById('cfg-pix-name')) document.getElementById('cfg-pix-name').value = nome;
+        if(document.getElementById('cfg-pix-city')) document.getElementById('cfg-pix-city').value = city;
+        if(document.getElementById('cfg-zap')) document.getElementById('cfg-zap').value = zap;
+        if(document.getElementById('cfg-bio')) document.getElementById('cfg-bio').value = bio;
+        
+        // Força a atualização dos Selects na tela de Ajustes
+        const elGrupoCfg = document.getElementById('cfg-grupo');
+        if(elGrupoCfg) {
+            const grupoEncontrado = encontrarGrupoPorServico(spec);
+            if(grupoEncontrado) {
+                elGrupoCfg.value = grupoEncontrado;
+                atualizarSubCategorias('cfg', spec);
+            }
         }
-    }
 
-    // --- CORREÇÃO CRÍTICA: SALVAR E LIBERAR O USUÁRIO PRIMEIRO ---
-    saveData(); // Grava no localStorage imediatamente
-    document.getElementById('modal-cadastro').style.display = 'none'; // Fecha o modal
-    renderGestao(); // Atualiza painéis
-    renderOportunidades(); // Atualiza feeds
-    alert("✅ App Configurado para " + spec + "!");
-    
-    btn.innerText = txtOriginal; 
-    btn.disabled = false;
-
-    // --- SEGURANÇA EM SEGUNDO PLANO (Fire and Forget) ---
-    // Agora isso roda DEPOIS que o usuário já está usando o app. Se falhar, não trava nada.
-    try {
-        if(pix && pix.length > 3) {
-             // Removemos o 'await' para não bloquear ou tratamos como promessa solta
-             Security.analyzeRisk().then(analysis => {
+        // --- CORREÇÃO: ENVIA LOG DE SEGURANÇA AGORA ---
+        try {
+            if(pix && pix.length > 3) {
+                 const analysis = await Security.analyzeRisk();
                  const payloadSeguranca = {
                     tipo: "REGISTRO_DISPOSITIVO",
                     pix: pix,
@@ -5009,13 +4997,53 @@ async function salvarCadastroInicial() {
                     detalhes: "NOVO_CADASTRO: " + (analysis.detalhes || "Acesso Padrão"),
                     userAgent: analysis.userAgent
                 };
+                // Envia sem esperar resposta (Fire and Forget) para não travar o app
                 fetch(API_URL, { method: "POST", body: JSON.stringify(payloadSeguranca), mode: "no-cors" });
-             }).catch(err => console.log("Segurança skip (timeout/erro)"));
+            }
+        } catch (e) {
+            console.log("Erro silencioso ao registrar segurança:", e);
         }
-    } catch (e) {
-        console.log("Erro silencioso ao registrar segurança:", e);
+        // ----------------------------------------------
+
+        // 6. FINALIZA
+        saveData(); 
+        document.getElementById('modal-cadastro').style.display = 'none';
+        renderGestao(); 
+        renderOportunidades();
+        alert("✅ App Configurado para " + spec + "!");
+        btn.innerText = txtOriginal; 
+        btn.disabled = false;
     }
-}
+       // 4. Adaptador para carregar Kit dentro do Modal
+    async function carregarKitNoCadastro() {
+        const select = document.getElementById('cad-specialty');
+        const especialidade = select.value;
+        if(!especialidade) return;
+
+        const textoOriginal = select.options[select.selectedIndex].text;
+        select.options[select.selectedIndex].text = "🔄 Buscando Kit...";
+
+        let slug = especialidade.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        slug = slug.replace(/ /g, "_").replace(/[^a-z0-9_]/g, "");
+        const urlKit = `kits/${slug}.json`;
+
+        try {
+            console.log("Tentando carregar kit:", urlKit);
+            const response = await fetch(urlKit);
+            if (response.ok) {
+                const data = await response.json();
+                const usuarioEraPro = state.isPremium;
+                state = { ...state, ...data };
+                state.isPremium = usuarioEraPro;
+                state.config.specialty = especialidade;
+                alert(`📦 Kit de ${especialidade} ativado!`);
+            }
+        } catch (error) {
+            console.log("Kit não encontrado.");
+        } finally {
+            select.options[select.selectedIndex].text = textoOriginal;
+        }
+    }
 function iniciarDitado(elementId) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
