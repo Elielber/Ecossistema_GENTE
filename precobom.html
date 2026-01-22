@@ -1439,6 +1439,7 @@ function checkPremiumLimit() {
     popularCategorias(); 
     loadData();
 	carregarFraseDoDia();
+	carregarDadosCliente();
 
   
    // 2. LÓGICA DE PWA (ATUALIZADA PARA 3 TELAS)
@@ -2126,44 +2127,50 @@ function iniciarOrcamentoAvulso() {
 
     function enviarDemanda() {
     const cat = document.getElementById('req-cat').value;
-	const grupo = document.getElementById('req-grupo').value;
+    const grupo = document.getElementById('req-grupo').value;
     const tit = document.getElementById('req-titulo').value;
     const desc = document.getElementById('req-desc').value;
+    
+    // Captura os dados pessoais
     const nome = document.getElementById('req-nome').value;
     const cid = document.getElementById('req-cidade').value;
     const zap = document.getElementById('req-zap').value;
     
-    // 1. LIMPEZA E VALIDAÇÃO PRÉVIA 
-    
     const zapLimpo = zap.replace(/\D/g, ''); 
     
-    // Se tiver menos de 10 dígitos (ex: faltou DDD ou número), avisa agora
     if (zapLimpo.length < 10) {
-        alert("⚠️ Telefone inválido! Digite o DDD + Número (Mínimo 10 dígitos).");
-        return; // Para aqui e não envia pro servidor
+        alert("⚠️ Telefone inválido! Digite o DDD + Número.");
+        return; 
     }
     
-    // VALIDAÇÃO JURÍDICA
     const termos = document.getElementById('chk-termos');
     if(!termos || !termos.checked) {
-        alert("⚠️ Por favor, aceite os termos de responsabilidade para continuar.");
+        alert("⚠️ Por favor, aceite os termos.");
         return;
     }
     
     if(!cat || !tit || !nome || !zap) { alert("Preencha os campos obrigatórios!"); return; }
 
+    // --- NOVO TRECHO: SALVAR DADOS DO CLIENTE ---
+    const perfilCliente = {
+        nome: nome,
+        cidade: cid,
+        zap: zap
+    };
+    localStorage.setItem('pb_cliente_dados', JSON.stringify(perfilCliente));
+    // --------------------------------------------
+
     const btn = document.querySelector('#view-cli-novo .btn-success');
     const txtOriginal = btn.innerText;
-    btn.innerText = "Enviando e Protegendo...";
+    btn.innerText = "Enviando...";
     btn.disabled = true;
-	const targetZap = sessionStorage.getItem('targetZap') || "";
-    // Checkbox opcional: Se marcado (true), vira público depois de 5 dias. 
-    // Se desmarcado (false), morre com o prestador (Exclusividade Total).
+    
+    const targetZap = sessionStorage.getItem('targetZap') || "";
     const permitirPublico = document.getElementById('chk-publico-apos-prazo').checked;
 
     const payload = {
         categoria: cat, 
-		grupo: grupo,
+        grupo: grupo,
         titulo: tit, 
         descricao: desc,
         nome: nome, 
@@ -2180,38 +2187,29 @@ function iniciarOrcamentoAvulso() {
         mode: "no-cors"
     })
     .then(() => {
-        alert(`✅ Sucesso! Sua demanda foi registrada.\n\nAviso: Nunca faça pagamentos antecipados sem conhecer o profissional.`);
+        alert(`✅ Pedido enviado!`);
         document.getElementById('req-titulo').value = "";
         document.getElementById('req-desc').value = "";
+        
+        // Mantemos o Nome, Cidade e Zap preenchidos para a próxima!
+        
         sessionStorage.removeItem('targetZap');
         toggleClientView('pedidos');
-        const lista = document.getElementById('lista-pedidos-cliente');
-        lista.innerHTML = `
-            <div class="notification-card" style="border-left-color: orange;">
-                <div style="display:flex; justify-content:space-between;">
-                    <strong>${tit}</strong>
-                    <span class="badge">Enviado</span>
-                </div>
-                <div style="font-size:0.8rem; color:#666; margin-top:5px;">Aguarde orçamentos no WhatsApp</div>
-            </div>` + lista.innerHTML;
+        
+        // Atualiza também o campo de busca de pedidos automaticamente
+        if(document.getElementById('cli-login-zap')) document.getElementById('cli-login-zap').value = zap;
+
+        // ... resto da sua função de renderizar lista ...
             
         btn.innerText = txtOriginal;
         btn.disabled = false;
     })
     .catch(err => {
-        alert("Erro de conexão. Tente novamente.");
+        alert("Erro de conexão.");
         btn.innerText = txtOriginal;
         btn.disabled = false;
-		// Mostra sugestão de instalação para o cliente
-if(typeof installApp === 'function') {
-     // Opcional: Criar um botão dinâmico na view-cli-lista ou apenas alertar
-     // Por hora, vamos manter simples. Se quiser, pode chamar o installApp() aqui se for Android.
-}
     });
 }
-
-    // Variável global para guardar os orçamentos carregados e podermos clicar em "Ver Detalhes"
-    let cacheOrcamentosCliente = [];
 
 function carregarMeusPedidos() {
     const zap = document.getElementById('cli-login-zap').value;
@@ -6716,6 +6714,26 @@ function carregando(ativar) {
         alert("Erro de conexão. Tente novamente.");
         carregarMeusPedidos(); // Restaura a lista
     });
+}
+	// --- FUNÇÃO PARA CARREGAR DADOS DO CLIENTE (PERFIL) ---
+function carregarDadosCliente() {
+    const dadosRaw = localStorage.getItem('pb_cliente_dados');
+    if (dadosRaw) {
+        try {
+            const dados = JSON.parse(dadosRaw);
+            
+            // Preenche o formulário de Novo Pedido
+            if(document.getElementById('req-nome')) document.getElementById('req-nome').value = dados.nome || "";
+            if(document.getElementById('req-cidade')) document.getElementById('req-cidade').value = dados.cidade || "";
+            if(document.getElementById('req-zap')) document.getElementById('req-zap').value = dados.zap || "";
+            
+            // BÔNUS: Já preenche o campo de busca de pedidos também!
+            if(document.getElementById('cli-login-zap')) document.getElementById('cli-login-zap').value = dados.zap || "";
+            
+        } catch (e) {
+            console.warn("Erro ao carregar perfil do cliente", e);
+        }
+    }
 }
 
 </script>
