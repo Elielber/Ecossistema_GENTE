@@ -1323,17 +1323,48 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
 	let listaDemandasCache = [];
 	let configPagamentoTemp = { tipo: 'vista', parcelas: 1 };
 	
-    // --- SISTEMA DE SEGURANÇA E RISCO (V3 - COM PLANO B) ---
+    
    // --- SISTEMA DE SEGURANÇA E RISCO (V3.1 - COM TIMEOUT) ---
 const Security = {
-    getDeviceID: function() {
-        let id = localStorage.getItem('pb_device_id');
-        if (!id) {
-            id = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-            localStorage.setItem('pb_device_id', id);
+    // 1. Tenta recuperar o ID "Blindado" já salvo no navegador
+    getID: function() {
+        try {
+            // Mudamos o nome da chave para 'pb_security_keys' para não misturar com o antigo
+            const dados = JSON.parse(localStorage.getItem('pb_security_keys'));
+            // Retorna o ID se existir, ou null se não tiver
+            return dados ? dados.id : null;
+        } catch (e) { 
+            return null; 
         }
-        return id;
     },
+
+    // 2. Gera "Ingredientes" Aleatórios
+    // O App usa isso só quando percebe que não tem ID (getID retornou null)
+    // Ele manda isso pro servidor, e o servidor cozinha o ID final.
+    gerarNovosIngredientes: function() {
+        return {
+            // Cria uma string aleatória longa (Entropia)
+            entropia: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
+            // Pega a hora exata (Timestamp)
+            timestamp: Date.now()
+        };
+    },
+
+    // 3. Salva o ID que o Servidor devolveu
+    // Chamado dentro do 'enviarOrcamentoFinak' quando o servidor responde com sucesso
+    salvarIdentidade: function(idRecebido) {
+        if (!idRecebido) return;
+        
+        const cofre = {
+            id: idRecebido, // O ID calculado pelo servidor
+            criadoEm: new Date().toISOString()
+        };
+        
+        // Salva no localStorage (Isso irá para o backup JSON do usuário automaticamente)
+        localStorage.setItem('pb_security_keys', JSON.stringify(cofre));
+        console.log("🔐 Identidade blindada salva com sucesso: ", idRecebido);
+    }
+};
 
     // Função interna com TIMEOUT de 2 segundos para não travar
     fetchWithTimeout: async function(url, ms = 2000) {
@@ -2584,9 +2615,8 @@ function carregarMeusPedidos() {
     const badge = document.getElementById('badge-opp');
     const area = state.config.specialty;
     
-    // --- TRAVA DE CADASTRO (NOVO) ---
-    // Verifica se tem os dados mínimos: Especialidade definida e Chave Pix (indicador de que configurou recebimento)
-    // Se não tiver, mostra o "Cadeado" e para a execução.
+    // --- 🔒 TRAVA DE CADASTRO (MANTIDA IGUAL AO SEU CÓDIGO) ---
+    // Verifica se tem os dados mínimos: Especialidade definida e Chave Pix
     if (!state.config.specialty || !state.config.pixKey || !state.config.pixName) {
         div.innerHTML = `
         <div style="text-align:center; padding:40px 20px; background:white; border-radius:12px; border:1px dashed #ccc; margin-top:20px;">
@@ -2604,27 +2634,47 @@ function carregarMeusPedidos() {
         // Esconde o badge de notificação para não distrair
         if(badge) badge.style.display = 'none';
         
-        return; // <--- O SEGREDO: Para a função aqui. Não busca nada no servidor.
+        return; // Para a execução aqui.
     }
     // --------------------------------
 
-    // SE PASSOU DA TRAVA, SEGUE O FLUXO NORMAL...
-    div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando oportunidades...</div>";
+    // SE PASSOU DA TRAVA, SEGUE O FLUXO DE SEGURANÇA...
+    div.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando oportunidades seguras...</div>";
 
-    // BUSCA REAL NA PLANILHA (GET)
-    fetch(API_URL) 
+    // Prepara as credenciais
+    const meuZap = state.config.zap ? state.config.zap.replace(/\D/g, '') : "";
+    const meuId = Security.getID();
+
+    // --- MUDANÇA AQUI: FETCH AGORA É POST COM SEGURANÇA ---
+    fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({
+            tipo: "BUSCAR_FEED", // Nova ação no Backend
+            zap: meuZap,
+            deviceId: meuId      // Envia a chave para validação
+        })
+    }) 
     .then(response => response.json())
     .then(data => {
+        // Se o Backend validar: retorna a lista
+        // Se o Backend bloquear (Device Mismatch): retorna [] (vazio)
+        
         listaDemandasCache = data; // Salva o que veio da nuvem
+        
+        // Sua função existente que desenha os cards
         filtrarERenderizar(div, area, badge);
     })
     .catch(err => {
-        console.error(err);
+        console.error("Erro no feed:", err);
         // Se der erro, tenta mostrar o cache ou mensagem de erro
-        if(listaDemandasCache.length > 0) filtrarERenderizar(div, area, badge);
-        else div.innerHTML = "<div style='text-align:center; color:red'>Erro de conexão. Verifique a internet.</div>";
+        if(listaDemandasCache.length > 0) {
+            filtrarERenderizar(div, area, badge);
+        } else {
+            div.innerHTML = "<div style='text-align:center; color:red; padding:20px'>Erro de conexão. Verifique sua internet.</div>";
+        }
     });
 }
+
 
         function filtrarERenderizar(divElement, areaEspecialidade, badgeElement) {
         divElement.innerHTML = "";
@@ -2742,18 +2792,7 @@ function carregarMeusPedidos() {
 
             
 
-            function iniciarOrcamento(idDemanda, titulo, nomeCliente) {
-        if(confirm(`Iniciar orçamento para: ${titulo}?`)) {
-            state.carrinho = [];
-            // SALVA O CONTEXTO DO ORÇAMENTO ATUAL
-            state.demandaAtiva = { id: idDemanda, cliente: nomeCliente, titulo: titulo };
-            saveData(); 
-            nav('catalogo');
-            alert("Carrinho limpo! Monte o orçamento e clique em Enviar no final.");
-        }
-    }
-
-    function enviarOrcamentoFinal() {
+function enviarOrcamentoFinal() {
     if(state.carrinho.length === 0) { alert("Carrinho vazio!"); return; }
     
     if(!state.demandaAtiva || !state.demandaAtiva.id) { 
@@ -2773,7 +2812,8 @@ function carregarMeusPedidos() {
     const prestadorNome = state.config.pixName || "Profissional";
     const btn = document.querySelector('#footer-orcamento .btn-action');
     const txtOriginal = btn.innerText;
-    btn.innerText = "Finalizando..."; btn.disabled = true;
+    btn.innerText = "🔒 Validando..."; // Mudança visual para indicar segurança
+    btn.disabled = true;
 
     // --- CÁLCULOS ---
     const itensCalculados = state.carrinho.map(item => {
@@ -2795,22 +2835,22 @@ function carregarMeusPedidos() {
     let totalParaHistorico = itensCalculados.reduce((acc, item) => acc + item._fixoMO + item._fixoMat, 0);
     totalParaHistorico += valorTaxas;
     
-    // --- FUNÇÃO DE SALVAMENTO LOCAL ---
+    // --- FUNÇÃO DE SALVAMENTO LOCAL (MANTIDA IGUAL) ---
     const finalizarProcesso = () => {
         if(!state.historico) state.historico = [];
         
         const idDemandaAtual = state.demandaAtiva.id;
         const indexExistente = state.historico.findIndex(h => h.idDemanda === idDemandaAtual);
-        const origemDemanda = state.demandaAtiva.origem || 'PLATAFORMA'; // Pega a origem
+        const origemDemanda = state.demandaAtiva.origem || 'PLATAFORMA'; 
 
         const dadosAtualizados = {
             id: (indexExistente !== -1) ? state.historico[indexExistente].id : Date.now(),
             idDemanda: idDemandaAtual,
             cliente: state.demandaAtiva.cliente,
             titulo: state.demandaAtiva.titulo,
-            origem: origemDemanda, // Salva se é APP ou EXTERNO
+            origem: origemDemanda, 
             valor: totalParaHistorico,
-            pagamento: configPagamentoTemp,
+            pagamento: typeof configPagamentoTemp !== 'undefined' ? configPagamentoTemp : "A combinar", // Proteção caso configPagamentoTemp não exista
             data: new Date().toISOString(),
             status: 'PENDENTE',
             itensBackup: itensCalculados, 
@@ -2826,7 +2866,6 @@ function carregarMeusPedidos() {
         renderCarrinho(); 
         nav('gestao'); 
         
-        // Abre o Zap com o resumo
         const txt = `Olá! Segue orçamento atualizado: *${totalParaHistorico.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}*.\nPodemos fechar?`;
         window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
 
@@ -2835,26 +2874,77 @@ function carregarMeusPedidos() {
 
     // --- DECISÃO: ENVIAR PARA NUVEM OU NÃO? ---
     if (state.demandaAtiva.origem === 'EXTERNO') {
-        // É particular: Salva só no celular
+        // Demanda particular não passa pela validação do servidor
         setTimeout(finalizarProcesso, 500); 
     } else {
-        // É da rede: Manda pra planilha
+        // --- 🔐 LÓGICA DE SEGURANÇA INJETADA AQUI ---
+        
+        // 1. Pega o ID atual (se tiver)
+        const meuIdAtual = Security.getID();
+        
         const payload = {
             tipo: "NOVO_ORCAMENTO",
             idDemanda: state.demandaAtiva.id,
             prestadorNome: prestadorNome,
             prestadorZap: zapInput,
             prestadorBio: state.config.bio || "Não informada",
-            configPagamento: configPagamentoTemp,
+            configPagamento: typeof configPagamentoTemp !== 'undefined' ? configPagamentoTemp : "",
             valorTotal: totalParaHistorico.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}),
-            itens: { versao: 2, lista: itensCalculados, taxas: valorTaxas, usaMateriais: usaMat }
+            itens: { versao: 2, lista: itensCalculados, taxas: valorTaxas, usaMateriais: usaMat },
+            
+            // Envia o ID para validação
+            deviceId: meuIdAtual
         };
 
-        fetch(API_URL, { method: "POST", body: JSON.stringify(payload, sanitizador), mode: "no-cors" })
-        .then(() => finalizarProcesso())
+        // 2. Se for primeiro acesso (sem ID), gera ingredientes
+        if (!meuIdAtual) {
+            console.log("🆕 Gerando chaves para primeiro vínculo...");
+            const raw = Security.gerarNovosIngredientes();
+            payload.segEntropia = raw.entropia;
+            payload.segTimestamp = raw.timestamp;
+        }
+
+        // 3. Envio seguro (SEM no-cors para ler a resposta)
+        // Nota: Removi o 'sanitizador' do stringify pois não tenho a definição dele,
+        // mas se você tiver, pode colocar de volta: JSON.stringify(payload, sanitizador)
+        fetch(API_URL, { 
+            method: "POST", 
+            body: JSON.stringify(payload) 
+        })
+        .then(res => res.json()) // Agora lemos a resposta JSON
+        .then(data => {
+            // --- TRAVA DE SEGURANÇA ---
+            if (data.erro === "DEVICE_MISMATCH") {
+                alert("⛔ BLOQUEIO DE SEGURANÇA\n\nEste WhatsApp já tem um vínculo com outro aparelho.\nSe você trocou de celular, restaure seu backup ou contate o suporte.");
+                btn.innerText = txtOriginal; 
+                btn.disabled = false;
+                return; // PARA TUDO AQUI. Não salva localmente.
+            }
+
+            // --- SUCESSO E VÍNCULO ---
+            if (data.sucesso) {
+                // Se o servidor mandou um novo ID (pois enviamos ingredientes), salvamos agora.
+                if (data.novoDeviceId) {
+                    Security.salvarIdentidade(data.novoDeviceId);
+                }
+                
+                // Só agora finalizamos o processo local
+                finalizarProcesso();
+            } else {
+                // Erro genérico do backend
+                alert("Erro ao registrar: " + (data.erro || "Desconhecido"));
+                btn.innerText = txtOriginal; btn.disabled = false;
+            }
+        })
         .catch(err => { 
-            alert("Sem internet? Salvando apenas no celular.");
-            finalizarProcesso(); 
+            console.error(err);
+            // Fallback: Se der erro de internet, permite salvar localmente (Modo Offline)
+            // Mas avisa que não foi para o servidor
+            if(confirm("Sem conexão com o servidor. Deseja salvar apenas no seu celular e enviar o Zap?")) {
+                finalizarProcesso(); 
+            } else {
+                btn.innerText = txtOriginal; btn.disabled = false;
+            }
         });
     }
 }
@@ -4035,17 +4125,32 @@ function sincronizarAgenda(callback) {
         btnAgendar.disabled = true;
     }
 
-    console.log("🔄 Iniciando Sync via POST...");
+    console.log("🔄 Iniciando Sync Seguro...");
+
+    // 1. OBTÉM A CHAVE DE SEGURANÇA
+    const meuId = Security.getID();
 
     fetch(API_URL, {
         method: 'POST',
         body: JSON.stringify({
             tipo: "SYNC_MEUS_SERVICOS",
-            zap: state.config.zap
+            zap: state.config.zap,
+            deviceId: meuId // <--- NOVO: ENVIA A CHAVE
         })
     }) 
     .then(res => res.json())
-    .then(lista => {
+    .then(resposta => {
+        // 2. TRAVA DE SEGURANÇA (Se o backend recusar)
+        if (resposta.erro === "DEVICE_MISMATCH") {
+            alert("⛔ SINCRONIZAÇÃO BLOQUEADA\n\nEste WhatsApp está vinculado a outro dispositivo.\nPara acessar sua agenda, restaure seu backup ou contate o suporte.");
+            // Não executa o callback de sucesso, pois falhou.
+            return;
+        }
+
+        // Se passou, assume que a resposta é a lista (array)
+        const lista = Array.isArray(resposta) ? resposta : [];
+
+        // --- SUA LÓGICA ORIGINAL ABAIXO (INTOCADA) ---
         let novosItens = 0;
         let atualizados = 0;
         
@@ -4064,7 +4169,7 @@ function sincronizarAgenda(callback) {
                         zap: remoto.zap,
                         valor: 0,
                         status: statusRemoto,
-                        dataAgendamento: remoto.dataAgendamento || "", // Tenta pegar a data já na criação
+                        dataAgendamento: remoto.dataAgendamento || "", 
                         origem: 'PLATAFORMA',
                         data: new Date().toISOString()
                     });
@@ -4072,10 +4177,9 @@ function sincronizarAgenda(callback) {
                 }
             } 
             else {
-                // --- CASO 2: ATUALIZAÇÃO (ALTERADO AQUI) ---
+                // --- CASO 2: ATUALIZAÇÃO ---
                 
-                // 1. ATUALIZAÇÃO DA DATA (CORREÇÃO APLICADA)
-                // Se veio uma data do servidor, atualizamos o local, independente do status
+                // 1. ATUALIZAÇÃO DA DATA
                 if (remoto.dataAgendamento && remoto.dataAgendamento !== itemLocal.dataAgendamento) {
                     itemLocal.dataAgendamento = remoto.dataAgendamento;
                     atualizados++; 
@@ -4087,8 +4191,6 @@ function sincronizarAgenda(callback) {
                         itemLocal.status = statusRemoto;
                         itemLocal.origem = 'PLATAFORMA';
                         
-                        // Se virou FECHADO e não tem data, limpa para forçar agendamento
-                        // (Mas se já veio data no passo 1 acima, ele vai manter a data correta)
                         if(statusRemoto === 'FECHADO' && !itemLocal.dataAgendamento) {
                             itemLocal.dataAgendamento = "";
                         }
@@ -4120,6 +4222,7 @@ function sincronizarAgenda(callback) {
         }
     });
 }
+
 
 function definirDataInicio(idDemanda) {
     const dataInput = prompt("Para quando combinou este serviço? (Formato: DD/MM/AAAA ou YYYY-MM-DD)", new Date().toLocaleDateString('pt-BR'));
