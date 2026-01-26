@@ -1246,6 +1246,50 @@
         </div>
     </div>
 </div>
+	<div id="modal-alocacao" class="modal-overlay" onclick="if(event.target.id==='modal-alocacao')this.style.display='none'">
+    <div class="modal-content">
+        <h3 style="margin:0; color:var(--primary);">📍 Alocar Equipe</h3>
+        <p style="font-size:0.8rem; color:#666; margin-bottom:15px;">Onde <strong id="alo-nome-prof"></strong> vai trabalhar?</p>
+        
+        <input type="hidden" id="alo-id-prof">
+
+        <div class="form-group">
+            <span class="label">1. Selecione a Obra (Ativas)</span>
+            <select id="alo-obra" class="input" onchange="carregarTarefasDaObra()">
+                <option value="">Aguardando...</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <span class="label">2. O que será feito? (Tarefa)</span>
+            <select id="alo-tarefa-select" class="input" onchange="checkTarefaManual()">
+                <option value="">Selecione a obra acima...</option>
+            </select>
+            <input type="text" id="alo-tarefa-manual" class="input" placeholder="Digite a tarefa..." style="display:none; margin-top:5px;">
+        </div>
+
+        <button class="btn btn-primary" onclick="salvarAlocacaoInteligente()">✅ Confirmar Alocação</button>
+    </div>
+</div>
+
+<div id="modal-recibo" class="modal-overlay" onclick="if(event.target.id==='modal-recibo')this.style.display='none'">
+    <div class="modal-content">
+        <h3 style="margin:0; color:var(--primary);">💰 Gerar Pagamento</h3>
+        <p style="font-size:0.8rem; color:#666; margin-bottom:15px;">Selecione os serviços realizados por <strong id="rec-nome-prof"></strong>:</p>
+        
+        <input type="hidden" id="rec-id-prof">
+
+        <div id="lista-servicos-pendentes" style="max-height:250px; overflow-y:auto; background:#f8f9fa; border:1px solid #eee; padding:10px; border-radius:8px; margin-bottom:15px;">
+            </div>
+
+        <div class="form-group">
+            <span class="label">Valor Total a Pagar (R$)</span>
+            <input type="number" id="rec-valor-total" class="input" style="font-size:1.5rem; font-weight:bold; color:#27ae60;">
+        </div>
+
+        <button class="btn btn-success" onclick="finalizarReciboInteligente()">📤 Enviar Comprovante (Zap)</button>
+    </div>
+</div>
 <script>
   let deferredPrompt;
   
@@ -3040,6 +3084,9 @@ function enviarOrcamentoFinal() {
         }
 
         // 3. SALVAR SE HOUVE MUDANÇA
+		state.profs.forEach(p => {
+    if (!p.diarioObra) p.diarioObra = []; // Cria o histórico se não existir
+});
         if (mudouAlgo) {
             console.log("✅ Estrutura de dados atualizada para v10.0");
             saveData(); 
@@ -3904,11 +3951,12 @@ const faturamentoAtual = state.historico
 }
 
 // --- VERSÃO 2: RECIBO PEDAGÓGICO (COM FEEDBACK) ---
+// Substitua a função gerarReciboEquipe antiga por estas:
+
 function gerarReciboEquipe() {
     if(state.profs.length <= 0) { alert("Cadastre alguém na equipe primeiro."); return; }
     
-    // 1. Seleção do Colaborador (Melhorada)
-    // Cria uma string numerada para o usuário escolher fácil
+    // Lista para escolher quem pagar
     const listaNomes = state.profs.map((p, i) => `${i+1}. ${p.nome}`).join('\n');
     const escolha = prompt(`PARA QUEM É O PAGAMENTO?\nDigite o número:\n\n${listaNomes}`);
     
@@ -3916,29 +3964,96 @@ function gerarReciboEquipe() {
     const index = parseInt(escolha) - 1;
     if(index < 0 || index >= state.profs.length) return;
     
-    const prof = state.profs[index];
+    abrirModalReciboInteligente(index);
+}
 
-    // 2. Dados do Pagamento
-    const valor = prompt(`💰 Qual o valor a pagar para ${prof.nome}? (R$)`);
-    if(!valor) return;
+function abrirModalReciboInteligente(indexProf) {
+    const prof = state.profs[indexProf];
+    document.getElementById('rec-id-prof').value = indexProf; // Guarda o índice
+    document.getElementById('rec-nome-prof').innerText = prof.nome;
+    document.getElementById('rec-valor-total').value = ""; // Limpa valor
+
+    const divLista = document.getElementById('lista-servicos-pendentes');
+    divLista.innerHTML = "";
+
+    // Filtra tarefas pendentes de pagamento
+    const pendentes = (prof.diarioObra || []).filter(d => d.status === 'PENDENTE');
+
+    if (pendentes.length === 0) {
+        divLista.innerHTML = "<div style='color:#999; text-align:center;'>Nenhum serviço pendente registrado.<br>Você pode gerar um pagamento avulso preenchendo o valor abaixo.</div>";
+    } else {
+        pendentes.forEach(item => {
+            const dataF = new Date(item.data).toLocaleDateString('pt-BR');
+            divLista.innerHTML += `
+            <div style="background:white; padding:8px; border-bottom:1px solid #eee; display:flex; align-items:center;">
+                <input type="checkbox" class="chk-servico-pagar" value="${item.id}" checked style="transform:scale(1.2); margin-right:10px;">
+                <div>
+                    <div style="font-weight:bold; font-size:0.85rem; color:#2c3e50;">${item.tarefa}</div>
+                    <div style="font-size:0.75rem; color:#7f8c8d;">${dataF} • ${item.obra}</div>
+                </div>
+            </div>`;
+        });
+    }
+
+    document.getElementById('modal-recibo').style.display = 'flex';
+}
+
+function finalizarReciboInteligente() {
+    const indexProf = document.getElementById('rec-id-prof').value;
+    const prof = state.profs[indexProf];
+    const valor = document.getElementById('rec-valor-total').value;
+
+    if (!valor || parseFloat(valor) <= 0) { alert("Digite o valor do pagamento."); return; }
+
+    // 1. Identifica quais serviços foram marcados
+    const checkboxes = document.querySelectorAll('.chk-servico-pagar:checked');
+    const idsPagos = Array.from(checkboxes).map(cb => parseInt(cb.value));
     
-    const servicoRef = prompt("🛠️ Referente a qual obra/serviço?");
-    const dataHoje = new Date().toLocaleDateString('pt-BR');
-    
-    // 3. MONTAGEM DO FEEDBACK (O Pulo do Gato)
+    // 2. Monta a lista de serviços para o texto
+    let textoServicos = "";
+    if (idsPagos.length > 0) {
+        textoServicos = "\n📋 *Referente aos serviços:*\n";
+        prof.diarioObra.forEach(item => {
+            if (idsPagos.includes(item.id)) {
+                const dataCurta = new Date(item.data).toLocaleDateString('pt-BR').slice(0,5); // DD/MM
+                // Tenta limpar o nome da obra para ficar curto
+                const obraCurta = item.obra.split('-')[0].trim(); 
+                textoServicos += `✅ [${dataCurta}] ${item.tarefa} (${obraCurta})\n`;
+                
+                // 3. Atualiza status para PAGO no banco de dados
+                item.status = 'PAGO';
+                item.dataPagamento = new Date().toISOString();
+            }
+        });
+    } else {
+        textoServicos = "\n📋 *Referente a:* Adiantamento / Diárias / Serviços Diversos";
+    }
+
+    // 4. Feedback (Avaliação)
     let blocoFeedback = "";
     if (prof.ultimoFeedback) {
         const estrelas = "⭐".repeat(Math.round(prof.nota || 5));
-        blocoFeedback = `\n--------------------------------\n📊 *AVALIAÇÃO DE DESEMPENHO*\nNota: ${estrelas} (${prof.nota})\n💬 *Feedback:* "${prof.ultimoFeedback}"\n--------------------------------`;
-    } else {
-        blocoFeedback = `\n--------------------------------\n📊 *AVALIAÇÃO DE DESEMPENHO*\n(Sem avaliação recente registrada)\n--------------------------------`;
+        blocoFeedback = `\n📊 *Avaliação Recente:*\nNota: ${estrelas}\nObs: "${prof.ultimoFeedback}"\n`;
     }
 
-    // 4. Texto Final do Zap
-    const textoRecibo = `*RECIBO DE PAGAMENTO*\n\nEu, *${state.config.pixName || 'O Contratante'}*, confirmo o pagamento a:\n👷 *${prof.nome}*\n\nValor: *R$ ${valor}*\nData: ${dataHoje}\nRef: ${servicoRef || 'Diária/Serviço'}\n${blocoFeedback}\n\n✅ *Registrado via App Preço Bom*`;
+    // 5. Gera Texto do Gestor (V3 - Sua Solicitação)
+    const dataHoje = new Date().toLocaleDateString('pt-BR');
+    const nomeGestor = state.config.pixName || "O Gestor";
+
+    const textoZap = `*COMPROVANTE DE PAGAMENTO* 💸\n\n` +
+                     `👤 *De:* ${nomeGestor}\n` +
+                     `👷 *Para:* ${prof.nome}\n` +
+                     `💰 *Valor:* R$ ${parseFloat(valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n` +
+                     `📅 *Data:* ${dataHoje}\n` +
+                     `${textoServicos}\n` +
+                     `${blocoFeedback}\n` +
+                     `_Registro digital via App Preço Bom_`;
+
+    saveData();
+    document.getElementById('modal-recibo').style.display = 'none';
     
-    // Envia
-    window.open(`https://wa.me/?text=${encodeURIComponent(textoRecibo)}`, '_blank');
+    // Abre WhatsApp
+    window.open(`https://wa.me/?text=${encodeURIComponent(textoZap)}`, '_blank');
 }
 
 // --- ETAPA 4: O HUD DE GAMIFICAÇÃO (Barra de XP) ---
@@ -6226,29 +6341,106 @@ function avaliarColaborador(id) {
         alert(`✅ Feedback Salvo!\n\nQuando você gerar o recibo de pagamento, essa mensagem irá junto para o colaborador.`);
     }
 }
+// Substitua a função alocarColaborador antiga por esta:
 function alocarColaborador(id) {
-    const profIndex = state.profs.findIndex(p => p.id === id);
-    if (profIndex === -1) return;
-    const prof = state.profs[profIndex];
-    
-    // Pergunta simples para manter o fluxo rápido
-    const novaTarefa = prompt(
-        `👷 ALOCAÇÃO DE TAREFA: ${prof.nome}\n\n` +
-        `O que ele deve fazer AGORA?\n(Ex: Lixando, Pintando, Intervalo)\n` +
-        `Deixe em branco para marcar como 'Disponível'.`, 
-        prof.tarefaAtual && prof.tarefaAtual !== "Disponível" ? prof.tarefaAtual : ""
-    );
+    const prof = state.profs.find(p => p.id === id);
+    if (!prof) return;
 
-    if (novaTarefa !== null) { // Se não cancelou
-        state.profs[profIndex].tarefaAtual = novaTarefa.trim() || "Disponível";
-        state.profs[profIndex].horaAlocacao = new Date().toLocaleTimeString();
-        saveData();
-        
-        // RECARREGA A TELA PARA MOSTRAR A MUDANÇA
-        // Se sua função principal for renderGestao(), use ela.
-        // Se este card estiver em uma sub-função, chame a principal.
-        renderGestao(); 
+    document.getElementById('alo-id-prof').value = id;
+    document.getElementById('alo-nome-prof').innerText = prof.nome;
+    
+    // 1. Carrega Obras Ativas (Status FECHADO = Em execução)
+    const selectObra = document.getElementById('alo-obra');
+    selectObra.innerHTML = '<option value="">Selecione...</option>';
+    
+    // Filtra obras em andamento
+    const obrasAtivas = state.historico.filter(h => h.status === 'FECHADO');
+    
+    if (obrasAtivas.length === 0) {
+        selectObra.innerHTML += '<option value="avulso">🚧 Trabalho Avulso / Interno</option>';
+    } else {
+        obrasAtivas.forEach(obra => {
+            // Guarda o ID da demanda e o título
+            selectObra.innerHTML += `<option value="${obra.id}">${obra.cliente} - ${obra.titulo}</option>`;
+        });
+        selectObra.innerHTML += '<option value="avulso">🚧 Outros / Avulso</option>';
     }
+
+    // Reseta campos
+    document.getElementById('alo-tarefa-select').innerHTML = '<option value="">Escolha a obra primeiro</option>';
+    document.getElementById('alo-tarefa-manual').style.display = 'none';
+
+    document.getElementById('modal-alocacao').style.display = 'flex';
+}
+
+function carregarTarefasDaObra() {
+    const obraId = document.getElementById('alo-obra').value;
+    const selectTarefa = document.getElementById('alo-tarefa-select');
+    selectTarefa.innerHTML = '';
+
+    if (!obraId || obraId === 'avulso') {
+        // Tarefas genéricas
+        const padrao = ["Ajudante Geral", "Limpeza/Organização", "Compras de Material", "Deslocamento", "Outros (Digitar)"];
+        padrao.forEach(t => selectTarefa.innerHTML += `<option value="${t}">${t}</option>`);
+    } else {
+        // Busca os itens do orçamento original
+        const obra = state.historico.find(h => h.id == obraId); // == para pegar string ou number
+        if (obra && obra.itensBackup) {
+            obra.itensBackup.forEach(item => {
+                selectTarefa.innerHTML += `<option value="${item.nome}">${item.nome}</option>`;
+            });
+        }
+        // Adiciona opções extras sempre úteis
+        selectTarefa.innerHTML += '<option value="Acabamentos">Acabamentos</option>';
+        selectTarefa.innerHTML += '<option value="Outros (Digitar)">Outros (Digitar)</option>';
+    }
+    checkTarefaManual();
+}
+
+function checkTarefaManual() {
+    const val = document.getElementById('alo-tarefa-select').value;
+    const inputManual = document.getElementById('alo-tarefa-manual');
+    if (val === 'Outros (Digitar)') {
+        inputManual.style.display = 'block';
+        inputManual.focus();
+    } else {
+        inputManual.style.display = 'none';
+    }
+}
+
+function salvarAlocacaoInteligente() {
+    const idProf = document.getElementById('alo-id-prof').value;
+    const obraId = document.getElementById('alo-obra').value;
+    const obraTxt = document.getElementById('alo-obra').options[document.getElementById('alo-obra').selectedIndex].text;
+    
+    let tarefa = document.getElementById('alo-tarefa-select').value;
+    if (tarefa === 'Outros (Digitar)') {
+        tarefa = document.getElementById('alo-tarefa-manual').value;
+    }
+
+    if (!tarefa) { alert("Defina a tarefa!"); return; }
+
+    const profIndex = state.profs.findIndex(p => p.id === idProf);
+    if (profIndex === -1) return;
+
+    // 1. Atualiza Status Visual (Para o Card de Equipe)
+    state.profs[profIndex].tarefaAtual = tarefa;
+    state.profs[profIndex].horaAlocacao = new Date().toLocaleTimeString();
+
+    // 2. Grava no DIÁRIO DE OBRA (Histórico para Pagamento)
+    if (!state.profs[profIndex].diarioObra) state.profs[profIndex].diarioObra = [];
+    
+    state.profs[profIndex].diarioObra.push({
+        id: Date.now(),
+        data: new Date().toISOString(),
+        obra: obraTxt,
+        tarefa: tarefa,
+        status: 'PENDENTE' // Pendente de pagamento
+    });
+
+    saveData();
+    renderGestao();
+    document.getElementById('modal-alocacao').style.display = 'none';
 }
 // --- MÓDULO DOSSIÊ TÉCNICO (FASE 1) ---
 
