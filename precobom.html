@@ -1275,19 +1275,33 @@
 <div id="modal-recibo" class="modal-overlay" onclick="if(event.target.id==='modal-recibo')this.style.display='none'">
     <div class="modal-content">
         <h3 style="margin:0; color:var(--primary);">💰 Gerar Pagamento</h3>
-        <p style="font-size:0.8rem; color:#666; margin-bottom:15px;">Selecione os serviços realizados por <strong id="rec-nome-prof"></strong>:</p>
+        <p style="font-size:0.8rem; color:#666; margin-bottom:15px;">Para <strong id="rec-nome-prof"></strong>:</p>
         
         <input type="hidden" id="rec-id-prof">
 
-        <div id="lista-servicos-pendentes" style="max-height:250px; overflow-y:auto; background:#f8f9fa; border:1px solid #eee; padding:10px; border-radius:8px; margin-bottom:15px;">
+        <div id="lista-servicos-pendentes" style="max-height:200px; overflow-y:auto; background:#f8f9fa; border:1px solid #eee; padding:10px; border-radius:8px; margin-bottom:15px;">
             </div>
 
-        <div class="form-group">
-            <span class="label">Valor Total a Pagar (R$)</span>
-            <input type="number" id="rec-valor-total" class="input" style="font-size:1.5rem; font-weight:bold; color:#27ae60;">
+        <div class="form-group" style="background:#fff3cd; padding:10px; border-radius:8px; border:1px solid #ffeeba;">
+            <span class="label" style="color:#856404;">Avaliação do Período</span>
+            <div style="display:flex; gap:5px; margin-bottom:5px;">
+                <select id="rec-nota" class="input" style="flex:1;">
+                    <option value="5">⭐⭐⭐⭐⭐ (Excelente)</option>
+                    <option value="4">⭐⭐⭐⭐ (Muito Bom)</option>
+                    <option value="3">⭐⭐⭐ (Normal)</option>
+                    <option value="2">⭐⭐ (Regular)</option>
+                    <option value="1">⭐ (Ruim)</option>
+                </select>
+            </div>
+            <input type="text" id="rec-obs" class="input" placeholder="Elogio ou observação (Opcional)...">
         </div>
 
-        <button class="btn btn-success" onclick="finalizarReciboInteligente()">📤 Enviar Comprovante (Zap)</button>
+        <div class="form-group">
+            <span class="label">Valor Total (R$)</span>
+            <input type="number" id="rec-valor-total" class="input" style="font-size:1.5rem; font-weight:bold; color:#27ae60;" placeholder="0,00">
+        </div>
+
+        <button class="btn btn-success" onclick="finalizarReciboInteligente()">📤 Enviar Comprovante e Avaliação</button>
     </div>
 </div>
 <script>
@@ -3967,29 +3981,35 @@ function gerarReciboEquipe() {
     abrirModalReciboInteligente(index);
 }
 
+// 2. Abre modal e reseta os campos
 function abrirModalReciboInteligente(indexProf) {
     const prof = state.profs[indexProf];
-    document.getElementById('rec-id-prof').value = indexProf; // Guarda o índice
+    document.getElementById('rec-id-prof').value = indexProf;
     document.getElementById('rec-nome-prof').innerText = prof.nome;
-    document.getElementById('rec-valor-total').value = ""; // Limpa valor
+    document.getElementById('rec-valor-total').value = ""; 
+
+    // --- NOVO: Reseta a avaliação para o padrão ---
+    document.getElementById('rec-nota').value = "5"; 
+    document.getElementById('rec-obs').value = ""; 
+    // ----------------------------------------------
 
     const divLista = document.getElementById('lista-servicos-pendentes');
     divLista.innerHTML = "";
 
-    // Filtra tarefas pendentes de pagamento
     const pendentes = (prof.diarioObra || []).filter(d => d.status === 'PENDENTE');
 
     if (pendentes.length === 0) {
-        divLista.innerHTML = "<div style='color:#999; text-align:center;'>Nenhum serviço pendente registrado.<br>Você pode gerar um pagamento avulso preenchendo o valor abaixo.</div>";
+        divLista.innerHTML = "<div style='color:#999; text-align:center; padding:10px; font-size:0.8rem;'>Nenhum serviço pendente.<br>Pode gerar um pagamento avulso.</div>";
     } else {
+        divLista.innerHTML = "<div style='font-size:0.75rem; color:#7f8c8d; margin-bottom:5px;'>Selecione o que está pagando:</div>";
         pendentes.forEach(item => {
-            const dataF = new Date(item.data).toLocaleDateString('pt-BR');
+            const dataF = new Date(item.data).toLocaleDateString('pt-BR').slice(0,5);
             divLista.innerHTML += `
             <div style="background:white; padding:8px; border-bottom:1px solid #eee; display:flex; align-items:center;">
                 <input type="checkbox" class="chk-servico-pagar" value="${item.id}" checked style="transform:scale(1.2); margin-right:10px;">
-                <div>
+                <div style="line-height:1.2;">
                     <div style="font-weight:bold; font-size:0.85rem; color:#2c3e50;">${item.tarefa}</div>
-                    <div style="font-size:0.75rem; color:#7f8c8d;">${dataF} • ${item.obra}</div>
+                    <div style="font-size:0.7rem; color:#7f8c8d;">${dataF} • ${item.obra}</div>
                 </div>
             </div>`;
         });
@@ -3998,29 +4018,31 @@ function abrirModalReciboInteligente(indexProf) {
     document.getElementById('modal-recibo').style.display = 'flex';
 }
 
+// 3. Gera o texto COM AVALIAÇÃO e dá baixa
 function finalizarReciboInteligente() {
     const indexProf = document.getElementById('rec-id-prof').value;
     const prof = state.profs[indexProf];
     const valor = document.getElementById('rec-valor-total').value;
+    
+    // --- NOVO: Captura a avaliação digitada agora ---
+    const nota = document.getElementById('rec-nota').value;
+    const obs = document.getElementById('rec-obs').value;
+    // ------------------------------------------------
 
     if (!valor || parseFloat(valor) <= 0) { alert("Digite o valor do pagamento."); return; }
 
-    // 1. Identifica quais serviços foram marcados
     const checkboxes = document.querySelectorAll('.chk-servico-pagar:checked');
     const idsPagos = Array.from(checkboxes).map(cb => parseInt(cb.value));
     
-    // 2. Monta a lista de serviços para o texto
     let textoServicos = "";
     if (idsPagos.length > 0) {
         textoServicos = "\n📋 *Referente aos serviços:*\n";
         prof.diarioObra.forEach(item => {
             if (idsPagos.includes(item.id)) {
-                const dataCurta = new Date(item.data).toLocaleDateString('pt-BR').slice(0,5); // DD/MM
-                // Tenta limpar o nome da obra para ficar curto
+                const dataCurta = new Date(item.data).toLocaleDateString('pt-BR').slice(0,5);
                 const obraCurta = item.obra.split('-')[0].trim(); 
                 textoServicos += `✅ [${dataCurta}] ${item.tarefa} (${obraCurta})\n`;
                 
-                // 3. Atualiza status para PAGO no banco de dados
                 item.status = 'PAGO';
                 item.dataPagamento = new Date().toISOString();
             }
@@ -4029,16 +4051,17 @@ function finalizarReciboInteligente() {
         textoServicos = "\n📋 *Referente a:* Adiantamento / Diárias / Serviços Diversos";
     }
 
-    // 4. Feedback (Avaliação)
-    let blocoFeedback = "";
-    if (prof.ultimoFeedback) {
-        const estrelas = "⭐".repeat(Math.round(prof.nota || 5));
-        blocoFeedback = `\n📊 *Avaliação Recente:*\nNota: ${estrelas}\nObs: "${prof.ultimoFeedback}"\n`;
-    }
+    // --- NOVO: Salva a nota no perfil do funcionário ---
+    prof.nota = parseInt(nota);
+    prof.ultimoFeedback = obs;
+    // ---------------------------------------------------
 
-    // 5. Gera Texto do Gestor (V3 - Sua Solicitação)
+    // --- NOVO: Gera o bloco de texto para o Zap ---
+    const estrelas = "⭐".repeat(parseInt(nota));
+    const blocoFeedback = `\n📊 *Avaliação do Período:*\nNota: ${estrelas}\nObs: "${obs || 'Excelente trabalho!'}"\n`;
+
     const dataHoje = new Date().toLocaleDateString('pt-BR');
-    const nomeGestor = state.config.pixName || "O Gestor";
+    const nomeGestor = state.config.pixName || "Gestão";
 
     const textoZap = `*COMPROVANTE DE PAGAMENTO* 💸\n\n` +
                      `👤 *De:* ${nomeGestor}\n` +
@@ -4052,7 +4075,6 @@ function finalizarReciboInteligente() {
     saveData();
     document.getElementById('modal-recibo').style.display = 'none';
     
-    // Abre WhatsApp
     window.open(`https://wa.me/?text=${encodeURIComponent(textoZap)}`, '_blank');
 }
 
