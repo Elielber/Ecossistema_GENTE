@@ -3813,35 +3813,33 @@ const faturamentoAtual = state.historico
          div.innerHTML += getCardBloqueadoHTML("5. Planejamento Futuro", "Estrategista", "5.000 XP");
      }
 
-     // =================================================================================
+// =================================================================================
     // 2. CARD 6: GESTÃO DE EQUIPE (PAINEL DE LIDERANÇA + ALOCAÇÃO)
     // =================================================================================
     if(AccessControl.check('card_equipe')) {
         
-        // 1. CÁLCULO DO "DELEGÔMETRO" (Mantido original)
+        // 1. CÁLCULO DO "DELEGÔMETRO"
         const totalServicos = state.historico ? state.historico.length : 0;
         const servicosDelegados = state.historico.filter(h => h.equipe && h.equipe.length > 0).length;
         
         let nivelDelegacao = 0;
         if (totalServicos > 0) nivelDelegacao = (servicosDelegados / totalServicos) * 100;
 
-        // Diagnóstico de Liderança
         let msgLideranca = "";
         let corLider = "";
         
         if (nivelDelegacao < 20) {
             msgLideranca = "Centralizador (Você faz tudo)";
-            corLider = "#e74c3c"; // Vermelho
+            corLider = "#e74c3c"; 
         } else if (nivelDelegacao < 60) {
             msgLideranca = "Líder em Evolução (Começando a delegar)";
-            corLider = "#f39c12"; // Laranja
+            corLider = "#f39c12"; 
         } else {
             msgLideranca = "Gestor Profissional (Sabe distribuir tarefas)";
-            corLider = "#27ae60"; // Verde
+            corLider = "#27ae60"; 
         }
 
-       
-       // 2. RENDERIZAÇÃO DA LISTA (Com Status e Botão Alocar)
+       // 2. RENDERIZAÇÃO DA LISTA (Sem o botão Avaliar avulso)
         let htmlEquipe = "";
         if (state.profs.length === 0) {
             htmlEquipe = `<div style="font-size:0.8rem; color:#666; font-style:italic; padding:10px;">Nenhum colaborador. Vá em Ajustes para adicionar.</div>`;
@@ -3849,14 +3847,13 @@ const faturamentoAtual = state.historico
             htmlEquipe = state.profs.map(p => {
                 const nota = p.nota || 5.0;
                 const estrelas = "⭐".repeat(Math.round(nota));
-                const feedbackCurto = p.ultimoFeedback ? `"${p.ultimoFeedback}"` : "Sem feedback registrado.";
+                // Feedback agora vem do último recibo
+                const feedbackCurto = p.ultimoFeedback ? `"${p.ultimoFeedback}"` : "Sem avaliações recentes.";
                 
-                // --- NOVA LÓGICA DE STATUS ---
                 const tarefa = p.tarefaAtual || "Disponível";
                 const isOcupado = tarefa !== "Disponível";
-                const corStatus = isOcupado ? "#e67e22" : "#27ae60"; // Laranja ou Verde
+                const corStatus = isOcupado ? "#e67e22" : "#27ae60"; 
                 const iconStatus = isOcupado ? "🔨" : "✅";
-                // -----------------------------
 
                 return `
                 <div style="padding:10px 0; border-bottom:1px solid #eee;">
@@ -3878,23 +3875,16 @@ const faturamentoAtual = state.historico
                        
                        <div style="display:flex; gap:5px; justify-content:flex-end;">
                            <button class="btn-sm btn-outline" 
-                                   style="padding:4px 8px; font-size:0.7rem; border-color:${corStatus}; color:${corStatus};" 
+                                   style="padding:4px 8px; font-size:0.7rem; border-color:${corStatus}; color:${corStatus}; width:100%;" 
                                    onclick="alocarColaborador('${p.id}')"> 
-                               📍 ${isOcupado ? 'Mudar' : 'Alocar'}
+                               📍 ${isOcupado ? 'Mudar Tarefa / Liberar' : 'Alocar em Obra'}
                            </button>
-                           
-                           <button class="btn-sm btn-outline" 
-                                   style="padding:4px 8px; font-size:0.7rem;" 
-                                   onclick="avaliarColaborador('${p.id}')">
-                               ⭐ Avaliar
-                           </button>
-                       </div>
+                           </div>
                    </div>
                 </div>`;
             }).join('');
         }
 
-        // 3. DICA ROTATIVA (Mantida original)
         const dicasGestao = [
             "⏰ <strong>Gestão de Tempo:</strong> Delegar tarefas operacionais libera você para negociar.",
             "👁️ <strong>Gestão Visual:</strong> Use o botão 'Alocar' para saber sempre quem está fazendo o quê.",
@@ -3932,7 +3922,7 @@ const faturamentoAtual = state.historico
            </div>
            
            <div style="margin-top:10px;">
-               <button class="btn btn-outline" style="flex:1; background:#e67e22; border:none; color:white;" onclick="gerarReciboEquipe()">📄 Recibo Pagamento</button>
+               <button class="btn btn-outline" style="flex:1; background:#e67e22; border:none; color:white;" onclick="gerarReciboEquipe()">📄 Recibo & Avaliação</button>
            </div>
         </div>`;
     } else {
