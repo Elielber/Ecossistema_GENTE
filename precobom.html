@@ -1387,36 +1387,35 @@ const Security = {
     // 1. Tenta recuperar o ID "Blindado" já salvo no navegador
     getID: function() {
         try {
-            // Mudamos o nome da chave para 'pb_security_keys' para não misturar com o antigo
             const dados = JSON.parse(localStorage.getItem('pb_security_keys'));
-            // Retorna o ID se existir, ou null se não tiver
             return dados ? dados.id : null;
         } catch (e) { 
             return null; 
         }
     },
-// --- ADICIONE ESTE BLOCO AQUI (CORREÇÃO) ---
+
+    // --- 🚨 COLE ESTE BLOCO AQUI (QUE ESTAVA FALTANDO) ---
     getDeviceID: function() {
+        // Tenta pegar do armazenamento local
         let id = localStorage.getItem("pb_device_id");
+        
+        // Se não existir, cria um novo e GRAVA para sempre
         if (!id || id === "undefined" || id === "null") {
             id = "DEV_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
             localStorage.setItem("pb_device_id", id);
+            console.log("Novo Device ID Gerado:", id);
         }
         return id;
     },
-    // --------------------------------------------
+    // -----------------------------------------------------
+
     // 2. Gera "Ingredientes" Aleatórios
-    // O App usa isso só quando percebe que não tem ID (getID retornou null)
-    // Ele manda isso pro servidor, e o servidor cozinha o ID final.
     gerarNovosIngredientes: function() {
         return {
-            // Cria uma string aleatória longa (Entropia)
             entropia: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
-            // Pega a hora exata (Timestamp)
             timestamp: Date.now()
         };
     },
-
     // 3. Salva o ID que o Servidor devolveu
     // Chamado dentro do 'enviarOrcamentoFinak' quando o servidor responde com sucesso
     salvarIdentidade: function(idRecebido) {
