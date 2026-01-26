@@ -4012,15 +4012,17 @@ function abrirModalReciboInteligente(indexProf) {
 function finalizarReciboInteligente() {
     const indexProf = document.getElementById('rec-id-prof').value;
     const prof = state.profs[indexProf];
-    const valor = document.getElementById('rec-valor-total').value;
+    const valorStr = document.getElementById('rec-valor-total').value;
     
-    // --- NOVO: Captura a avaliação digitada agora ---
+    // Captura a avaliação
     const nota = document.getElementById('rec-nota').value;
     const obs = document.getElementById('rec-obs').value;
-    // ------------------------------------------------
 
-    if (!valor || parseFloat(valor) <= 0) { alert("Digite o valor do pagamento."); return; }
+    if (!valorStr || parseFloat(valorStr) <= 0) { alert("Digite o valor do pagamento."); return; }
+    
+    const valorFinal = parseFloat(valorStr);
 
+    // 1. PROCESSA AS TAREFAS (BAIXA OPERACIONAL)
     const checkboxes = document.querySelectorAll('.chk-servico-pagar:checked');
     const idsPagos = Array.from(checkboxes).map(cb => parseInt(cb.value));
     
@@ -4033,6 +4035,7 @@ function finalizarReciboInteligente() {
                 const obraCurta = item.obra.split('-')[0].trim(); 
                 textoServicos += `✅ [${dataCurta}] ${item.tarefa} (${obraCurta})\n`;
                 
+                // Marca como PAGO na ficha do funcionário
                 item.status = 'PAGO';
                 item.dataPagamento = new Date().toISOString();
             }
@@ -4041,12 +4044,25 @@ function finalizarReciboInteligente() {
         textoServicos = "\n📋 *Referente a:* Adiantamento / Diárias / Serviços Diversos";
     }
 
-    // --- NOVO: Salva a nota no perfil do funcionário ---
+    // 2. SALVA AVALIAÇÃO (RH)
     prof.nota = parseInt(nota);
     prof.ultimoFeedback = obs;
-    // ---------------------------------------------------
 
-    // --- NOVO: Gera o bloco de texto para o Zap ---
+    // --- 3. LANÇAMENTO FINANCEIRO AUTOMÁTICO (NOVO!) ---
+    // Garante que o objeto financeiro existe
+    if (!state.financeiro) state.financeiro = { saldo: 0, movimentos: [] };
+
+    state.financeiro.movimentos.push({
+        id: Date.now(), // ID único do lançamento
+        tipo: 'SAIDA',  // É dinheiro saindo do bolso
+        desc: `Pagamento Equipe: ${prof.nome}`, // Descrição clara para o extrato
+        valor: valorFinal,
+        data: new Date().toISOString(),
+        status: 'REALIZADO' // Já está pago
+    });
+    // ----------------------------------------------------
+
+    // 4. GERA TEXTO DO ZAP
     const estrelas = "⭐".repeat(parseInt(nota));
     const blocoFeedback = `\n📊 *Avaliação do Período:*\nNota: ${estrelas}\nObs: "${obs || 'Excelente trabalho!'}"\n`;
 
@@ -4056,15 +4072,21 @@ function finalizarReciboInteligente() {
     const textoZap = `*COMPROVANTE DE PAGAMENTO* 💸\n\n` +
                      `👤 *De:* ${nomeGestor}\n` +
                      `👷 *Para:* ${prof.nome}\n` +
-                     `💰 *Valor:* R$ ${parseFloat(valor).toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n` +
+                     `💰 *Valor:* R$ ${valorFinal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}\n` +
                      `📅 *Data:* ${dataHoje}\n` +
                      `${textoServicos}\n` +
                      `${blocoFeedback}\n` +
                      `_Registro digital via App Preço Bom_`;
 
     saveData();
+    // Se estiver em tela grande, atualiza o card financeiro imediatamente
+    if(state.isPremium) renderGestao(); 
+    
     document.getElementById('modal-recibo').style.display = 'none';
     
+    // Feedback visual antes de abrir o zap
+    alert("✅ Pagamento Registrado!\n\n1. Tarefas baixadas.\n2. Saiu do seu Caixa.\n3. Abrindo WhatsApp...");
+
     window.open(`https://wa.me/?text=${encodeURIComponent(textoZap)}`, '_blank');
 }
 
