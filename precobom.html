@@ -744,11 +744,11 @@
     <input type="checkbox" id="chk-seguranca" name="seguranca" required style="margin-top:3px;">
     <div style="flex:1;">
         <p style="margin: 0 0 5px 0;"><strong>🛡️ Termos de Uso e Segurança</strong></p>
-        Confirmo que as informações acima estão corretas.
-Está claro para mim que o Preço Bom atua para conectar clientes ao meu serviço de forma segura.
-Concordo que denúncias ou uso irregular podem levar à suspensão do acesso à plataforma.
+       Confirmo que as informações acima estão corretas.
+       Está claro para mim que o Preço Bom atua para conectar clientes ao meu serviço de forma segura.
+       Concordo que denúncias ou uso irregular podem levar à suspensão do acesso à plataforma.
     </div>
-</label>
+   </label>
     </div>
 	 
 	    
@@ -918,15 +918,15 @@ Concordo que denúncias ou uso irregular podem levar à suspensão do acesso à 
             <button class="btn btn-outline" onclick="iniciarDitado('cad-bio')" style="width:50px; font-size:1.5rem; margin-top:5px;">🎙️</button>
             <div style="font-size:0.7rem; color:#999; text-align:right;" id="bio-counter">0/20</div>
         </div>
-   <label for="chk-seguranca" style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; font-size: 0.75rem; color: #555; background-color: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px; margin: 15px 0; border-radius: 4px;">
-    <input type="checkbox" id="chk-seguranca" name="seguranca" required style="margin-top:3px;">
+   <label for="chk-seguranca-cadastro" style="display:flex; gap:10px; align-items:flex-start; cursor:pointer; font-size: 0.75rem; color: #555; background-color: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px; margin: 15px 0; border-radius: 4px;">
+    <input type="checkbox" id="chk-seguranca-cadastro" name="seguranca" required style="margin-top:3px;">
     <div style="flex:1;">
         <p style="margin: 0 0 5px 0;"><strong>🛡️ Termos de Uso e Segurança</strong></p>
        Confirmo que as informações acima estão corretas.
-Está claro para mim que o Preço Bom atua para conectar clientes ao meu serviço de forma segura.
-Concordo que denúncias ou uso irregular podem levar à suspensão do acesso à plataforma.
+       Está claro para mim que o Preço Bom atua para conectar clientes ao meu serviço de forma segura.
+       Concordo que denúncias ou uso irregular podem levar à suspensão do acesso à plataforma.
     </div>
-</label>
+   </label>
         <button class="btn btn-success" onclick="salvarCadastroInicial()">✅ Concluir Cadastro</button>
     </div>
 </div>
@@ -1383,7 +1383,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6
         futuro: { objetivos: [], swot: {} }, // Card 5
         equipe: [], // Reforço para o Card 6 (mesmo que já exista profs, vamos padronizar aqui futuramente)
         // -------------------------------
-        config: { specialty: "Geral", taxaCompra: 0, taxaVisita: 0, pixKey: "", pixName: "", pixCity: "" , zap: "", nota: "5.0", totalAvaliacoes: 0},
+        config: { specialty: "Geral", termosAceitos: false, taxaCompra: 0, taxaVisita: 0, pixKey: "", pixName: "", pixCity: "" , zap: "", nota: "5.0", totalAvaliacoes: 0},
         profs: [{id: "p1", nome: "Mão de Obra", valor: 50}], // Mantido para compatibilidade
         catalogo: [{ id: 1, nome: "Serviço Exemplo", cat: "Geral", ordem: 1, equipe: [{pid: "p1", h: 2}], mat: [] }],
         carrinho: [],
@@ -1865,6 +1865,13 @@ function renderListasConfig() {
     if(document.getElementById('cfg-pix-key')) document.getElementById('cfg-pix-key').value = state.config.pixKey || "";
     if(document.getElementById('cfg-pix-name')) document.getElementById('cfg-pix-name').value = state.config.pixName || "";
     if(document.getElementById('cfg-pix-city')) document.getElementById('cfg-pix-city').value = state.config.pixCity || "";
+
+// --- 4. NOVO: Sincroniza o Checkbox dos Termos (Visual) ---
+    // Isso faz a mágica: se aceitou no modal, aparece marcado aqui automaticamente.
+    const chkSeguranca = document.getElementById('chk-seguranca');
+    if(chkSeguranca) {
+        chkSeguranca.checked = state.config.termosAceitos || false;
+    }
 }
 
 	
@@ -5293,11 +5300,18 @@ function enviarAvaliacao() {
         const nome = document.getElementById('cad-pix-name').value;
         const city = document.getElementById('cad-pix-city').value;
         const zap = document.getElementById('cad-zap').value;
+		const checkTermos = document.getElementById('chk-seguranca-cadastro');
 
         // 2. Validações
         if (bio.length < 20) { alert("⚠️ Escreva um pouco mais na sua bio."); return; }
 		
         if (!pix || !spec || !nome || !zap) { alert("Preencha todos os campos obrigatórios."); return; }
+		
+		if (!state.config.termosAceitos && !checkTermos.checked) {
+        alert("🛡️ É obrigatório aceitar os Termos de Uso.");
+        checkTermos.focus();
+        // Destaque visual em vermelho para ajudar o usuário
+        checkTermos.parentElement.style.border = "1px solid red"; return;}
 
         // Feedback visual
         const btn = document.querySelector('#modal-cadastro .btn-success');
@@ -5312,6 +5326,7 @@ function enviarAvaliacao() {
         state.config.pixCity = city;
         state.config.specialty = spec;
         state.config.zap = zap;
+		state.config.termosAceitos = true;
 
         // 5. SINCRONIZA VISUALMENTE COM A TELA DE AJUSTES
         if(document.getElementById('cfg-pix-key')) document.getElementById('cfg-pix-key').value = pix;
