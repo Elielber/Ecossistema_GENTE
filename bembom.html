@@ -7248,11 +7248,11 @@ async function carregarFraseDoDia() {
     }
 }
 
-// Função para gerar imagem e compartilhar (Versão Camaleão 🦎)
 function compartilharFraseImagem() {
-    if (!fraseAtualObj) return;
+    // Verifica se existe frase carregada
+    if (typeof fraseAtualObj === 'undefined' || !fraseAtualObj) return;
 
-    const btn = event.currentTarget;
+    const btn = event.currentTarget; // Captura o botão clicado
     const txtOriginal = btn.innerText;
     btn.innerText = "⏳ Gerando...";
     btn.disabled = true;
@@ -7263,9 +7263,9 @@ function compartilharFraseImagem() {
     canvas.width = 1080;
     canvas.height = 1080;
 
-    // --- 1. FUNDO (Mantive escuro para contraste, mas com toque da cor do app) ---
+    // --- 1. FUNDO ---
     const grd = ctx.createLinearGradient(0, 0, 0, 1080);
-    grd.addColorStop(0, "#2c3e50");   // Topo escuro elegante
+    grd.addColorStop(0, "#2c3e50");   // Topo escuro
     grd.addColorStop(1, "#000000");   // Base preta
     ctx.fillStyle = grd;
     ctx.fillRect(0, 0, 1080, 1080);
@@ -7278,18 +7278,17 @@ function compartilharFraseImagem() {
     ctx.font = "bold 400px sans-serif";
     ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
     ctx.textAlign = "center";
-    ctx.fillText("🤝", 540, 680);
+    ctx.fillText("🤝", 540, 680); // Pode usar APP.icone aqui se quiser a marca d'água dinâmica
 
     // --- 3. CABEÇALHO ---
     // Ícone Principal
     ctx.fillStyle = "#ffffff";
     ctx.font = "80px sans-serif";
-    ctx.fillText(APP.icone, 540, 150); // <--- MUDANÇA: Usa o ícone dinâmico
+    ctx.fillText(APP.icone, 540, 150); 
     
     // Nome do App (Na cor da Vertical)
-    ctx.fillStyle = APP.cor; // <--- MUDANÇA: Usa a cor Laranja, Verde, etc.
+    ctx.fillStyle = APP.cor; 
     ctx.font = "bold 50px sans-serif";
-    // .toUpperCase() deixa o nome em maiúsculo (ex: ESTAR BEM)
     ctx.fillText(APP.nome.toUpperCase(), 540, 220); 
 
     ctx.fillStyle = "#bdc3c7"; // Cinza claro
@@ -7304,41 +7303,56 @@ function compartilharFraseImagem() {
     let startY = 450;
     if(texto.length < 50) startY = 500; 
     
-    // Chama a função wrapText existente
-    wrapText(ctx, texto, 540, startY, 900, 75);
+    // Chama a função wrapText existente no seu código
+    // Se der erro aqui, certifique-se que a função wrapText está declarada no arquivo
+    if (typeof wrapText === "function") {
+        wrapText(ctx, texto, 540, startY, 900, 75);
+    } else {
+        // Fallback simples se wrapText não existir
+        ctx.fillText(texto, 540, 500); 
+    }
 
     // --- 5. AUTOR ---
-    ctx.fillStyle = APP.cor; // <--- MUDANÇA: Autor na cor do tema
+    ctx.fillStyle = APP.cor; 
     ctx.font = "bold 40px sans-serif";
     ctx.fillText(`— ${fraseAtualObj.autor}`, 540, 850);
 
-    // --- 6. RODAPÉ E LINK ---
+    // --- 6. RODAPÉ (MODIFICADO AQUI) ---
     ctx.fillStyle = "rgba(255,255,255,0.8)";
     ctx.font = "28px sans-serif";
     
-    // Pega o link atual COMPLETO (inclusive o ?app=SAUDE)
-    const linkAtual = window.location.href;
-    
-    // Limpa o "https://" só visualmente para ficar bonito na imagem
-    const linkVisual = linkAtual.replace(/(^\w+:|^)\/\//, '');
+    // 1. Pega o texto da vertical (Ex: "Saúde e Bem-estar")
+    let textoVertical = "";
+    const elDescLogin = document.getElementById('app-desc-login');
+    if (elDescLogin) {
+        textoVertical = elDescLogin.innerText;
+    }
 
-    ctx.fillText("Encontre profissionais qualificados no app:", 540, 980);
+    // 2. Monta a frase completa
+    // Resultado ex: "Encontre no app Profissionais qualificados em Saúde e Bem-estar"
+    const textoRodape = `Encontre no app Profissionais qualificados em ${textoVertical}`;
+
+    // 3. Desenha no canvas
+    ctx.fillText(textoRodape, 540, 980);
     
+    // Link visual (Opcional, logo abaixo)
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 30px sans-serif";
-    
+    const linkVisual = window.location.host; // Mostra apenas "seusite.com.br"
+    ctx.fillText(linkVisual, 540, 1030);
 
     // --- 7. EXPORTAÇÃO ---
     canvas.toBlob(async function(blob) {
-        const fileName = `frase-${APP.nome.replace(/\s+/g, '-').toLowerCase()}.jpg`; // ex: frase-estar-bem.jpg
+        const fileName = `frase-${APP.nome.replace(/\s+/g, '-').toLowerCase()}.jpg`; 
         const file = new File([blob], fileName, { type: "image/jpeg" });
+        const linkAtual = window.location.href;
 
         if (navigator.share && navigator.canShare({ files: [file] })) {
             try {
                 await navigator.share({
                     files: [file],
-                    title: `Frase do Dia - ${APP.nome}`, // Título dinâmico
-                    text: linkAtual // O link clicável no WhatsApp será o correto (com a vertical)
+                    title: `Frase do Dia - ${APP.nome}`, 
+                    text: `${fraseAtualObj.frase}\n\n${linkAtual}` 
                 });
             } catch (err) {
                 console.log("Compartilhamento cancelado.");
@@ -7349,13 +7363,14 @@ function compartilharFraseImagem() {
             a.href = URL.createObjectURL(blob);
             a.download = fileName;
             a.click();
-            alert("Imagem salva! Compartilhe manualmente.");
+            // alert("Imagem salva! Compartilhe manualmente.");
         }
         
         btn.innerText = txtOriginal;
         btn.disabled = false;
     }, 'image/jpeg', 0.9);
 }
+
 function abrirModalSuporte() {
     document.getElementById('modal-suporte').style.display = 'block';
 }
