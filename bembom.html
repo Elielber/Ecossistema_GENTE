@@ -1961,14 +1961,25 @@ window.addEventListener('beforeinstallprompt', (e) => {
     }
 // configuração para permitir a visualização simpleficada da demanda
 const verDemandaId = params.get('ver_demanda');
+const grupoLink = params.get('grupo'); 
+const catLink = params.get('cat');     
+
 if (verDemandaId) {
-    // 1. Força a entrada na tela de prestador e no feed
+    if (grupoLink) sessionStorage.setItem('link_grupo', grupoLink);
+    if (catLink) sessionStorage.setItem('link_cat', catLink);
+
     setTimeout(() => {
         goToScreen('prestador');
         nav('oportunidades');
         
-        // 2. Tenta destacar a demanda (Alerta educativo para conversão)
-        alert(`🔍 Você abriu uma oportunidade específica através de um link de indicação!\n\nSe você ainda não é cadastrado, complete seu perfil para enviar o orçamento agora.`);
+        // Verificamos se o usuário NÃO tem cadastro (bio curta ou inexistente)
+        if (!state.config.bio || state.config.bio.length < 20) {
+            
+            alert(`🔍 Você abriu uma oportunidade específica para: ${catLink || 'um serviço'}!\n\nComo este é seu primeiro acesso, complete seu perfil abaixo para liberar o envio do orçamento agora.`);
+            
+            abrirModalCadastro(); // Abre o modal logo após o OK do alerta
+        }
+
     }, 500);
 }
 
@@ -5596,45 +5607,56 @@ function enviarAvaliacao() {
     // 2. Abre o Modal e Preenche dados (Adicione esta também se não tiver)
 // Função para Abrir o Modal e Preencher (Se já tiver dados parciais)
     function abrirModalCadastro(isEdicao = false) {
-        document.getElementById('modal-cadastro').style.display = 'flex';
-        
-        const selGrupo = document.getElementById('cad-grupo');
-        // Popula o select se estiver vazio
-        if(selGrupo.options.length <= 1) {
-            const grupos = Object.keys(TAXONOMIA);
-            selGrupo.innerHTML = '<option value="">Selecione a Área...</option>';
-            grupos.forEach(g => selGrupo.innerHTML += `<option value="${g}">${g}</option>`);
-        }
-
-        // Preenche campos com o que já tem na memória (State)
-        if (state.config.specialty) {
-            const grupo = encontrarGrupoPorServico(state.config.specialty);
-            if(grupo) {
-                selGrupo.value = grupo;
-                atualizarSubCategorias('cad', state.config.specialty);
-            }
-        }
-        
-        // Mapeamento State -> Inputs do Modal
-        document.getElementById('cad-pix-key').value = state.config.pixKey || "";
-        document.getElementById('cad-pix-name').value = state.config.pixName || "";
-        document.getElementById('cad-pix-city').value = state.config.pixCity || "";
-        document.getElementById('cad-zap').value = state.config.zap || ""; // NOVO: Traz o Zap
-        document.getElementById('cad-bio').value = state.config.bio || "";
-        
-        // Contador da Bio
-        const bioInput = document.getElementById('cad-bio');
-        bioInput.onkeyup = function() {
-            const len = this.value.length;
-            const counter = document.getElementById('bio-counter');
-            if(counter) {
-                counter.innerText = len + "/20";
-                counter.style.color = len >= 20 ? "green" : "red";
-            }
-        };
-        // Trigger inicial para pintar o contador
-        bioInput.onkeyup(); 
+    document.getElementById('modal-cadastro').style.display = 'flex';
+    
+    const selGrupo = document.getElementById('cad-grupo');
+    if(selGrupo.options.length <= 1) {
+        const grupos = Object.keys(TAXONOMIA);
+        selGrupo.innerHTML = '<option value="">Selecione a Área...</option>';
+        grupos.forEach(g => selGrupo.innerHTML += `<option value="${g}">${g}</option>`);
     }
+
+    
+    const grupoSugerido = sessionStorage.getItem('link_grupo');
+    const catSugerida = sessionStorage.getItem('link_cat');
+
+    if (grupoSugerido && !state.config.specialty) {
+        selGrupo.value = grupoSugerido;
+        // Preenche a especialidade e dispara a atualização do segundo select
+        atualizarSubCategorias('cad', catSugerida);
+        
+        // Limpa a sessão para não repetir em acessos futuros
+        sessionStorage.removeItem('link_grupo');
+        sessionStorage.removeItem('link_cat');
+    } 
+
+    else if (state.config.specialty) {
+        const grupo = encontrarGrupoPorServico(state.config.specialty);
+        if(grupo) {
+            selGrupo.value = grupo;
+            atualizarSubCategorias('cad', state.config.specialty);
+        }
+    }
+    
+    [span_2](start_span)// Mapeamento State -> Inputs do Modal (Pix, Nome, Zap, Bio...)[span_2](end_span)
+    document.getElementById('cad-pix-key').value = state.config.pixKey || "";
+    document.getElementById('cad-pix-name').value = state.config.pixName || "";
+    document.getElementById('cad-pix-city').value = state.config.pixCity || "";
+    document.getElementById('cad-zap').value = state.config.zap || "";
+    document.getElementById('cad-bio').value = state.config.bio || "";
+    
+    const bioInput = document.getElementById('cad-bio');
+    bioInput.onkeyup = function() {
+        const len = this.value.length;
+        const counter = document.getElementById('bio-counter');
+        if(counter) {
+            counter.innerText = len + "/20";
+            counter.style.color = len >= 20 ? "green" : "red";
+        }
+    };
+    bioInput.onkeyup(); 
+}
+
 
 
 // Função para Salvar e Sincronizar Tudo (Cadastro Inicial)
