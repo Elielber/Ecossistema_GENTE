@@ -1959,6 +1959,18 @@ window.addEventListener('beforeinstallprompt', (e) => {
             .catch(err => { alert("Erro ao carregar kit: " + err.message); });
         }
     }
+// configuração para permitir a visualização simpleficada da demanda
+const verDemandaId = params.get('ver_demanda');
+if (verDemandaId) {
+    // 1. Força a entrada na tela de prestador e no feed
+    setTimeout(() => {
+        goToScreen('prestador');
+        nav('oportunidades');
+        
+        // 2. Tenta destacar a demanda (Alerta educativo para conversão)
+        alert(`🔍 Você abriu uma oportunidade específica através de um link de indicação!\n\nSe você ainda não é cadastrado, complete seu perfil para enviar o orçamento agora.`);
+    }, 500);
+}
 
     // 6. AUTO-UPDATE FEED
     setInterval(() => {
@@ -2851,16 +2863,21 @@ function carregarMeusPedidos() {
                         </button>
                     </div>`;
                 }
-                // C. ABERTA -> EXCLUIR
-                else if (d.status === 'ABERTA') {
-                    botoesAcao = `
-                    <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px;">
-                        <button class="btn btn-sm btn-outline" style="width:100%; border-color:#95a5a6; color:#95a5a6;" 
-                            onclick="cancelarPedidoCliente('${d.id}', '${tituloSafe}')">
-                            🗑️ Excluir Pedido
-                        </button>
-                    </div>`;
-                }
+                // C. ABERTA -> EXCLUIR e compartilhar
+else if (d.status === 'ABERTA') {
+    botoesAcao = `
+    <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px; display:flex; gap:10px;">
+        <button class="btn btn-sm" style="flex:1; background:#25D366; color:white; border:none; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:5px;" 
+            onclick="compartilharOportunidade('${d.id}', '${tituloSafe}', '${d.cidade}')">
+            📢 Status
+        </button>
+        <button class="btn btn-sm btn-outline" style="flex:1; border-color:#95a5a6; color:#95a5a6;" 
+            onclick="cancelarPedidoCliente('${d.id}', '${tituloSafe}')">
+            🗑️ Excluir
+        </button>
+    </div>`;
+}
+
 
                 // --- 🆕 ADICIONADO ${htmlAlertaVencido} NO INÍCIO DO CARD ---
                 div.innerHTML += `
@@ -7562,6 +7579,31 @@ function carregarDadosCliente() {
         } catch (e) {
             console.warn("Erro ao carregar perfil do cliente", e);
         }
+    }
+}
+// --- FUNÇÕES DE COMPARTILHAMENTO PÚBLICO (MARKETING) ---
+function compartilharOportunidade(idDemanda, titulo, cidade) {
+    const baseUrl = window.location.href.split('?')[0];
+    const params = new URLSearchParams(window.location.search);
+    const appID = params.get('app') || localStorage.getItem('PB_APP_ID') || 'OBRA';
+
+    // O link leva para a vertical correta e carrega a demanda específica
+    const linkOportunidade = `${baseUrl}?app=${appID}&ver_demanda=${idDemanda}`;
+
+    const textoCompartilhar = `🚀 *OPORTUNIDADE DE SERVIÇO*\n\n` +
+        `Estou precisando de: *${titulo}*\n` +
+        `📍 Local: ${cidade}\n\n` +
+        `Profissionais interessados podem enviar o orçamento pelo link abaixo (via App ${APP.nome}):\n` +
+        `${linkOportunidade}`;
+
+    if (navigator.share) {
+        navigator.share({
+            title: `Serviço: ${titulo}`,
+            text: textoCompartilhar,
+            url: linkOportunidade
+        }).catch(console.error);
+    } else {
+        window.open(`https://wa.me/?text=${encodeURIComponent(textoCompartilhar)}`, '_blank');
     }
 }
 
