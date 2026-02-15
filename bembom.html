@@ -2885,7 +2885,7 @@ else if (d.status === 'ABERTA') {
     botoesAcao = `
     <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px; display:flex; gap:10px;">
         <button class="btn btn-sm" style="flex:1; background:#25D366; color:white; border:none; font-weight:bold;" 
-            onclick="compartilharOportunidade('${d.id}', '${tituloSafe}', '${cidadeValor}', '${categoriaValor}')">
+            onclick="compartilharOportunidade('${d.id}', '${tituloSafe}', '${cidadeValor}', '${categoriaValor}', '${grupoValor}')">
             📢 Status
         </button>
         <button class="btn btn-sm btn-outline" style="flex:1; border-color:#95a5a6; color:#95a5a6;" 
@@ -7614,19 +7614,20 @@ function carregarDadosCliente() {
     }
 }
 // --- FUNÇÕES DE COMPARTILHAMENTO PÚBLICO (MARKETING) ---
-function compartilharOportunidade(idDemanda, titulo, cidade, especialidade) {
+// Atualize a assinatura da função para aceitar 'grupo'
+function compartilharOportunidade(idDemanda, titulo, cidade, especialidade, grupo) {
     const baseUrl = window.location.href.split('?')[0];
     const params = new URLSearchParams(window.location.search);
     const appID = params.get('app') || localStorage.getItem('PB_APP_ID') || 'OBRA';
 
-    const linkOportunidade = `${baseUrl}?app=${appID}&ver_demanda=${idDemanda}`;
+    // Agora o link inclui &grupo= e &cat= de forma explícita
+    const linkOportunidade = `${baseUrl}?app=${appID}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(grupo)}&cat=${encodeURIComponent(especialidade)}`;
 
-    // Montagem do texto com a Especialidade em destaque
-    const textoCompartilhar = `🚀 *OPORTUNIDADE DE SERVIÇO PARA:*\n` +
+    const textoCompartilhar = `🚀 *OPORTUNIDADE DE SERVIÇO PARA:* \n` +
         `👉 *${especialidade.toUpperCase()}*\n\n` +
         `Estou precisando de: *${titulo}*\n` +
-        `📍 Local: ${cidade || 'Não informado'}\n\n` +
-        `Profissionais interessados podem enviar o orçamento pelo link abaixo (via App ${APP.nome}):`;
+        `📍 Local: ${cidade}\n\n` +
+        `Profissionais interessados podem enviar o orçamento pelo link abaixo:`;
 
     if (navigator.share) {
         navigator.share({
@@ -7638,6 +7639,7 @@ function compartilharOportunidade(idDemanda, titulo, cidade, especialidade) {
         window.open(`https://wa.me/?text=${encodeURIComponent(textoCompartilhar + "\n" + linkOportunidade)}`, '_blank');
     }
 }
+
 
 </script>
 </body>
