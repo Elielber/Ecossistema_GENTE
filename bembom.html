@@ -7587,23 +7587,22 @@ function compartilharOportunidade(idDemanda, titulo, cidade) {
     const params = new URLSearchParams(window.location.search);
     const appID = params.get('app') || localStorage.getItem('PB_APP_ID') || 'OBRA';
 
-    // O link leva para a vertical correta e carrega a demanda específica
     const linkOportunidade = `${baseUrl}?app=${appID}&ver_demanda=${idDemanda}`;
 
     const textoCompartilhar = `🚀 *OPORTUNIDADE DE SERVIÇO*\n\n` +
         `Estou precisando de: *${titulo}*\n` +
         `📍 Local: ${cidade}\n\n` +
-        `Profissionais interessados podem enviar o orçamento pelo link abaixo (via App ${APP.nome}):\n` +
-        `${linkOportunidade}`;
+        `Profissionais interessados podem enviar o orçamento pelo link abaixo (via App ${APP.nome}):`;
 
     if (navigator.share) {
         navigator.share({
             title: `Serviço: ${titulo}`,
             text: textoCompartilhar,
-            url: linkOportunidade
+            url: linkOportunidade // O sistema se encarrega de colocar o link no final
         }).catch(console.error);
     } else {
-        window.open(`https://wa.me/?text=${encodeURIComponent(textoCompartilhar)}`, '_blank');
+        // No Fallback (PC), mantemos a concatenação manual pois não há campo 'url'
+        window.open(`https://wa.me/?text=${encodeURIComponent(textoCompartilhar + "\n" + linkOportunidade)}`, '_blank');
     }
 }
 
