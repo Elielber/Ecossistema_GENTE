@@ -1961,10 +1961,11 @@ window.addEventListener('beforeinstallprompt', (e) => {
     }
 // configuração para permitir a visualização simpleficada da demanda
 const verDemandaId = params.get('ver_demanda');
-const grupoLink = params.get('grupo'); 
-const catLink = params.get('cat');     
+const grupoLink = params.get('grupo'); // Ex: OBRA ou REFORMA
+const catLink = params.get('cat');     // Ex: Pedreiro
 
 if (verDemandaId) {
+    // Armazena no sessionStorage para o modal ler ao abrir
     if (grupoLink) sessionStorage.setItem('link_grupo', grupoLink);
     if (catLink) sessionStorage.setItem('link_cat', catLink);
 
@@ -1972,16 +1973,16 @@ if (verDemandaId) {
         goToScreen('prestador');
         nav('oportunidades');
         
-        // Verificamos se o usuário NÃO tem cadastro (bio curta ou inexistente)
+        // Verifica se o usuário é novo (cadastro incompleto)
         if (!state.config.bio || state.config.bio.length < 20) {
-            
+            // ALERTA DE ORIENTAÇÃO
             alert(`🔍 Você abriu uma oportunidade específica para: ${catLink || 'um serviço'}!\n\nComo este é seu primeiro acesso, complete seu perfil abaixo para liberar o envio do orçamento agora.`);
             
-            abrirModalCadastro(); // Abre o modal logo após o OK do alerta
+            abrirModalCadastro(); 
         }
-
     }, 500);
 }
+
 
     // 6. AUTO-UPDATE FEED
     setInterval(() => {
@@ -5604,33 +5605,35 @@ function enviarAvaliacao() {
         return false;
     }
 
-    // 2. Abre o Modal e Preenche dados (Adicione esta também se não tiver)
-// Função para Abrir o Modal e Preencher (Se já tiver dados parciais)
-    function abrirModalCadastro(isEdicao = false) {
+function abrirModalCadastro(isEdicao = false) {
     document.getElementById('modal-cadastro').style.display = 'flex';
     
     const selGrupo = document.getElementById('cad-grupo');
+    // 1. Garante que a lista de Áreas (Grupos) esteja carregada
     if(selGrupo.options.length <= 1) {
         const grupos = Object.keys(TAXONOMIA);
         selGrupo.innerHTML = '<option value="">Selecione a Área...</option>';
         grupos.forEach(g => selGrupo.innerHTML += `<option value="${g}">${g}</option>`);
     }
 
-    
+    // 2. Tenta recuperar dados do link de indicação (sessionStorage)
     const grupoSugerido = sessionStorage.getItem('link_grupo');
     const catSugerida = sessionStorage.getItem('link_cat');
 
+    // 3. Lógica de Preenchimento Inteligente
     if (grupoSugerido && !state.config.specialty) {
+        // Define o grupo no select
         selGrupo.value = grupoSugerido;
-        // Preenche a especialidade e dispara a atualização do segundo select
+        
+        // Dispara a função que popula o select de especialidade e já seleciona a categoria
         atualizarSubCategorias('cad', catSugerida);
         
-        // Limpa a sessão para não repetir em acessos futuros
+        // Limpa a memória temporária para não afetar outros usuários no mesmo dispositivo
         sessionStorage.removeItem('link_grupo');
         sessionStorage.removeItem('link_cat');
     } 
-
     else if (state.config.specialty) {
+        // Caso padrão: usuário já tem algo no estado
         const grupo = encontrarGrupoPorServico(state.config.specialty);
         if(grupo) {
             selGrupo.value = grupo;
@@ -5638,13 +5641,14 @@ function enviarAvaliacao() {
         }
     }
     
-    [span_2](start_span)// Mapeamento State -> Inputs do Modal (Pix, Nome, Zap, Bio...)[span_2](end_span)
+    [span_2](start_span)// 4. Preenchimento dos demais campos[span_2](end_span)
     document.getElementById('cad-pix-key').value = state.config.pixKey || "";
     document.getElementById('cad-pix-name').value = state.config.pixName || "";
     document.getElementById('cad-pix-city').value = state.config.pixCity || "";
     document.getElementById('cad-zap').value = state.config.zap || "";
     document.getElementById('cad-bio').value = state.config.bio || "";
     
+    // Configuração do contador da Bio
     const bioInput = document.getElementById('cad-bio');
     bioInput.onkeyup = function() {
         const len = this.value.length;
@@ -5656,6 +5660,7 @@ function enviarAvaliacao() {
     };
     bioInput.onkeyup(); 
 }
+
 
 
 
