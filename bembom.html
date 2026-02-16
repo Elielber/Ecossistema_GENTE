@@ -5622,11 +5622,13 @@ function enviarAvaliacao() {
         return false;
     }
 function abrirModalCadastro(isEdicao = false) {
+    // 1. Exibe o modal
     document.getElementById('modal-cadastro').style.display = 'flex';
     
     const selGrupo = document.getElementById('cad-grupo');
+    const selCat = document.getElementById('cad-specialty');
     
-    // 1. Limpamos e Repopulamos de forma sólida
+    // 2. Popula os Grupos (Áreas de Atuação)
     const grupos = Object.keys(TAXONOMIA);
     selGrupo.innerHTML = '<option value="">Selecione a Área...</option>';
     
@@ -5637,49 +5639,52 @@ function abrirModalCadastro(isEdicao = false) {
         selGrupo.appendChild(opt);
     });
 
-    // 2. Recuperamos os dados do link e DECODIFICAMOS (para tratar acentos)
-    let grupoSugerido = sessionStorage.getItem('link_grupo');
-    let catSugerida = sessionStorage.getItem('link_cat');
+    // 3. Recupera os parâmetros diretamente da URL ou do SessionStorage
+    const params = new URLSearchParams(window.location.search);
+    
+    // Sincroniza com as chaves 'grupo' e 'cat' geradas na função compartilharOportunidade
+    let grupoSugerido = params.get('grupo') || sessionStorage.getItem('link_grupo');
+    let catSugerida = params.get('cat') || params.get('categoria') || sessionStorage.getItem('link_cat');
 
+    // 4. Decodifica os textos para tratar acentos e espaços vindos da URL
     if (grupoSugerido) grupoSugerido = decodeURIComponent(grupoSugerido);
     if (catSugerida) catSugerida = decodeURIComponent(catSugerida);
 
-    // 3. Preenchimento Inteligente (Prioridade ao Link)
-    if (grupoSugerido && !state.config.specialty) {
-        // Tentamos selecionar o grupo
+    // 5. Aplica a Lógica de Preenchimento Automático
+    if (grupoSugerido && TAXONOMIA[grupoSugerido]) {
         selGrupo.value = grupoSugerido;
         
-        // Pequeno delay para garantir que o navegador "enxergou" a seleção do grupo
+        // Pequeno delay (150ms) para garantir que o DOM processe a mudança do grupo antes de popular as subcategorias
         setTimeout(() => {
-            // Disparamos a atualização das subcategorias
             atualizarSubCategorias('cad', catSugerida);
             
-            // Verificação extra: Se o campo ainda estiver vazio, tentamos forçar a categoria
-            const selCat = document.getElementById('cad-specialty');
+            // Garantia extra: força a seleção caso o atualizarSubCategorias ainda não tenha refletido no valor do elemento
             if (selCat && catSugerida) {
                 selCat.value = catSugerida;
             }
 
+            // Limpa o sessionStorage após o uso para não interferir em cadastros futuros manuais
             sessionStorage.removeItem('link_grupo');
             sessionStorage.removeItem('link_cat');
-        }, 150); // Aumentamos para 150ms para dar tempo ao mobile
-
+        }, 150);
     } 
-    else if (state.config.specialty) {
-        const grupo = encontrarGrupoPorServico(state.config.specialty);
-        if(grupo) {
-            selGrupo.value = grupo;
-            atualizarSubCategorias('cad', state.config.specialty);
+    // Fallback: Se o prestador já tiver uma especialidade salva no estado local
+    else if (state.config.specialty && state.config.specialty !== "Geral") {
+        const grupoExistente = encontrarGrupoPorServico(state.config.specialty);
+        if(grupoExistente) {
+            selGrupo.value = grupoExistente;
+            setTimeout(() => atualizarSubCategorias('cad', state.config.specialty), 100);
         }
     }
     
-    // 4. Preenchimento dos demais campos
+    // 6. Preenchimento dos demais campos de perfil
     document.getElementById('cad-pix-key').value = state.config.pixKey || "";
     document.getElementById('cad-pix-name').value = state.config.pixName || "";
     document.getElementById('cad-pix-city').value = state.config.pixCity || "";
     document.getElementById('cad-zap').value = state.config.zap || "";
     document.getElementById('cad-bio').value = state.config.bio || "";
     
+    // Inicializa o contador de caracteres da Bio
     const bioInput = document.getElementById('cad-bio');
     if(bioInput) {
         bioInput.onkeyup = function() {
