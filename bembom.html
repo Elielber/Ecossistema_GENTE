@@ -7650,29 +7650,79 @@ function carregarDadosCliente() {
 }
 // --- FUNÇÕES DE COMPARTILHAMENTO PÚBLICO (MARKETING) ---
 // Atualize a assinatura da função para aceitar 'grupo'
-function compartilharOportunidade(idDemanda, titulo, cidade, especialidade, grupo) {
+async function compartilharOportunidade(idDemanda, titulo, cidade, especialidade, grupo) {
     const baseUrl = window.location.href.split('?')[0];
     const params = new URLSearchParams(window.location.search);
     const appID = params.get('app') || localStorage.getItem('PB_APP_ID') || 'OBRA';
 
-    // Agora o link inclui &grupo= e &cat= de forma explícita
+    // Link com parâmetros para preencher os selects do prestador automaticamente
     const linkOportunidade = `${baseUrl}?app=${appID}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(grupo)}&cat=${encodeURIComponent(especialidade)}`;
 
-    const textoCompartilhar = `🚀 *OPORTUNIDADE DE SERVIÇO PARA:* \n` +
-        `👉 *${especialidade.toUpperCase()}*\n\n` +
-        `Estou precisando de: *${titulo}*\n` +
-        `📍 Local: ${cidade}\n\n` +
-        `Profissionais interessados podem enviar o orçamento pelo link abaixo:`;
+    // Gera a imagem dinamicamente
+    const imgData = await gerarImagemOportunidade({
+        titulo: titulo,
+        especialidade: especialidade,
+        local: cidade,
+        grupo: grupo
+    });
 
-    if (navigator.share) {
+    const res = await fetch(imgData);
+    const blob = await res.blob();
+    const file = new File([blob], 'oportunidade.jpg', { type: 'image/jpeg' });
+
+    const textoLegenda = `🚀 Oportunidade para ${especialidade} em ${cidade}!\n\nOrçamentos pelo link: ${linkOportunidade}`;
+
+    // Compartilhamento Nativo (Mobile)
+    if (navigator.share && navigator.canShare({ files: [file] })) {
         navigator.share({
-            title: `Serviço: ${titulo}`,
-            text: textoCompartilhar,
-            url: linkOportunidade 
-        }).catch(console.error);
+            files: [file],
+            text: textoLegenda
+        });
     } else {
-        window.open(`https://wa.me/?text=${encodeURIComponent(textoCompartilhar + "\n" + linkOportunidade)}`, '_blank');
+        window.open(`https://wa.me/?text=${encodeURIComponent(textoLegenda)}`, '_blank');
     }
+}
+async function gerarImagemOportunidade(dados) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 1080;
+    const ctx = canvas.getContext('2d');
+
+    // Recupera cor e ícone da vertical cadastrada no seu código
+    const infoVertical = VERTICAIS[dados.grupo] || VERTICAIS['OBRA'];
+    const corVertical = infoVertical.cor;
+    const iconeVertical = infoVertical.icone;
+
+    // Fundo Estilo Classificados
+    ctx.fillStyle = "#fdfbf7"; 
+    ctx.fillRect(0, 0, 1080, 1080);
+
+    // Borda dupla na cor da vertical
+    ctx.strokeStyle = corVertical;
+    ctx.lineWidth = 15;
+    ctx.strokeRect(40, 40, 1000, 1000);
+
+    // Cabeçalho e Especialidade
+    ctx.textAlign = "center";
+    ctx.fillStyle = corVertical;
+    ctx.fillRect(100, 220, 880, 180); 
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 80px sans-serif";
+    ctx.fillText(dados.especialidade.toUpperCase(), 540, 340);
+
+    // Texto da Demanda
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#2c3e50";
+    ctx.font = "bold 45px sans-serif";
+    ctx.fillText("Precisa-se de:", 130, 520);
+    
+    // Usa a função wrapText que você já possui no arquivo
+    wrapText(ctx, dados.titulo, 130, 580, 820, 55);
+
+    ctx.font = "bold 42px sans-serif";
+    ctx.fillText(`📍 Local: ${dados.local}`, 130, 780);
+
+    return canvas.toDataURL("image/jpeg", 0.9);
 }
 
 
