@@ -5604,36 +5604,42 @@ function enviarAvaliacao() {
         abrirModalCadastro();
         return false;
     }
-
 function abrirModalCadastro(isEdicao = false) {
     document.getElementById('modal-cadastro').style.display = 'flex';
     
     const selGrupo = document.getElementById('cad-grupo');
-    // 1. Garante que a lista de Áreas (Grupos) esteja carregada
-    if(selGrupo.options.length <= 1) {
-        const grupos = Object.keys(TAXONOMIA);
-        selGrupo.innerHTML = '<option value="">Selecione a Área...</option>';
-        grupos.forEach(g => selGrupo.innerHTML += `<option value="${g}">${g}</option>`);
-    }
+    
+    // 1. Limpamos e Repopulamos de forma sólida
+    const grupos = Object.keys(TAXONOMIA);
+    selGrupo.innerHTML = '<option value="">Selecione a Área...</option>';
+    
+    grupos.forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g;
+        opt.textContent = g;
+        selGrupo.appendChild(opt);
+    });
 
-    // 2. Tenta recuperar dados do link de indicação (sessionStorage)
+    // 2. Recuperamos os dados do link
     const grupoSugerido = sessionStorage.getItem('link_grupo');
     const catSugerida = sessionStorage.getItem('link_cat');
 
-    // 3. Lógica de Preenchimento Inteligente
+    // 3. Preenchimento Inteligente (Prioridade ao Link)
     if (grupoSugerido && !state.config.specialty) {
-        // Define o grupo no select
+        // Atribuímos o grupo
         selGrupo.value = grupoSugerido;
         
-        // Dispara a função que popula o select de especialidade e já seleciona a categoria
-        atualizarSubCategorias('cad', catSugerida);
-        
-        // Limpa a memória temporária para não afetar outros usuários no mesmo dispositivo
-        sessionStorage.removeItem('link_grupo');
-        sessionStorage.removeItem('link_cat');
+        // Chamamos a atualização das especialidades passando a categoria desejada
+        // O setTimeout de 0ms serve para dar fôlego ao navegador processar o grupo antes da categoria
+        setTimeout(() => {
+            atualizarSubCategorias('cad', catSugerida);
+            // Limpamos apenas após o preenchimento bem sucedido
+            sessionStorage.removeItem('link_grupo');
+            sessionStorage.removeItem('link_cat');
+        }, 50);
+
     } 
     else if (state.config.specialty) {
-        // Caso padrão: usuário já tem algo no estado
         const grupo = encontrarGrupoPorServico(state.config.specialty);
         if(grupo) {
             selGrupo.value = grupo;
@@ -5641,14 +5647,13 @@ function abrirModalCadastro(isEdicao = false) {
         }
     }
     
-    [span_2](start_span)// 4. Preenchimento dos demais campos[span_2](end_span)
+    // 4. Preenchimento dos demais campos
     document.getElementById('cad-pix-key').value = state.config.pixKey || "";
     document.getElementById('cad-pix-name').value = state.config.pixName || "";
     document.getElementById('cad-pix-city').value = state.config.pixCity || "";
     document.getElementById('cad-zap').value = state.config.zap || "";
     document.getElementById('cad-bio').value = state.config.bio || "";
     
-    // Configuração do contador da Bio
     const bioInput = document.getElementById('cad-bio');
     bioInput.onkeyup = function() {
         const len = this.value.length;
@@ -5660,9 +5665,6 @@ function abrirModalCadastro(isEdicao = false) {
     };
     bioInput.onkeyup(); 
 }
-
-
-
 
 // Função para Salvar e Sincronizar Tudo (Cadastro Inicial)
     async function salvarCadastroInicial() {
