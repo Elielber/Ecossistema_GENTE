@@ -1959,13 +1959,19 @@ window.addEventListener('beforeinstallprompt', (e) => {
             .catch(err => { alert("Erro ao carregar kit: " + err.message); });
         }
     }
-// configuração para permitir a visualização simpleficada da demanda
+// configuração para permitir a visualização simplificada da demanda
 const verDemandaId = params.get('ver_demanda');
-const grupoLink = params.get('grupo'); // Ex: OBRA ou REFORMA
-const catLink = params.get('cat');     // Ex: Pedreiro
+let grupoLink = params.get('grupo'); 
+let catLink = params.get('cat');     
 
 if (verDemandaId) {
-    // Armazena no sessionStorage para o modal ler ao abrir
+    // Tratamento de caracteres especiais (acentos/cedilha) vindo da URL
+    try {
+        if (grupoLink) grupoLink = decodeURIComponent(grupoLink);
+        if (catLink) catLink = decodeURIComponent(catLink);
+    } catch (e) { console.error("Erro na decodificação dos parâmetros", e); }
+
+    // Armazena no sessionStorage de forma limpa
     if (grupoLink) sessionStorage.setItem('link_grupo', grupoLink);
     if (catLink) sessionStorage.setItem('link_cat', catLink);
 
@@ -1975,13 +1981,14 @@ if (verDemandaId) {
         
         // Verifica se o usuário é novo (cadastro incompleto)
         if (!state.config.bio || state.config.bio.length < 20) {
-            // ALERTA DE ORIENTAÇÃO
+            // ALERTA DE ORIENTAÇÃO - Usando o nome já decodificado
             alert(`🔍 Você abriu uma oportunidade específica para: ${catLink || 'um serviço'}!\n\nComo este é seu primeiro acesso, complete seu perfil abaixo para liberar o envio do orçamento agora.`);
             
             abrirModalCadastro(); 
         }
     }, 500);
 }
+
 
 
     // 6. AUTO-UPDATE FEED
@@ -5620,23 +5627,32 @@ function abrirModalCadastro(isEdicao = false) {
         selGrupo.appendChild(opt);
     });
 
-    // 2. Recuperamos os dados do link
-    const grupoSugerido = sessionStorage.getItem('link_grupo');
-    const catSugerida = sessionStorage.getItem('link_cat');
+    // 2. Recuperamos os dados do link e DECODIFICAMOS (para tratar acentos)
+    let grupoSugerido = sessionStorage.getItem('link_grupo');
+    let catSugerida = sessionStorage.getItem('link_cat');
+
+    if (grupoSugerido) grupoSugerido = decodeURIComponent(grupoSugerido);
+    if (catSugerida) catSugerida = decodeURIComponent(catSugerida);
 
     // 3. Preenchimento Inteligente (Prioridade ao Link)
     if (grupoSugerido && !state.config.specialty) {
-        // Atribuímos o grupo
+        // Tentamos selecionar o grupo
         selGrupo.value = grupoSugerido;
         
-        // Chamamos a atualização das especialidades passando a categoria desejada
-        // O setTimeout de 0ms serve para dar fôlego ao navegador processar o grupo antes da categoria
+        // Pequeno delay para garantir que o navegador "enxergou" a seleção do grupo
         setTimeout(() => {
+            // Disparamos a atualização das subcategorias
             atualizarSubCategorias('cad', catSugerida);
-            // Limpamos apenas após o preenchimento bem sucedido
+            
+            // Verificação extra: Se o campo ainda estiver vazio, tentamos forçar a categoria
+            const selCat = document.getElementById('cad-specialty');
+            if (selCat && catSugerida) {
+                selCat.value = catSugerida;
+            }
+
             sessionStorage.removeItem('link_grupo');
             sessionStorage.removeItem('link_cat');
-        }, 50);
+        }, 150); // Aumentamos para 150ms para dar tempo ao mobile
 
     } 
     else if (state.config.specialty) {
@@ -5655,15 +5671,17 @@ function abrirModalCadastro(isEdicao = false) {
     document.getElementById('cad-bio').value = state.config.bio || "";
     
     const bioInput = document.getElementById('cad-bio');
-    bioInput.onkeyup = function() {
-        const len = this.value.length;
-        const counter = document.getElementById('bio-counter');
-        if(counter) {
-            counter.innerText = len + "/20";
-            counter.style.color = len >= 20 ? "green" : "red";
-        }
-    };
-    bioInput.onkeyup(); 
+    if(bioInput) {
+        bioInput.onkeyup = function() {
+            const len = this.value.length;
+            const counter = document.getElementById('bio-counter');
+            if(counter) {
+                counter.innerText = len + "/20";
+                counter.style.color = len >= 20 ? "green" : "red";
+            }
+        };
+        bioInput.onkeyup(); 
+    }
 }
 
 // Função para Salvar e Sincronizar Tudo (Cadastro Inicial)
