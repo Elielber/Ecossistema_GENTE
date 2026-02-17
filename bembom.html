@@ -7653,46 +7653,47 @@ async function compartilharOportunidade(idDemanda, titulo, cidade, especialidade
     const btn = event.currentTarget;
     const txtOriginal = btn.innerText;
     btn.innerText = "⏳ Criando...";
+    btn.disabled = true;
 
-    // --- LOGICA DE PERSONALIZAÇÃO AUTOMÁTICA ---
-    // Identifica a vertical real baseada na especialidade (ex: Mecânico -> AUTO)
-    const idVerticalReal = encontrarGrupoPorServico(especialidade);
+    try {
+        // Usa diretamente o 'grupo' que veio da demanda para pegar o tema correto
+        // VERTICAIS['AUTO'], VERTICAIS['OBRA'], etc.
+        const temaVertical = VERTICAIS[grupo] || VERTICAIS['OBRA']; 
+        const baseUrl = window.location.href.split('?')[0];
+        
+        // Monta o link usando o grupo e a especialidade garantidos da demanda
+        const linkOportunidade = `${baseUrl}?app=${grupo}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(grupo)}&cat=${encodeURIComponent(especialidade)}`;
 
-    const temaVertical = VERTICAIS[idVerticalReal]; 
-    
-    const baseUrl = window.location.href.split('?')[0];
-    
-    // O link agora carrega o AppID correto da vertical da oportunidade:
-const linkOportunidade = `${baseUrl}?app=${idVerticalReal}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(idVerticalReal)}&cat=${encodeURIComponent(especialidade)}`;
+        // Gera a imagem passando os dados exatos do tema
+        const imgData = await gerarImagemOportunidade({
+            titulo: titulo,
+            especialidade: especialidade,
+            local: cidade,
+            cor: temaVertical.cor,
+            icone: temaVertical.icone
+        });
 
-    // Gera a imagem usando o tema detectado
-    const imgData = await gerarImagemOportunidade({
-        titulo: titulo,
-        especialidade: especialidade,
-        local: cidade,
-        cor: temaVertical.cor,   // Passa a cor correta para o Canvas
-        icone: temaVertical.icone // Passa o ícone correto para o Canvas
-    });
+        const res = await fetch(imgData);
+        const blob = await res.blob();
+        const file = new File([blob], 'oportunidade.jpg', { type: 'image/jpeg' });
 
-    const res = await fetch(imgData);
-    const blob = await res.blob();
-    const file = new File([blob], 'oportunidade.jpg', { type: 'image/jpeg' });
-
-    const textoLegenda = `${linkOportunidade}`;
-
-    if (navigator.share && navigator.canShare({ files: [file] })) {
-        try {
+        if (navigator.share && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
-                text: textoLegenda
+                text: linkOportunidade // Legenda apenas com o link, como na sua versão
             });
-        } catch (err) { console.log("Cancelado"); }
-    } else {
-        window.open(`https://wa.me/?text=${encodeURIComponent(textoLegenda)}`, '_blank');
+        } else {
+            window.open(`https://wa.me/?text=${encodeURIComponent(linkOportunidade)}`, '_blank');
+        }
+
+    } catch (err) {
+        console.error("Erro no compartilhamento:", err);
+    } finally {
+        btn.innerText = txtOriginal;
+        btn.disabled = false;
     }
-    
-    btn.innerText = txtOriginal;
 }
+
 
 
 async function gerarImagemOportunidade(dados) {
