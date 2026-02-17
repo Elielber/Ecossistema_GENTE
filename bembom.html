@@ -2903,9 +2903,9 @@ else if (d.status === 'ABERTA') {
     botoesAcao = `
     <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px; display:flex; gap:10px;">
         <button class="btn btn-sm" style="flex:1; background:#25D366; color:white; border:none; font-weight:bold;" 
-    onclick="gerarImagemOportunidade('${d.id}', '${tituloSafe}', '${cidadeValor}', '${categoriaValor}', '${grupoValor}')">
-    📸 Divulgar
-</button>
+            onclick="compartilharOportunidade('${d.id}', '${tituloSafe}', '${cidadeValor}', '${categoriaValor}', '${grupoValor}')">
+            📢 Status
+        </button>
         <button class="btn btn-sm btn-outline" style="flex:1; border-color:#95a5a6; color:#95a5a6;" 
             onclick="cancelarPedidoCliente('${d.id}', '${tituloSafe}')">
             🗑️ Excluir
@@ -7673,101 +7673,6 @@ function compartilharOportunidade(idDemanda, titulo, cidade, especialidade, grup
     } else {
         window.open(`https://wa.me/?text=${encodeURIComponent(textoCompartilhar + "\n" + linkOportunidade)}`, '_blank');
     }
-}
-function gerarImagemOportunidade(idDemanda, titulo, cidade, especialidade, grupo) {
-    const btn = event.currentTarget;
-    const txtOriginal = btn.innerText;
-    btn.innerText = "⏳ Criando Card...";
-    btn.disabled = true;
-
-    // Configuração do Canvas (Quadrado para Redes Sociais)
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = 1080;
-    canvas.height = 1080;
-
-    // 1. FUNDO E CORES (Baseado na Vertical do App)
-    const corDestaque = APP.cor || "#2c3e50";
-    const grd = ctx.createLinearGradient(0, 0, 0, 1080);
-    grd.addColorStop(0, "#ffffff"); 
-    grd.addColorStop(1, "#f8f9fa");
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, 1080, 1080);
-
-    // Faixa Superior de Destaque
-    ctx.fillStyle = corDestaque;
-    ctx.fillRect(0, 0, 1080, 220);
-
-    // 2. CABEÇALHO
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 45px sans-serif";
-    ctx.fillText("ESTOU PRECISANDO DE:", 540, 100);
-    
-    ctx.font = "bold 85px sans-serif";
-    ctx.fillText(especialidade.toUpperCase(), 540, 185);
-
-    // 3. CORPO (DETALHES DO SERVIÇO)
-    ctx.fillStyle = "#2c3e50";
-    ctx.font = "bold 60px sans-serif";
-    // Título do Serviço (Wrap text para não estourar)
-    wrapText(ctx, titulo, 540, 380, 900, 75);
-
-    // Localização com Ícone
-    ctx.fillStyle = "#7f8c8d";
-    ctx.font = "50px sans-serif";
-    ctx.fillText(`📍 ${cidade}`, 540, 580);
-
-    // 4. CALL TO ACTION (Chamada para Ação)
-    // Box de destaque para o link
-    ctx.fillStyle = "#e3f2fd";
-    ctx.roundRect ? ctx.fillRoundedRect?.(140, 680, 800, 250, 30) : ctx.fillRect(140, 680, 800, 250); 
-    
-    ctx.fillStyle = "#1565c0";
-    ctx.font = "bold 40px sans-serif";
-    ctx.fillText("QUER ENVIAR UM ORÇAMENTO?", 540, 750);
-    
-    ctx.fillStyle = corDestaque;
-    ctx.font = "bold 55px sans-serif";
-    ctx.fillText("ACESSE O LINK NA LEGENDA", 540, 840);
-
-    // 5. RODAPÉ INSTITUCIONAL
-    ctx.fillStyle = "#bdc3c7";
-    ctx.font = "30px sans-serif";
-    ctx.fillText(`Publicado via ${APP.nome} • ${APP.icone}`, 540, 1020);
-
-    // 6. EXPORTAÇÃO E COMPARTILHAMENTO
-    canvas.toBlob(async function(blob) {
-        const file = new File([blob], "oportunidade.jpg", { type: "image/jpeg" });
-        
-        // Link dinâmico (Mesma lógica da sua função original)
-        const baseUrl = window.location.href.split('?')[0];
-        const params = new URLSearchParams(window.location.search);
-        const appID = params.get('app') || localStorage.getItem('PB_APP_ID') || 'OBRA';
-        const linkOportunidade = `${baseUrl}?app=${appID}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(grupo)}&cat=${encodeURIComponent(especialidade)}`;
-
-        const textoLegenda = `${linkOportunidade}`;
-
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-            try {
-                await navigator.share({
-                    files: [file],
-                    title: `Serviço: ${titulo}`,
-                    text: textoLegenda
-                });
-            } catch (err) { console.log("Cancelado"); }
-        } else {
-            // Download fallback
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = "oportunidade-servico.jpg";
-            a.click();
-            alert("Imagem gerada! Copie o link da demanda para postar junto.");
-        }
-        
-        btn.innerText = txtOriginal;
-        btn.disabled = false;
-    }, 'image/jpeg', 0.9);
 }
 
 
