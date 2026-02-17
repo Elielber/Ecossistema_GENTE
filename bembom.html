@@ -7650,29 +7650,175 @@ function carregarDadosCliente() {
 }
 // --- FUNÇÕES DE COMPARTILHAMENTO PÚBLICO (MARKETING) ---
 // Atualize a assinatura da função para aceitar 'grupo'
-function compartilharOportunidade(idDemanda, titulo, cidade, especialidade, grupo) {
+async function compartilharOportunidade(idDemanda, titulo, cidade, especialidade, grupo) {
+
     const baseUrl = window.location.href.split('?')[0];
     const params = new URLSearchParams(window.location.search);
     const appID = params.get('app') || localStorage.getItem('PB_APP_ID') || 'OBRA';
 
-    // Agora o link inclui &grupo= e &cat= de forma explícita
     const linkOportunidade = `${baseUrl}?app=${appID}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(grupo)}&cat=${encodeURIComponent(especialidade)}`;
 
-    const textoCompartilhar = `🚀 *OPORTUNIDADE DE SERVIÇO PARA:* \n` +
-        `👉 *${especialidade.toUpperCase()}*\n\n` +
-        `Estou precisando de: *${titulo}*\n` +
-        `📍 Local: ${cidade}\n\n` +
-        `Profissionais interessados podem enviar o orçamento pelo link abaixo:`;
+    const textoCompartilhar =linkOportunidade;
 
-    if (navigator.share) {
-        navigator.share({
-            title: `Serviço: ${titulo}`,
-            text: textoCompartilhar,
-            url: linkOportunidade 
-        }).catch(console.error);
-    } else {
-        window.open(`https://wa.me/?text=${encodeURIComponent(textoCompartilhar + "\n" + linkOportunidade)}`, '_blank');
+    try {
+
+        // Se o dispositivo suporta compartilhamento com arquivos
+        if (navigator.canShare && navigator.canShare({ files: [] })) {
+
+            const imagem = await gerarImagemOportunidade(
+                titulo,
+                cidade,
+                especialidade,
+                grupo
+            );
+
+            await navigator.share({
+                title: `Serviço: ${titulo}`,
+                text: textoCompartilhar,
+                files: [imagem]
+            });
+
+        } else if (navigator.share) {
+
+            // Fallback: compartilha só texto + link
+            await navigator.share({
+                title: `Serviço: ${titulo}`,
+                text: textoCompartilhar
+            });
+
+        } else {
+
+            // Fallback final: abre WhatsApp Web
+            window.open(
+                `https://wa.me/?text=${encodeURIComponent(textoCompartilhar)}`,
+                '_blank'
+            );
+
+        }
+
+    } catch (err) {
+        console.error("Erro ao compartilhar:", err);
     }
+}
+
+async function gerarImagemOportunidade(titulo, cidade, especialidade, grupo) {
+
+    const vertical = VERTICAIS[grupo] || {};
+    const cor = vertical.cor || "#c0392b";
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = 1080;
+    canvas.height = 1080;
+
+    // Fundo levemente acinzentado
+    ctx.fillStyle = "#f4f4f4";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Moldura externa
+    ctx.strokeStyle = cor;
+    ctx.lineWidth = 30;
+    ctx.strokeRect(0, 0, canvas.width, canvas.height);
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#333";
+
+    // =========================
+    // Cabeçalho
+    // =========================
+    ctx.font = "bold 48px Arial";
+    ctx.fillStyle = cor;
+    ctx.fillText(
+        `OPORTUNIDADE EM ${cidade.toUpperCase()}`,
+        canvas.width / 2,
+        180
+    );
+
+    // =========================
+    // PARA:
+    // =========================
+    ctx.font = "bold 40px Arial";
+    ctx.fillStyle = "#444";
+    ctx.fillText("PARA:", canvas.width / 2, 300);
+
+    // =========================
+    // Faixa Especialidade
+    // =========================
+    const faixaY = 340;
+    const faixaAltura = 130;
+
+    ctx.fillStyle = cor;
+    ctx.fillRect(140, faixaY, 800, faixaAltura);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 70px Arial";
+    ctx.fillText(
+        especialidade.toUpperCase(),
+        canvas.width / 2,
+        faixaY + 85
+    );
+
+    // =========================
+    // Título do Serviço (com quebra automática)
+    // =========================
+    ctx.fillStyle = "#333";
+    ctx.font = "50px Arial";
+
+    function quebrarLinha(texto, maxWidth) {
+        const palavras = texto.split(" ");
+        let linhas = [];
+        let linhaAtual = "";
+
+        for (let palavra of palavras) {
+            const testeLinha = linhaAtual + palavra + " ";
+            const largura = ctx.measureText(testeLinha).width;
+            if (largura > maxWidth && linhaAtual !== "") {
+                linhas.push(linhaAtual);
+                linhaAtual = palavra + " ";
+            } else {
+                linhaAtual = testeLinha;
+            }
+        }
+        linhas.push(linhaAtual);
+        return linhas;
+    }
+
+    const linhasTitulo = quebrarLinha(titulo, 800);
+    let yTexto = 600;
+
+    linhasTitulo.forEach(linha => {
+        ctx.fillText(linha.trim(), canvas.width / 2, yTexto);
+        yTexto += 60;
+    });
+
+    // =========================
+    // Linha de urgência
+    // =========================
+    ctx.font = "italic 40px Arial";
+    ctx.fillStyle = "#555";
+    ctx.fillText(
+        "Cliente buscando profissional agora",
+        canvas.width / 2,
+        820
+    );
+
+    // =========================
+    // CTA Final
+    // =========================
+    ctx.font = "bold 42px Arial";
+    ctx.fillStyle = cor;
+    ctx.fillText(
+        "ENVIE SEU ORÇAMENTO NO LINK ABAIXO",
+        canvas.width / 2,
+        920
+    );
+
+    return new Promise(resolve => {
+        canvas.toBlob(blob => {
+            resolve(new File([blob], "oportunidade.png", { type: "image/png" }));
+        });
+    });
 }
 
 
