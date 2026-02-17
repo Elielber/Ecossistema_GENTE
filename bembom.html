@@ -7656,15 +7656,16 @@ async function compartilharOportunidade(idDemanda, titulo, cidade, especialidade
     btn.disabled = true;
 
     try {
-        // Usa diretamente o 'grupo' que veio da demanda para pegar o tema correto
-        // VERTICAIS['AUTO'], VERTICAIS['OBRA'], etc.
+        // 1. OBTÉM O TEMA DIRETAMENTE DO GRUPO DA DEMANDA
+        // Se a demanda é de AUTO, o grupo será 'AUTO' e pegará a cor vermelha.
         const temaVertical = VERTICAIS[grupo] || VERTICAIS['OBRA']; 
         const baseUrl = window.location.href.split('?')[0];
         
-        // Monta o link usando o grupo e a especialidade garantidos da demanda
+        // 2. CONSTRUÇÃO DO LINK (Corrigida para forçar a vertical no destino)
+        // O parâmetro 'app' deve receber o grupo para que o tema carregue corretamente.
         const linkOportunidade = `${baseUrl}?app=${grupo}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(grupo)}&cat=${encodeURIComponent(especialidade)}`;
 
-        // Gera a imagem passando os dados exatos do tema
+        // 3. GERAÇÃO DA IMAGEM COM O TEMA CORRETO
         const imgData = await gerarImagemOportunidade({
             titulo: titulo,
             especialidade: especialidade,
@@ -7677,10 +7678,11 @@ async function compartilharOportunidade(idDemanda, titulo, cidade, especialidade
         const blob = await res.blob();
         const file = new File([blob], 'oportunidade.jpg', { type: 'image/jpeg' });
 
+        // 4. COMPARTILHAMENTO
         if (navigator.share && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
-                text: linkOportunidade // Legenda apenas com o link, como na sua versão
+                text: `${linkOportunidade}`
             });
         } else {
             window.open(`https://wa.me/?text=${encodeURIComponent(linkOportunidade)}`, '_blank');
