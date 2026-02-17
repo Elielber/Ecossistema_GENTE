@@ -7452,55 +7452,157 @@ function compartilharFraseImagem() {
     // --- 6. RODAPÉ (MODIFICADO AQUI) ---
     ctx.fillStyle = "rgba(255,255,255,0.8)";
     ctx.font = "28px sans-serif";
+
+
+bembom.html
+HTML 356.18KB
+Pensando aqui com os meus botões...
+E se ao compartilhar a frase do dia fosse gerado várias imagens, uma da frase do dia e o link para o app (vertical) como já está, e outras imagens com as oportunidades reais usando o texto do link de oportunidade. Caso ainda não haja oportunidades para aquele app (vertical) a imagem do link de oportunidade traz um convite ao cadastro para ver as oportunidades? Verifique se os trechos de códigos abaixo implementam corretamente esta ideia.
+
+1-
+// Filtra e embaralha oportunidades do back-end (listaDemandasCache)
+function obterOportunidadesAleatoriasParaMarketing() {
+    const params = new URLSearchParams(window.location.search);
+    const appAtualID = params.get('app') || localStorage.getItem('PB_APP_ID') || 'OBRA';
     
-    // 1. Pega o texto da vertical (Ex: "Saúde e Bem-estar")
-    let textoVertical = "";
-    const elDescLogin = document.getElementById('app-desc-login');
-    if (elDescLogin) {
-        textoVertical = elDescLogin.innerText;
+    if (!VERTICAIS[appAtualID]) return [];
+
+    const especialidadesDaVertical = [];
+    Object.values(VERTICAIS[appAtualID].categorias).forEach(lista => especialidadesDaVertical.push(...lista));
+
+    // Filtra demandas ABERTAS que pertencem à vertical atual
+    let filtradas = listaDemandasCache.filter(d => 
+        (d.status === 'ABERTA' || d.situacao === 'ABERTA') && 
+        especialidadesDaVertical.includes(d.cat)
+    );
+
+    // Embaralha (Fisher-Yates) para garantir aleatoriedade no marketing
+    for (let i = filtradas.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [filtradas[i], filtradas[j]] = [filtradas[j], filtradas[i]];
     }
 
-    // 2. Monta a frase completa
-    const textoRodape = `Encontre Profissionais Qualificados em ${textoVertical}`;
-
-    // 3. Desenha no canvas
-    ctx.fillText(textoRodape, 540, 980);
-    
-    // Link visual (Opcional, logo abaixo)
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 30px sans-serif";
-    
-
-    // --- 7. EXPORTAÇÃO ---
-    canvas.toBlob(async function(blob) {
-        const fileName = `frase-${APP.nome.replace(/\s+/g, '-').toLowerCase()}.jpg`; 
-        const file = new File([blob], fileName, { type: "image/jpeg" });
-        const linkAtual = window.location.href;
-
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-            try {
-                await navigator.share({
-                    files: [file],
-                    title: `Frase do Dia - ${APP.nome}`, 
-                    text: `${linkAtual}` 
-                });
-            } catch (err) {
-                console.log("Compartilhamento cancelado.");
-            }
-        } else {
-            // Fallback Desktop
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = fileName;
-            a.click();
-            // alert("Imagem salva! Compartilhe manualmente.");
-        }
-        
-        btn.innerText = txtOriginal;
-        btn.disabled = false;
-    }, 'image/jpeg', 0.9);
+    return filtradas.slice(0, 3); // Limite de 3 conforme solicitado
 }
 
+// Gera o link de autocompletação para o novo prestador
+function montarLinkOportunidade(op) {
+    const baseUrl = window.location.href.split('?')[0];
+    const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
+    return `${baseUrl}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo)}&cat=${encodeURIComponent(op.cat)}`;
+}
+
+// Disparo isolado para garantir legenda exclusiva por imagem
+async function dispararShareIndividual(blob, fileName, text) {
+    const file = new File([blob], fileName, { type: "image/jpeg" });
+    if (navigator.share && navigator.canShare({ files: [file] })) {
+        return await navigator.share({ files: [file], text: text });
+    } else {
+        // Fallback: Download se o navegador não suportar share de arquivo
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = fileName;
+        a.click();
+    }
+}
+
+
+// Card 1: Frase do Dia
+async function gerarBlobFrase() {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1080; canvas.height = 1080;
+    const grd = ctx.createLinearGradient(0, 0, 0, 1080);
+    grd.addColorStop(0, "#2c3e50"); grd.addColorStop(1, "#000000");
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, 1080, 1080);
+    ctx.fillStyle = APP.cor; ctx.fillRect(0, 0, 1080, 25);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffffff";
+    ctx.font = "italic 55px serif";
+    wrapText(ctx, `"${fraseAtualObj.frase}"`, 540, 450, 900, 75);
+    ctx.fillStyle = APP.cor; ctx.font = "bold 40px sans-serif";
+    ctx.fillText(`— ${fraseAtualObj.autor}`, 540, 850);
+    return new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
+}
+
+// Cards 2 a 4: Oportunidades (Profissão em destaque)
+async function gerarCardOportunidadeImagem(op) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1080; canvas.height = 1080;
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, 1080, 1080);
+    ctx.fillStyle = APP.cor; ctx.fillRect(0, 0, 1080, 280);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 50px sans-serif"; ctx.fillText("🚀 NOVA OPORTUNIDADE", 540, 120);
+    ctx.font = "40px sans-serif"; ctx.fillText(`EM ${op.cidade.toUpperCase()}`, 540, 190);
+    ctx.fillStyle = "#2c3e50"; ctx.font = "bold 130px sans-serif";
+    ctx.fillText((op.cat || "").toUpperCase(), 540, 580);
+    ctx.strokeStyle = APP.cor; ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.moveTo(300, 630); ctx.lineTo(780, 630); ctx.stroke();
+    ctx.fillStyle = "#7f8c8d"; ctx.font = "45px sans-serif";
+    wrapText(ctx, op.titulo, 540, 750, 900, 65);
+    ctx.fillStyle = "#27ae60"; ctx.font = "bold 45px sans-serif";
+    ctx.fillText("CLIQUE NO LINK DA LEGENDA ⬇️", 540, 1000);
+    return new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
+}
+
+// Card 5: Totalizador ou Convite
+async function gerarCardFinalMarketing(total) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1080; canvas.height = 1080;
+    ctx.fillStyle = total > 0 ? "#2c3e50" : APP.cor;
+    ctx.fillRect(0, 0, 1080, 1080);
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffffff";
+    if (total > 0) {
+        ctx.fillStyle = "#f1c40f"; ctx.font = "bold 90px sans-serif"; ctx.fillText("MERCADO ATIVO", 540, 300);
+        ctx.fillStyle = "#ffffff"; ctx.font = "bold 300px sans-serif"; ctx.fillText(total, 540, 650);
+        ctx.font = "bold 60px sans-serif"; ctx.fillText("PEDIDOS DISPONÍVEIS", 540, 800);
+    } else {
+        ctx.font = "bold 80px sans-serif"; ctx.fillText("TRABALHE CONOSCO", 540, 450);
+        ctx.font = "45px sans-serif"; ctx.fillText(`Receba pedidos de ${APP.nome}!`, 540, 600);
+    }
+    return new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
+}
+
+
+
+async function compartilharFraseImagem() {
+    const oportunidades = obterOportunidadesAleatoriasParaMarketing();
+    const btn = event.currentTarget;
+    const txtOriginal = btn.innerText;
+    btn.innerText = "⏳ Preparando..."; btn.disabled = true;
+
+    try {
+        const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
+
+        // 1. Enviar Frase
+        const blobFrase = await gerarBlobFrase();
+        const legendaFrase = `💡 *FRASE DO DIA*\n"${fraseAtualObj.frase}"\n\n🚀 Gestão para Autônomos: ${window.location.href.split('?')[0]}?app=${appID}`;
+        await dispararShareIndividual(blobFrase, "frase.jpg", legendaFrase);
+
+        // 2. Enviar Oportunidades (Loop Sequencial)
+        for (const op of oportunidades) {
+            if (confirm(`Gerar card para: ${op.cat}?`)) {
+                const blobOp = await gerarCardOportunidadeImagem(op);
+                const linkOp = montarLinkOportunidade(op);
+                const legendaOp = `🚀 OPORTUNIDADE: ${op.cat.toUpperCase()}\n\n🔗 Clique para ver e orçar: ${linkOp}`;
+                await dispararShareIndividual(blobOp, `op-${op.id}.jpg`, legendaOp);
+            }
+        }
+
+        // 3. Enviar Card Final
+        const total = listaDemandasCache.filter(d => (d.status === 'ABERTA' || d.situacao === 'ABERTA')).length;
+        const blobFinal = await gerarCardFinalMarketing(oportunidades.length > 0 ? total : 0);
+        const legendaFinal = total > 0 ? `📈 ${total} pedidos ativos! Cadastre-se: ${window.location.href.split('?')[0]}?app=${appID}` : `🤝 Seja o primeiro! Cadastre-se: ${window.location.href.split('?')[0]}?app=${appID}`;
+        await dispararShareIndividual(blobFinal, "mercado.jpg", legendaFinal);
+
+    } catch (err) {
+        console.warn("Fluxo finalizado ou cancelado.");
+    } finally {
+        btn.innerText = txtOriginal; btn.disabled = false;
+    }
+}
+	
 function abrirModalSuporte() {
     document.getElementById('modal-suporte').style.display = 'block';
 }
