@@ -7688,58 +7688,58 @@ async function gerarImagemOportunidade(dados) {
     canvas.height = 1080;
     const ctx = canvas.getContext('2d');
 
-    // Recupera cor e ícone da vertical cadastrada no seu código
-    const infoVertical = VERTICAIS[dados.grupo] || VERTICAIS['OBRA'];
+    // --- LÓGICA DE IDENTIFICAÇÃO DA VERTICAL ---
+    // Tenta encontrar o grupo pai (ex: encontrar que "Estrutura" pertence a "OBRA")
+    let idVertical = dados.grupo; 
+    if (!VERTICAIS[idVertical]) {
+        idVertical = encontrarGrupoPorServico(dados.especialidade) || 'OBRA';
+    }
+
+    const infoVertical = VERTICAIS[idVertical];
     const corVertical = infoVertical.cor;
     const iconeVertical = infoVertical.icone;
 
-    // --- FUNDO ESTILO CLASSIFICADOS ---
+    // --- DESENHO DO CARD ---
     ctx.fillStyle = "#fdfbf7"; 
     ctx.fillRect(0, 0, 1080, 1080);
 
-    // Borda na cor da vertical
+    // Borda dupla na cor da vertical
     ctx.strokeStyle = corVertical;
     ctx.lineWidth = 15;
     ctx.strokeRect(40, 40, 1000, 1000);
+    ctx.lineWidth = 5;
+    ctx.strokeRect(65, 65, 950, 950);
 
-    // --- 1. "SERVIÇO PARA" (CABEÇALHO) ---
+    // 1. Título com ícone dinâmico
     ctx.textAlign = "center";
     ctx.fillStyle = "#333";
     ctx.font = "bold 45px sans-serif";
     ctx.fillText(`${iconeVertical} OPORTUNIDADE PARA:`, 540, 180);
 
-    // --- 2. [ESPECIALIDADE] (BOX COLORIDO) ---
+    // 2. Especialidade (Box com cor da vertical)
     ctx.fillStyle = corVertical;
-    // Box dinâmico para a especialidade
     ctx.fillRect(100, 230, 880, 200); 
-    
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 75px sans-serif";
-    // Quebra de linha para especialidades longas (ex: Impermeabilização)
-    wrapText(ctx, dados.especialidade.toUpperCase(), 540, 320, 800, 85);
+    wrapText(ctx, dados.especialidade.toUpperCase(), 540, 325, 800, 85);
 
-    // --- 3. PARA [TITULO DA DEMANDA] ---
-    ctx.textAlign = "center";
+    // 3. Título da demanda (O que precisa ser feito)
     ctx.fillStyle = "#2c3e50";
     ctx.font = "bold 40px sans-serif";
     ctx.fillText("", 540, 520);
-    
     ctx.fillStyle = "#444";
     ctx.font = "50px sans-serif";
-    // Título da demanda com quebra de linha
     wrapText(ctx, dados.titulo, 540, 590, 850, 60);
 
-    // --- 4. EM [LOCALIDADE] ---
+    // 4. Localidade
     ctx.fillStyle = "#2c3e50";
     ctx.font = "bold 40px sans-serif";
     ctx.fillText("EM:", 540, 780);
-    
     ctx.fillStyle = "#333";
     ctx.font = "bold 55px sans-serif";
-    // Localidade com quebra de linha (para nomes de cidades/bairros longos)
     wrapText(ctx, dados.local, 540, 850, 850, 65);
 
-    // --- 5. CHAMADA DE AÇÃO ---
+    // 5. Rodapé
     ctx.fillStyle = corVertical;
     ctx.font = "bold 35px sans-serif";
     ctx.fillText("ENVIE SEU ORÇAMENTO NO LINK ABAIXO", 540, 1010);
