@@ -7656,16 +7656,16 @@ async function compartilharOportunidade(idDemanda, titulo, cidade, especialidade
     btn.disabled = true;
 
     try {
-        // 1. OBTÉM O TEMA DIRETAMENTE DO GRUPO DA DEMANDA
-        // Se a demanda é de AUTO, o grupo será 'AUTO' e pegará a cor vermelha.
+        // Identifica a vertical (ex: SAUDE, AUTO) para definir cores e ícones na imagem
         const temaVertical = VERTICAIS[grupo] || VERTICAIS['OBRA']; 
         const baseUrl = window.location.href.split('?')[0];
         
-        // 2. CONSTRUÇÃO DO LINK (Corrigida para forçar a vertical no destino)
-        // O parâmetro 'app' deve receber o grupo para que o tema carregue corretamente.
+        // 1. PERSONALIZAÇÃO DO LINK:
+        // Injetamos o grupo e a categoria para que o 'ver_demanda' saiba o contexto ao abrir
         const linkOportunidade = `${baseUrl}?app=${grupo}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(grupo)}&cat=${encodeURIComponent(especialidade)}`;
 
-        // 3. GERAÇÃO DA IMAGEM COM O TEMA CORRETO
+        // 2. GERAÇÃO DA IMAGEM:
+        // Passamos os dados da demanda para a função de desenho
         const imgData = await gerarImagemOportunidade({
             titulo: titulo,
             especialidade: especialidade,
@@ -7678,14 +7678,17 @@ async function compartilharOportunidade(idDemanda, titulo, cidade, especialidade
         const blob = await res.blob();
         const file = new File([blob], 'oportunidade.jpg', { type: 'image/jpeg' });
 
-        // 4. COMPARTILHAMENTO
+        // Texto de chamada para o WhatsApp
+        const mensagemTexto = `📢 *NOVA OPORTUNIDADE: ${especialidade.toUpperCase()}*\n\n📍 Local: ${cidade}\n📝 Serviço: ${titulo}\n\nVeja os detalhes e envie seu orçamento pelo link abaixo:\n${linkOportunidade}`;
+
         if (navigator.share && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
-                text: `${linkOportunidade}`
+                text: mensagemTexto 
             });
         } else {
-            window.open(`https://wa.me/?text=${encodeURIComponent(linkOportunidade)}`, '_blank');
+            // Fallback caso o navegador não suporte compartilhamento de arquivos
+            window.open(`https://wa.me/?text=${encodeURIComponent(mensagemTexto)}`, '_blank');
         }
 
     } catch (err) {
@@ -7704,52 +7707,56 @@ async function gerarImagemOportunidade(dados) {
     canvas.width = 1080;
     canvas.height = 1080;
 
-    // Usa a cor e ícone detectados na função de compartilhamento
+    // Cores e Ícones dinâmicos baseados no grupo da demanda
     const corTema = dados.cor;
     const iconeTema = dados.icone;
 
+    // Fundo do Cartaz
     ctx.fillStyle = "#fdfbf7"; 
     ctx.fillRect(0, 0, 1080, 1080);
 
+    // Moldura na cor da vertical
     ctx.strokeStyle = corTema; 
     ctx.lineWidth = 20;
     ctx.strokeRect(40, 40, 1000, 1000);
 
+    // Cabeçalho
     ctx.textAlign = "center";
     ctx.fillStyle = "#333";
     ctx.font = "bold 45px sans-serif";
     ctx.fillText(`${iconeTema} SERVIÇO PARA:`, 540, 180);
 
+    // Destaque da Especialidade (Faixa Colorida)
     ctx.fillStyle = corTema;
-    ctx.fillRect(100, 230, 880, 200); 
+    ctx.fillRect(100, 230, 880, 180); 
     
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 75px sans-serif";
-    wrapText(ctx, dados.especialidade.toUpperCase(), 540, 325, 800, 85);
+    // Centraliza o texto da especialidade (ex: ELETRICISTA)
+    wrapText(ctx, dados.especialidade.toUpperCase(), 540, 340, 800, 85);
 
-    ctx.fillStyle = "#2c3e50";
-    ctx.font = "bold 40px sans-serif";
-    ctx.fillText("", 540, 520);
-    
+    // Título/Descrição do Serviço
     ctx.fillStyle = "#444";
     ctx.font = "50px sans-serif";
-    wrapText(ctx, dados.titulo, 540, 590, 850, 60);
+    wrapText(ctx, dados.titulo, 540, 550, 850, 65);
 
+    // Localização
     ctx.fillStyle = "#2c3e50";
     ctx.font = "bold 40px sans-serif";
-    ctx.fillText("AQUI EM:", 540, 780);
+    ctx.fillText("LOCAL:", 540, 780);
     
     ctx.fillStyle = "#333";
-    ctx.font = "bold 55px sans-serif";
-    wrapText(ctx, dados.local, 540, 850, 850, 65);
+    ctx.font = "bold 60px sans-serif";
+    wrapText(ctx, dados.local, 540, 860, 850, 70);
 
+    // Rodapé com Chamada de Ação
     ctx.fillStyle = corTema;
     ctx.font = "bold 35px sans-serif";
-    ctx.fillText("ENVIE SEU ORÇAMENTO NO LINK ABAIXO", 540, 1010);
-
+    ctx.fillText("ENVIE SEU ORÇAMENTO PELO LINK NA LEGENDA", 540, 1010);
 
     return canvas.toDataURL("image/jpeg", 0.9);
 }
+
 
 
 
