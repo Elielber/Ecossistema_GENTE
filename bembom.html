@@ -7654,42 +7654,45 @@ async function compartilharOportunidade(idDemanda, titulo, cidade, especialidade
     const txtOriginal = btn.innerText;
     btn.innerText = "⏳ Criando...";
 
+    // --- LOGICA DE PERSONALIZAÇÃO AUTOMÁTICA ---
+    // Identifica a vertical real baseada na especialidade (ex: Mecânico -> AUTO)
+    const idVerticalReal = encontrarGrupoPorServico(especialidade) || 'OBRA';
+    const temaVertical = VERTICAIS[idVerticalReal]; 
+    
     const baseUrl = window.location.href.split('?')[0];
-    const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
-    const linkOportunidade = `${baseUrl}?app=${appID}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(grupo)}&cat=${encodeURIComponent(especialidade)}`;
+    
+    // O link agora carrega o AppID correto da vertical da oportunidade
+    const linkOportunidade = `${baseUrl}?app=${idVerticalReal}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(idVerticalReal)}&cat=${encodeURIComponent(especialidade)}`;
 
-    // 1. Gera o DataURL da imagem
+    // Gera a imagem usando o tema detectado
     const imgData = await gerarImagemOportunidade({
         titulo: titulo,
         especialidade: especialidade,
         local: cidade,
-        grupo: grupo
+        cor: temaVertical.cor,   // Passa a cor correta para o Canvas
+        icone: temaVertical.icone // Passa o ícone correto para o Canvas
     });
 
-    // 2. Transforma em arquivo (Blob para File)
     const res = await fetch(imgData);
     const blob = await res.blob();
     const file = new File([blob], 'oportunidade.jpg', { type: 'image/jpeg' });
 
     const textoLegenda = `🚀 Nova oportunidade para ${especialidade} em ${cidade}!\n\nVeja os detalhes e envie seu orçamento aqui:\n${linkOportunidade}`;
 
-    // 3. Compartilhamento Nativo (Igual à Frase do Dia)
     if (navigator.share && navigator.canShare({ files: [file] })) {
         try {
             await navigator.share({
                 files: [file],
                 text: textoLegenda
             });
-        } catch (err) {
-            console.log("Compartilhamento cancelado");
-        }
+        } catch (err) { console.log("Cancelado"); }
     } else {
-        // Fallback: Abre apenas o link se o navegador não suportar envio de arquivo
         window.open(`https://wa.me/?text=${encodeURIComponent(textoLegenda)}`, '_blank');
     }
     
     btn.innerText = txtOriginal;
 }
+
 
 async function gerarImagemOportunidade(dados) {
     const canvas = document.createElement('canvas');
@@ -7697,31 +7700,29 @@ async function gerarImagemOportunidade(dados) {
     canvas.width = 1080;
     canvas.height = 1080;
 
-    // --- FUNDO (Estilo Papel/Classificados) ---
+    // Usa a cor e ícone detectados na função de compartilhamento
+    const corTema = dados.cor;
+    const iconeTema = dados.icone;
+
     ctx.fillStyle = "#fdfbf7"; 
     ctx.fillRect(0, 0, 1080, 1080);
 
-    // --- PERSONALIZAÇÃO VIA APP (Sua Solução) ---
-    // Utilizamos a cor e o ícone da vertical ativa no momento
-    ctx.strokeStyle = APP.cor; 
+    ctx.strokeStyle = corTema; 
     ctx.lineWidth = 20;
     ctx.strokeRect(40, 40, 1000, 1000);
 
-    // 1. Cabeçalho com Ícone da Vertical
     ctx.textAlign = "center";
     ctx.fillStyle = "#333";
     ctx.font = "bold 45px sans-serif";
-    ctx.fillText(`${APP.icone} SERVIÇO PARA:`, 540, 180);
+    ctx.fillText(`${iconeTema} SERVIÇO PARA:`, 540, 180);
 
-    // 2. Especialidade (Box com a cor da Vertical ativa)
-    ctx.fillStyle = APP.cor;
+    ctx.fillStyle = corTema;
     ctx.fillRect(100, 230, 880, 200); 
     
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 75px sans-serif";
     wrapText(ctx, dados.especialidade.toUpperCase(), 540, 325, 800, 85);
 
-    // 3. Título da Demanda
     ctx.fillStyle = "#2c3e50";
     ctx.font = "bold 40px sans-serif";
     ctx.fillText("PARA:", 540, 520);
@@ -7730,7 +7731,6 @@ async function gerarImagemOportunidade(dados) {
     ctx.font = "50px sans-serif";
     wrapText(ctx, dados.titulo, 540, 590, 850, 60);
 
-    // 4. Localidade
     ctx.fillStyle = "#2c3e50";
     ctx.font = "bold 40px sans-serif";
     ctx.fillText("EM:", 540, 780);
@@ -7739,8 +7739,7 @@ async function gerarImagemOportunidade(dados) {
     ctx.font = "bold 55px sans-serif";
     wrapText(ctx, dados.local, 540, 850, 850, 65);
 
-    // 5. Chamada de Ação (Rodapé colorido)
-    ctx.fillStyle = APP.cor;
+    ctx.fillStyle = corTema;
     ctx.font = "bold 35px sans-serif";
     ctx.fillText("ENVIE SEU ORÇAMENTO NO LINK ABAIXO", 540, 1010);
 
