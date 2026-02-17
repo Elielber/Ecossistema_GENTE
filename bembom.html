@@ -339,7 +339,7 @@
         </div>
                 
         <div onclick="selecionarAppPortal('TREINA')" style="background: white; padding: 13px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); cursor: pointer; border-bottom: 4px solid #f1c40f; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
-            <div style="font-size: 2.5rem;">🎯</div>
+            <div style="font-size: 2.5rem;">🎓</div>
             <h3 style="margin: 10px 0 5px 0; color: #333; font-size:1rem;">Treina Bem</h3>
             <div style="font-size: 0.75rem; color: #999;">Treinamento e Capacitação</div>
         </div>
@@ -1488,7 +1488,7 @@ const VERTICAIS = {
         cor: "#c0392b", // Vermelho
         icone: "🚗",
         categorias: {
-            "Manutenção": ["Mecânico", "Auto Elétrica", "Borracheiro", "Auto Refrigeração"],
+            "Mecânica": ["Mecânico", "Auto Elétrica", "Borracheiro", "Auto Refrigeração"],
             "Estética": ["Lanternagem e Pintura", "Lava Jato"]
         }
     },
@@ -1496,7 +1496,7 @@ const VERTICAIS = {
         nome: "Treina Bem",
         titulo: "Treinamento e Capacitação",
         cor: "#f1c40f", // Amarelo
-        icone: "🎯",
+        icone: "🎓",
         categorias: {
             "Escolar": ["Reforço Escolar Matemática", "Reforço Escolar Matemática", "Idiomas"],
             "Esportes": ["Personal Trainer", "Artes Marciais"]
@@ -2903,9 +2903,9 @@ else if (d.status === 'ABERTA') {
     botoesAcao = `
     <div style="margin-top:15px; border-top:1px dashed #ccc; padding-top:10px; display:flex; gap:10px;">
         <button class="btn btn-sm" style="flex:1; background:#25D366; color:white; border:none; font-weight:bold;" 
-            onclick="compartilharOportunidade('${d.id}', '${tituloSafe}', '${cidadeValor}', '${categoriaValor}', '${grupoValor}')">
-            📢 Status
-        </button>
+    onclick="gerarImagemOportunidade('${d.id}', '${tituloSafe}', '${cidadeValor}', '${categoriaValor}', '${grupoValor}')">
+    📸 Divulgar
+</button>
         <button class="btn btn-sm btn-outline" style="flex:1; border-color:#95a5a6; color:#95a5a6;" 
             onclick="cancelarPedidoCliente('${d.id}', '${tituloSafe}')">
             🗑️ Excluir
@@ -7648,115 +7648,127 @@ function carregarDadosCliente() {
         }
     }
 }
-// --- FUNÇÕES DE COMPARTILHAMENTO PÚBLICO (MARKETING) --
-async function compartilharOportunidade(idDemanda, titulo, cidade, especialidade, grupo) {
-    const btn = event.currentTarget;
-    const txtOriginal = btn.innerText;
-    btn.innerText = "⏳ Criando...";
-    btn.disabled = true;
+// --- FUNÇÕES DE COMPARTILHAMENTO PÚBLICO (MARKETING) ---
+// Atualize a assinatura da função para aceitar 'grupo'
+function compartilharOportunidade(idDemanda, titulo, cidade, especialidade, grupo) {
+    const baseUrl = window.location.href.split('?')[0];
+    const params = new URLSearchParams(window.location.search);
+    const appID = params.get('app') || localStorage.getItem('PB_APP_ID') || 'OBRA';
 
-    try {
-        // Identifica a vertical (ex: SAUDE, AUTO) para definir cores e ícones na imagem
-        const temaVertical = VERTICAIS[grupo] || VERTICAIS['OBRA']; 
-        const baseUrl = window.location.href.split('?')[0];
-        
-        // 1. PERSONALIZAÇÃO DO LINK:
-        // Injetamos o grupo e a categoria para que o 'ver_demanda' saiba o contexto ao abrir
-        const linkOportunidade = `${baseUrl}?app=${grupo}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(grupo)}&cat=${encodeURIComponent(especialidade)}`;
+    // Agora o link inclui &grupo= e &cat= de forma explícita
+    const linkOportunidade = `${baseUrl}?app=${appID}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(grupo)}&cat=${encodeURIComponent(especialidade)}`;
 
-        // 2. GERAÇÃO DA IMAGEM:
-        // Passamos os dados da demanda para a função de desenho
-        const imgData = await gerarImagemOportunidade({
-            titulo: titulo,
-            especialidade: especialidade,
-            local: cidade,
-            cor: temaVertical.cor,
-            icone: temaVertical.icone
-        });
+    const textoCompartilhar = `🚀 *OPORTUNIDADE DE SERVIÇO PARA:* \n` +
+        `👉 *${especialidade.toUpperCase()}*\n\n` +
+        `Estou precisando de: *${titulo}*\n` +
+        `📍 Local: ${cidade}\n\n` +
+        `Profissionais interessados podem enviar o orçamento pelo link abaixo:`;
 
-        const res = await fetch(imgData);
-        const blob = await res.blob();
-        const file = new File([blob], 'oportunidade.jpg', { type: 'image/jpeg' });
-
-        // Texto de chamada para o WhatsApp
-        const mensagemTexto = `📢 *NOVA OPORTUNIDADE: ${especialidade.toUpperCase()}*\n\n📍 Local: ${cidade}\n📝 Serviço: ${titulo}\n\nVeja os detalhes e envie seu orçamento pelo link abaixo:\n${linkOportunidade}`;
-
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-                files: [file],
-                text: mensagemTexto 
-            });
-        } else {
-            // Fallback caso o navegador não suporte compartilhamento de arquivos
-            window.open(`https://wa.me/?text=${encodeURIComponent(mensagemTexto)}`, '_blank');
-        }
-
-    } catch (err) {
-        console.error("Erro no compartilhamento:", err);
-    } finally {
-        btn.innerText = txtOriginal;
-        btn.disabled = false;
+    if (navigator.share) {
+        navigator.share({
+            title: `Serviço: ${titulo}`,
+            text: textoCompartilhar,
+            url: linkOportunidade 
+        }).catch(console.error);
+    } else {
+        window.open(`https://wa.me/?text=${encodeURIComponent(textoCompartilhar + "\n" + linkOportunidade)}`, '_blank');
     }
 }
+function gerarImagemOportunidade(idDemanda, titulo, cidade, especialidade, grupo) {
+    const btn = event.currentTarget;
+    const txtOriginal = btn.innerText;
+    btn.innerText = "⏳ Criando Card...";
+    btn.disabled = true;
 
-
-async function gerarImagemOportunidade(dados) {
+    // Configuração do Canvas (Quadrado para Redes Sociais)
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     canvas.width = 1080;
     canvas.height = 1080;
 
-    // Utiliza as cores e ícone passados no objeto 'dados'
-    const corTema = dados.cor || "#34495e";
-    const iconeTema = dados.icone || "🤝";
-
-    // Fundo
-    ctx.fillStyle = "#fdfbf7"; 
+    // 1. FUNDO E CORES (Baseado na Vertical do App)
+    const corDestaque = APP.cor || "#2c3e50";
+    const grd = ctx.createLinearGradient(0, 0, 0, 1080);
+    grd.addColorStop(0, "#ffffff"); 
+    grd.addColorStop(1, "#f8f9fa");
+    ctx.fillStyle = grd;
     ctx.fillRect(0, 0, 1080, 1080);
 
-    // Moldura dinâmica baseada na cor da vertical
-    ctx.strokeStyle = corTema; 
-    ctx.lineWidth = 25;
-    ctx.strokeRect(50, 50, 980, 980);
+    // Faixa Superior de Destaque
+    ctx.fillStyle = corDestaque;
+    ctx.fillRect(0, 0, 1080, 220);
 
-    // Título Superior
+    // 2. CABEÇALHO
     ctx.textAlign = "center";
-    ctx.fillStyle = "#333";
-    ctx.font = "bold 45px sans-serif";
-    ctx.fillText(`${iconeTema} OPORTUNIDADE PARA:`, 540, 180);
-
-    // Faixa Central com a cor do tema
-    ctx.fillStyle = corTema;
-    ctx.fillRect(100, 230, 880, 200); 
-    
-    // Especialidade em destaque
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 75px sans-serif";
-    wrapText(ctx, dados.especialidade.toUpperCase(), 540, 325, 800, 85);
-
-    // Descrição do Serviço
-    ctx.fillStyle = "#444";
-    ctx.font = "italic 50px sans-serif";
-    wrapText(ctx, dados.titulo, 540, 580, 850, 65);
-
-    // Localização (Cidade)
-    ctx.fillStyle = corTema;
-    ctx.font = "bold 40px sans-serif";
-    ctx.fillText("📍 LOCALIZAÇÃO:", 540, 780);
+    ctx.font = "bold 45px sans-serif";
+    ctx.fillText("ESTOU PRECISANDO DE:", 540, 100);
     
-    ctx.fillStyle = "#333";
-    ctx.font = "bold 65px sans-serif";
-    wrapText(ctx, dados.local, 540, 860, 850, 75);
+    ctx.font = "bold 85px sans-serif";
+    ctx.fillText(especialidade.toUpperCase(), 540, 185);
 
-    // Chamada de Ação
-    ctx.fillStyle = corTema;
-    ctx.font = "bold 38px sans-serif";
-    ctx.fillText("VEJA DETALHES NO LINK DA LEGENDA ⬇️", 540, 1010);
+    // 3. CORPO (DETALHES DO SERVIÇO)
+    ctx.fillStyle = "#2c3e50";
+    ctx.font = "bold 60px sans-serif";
+    // Título do Serviço (Wrap text para não estourar)
+    wrapText(ctx, titulo, 540, 380, 900, 75);
 
-    return canvas.toDataURL("image/jpeg", 0.9);
+    // Localização com Ícone
+    ctx.fillStyle = "#7f8c8d";
+    ctx.font = "50px sans-serif";
+    ctx.fillText(`📍 ${cidade}`, 540, 580);
+
+    // 4. CALL TO ACTION (Chamada para Ação)
+    // Box de destaque para o link
+    ctx.fillStyle = "#e3f2fd";
+    ctx.roundRect ? ctx.fillRoundedRect?.(140, 680, 800, 250, 30) : ctx.fillRect(140, 680, 800, 250); 
+    
+    ctx.fillStyle = "#1565c0";
+    ctx.font = "bold 40px sans-serif";
+    ctx.fillText("QUER ENVIAR UM ORÇAMENTO?", 540, 750);
+    
+    ctx.fillStyle = corDestaque;
+    ctx.font = "bold 55px sans-serif";
+    ctx.fillText("ACESSE O LINK NA LEGENDA", 540, 840);
+
+    // 5. RODAPÉ INSTITUCIONAL
+    ctx.fillStyle = "#bdc3c7";
+    ctx.font = "30px sans-serif";
+    ctx.fillText(`Publicado via ${APP.nome} • ${APP.icone}`, 540, 1020);
+
+    // 6. EXPORTAÇÃO E COMPARTILHAMENTO
+    canvas.toBlob(async function(blob) {
+        const file = new File([blob], "oportunidade.jpg", { type: "image/jpeg" });
+        
+        // Link dinâmico (Mesma lógica da sua função original)
+        const baseUrl = window.location.href.split('?')[0];
+        const params = new URLSearchParams(window.location.search);
+        const appID = params.get('app') || localStorage.getItem('PB_APP_ID') || 'OBRA';
+        const linkOportunidade = `${baseUrl}?app=${appID}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(grupo)}&cat=${encodeURIComponent(especialidade)}`;
+
+        const textoLegenda = `${linkOportunidade}`;
+
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: `Serviço: ${titulo}`,
+                    text: textoLegenda
+                });
+            } catch (err) { console.log("Cancelado"); }
+        } else {
+            // Download fallback
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = "oportunidade-servico.jpg";
+            a.click();
+            alert("Imagem gerada! Copie o link da demanda para postar junto.");
+        }
+        
+        btn.innerText = txtOriginal;
+        btn.disabled = false;
+    }, 'image/jpeg', 0.9);
 }
-
-
 
 
 </script>
