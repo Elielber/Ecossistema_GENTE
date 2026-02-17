@@ -7650,48 +7650,64 @@ function carregarDadosCliente() {
 }
 // --- FUNÇÕES DE COMPARTILHAMENTO PÚBLICO (MARKETING) ---
 async function compartilharOportunidade(idDemanda, titulo, cidade, especialidade, grupo) {
-    const btn = event.currentTarget;
-    const txtOriginal = btn.innerText;
-    btn.innerText = "⏳ Criando...";
+    // 1. Previne travamento capturando o botão corretamente
+    const btn = event ? event.currentTarget : null;
+    const txtOriginal = btn ? btn.innerText : "";
+    if(btn) { btn.innerText = "⏳ Criando..."; btn.disabled = true; }
 
-    // --- LOGICA DE PERSONALIZAÇÃO AUTOMÁTICA ---
-    // Identifica a vertical real baseada na especialidade (ex: Mecânico -> AUTO)
-    const idVerticalReal = encontrarGrupoPorServico(especialidade) || 'OBRA';
-    const temaVertical = VERTICAIS[idVerticalReal]; 
-    
-    const baseUrl = window.location.href.split('?')[0];
-    
-    // O link agora carrega o AppID correto da vertical da oportunidade:
-const linkOportunidade = `${baseUrl}?app=${idVerticalReal}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(idVerticalReal)}&cat=${encodeURIComponent(especialidade)}`;
+    try {
+        // 2. DETECÇÃO DA VERTICAL (Blindada)
+        // Se o 'grupo' passado for inválido (como "Estrutura"), buscamos na taxonomia real (OBRA, AUTO, etc.)
+        let idVerticalReal = 'OBRA'; // Padrão de segurança
+        
+        // Verifica se o 'grupo' recebido já é uma chave válida (OBRA, AUTO, SAUDE...)
+        if (VERTICAIS[grupo]) {
+            idVerticalReal = grupo;
+        } else {
+            // Se não for, usa a busca que já existe no seu código
+            idVerticalReal = encontrarGrupoPorServico(especialidade) || 'OBRA';
+        }
 
-    // Gera a imagem usando o tema detectado
-    const imgData = await gerarImagemOportunidade({
-        titulo: titulo,
-        especialidade: especialidade,
-        local: cidade,
-        cor: temaVertical.cor,   // Passa a cor correta para o Canvas
-        icone: temaVertical.icone // Passa o ícone correto para o Canvas
-    });
+        const temaVertical = VERTICAIS[idVerticalReal];
+        const baseUrl = window.location.href.split('?')[0];
+        
+        // 3. LINK UNIFICADO (Sempre usa a vertical real da oportunidade)
+        const linkOportunidade = `${baseUrl}?app=${idVerticalReal}&ver_demanda=${idDemanda}&grupo=${encodeURIComponent(idVerticalReal)}&cat=${encodeURIComponent(especialidade)}`;
 
-    const res = await fetch(imgData);
-    const blob = await res.blob();
-    const file = new File([blob], 'oportunidade.jpg', { type: 'image/jpeg' });
+        // 4. GERAÇÃO DA IMAGEM
+        const imgData = await gerarImagemOportunidade({
+            titulo: titulo,
+            especialidade: especialidade,
+            local: cidade,
+            cor: temaVertical.cor,
+            icone: temaVertical.icone
+        });
 
-    const textoLegenda = `${linkOportunidade}`;
+        // 5. PREPARAÇÃO DO ARQUIVO
+        const res = await fetch(imgData);
+        const blob = await res.blob();
+        const file = new File([blob], 'oportunidade.jpg', { type: 'image/jpeg' });
 
-    if (navigator.share && navigator.canShare({ files: [file] })) {
-        try {
+        const textoLegenda = `🚀 Nova oportunidade para *${especialidade}* em *${cidade}*!\n\nVeja os detalhes e envie seu orçamento aqui:\n${linkOportunidade}`;
+
+        // 6. COMPARTILHAMENTO
+        if (navigator.share && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
                 text: textoLegenda
             });
-        } catch (err) { console.log("Cancelado"); }
-    } else {
-        window.open(`https://wa.me/?text=${encodeURIComponent(textoLegenda)}`, '_blank');
+        } else {
+            window.open(`https://wa.me/?text=${encodeURIComponent(textoLegenda)}`, '_blank');
+        }
+
+    } catch (err) {
+        console.error("Erro no compartilhamento:", err);
+        alert("Ops! Houve um erro ao gerar a imagem. Tente novamente.");
+    } finally {
+        if(btn) { btn.innerText = txtOriginal; btn.disabled = false; }
     }
-    
-    btn.innerText = txtOriginal;
 }
+
 
 
 async function gerarImagemOportunidade(dados) {
