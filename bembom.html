@@ -1136,7 +1136,7 @@
         <p style="font-size: 0.85em; margin-bottom: 10px;">🚀 <b>Apoie nossa comunidade:</b> Compartilhe as vagas abertas desta vertical no seu status!</p>
         <button onclick="gerarMarketingContextualVertical(event)" 
                 style="background: var(--success); color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer;">
-            Gerar Cards de Oportunidades
+            Cards de Oportunidades
         </button>
     </div>
        </div>
@@ -7436,85 +7436,71 @@ async function gerarMarketingContextualVertical(event) {
 
     try {
 
-        btn.innerText = "⏳ Buscando vagas de " + nomeVertical + "...";
         btn.disabled = true;
+        btn.innerText = "⏳ Preparando...";
 
-        // 🔹 1. Busca TODAS as vagas abertas (sem filtrar por vertical)
-        const response = await fetch(API_URL, {
-            method: "POST",
-            body: JSON.stringify({
-                tipo: "BUSCAR_OPORTUNIDADES_MARKETING"
-            })
-        });
-
-        const oportunidades = await response.json();
-
-        if (!Array.isArray(oportunidades)) {
-            throw new Error("Resposta inválida do servidor");
+        // 🔄 Se mudou de vertical, reseta controle
+        if (verticalMarketingAtual !== appID) {
+            listaMarketing = [];
+            indiceMarketing = 0;
+            verticalMarketingAtual = appID;
         }
 
-        // 🔹 2. Tradutor: Especialidades da vertical atual
-        const especialidadesDaVertical = [];
+        // 📡 Busca apenas se ainda não carregou
+        if (listaMarketing.length === 0) {
 
-        if (VERTICAIS[appID] && VERTICAIS[appID].categorias) {
-            Object.values(VERTICAIS[appID].categorias)
-                .forEach(lista => especialidadesDaVertical.push(...lista));
-        }
+            btn.innerText = "⏳ Buscando vagas...";
 
-        // 🔹 3. Filtra apenas as especialidades da vertical atual
-        const oportunidadesFiltradas = oportunidades.filter(op =>
-            especialidadesDaVertical.includes(op.cat)
-        );
+            const response = await fetch(API_URL, {
+                method: "POST",
+                body: JSON.stringify({
+                    tipo: "BUSCAR_OPORTUNIDADES_MARKETING",
+                    vertical: appID
+                })
+            });
 
-        // 🔹 4. Se não houver vagas daquela vertical
-        if (oportunidadesFiltradas.length === 0) {
+            listaMarketing = await response.json();
 
-            alert(`No momento não há vagas abertas para ${nomeVertical}. Que tal convidar novos profissionais?`);
-
-            const blobConvite = await gerarCardFinalMarketing(0);
-            const urlBase = window.location.href.split('?')[0];
-
-            await dispararShareIndividual(
-                blobConvite,
-                "convite.jpg",
-                `${urlBase}?app=${appID}`
-            );
-
-            return;
-        }
-
-        // 🔹 5. Loop de geração manual
-        for (let i = 0; i < Math.min(oportunidadesFiltradas.length, 3); i++) {
-
-            const op = oportunidadesFiltradas[i];
-
-            if (confirm(`Gerar card para vaga de ${op.cat}?`)) {
-
-                btn.innerText = "🎨 Desenhando card...";
-
-                const blobOp = await gerarCardOportunidadeImagem(op);
-
-                const urlBase = window.location.href.split('?')[0];
-
-                const linkOp = `${urlBase}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo || "")}&cat=${encodeURIComponent(op.cat || "")}`;
-
-                await dispararShareIndividual(
-                    blobOp,
-                    `vaga-${op.id}.jpg`,
-                    linkOp
-                );
+            if (!Array.isArray(listaMarketing) || listaMarketing.length === 0) {
+                alert(`No momento não há vagas abertas para ${nomeVertical}.`);
+                return;
             }
         }
 
+        // 🚫 Acabaram as vagas
+        if (!listaMarketing[indiceMarketing]) {
+            alert("Todas as vagas já foram compartilhadas.");
+            indiceMarketing = 0;
+            return;
+        }
+
+        // 🎯 Pega apenas UMA vaga por clique
+        const op = listaMarketing[indiceMarketing];
+
+        btn.innerText = "🎨 Gerando card...";
+
+        const blobOp = await gerarCardOportunidadeImagem(op);
+
+        const urlBase = window.location.href.split('?')[0];
+        const linkOp = `${urlBase}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo || "")}&cat=${encodeURIComponent(op.cat || "")}`;
+
+        await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
+
+        // ➕ Avança para próxima vaga
+        indiceMarketing++;
+
+        btn.innerText = "✅ Gerar Próxima Vaga";
+
     } catch (err) {
 
-        console.error("Erro no marketing contextual:", err);
-        alert("Não foi possível carregar as vagas agora.");
+        console.error("Erro marketing:", err);
+        alert("Erro ao gerar card.");
 
     } finally {
-
-        btn.innerText = txtOriginal;
         btn.disabled = false;
+        if (btn.innerText === "⏳ Preparando..." || btn.innerText === "⏳ Buscando vagas...") {
+            btn.innerText = txtOriginal;
+        }
     }
 }
 
