@@ -1132,7 +1132,13 @@
                     💬 Fale com o Pesquisador
                 </button>
             </div>
-            
+            <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
+        <p style="font-size: 0.9em; color: #666;">Ajude a divulgar novas vagas:</p>
+        <button onclick="gerarMarketingManual()" class="btn-marketing" 
+                style="background: var(--success); color: white; width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold;">
+            🚀 Gerar Cards de Oportunidades
+        </button>
+    </div>
        </div>
     </div>
 </div>
@@ -7496,64 +7502,77 @@ async function iniciarMarketing(event) {
     }
 }
 
-async function compartilharOportunidades(indiceInicial = 0) {
+async function gerarMarketingManual(event) {
+
+    const btn = event.currentTarget;
+    const txtOriginal = btn.innerText;
+
     try {
+
+        btn.innerText = "⏳ Buscando vagas...";
+        btn.disabled = true;
+
         const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
         const urlBase = window.location.href.split('?')[0];
 
-        // 1. Recupera oportunidades (prioriza o cache salvo no iniciarMarketing)
-        let oportunidades = JSON.parse(localStorage.getItem("PB_MARKETING_OPPS") || "null");
+        const response = await fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify({
+                tipo: "BUSCAR_OPORTUNIDADES_MARKETING",
+                vertical: appID
+            })
+        });
 
-        // Se o cache sumiu (raro), busca novamente
-        if (!Array.isArray(oportunidades)) {
-            const response = await fetch(API_URL, {
-                method: "POST",
-                body: JSON.stringify({ tipo: "BUSCAR_OPORTUNIDADES_MARKETING", vertical: appID })
-            });
-            oportunidades = await response.json();
-            localStorage.setItem("PB_MARKETING_OPPS", JSON.stringify(oportunidades));
-        }
+        const oportunidades = await response.json();
 
-        // 2. Se não houver nada, gera o card de convite final
-        if (!oportunidades || oportunidades.length === 0) {
+        if (!Array.isArray(oportunidades) || oportunidades.length === 0) {
+
+            alert("Não encontramos vagas abertas. Gerando card de convite.");
+
             const blobConvite = await gerarCardFinalMarketing(0);
-            await dispararShareIndividual(blobConvite, "convite.jpg", `${urlBase}?app=${appID}`);
-            MarketingState.limpar();
+
+            await dispararShareIndividual(
+                blobConvite,
+                "convite.jpg",
+                `${urlBase}?app=${appID}`
+            );
+
             return;
         }
 
-        // 3. Loop de Processamento com controle de Estado
-        for (let i = indiceInicial; i < Math.min(oportunidades.length, 3); i++) {
+        for (let i = 0; i < Math.min(oportunidades.length, 3); i++) {
+
             const op = oportunidades[i];
 
-            // Reativa a interação do usuário (Obrigatório para o navegador liberar o Share)
-            const continuar = confirm(`Frase enviada! Gerar card para vaga de: ${op.cat}?`);
+            const continuar = confirm(`Gerar card para: ${op.cat}?`);
+
             if (!continuar) break;
 
-            // Gera a imagem
+            btn.innerText = "⏳ Desenhando card...";
+
             const blobOp = await gerarCardOportunidadeImagem(op);
-            const linkOp = `${urlBase}?app=${appID}&ver_demanda=${encodeURIComponent(op.id)}&grupo=${encodeURIComponent(op.grupo || "")}&cat=${encodeURIComponent(op.cat || "")}`;
 
-            // --- PONTO CHAVE: Salva o próximo índice ANTES de disparar ---
-            // Se o app "morrer" no WhatsApp, ao voltar ele recomeça do i + 1
-            MarketingState.salvar({
-                ativo: true,
-                etapa: "oportunidades",
-                indice: i + 1
-            });
+            const linkOp = `${urlBase}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo || "")}&cat=${encodeURIComponent(op.cat || "")}`;
 
-            // Dispara e aguarda
-            await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
+            await dispararShareIndividual(
+                blobOp,
+                `vaga-${op.id}.jpg`,
+                linkOp
+            );
         }
 
-        // 4. Limpeza Final após concluir o ciclo
-        MarketingState.limpar();
-
     } catch (err) {
-        console.error("Erro ao processar oportunidades:", err);
-        // Não limpa o estado aqui para permitir nova tentativa se for erro de rede
+
+        console.error("Erro no marketing manual:", err);
+        alert("Erro ao conectar com o servidor.");
+
+    } finally {
+
+        btn.innerText = txtOriginal;
+        btn.disabled = false;
     }
 }
+
 
 	
 // Filtra e embaralha oportunidades do back-end (listaDemandasCache)
