@@ -7400,51 +7400,78 @@ async function obterOportunidadesMarketingServidor() {
 }
 
 // 2. Função de compartilhamento consolidada (Frase + Oportunidades Reais)
-async function compartilharFraseImagem() {
+async function compartilharFraseImagem(event) {
     if (!fraseAtualObj) {
-        alert("Carregando frase..."); return;
+        alert("Aguarde o carregamento da frase...");
+        return;
     }
 
-    const btn = event.currentTarget;
-    const txtOriginal = btn.innerText;
-    btn.innerText = "⏳ Preparando Cards...";
-    btn.disabled = true;
+    const btn = event?.currentTarget;
+    const txtOriginal = btn ? btn.innerText : "";
+    if (btn) {
+        btn.innerText = "⏳ Preparando...";
+        btn.disabled = true;
+    }
 
     try {
-        const oportunidades = await obterOportunidadesMarketingServidor();
         const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
         const urlBase = window.location.href.split('?')[0];
+        const linkHome = `${urlBase}?app=${appID}`;
 
-        // CARD 1: Frase do Dia (Sempre enviado)
+        // 🔎 1. Buscar oportunidades no servidor
+        const response = await fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify({
+                tipo: "BUSCAR_OPORTUNIDADES_MARKETING",
+                vertical: appID
+            })
+        });
+
+        if (!response.ok) throw new Error("Erro no servidor");
+
+        let oportunidades = await response.json();
+        if (!Array.isArray(oportunidades)) {
+            oportunidades = [];
+        }
+
+        // 🖼️ 2. Compartilhar Card da Frase (Legenda: apenas link)
         const blobFrase = await gerarBlobFrase();
-        const legendaFrase = ` ${urlBase}?app=${appID}`;
-        await dispararShareIndividual(blobFrase, "frase.jpg", legendaFrase);
+        await dispararShareIndividual(blobFrase, "frase.jpg", linkHome);
 
-        // CARDS 2 a 4: Oportunidades Reais (Sequencial)
-        if (oportunidades.length > 0) {
-            for (let i = 0; i < Math.min(oportunidades.length, 3); i++) {
-                const op = oportunidades[i];
-                if (confirm(`Gerar card para oportunidade de: ${op.cat}?`)) {
-                    const blobOp = await gerarCardOportunidadeImagem(op);
-                    const linkOp = `${urlBase}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo)}&cat=${encodeURIComponent(op.cat)}`;
-                    const legendaOp = `${linkOp}`;
-                    await dispararShareIndividual(blobOp, `vaga.jpg`, legendaOp);
-                }
-            }
-        } else {
-            // Se não houver vagas, envia apenas o card de convite
+        // 🚀 3. Compartilhar até 3 oportunidades reais
+        for (let i = 0; i < Math.min(oportunidades.length, 3); i++) {
+            const op = oportunidades[i];
+
+            if (!op || !op.id) continue;
+
+            const blobOp = await gerarCardOportunidadeImagem(op);
+
+            const linkOp =
+                `${urlBase}?app=${appID}` +
+                `&ver_demanda=${encodeURIComponent(op.id)}` +
+                `&grupo=${encodeURIComponent(op.grupo || "")}` +
+                `&cat=${encodeURIComponent(op.cat || "")}`;
+
+            await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
+        }
+
+        // 🤝 4. Se não houver oportunidades, envia card convite
+        if (oportunidades.length === 0) {
             const blobConvite = await gerarCardFinalMarketing(0);
-            const legendaConvite = `${urlBase}?app=${appID}`;
-            await dispararShareIndividual(blobConvite, "convite.jpg", legendaConvite);
+            await dispararShareIndividual(blobConvite, "convite.jpg", linkHome);
         }
 
     } catch (err) {
-        console.warn("Fluxo finalizado.");
+        console.error("Erro ao compartilhar:", err);
+        alert("Erro ao gerar cards. Verifique sua conexão.");
     } finally {
-        btn.innerText = txtOriginal;
-        btn.disabled = false;
+        if (btn) {
+            btn.innerText = txtOriginal || "Compartilhar";
+            btn.disabled = false;
+        }
     }
 }
+
 
 // Filtra e embaralha oportunidades do back-end (listaDemandasCache)
 function obterOportunidadesAleatoriasParaMarketing() {
