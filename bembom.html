@@ -1132,11 +1132,11 @@
                     💬 Fale com o Pesquisador
                 </button>
             </div>
-            <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
-        <p style="font-size: 0.9em; color: #666;">Ajude a divulgar novas vagas:</p>
-        <button onclick="gerarMarketingManual(event)" class="btn-marketing" 
-                style="background: var(--success); color: white; width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold;">
-            🚀 Gerar Cards de Oportunidades
+           <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 20px; border: 1px dashed var(--secondary);">
+        <p style="font-size: 0.85em; margin-bottom: 10px;">🚀 <b>Apoie nossa comunidade:</b> Compartilhe as vagas abertas desta vertical no seu status!</p>
+        <button onclick="gerarMarketingContextualVertical()" 
+                style="background: var(--success); color: white; border: none; padding: 12px; border-radius: 8px; width: 100%; font-weight: bold; cursor: pointer;">
+            Gerar Cards de Oportunidades
         </button>
     </div>
        </div>
@@ -1439,22 +1439,6 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6YbMKWK4kuO-fdexmhOp_4_dO_-oeDwyVtJazuiA3le5rcA/exec"; 
 
 	// máquina de estados
-const MarketingState = {
-    KEY: "PB_MARKETING",
-
-    salvar(data) {
-        localStorage.setItem(this.KEY, JSON.stringify(data));
-    },
-
-    obter() {
-        const raw = localStorage.getItem(this.KEY);
-        return raw ? JSON.parse(raw) : null;
-    },
-
-    limpar() {
-        localStorage.removeItem(this.KEY);
-    }
-};
 
 /* ============================================================
    🚀 MOTOR DO ECOSSISTEMA GENTE (Versão Final Estável)
@@ -2034,28 +2018,6 @@ if (verDemandaId) {
         }
     }, 60000); // Ajustado para 60 segundos
 			  
-// 7. RECUPERAÇÃO DE MARKETING
-const estadoMarketing = MarketingState.obter();
-
-if (!verDemandaId && estadoMarketing && estadoMarketing.ativo) {
-
-    console.log("🔄 Retomando marketing...");
-
-       if (estadoMarketing.etapa === "oportunidades") {
-
-        setTimeout(() => {
-            const continuar = confirm("Deseja continuar gerando os cards?");
-            
-            if (continuar) {
-                compartilharOportunidades(estadoMarketing.indice || 0);
-            } else {
-                MarketingState.limpar();
-            }
-
-        }, 800);
-    }
-}
-
 };
 
  
@@ -7460,54 +7422,57 @@ async function iniciarMarketing(event) {
         }
     }
 }
-async function gerarMarketingManual(event) {
+async function gerarMarketingContextualVertical() {
     const btn = event.currentTarget;
     const txtOriginal = btn.innerText;
+    
+    // Identifica qual vertical está em tela
+    const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
+    const nomeVertical = APP.nome || appID;
 
     try {
-        btn.innerText = "⏳ Buscando vagas...";
+        btn.innerText = "⏳ Buscando vagas de " + nomeVertical + "...";
         btn.disabled = true;
 
-        const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
-        const urlBase = window.location.href.split('?')[0];
-
-        // 1. Busca oportunidades no Back-end
+        // 1. Busca no Back-end filtrando pela Vertical em tela
         const response = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({
                 tipo: "BUSCAR_OPORTUNIDADES_MARKETING",
-                vertical: appID
+                vertical: appID // O Back-end usará isso para filtrar na planilha
             })
         });
 
         const oportunidades = await response.json();
 
-        // 2. Se não houver vagas, gera card de convite
+        // 2. Validação: Só prossegue se houver vagas daquela vertical
         if (!Array.isArray(oportunidades) || oportunidades.length === 0) {
-            alert("Nenhuma vaga aberta no momento. Gerando convite para novos profissionais!");
+            alert(`No momento não há vagas abertas para ${nomeVertical}. Que tal convidar novos profissionais?`);
             const blobConvite = await gerarCardFinalMarketing(0);
+            const urlBase = window.location.href.split('?')[0];
             await dispararShareIndividual(blobConvite, "convite.jpg", `${urlBase}?app=${appID}`);
             return;
         }
 
-        // 3. Loop manual: um 'confirm' para cada card (Garante interação válida no navegador)
+        // 3. Loop de Confirmação (Um clique por card)
         for (let i = 0; i < Math.min(oportunidades.length, 3); i++) {
             const op = oportunidades[i];
             
-            // Pergunta antes de cada card para reativar o 'navigator.share'
-            const continuar = confirm(`Gerar card de marketing para: ${op.cat}?`);
-            if (!continuar) break;
-
-            btn.innerText = "⏳ Desenhando...";
-            const blobOp = await gerarCardOportunidadeImagem(op);
-            const linkOp = `${urlBase}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo || "")}&cat=${encodeURIComponent(op.cat || "")}`;
-
-            await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
+            // O confirm garante que o navegador aceite o próximo navigator.share
+            if (confirm(`Gerar card para vaga de ${op.cat}?`)) {
+                btn.innerText = "🎨 Desenhando card...";
+                const blobOp = await gerarCardOportunidadeImagem(op);
+                
+                const urlBase = window.location.href.split('?')[0];
+                const linkOp = `${urlBase}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo || "")}&cat=${encodeURIComponent(op.cat || "")}`;
+                
+                await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
+            }
         }
 
     } catch (err) {
-        console.error("Erro no marketing manual:", err);
-        alert("Erro ao conectar com o servidor.");
+        console.error("Erro no marketing contextual:", err);
+        alert("Não foi possível carregar as vagas agora.");
     } finally {
         btn.innerText = txtOriginal;
         btn.disabled = false;
