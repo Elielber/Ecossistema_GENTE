@@ -7427,66 +7427,95 @@ async function iniciarMarketing(event) {
     return params.get('app') || localStorage.getItem('PB_APP_ID') || 'OBRA';
 }
 async function gerarMarketingContextualVertical(event) {
+
     const btn = event.currentTarget;
     const txtOriginal = btn.innerText;
-    
-    // Identifica qual vertical está em tela
+
     const appID = getAppIDAtual();
     const nomeVertical = APP.nome || appID;
 
     try {
+
         btn.innerText = "⏳ Buscando vagas de " + nomeVertical + "...";
         btn.disabled = true;
 
-        // 1. Busca no Back-end filtrando pela Vertical em tela
+        // 🔹 1. Busca TODAS as vagas abertas (sem filtrar por vertical)
         const response = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({
-                tipo: "BUSCAR_OPORTUNIDADES_MARKETING",
-                vertical: appID // O Back-end usará isso para filtrar na planilha
+                tipo: "BUSCAR_OPORTUNIDADES_MARKETING"
             })
         });
 
         const oportunidades = await response.json();
 
-        // 2. Validação: Só prossegue se houver vagas daquela vertical
-        if (!Array.isArray(oportunidades) || oportunidades.length === 0) {
+        if (!Array.isArray(oportunidades)) {
+            throw new Error("Resposta inválida do servidor");
+        }
+
+        // 🔹 2. Tradutor: Especialidades da vertical atual
+        const especialidadesDaVertical = [];
+
+        if (VERTICAIS[appID] && VERTICAIS[appID].categorias) {
+            Object.values(VERTICAIS[appID].categorias)
+                .forEach(lista => especialidadesDaVertical.push(...lista));
+        }
+
+        // 🔹 3. Filtra apenas as especialidades da vertical atual
+        const oportunidadesFiltradas = oportunidades.filter(op =>
+            especialidadesDaVertical.includes(op.cat)
+        );
+
+        // 🔹 4. Se não houver vagas daquela vertical
+        if (oportunidadesFiltradas.length === 0) {
+
             alert(`No momento não há vagas abertas para ${nomeVertical}. Que tal convidar novos profissionais?`);
+
             const blobConvite = await gerarCardFinalMarketing(0);
             const urlBase = window.location.href.split('?')[0];
-            await dispararShareIndividual(blobConvite, "convite.jpg", `${urlBase}?app=${appID}`);
+
+            await dispararShareIndividual(
+                blobConvite,
+                "convite.jpg",
+                `${urlBase}?app=${appID}`
+            );
+
             return;
         }
 
-        // 3. Loop de Confirmação (Um clique por card)
-        for (let i = 0; i < Math.min(oportunidades.length, 3); i++) {
-            const op = oportunidades[i];
-            
-            // O confirm garante que o navegador aceite o próximo navigator.share
+        // 🔹 5. Loop de geração manual
+        for (let i = 0; i < Math.min(oportunidadesFiltradas.length, 3); i++) {
+
+            const op = oportunidadesFiltradas[i];
+
             if (confirm(`Gerar card para vaga de ${op.cat}?`)) {
+
                 btn.innerText = "🎨 Desenhando card...";
+
                 const blobOp = await gerarCardOportunidadeImagem(op);
-                
+
                 const urlBase = window.location.href.split('?')[0];
+
                 const linkOp = `${urlBase}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo || "")}&cat=${encodeURIComponent(op.cat || "")}`;
-                
-                await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
+
+                await dispararShareIndividual(
+                    blobOp,
+                    `vaga-${op.id}.jpg`,
+                    linkOp
+                );
             }
         }
 
     } catch (err) {
+
         console.error("Erro no marketing contextual:", err);
         alert("Não foi possível carregar as vagas agora.");
+
     } finally {
+
         btn.innerText = txtOriginal;
         btn.disabled = false;
     }
-}
-// Gera o link de autocompletação para o novo prestador
-function montarLinkOportunidade(op) {
-    const baseUrl = window.location.href.split('?')[0];
-    const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
-    return `${baseUrl}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo)}&cat=${encodeURIComponent(op.cat)}`;
 }
 
 // Disparo isolado para garantir legenda exclusiva por imagem
