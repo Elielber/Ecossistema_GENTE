@@ -7447,120 +7447,111 @@ async function iniciarMarketing(event) {
     }
 
     const btn = event?.currentTarget;
-    if (btn) {
-        btn.innerText = "⏳ Gerando frase...";
-        btn.disabled = true;
-    }
+    const textoOriginal = btn ? btn.innerText : "Compartilhar";
 
     try {
+        if (btn) {
+            btn.innerText = "⏳ Preparando...";
+            btn.disabled = true;
+        }
+
         const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
         const urlBase = window.location.href.split('?')[0];
         const linkHome = `${urlBase}?app=${appID}`;
 
-        // Salva estado inicial
-        MarketingState.salvar({
-            ativo: true,
-            etapa: "frase"
+        // 1️⃣ BUSCA AS OPORTUNIDADES PRIMEIRO (Garante o cache para a volta)
+        const response = await fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify({ 
+                tipo: "BUSCAR_OPORTUNIDADES_MARKETING", 
+                vertical: appID 
+            })
         });
+        const oportunidades = await response.json();
+        localStorage.setItem("PB_MARKETING_OPPS", JSON.stringify(oportunidades));
 
-        const blobFrase = await gerarBlobFrase();
-		// 🔄 Pré-carregamento silencioso para garantir que o cache exista na volta
-fetch(API_URL, {
-    method: "POST",
-    body: JSON.stringify({ tipo: "BUSCAR_OPORTUNIDADES_MARKETING", vertical: appID })
-})
-.then(res => res.json())
-.then(data => localStorage.setItem("PB_MARKETING_OPPS", JSON.stringify(data)))
-.catch(e => console.warn("Cache falhou, buscará na retomada."));
-        await dispararShareIndividual(blobFrase, "frase.jpg", linkHome);
-
-        // Após compartilhar frase → preparar próxima etapa
+        // 2️⃣ SALVA O ESTADO DE RETOMADA (Caso o sistema reinicie o app)
         MarketingState.salvar({
             ativo: true,
             etapa: "oportunidades",
             indice: 0
         });
 
+        // 3️⃣ GERA A IMAGEM
+        const blobFrase = await gerarBlobFrase();
+
+        // 4️⃣ DISPARA O COMPARTILHAMENTO
+        // Quando o usuário volta daqui, o window.onload lerá o estado salvo acima
+        await dispararShareIndividual(blobFrase, "frase.jpg", linkHome);
+
     } catch (err) {
-        console.error("Erro na frase:", err);
+        console.error("Erro no fluxo de marketing:", err);
         MarketingState.limpar();
+        alert("Erro ao preparar marketing. Verifique sua conexão.");
     } finally {
         if (btn) {
-            btn.innerText = "Compartilhar";
+            btn.innerText = textoOriginal;
             btn.disabled = false;
         }
     }
 }
 
-
 async function compartilharOportunidades(indiceInicial = 0) {
     try {
-        const estado = MarketingState.obter();
-        if (!estado || !estado.ativo) return;
-
         const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
         const urlBase = window.location.href.split('?')[0];
 
-        // 🔄 Recupera oportunidades do cache ou servidor
+        // 1. Recupera oportunidades (prioriza o cache salvo no iniciarMarketing)
         let oportunidades = JSON.parse(localStorage.getItem("PB_MARKETING_OPPS") || "null");
 
+        // Se o cache sumiu (raro), busca novamente
         if (!Array.isArray(oportunidades)) {
             const response = await fetch(API_URL, {
                 method: "POST",
-                body: JSON.stringify({
-                    tipo: "BUSCAR_OPORTUNIDADES_MARKETING",
-                    vertical: appID
-                })
+                body: JSON.stringify({ tipo: "BUSCAR_OPORTUNIDADES_MARKETING", vertical: appID })
             });
-
             oportunidades = await response.json();
-            if (!Array.isArray(oportunidades)) oportunidades = [];
-
             localStorage.setItem("PB_MARKETING_OPPS", JSON.stringify(oportunidades));
         }
 
-        if (oportunidades.length === 0) {
+        // 2. Se não houver nada, gera o card de convite final
+        if (!oportunidades || oportunidades.length === 0) {
             const blobConvite = await gerarCardFinalMarketing(0);
-            const linkHome = `${urlBase}?app=${appID}`;
-            await dispararShareIndividual(blobConvite, "convite.jpg", linkHome);
+            await dispararShareIndividual(blobConvite, "convite.jpg", `${urlBase}?app=${appID}`);
             MarketingState.limpar();
             return;
         }
 
+        // 3. Loop de Processamento com controle de Estado
         for (let i = indiceInicial; i < Math.min(oportunidades.length, 3); i++) {
-
             const op = oportunidades[i];
 
-            const continuar = confirm(`Gerar card de ${op.cat}?`);
-            if (!continuar) {
-                MarketingState.limpar();
-                return;
-            }
+            // Reativa a interação do usuário (Obrigatório para o navegador liberar o Share)
+            const continuar = confirm(`Frase enviada! Gerar card para vaga de: ${op.cat}?`);
+            if (!continuar) break;
 
+            // Gera a imagem
             const blobOp = await gerarCardOportunidadeImagem(op);
+            const linkOp = `${urlBase}?app=${appID}&ver_demanda=${encodeURIComponent(op.id)}&grupo=${encodeURIComponent(op.grupo || "")}&cat=${encodeURIComponent(op.cat || "")}`;
 
-            const linkOp =
-                `${urlBase}?app=${appID}` +
-                `&ver_demanda=${encodeURIComponent(op.id)}` +
-                `&grupo=${encodeURIComponent(op.grupo || "")}` +
-                `&cat=${encodeURIComponent(op.cat || "")}`;
-
-            await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
-
-            // 🔐 Atualiza progresso
+            // --- PONTO CHAVE: Salva o próximo índice ANTES de disparar ---
+            // Se o app "morrer" no WhatsApp, ao voltar ele recomeça do i + 1
             MarketingState.salvar({
                 ativo: true,
                 etapa: "oportunidades",
                 indice: i + 1
             });
+
+            // Dispara e aguarda
+            await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
         }
 
-        // Finalizou tudo
+        // 4. Limpeza Final após concluir o ciclo
         MarketingState.limpar();
-        localStorage.removeItem("PB_MARKETING_OPPS");
 
     } catch (err) {
-        console.error("Erro nas oportunidades:", err);
+        console.error("Erro ao processar oportunidades:", err);
+        // Não limpa o estado aqui para permitir nova tentativa se for erro de rede
     }
 }
 
