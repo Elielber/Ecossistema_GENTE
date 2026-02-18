@@ -7452,75 +7452,9 @@ function compartilharFraseImagem() {
     // --- 6. RODAPÉ (MODIFICADO AQUI) ---
     ctx.fillStyle = "rgba(255,255,255,0.8)";
     ctx.font = "28px sans-serif";
-// 1. Pega o texto da vertical (Ex: "Saúde e Bem-estar")
-    let textoVertical = "";
-    const elDescLogin = document.getElementById('app-desc-login');
-    if (elDescLogin) {
-        textoVertical = elDescLogin.innerText;
-    }
 
-    // 2. Monta a frase completa
-    const textoRodape = `Encontre Profissionais Qualificados em ${textoVertical}`;
-
-    // 3. Desenha no canvas
-    ctx.fillText(textoRodape, 540, 980);
-    
-    // Link visual (Opcional, logo abaixo)
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 30px sans-serif";
-    
-
-    // --- 7. EXPORTAÇÃO ---
-    canvas.toBlob(async function(blob) {
-        const fileName = `frase-${APP.nome.replace(/\s+/g, '-').toLowerCase()}.jpg`; 
-        const file = new File([blob], fileName, { type: "image/jpeg" });
-        const linkAtual = window.location.href;
-
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-            try {
-                await navigator.share({
-                    files: [file],
-                    title: `Frase do Dia - ${APP.nome}`, 
-                    text: `${linkAtual}` 
-                });
-            } catch (err) {
-                console.log("Compartilhamento cancelado.");
-            }
-        } else {
-            // Fallback Desktop
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = fileName;
-            a.click();
-            // alert("Imagem salva! Compartilhe manualmente.");
-        }
-        
-        btn.innerText = txtOriginal;
-        btn.disabled = false;
-    }, 'image/jpeg', 0.9);
 }
-}
-// Filtra oportunidades diretamente da Vertical (Sem depender do login do prestador)
-async function obterOportunidadesParaMarketingPorVertical() {
-    const appAtualID = localStorage.getItem('PB_APP_ID') || 'OBRA';
-    try {
-        const response = await fetch(API_URL, {
-            method: "POST",
-            body: JSON.stringify({
-                tipo: "BUSCAR_OPORTUNIDADES_MARKETING",
-                vertical: appAtualID
-            })
-        });
-        const filtradas = await response.json();
-        if (!Array.isArray(filtradas)) return [];
-        
-        // Embaralha resultados
-        return filtradas.sort(() => Math.random() - 0.5).slice(0, 3);
-    } catch (e) {
-        console.error("Erro ao buscar marketing:", e);
-        return [];
-    }
-}
+
 // Filtra e embaralha oportunidades do back-end (listaDemandasCache)
 function obterOportunidadesAleatoriasParaMarketing() {
     const params = new URLSearchParams(window.location.search);
@@ -7628,50 +7562,39 @@ async function gerarCardFinalMarketing(total) {
 
 
 async function compartilharFraseImagem() {
-    if (!fraseAtualObj) {
-        alert("Aguarde o carregamento da frase...");
-        return;
-    }
-
+    const oportunidades = obterOportunidadesAleatoriasParaMarketing();
     const btn = event.currentTarget;
     const txtOriginal = btn.innerText;
-    btn.innerText = "⏳ Buscando Oportunidades..."; 
-    btn.disabled = true;
+    btn.innerText = "⏳ Preparando..."; btn.disabled = true;
 
     try {
-        // Busca oportunidades filtradas por vertical no Back-End
-        const oportunidades = await obterOportunidadesParaMarketingPorVertical();
         const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
-        const urlBase = window.location.href.split('?')[0];
 
-        // 1. Enviar Card da Frase
+        // 1. Enviar Frase
         const blobFrase = await gerarBlobFrase();
-        const legendaFrase = `Conheça o ${APP.nome}: ${urlBase}?app=${appID}`;
+        const legendaFrase = `💡 *FRASE DO DIA*\n"${fraseAtualObj.frase}"\n\n🚀 Gestão para Autônomos: ${window.location.href.split('?')[0]}?app=${appID}`;
         await dispararShareIndividual(blobFrase, "frase.jpg", legendaFrase);
 
-        // 2. Enviar Cards de Oportunidades Reais (se houver)
+        // 2. Enviar Oportunidades (Loop Sequencial)
         for (const op of oportunidades) {
-            if (confirm(`Gerar card de oportunidade para: ${op.cat}?`)) {
+            if (confirm(`Gerar card para: ${op.cat}?`)) {
                 const blobOp = await gerarCardOportunidadeImagem(op);
-                // Link direto para a demanda
-                const linkOp = `${urlBase}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo)}&cat=${encodeURIComponent(op.cat)}`;
-                const legendaOp = `🚀 *OPORTUNIDADE REAL*\nPrecisamos de: *${op.cat.toUpperCase()}*\n📍 ${op.cidade}\n\n🔗 Ver detalhes e orçar: ${linkOp}`;
-                await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, legendaOp);
+                const linkOp = montarLinkOportunidade(op);
+                const legendaOp = `🚀 OPORTUNIDADE: ${op.cat.toUpperCase()}\n\n🔗 Clique para ver e orçar: ${linkOp}`;
+                await dispararShareIndividual(blobOp, `op-${op.id}.jpg`, legendaOp);
             }
         }
 
-        // 3. Card de Convite Final (Se não houver oportunidades ou após as mesmas)
-        if (oportunidades.length === 0) {
-            const blobFinal = await gerarCardFinalMarketing(0);
-            const legendaFinal = `🤝 Seja o primeiro profissional da sua região! Cadastre-se no ${APP.nome}: ${urlBase}?app=${appID}`;
-            await dispararShareIndividual(blobFinal, "convite.jpg", legendaFinal);
-        }
+        // 3. Enviar Card Final
+        const total = listaDemandasCache.filter(d => (d.status === 'ABERTA' || d.situacao === 'ABERTA')).length;
+        const blobFinal = await gerarCardFinalMarketing(oportunidades.length > 0 ? total : 0);
+        const legendaFinal = total > 0 ? `📈 ${total} pedidos ativos! Cadastre-se: ${window.location.href.split('?')[0]}?app=${appID}` : `🤝 Seja o primeiro! Cadastre-se: ${window.location.href.split('?')[0]}?app=${appID}`;
+        await dispararShareIndividual(blobFinal, "mercado.jpg", legendaFinal);
 
     } catch (err) {
-        console.warn("Fluxo finalizado.");
+        console.warn("Fluxo finalizado ou cancelado.");
     } finally {
-        btn.innerText = txtOriginal; 
-        btn.disabled = false;
+        btn.innerText = txtOriginal; btn.disabled = false;
     }
 }
 	
