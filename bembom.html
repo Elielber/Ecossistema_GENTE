@@ -7480,13 +7480,21 @@ async function iniciarMarketing(event) {
         const urlBase = window.location.href.split('?')[0];
         const linkHome = `${urlBase}?app=${appID}`;
 
-        // 🔐 Salva estado inicial
+        // Salva estado inicial
         MarketingState.salvar({
             ativo: true,
             etapa: "frase"
         });
 
         const blobFrase = await gerarBlobFrase();
+		// 🔄 Pré-carregamento silencioso para garantir que o cache exista na volta
+fetch(API_URL, {
+    method: "POST",
+    body: JSON.stringify({ tipo: "BUSCAR_OPORTUNIDADES_MARKETING", vertical: appID })
+})
+.then(res => res.json())
+.then(data => localStorage.setItem("PB_MARKETING_OPPS", JSON.stringify(data)))
+.catch(e => console.warn("Cache falhou, buscará na retomada."));
         await dispararShareIndividual(blobFrase, "frase.jpg", linkHome);
 
         // Após compartilhar frase → preparar próxima etapa
