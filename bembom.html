@@ -426,7 +426,7 @@
     <div id="txt-autor-dia" style="font-size: 0.8rem; font-weight: bold; text-align: right; color: rgba(255,255,255,0.8);">
         </div>
 
-    <button onclick="compartilharFraseImagem()" style="margin-top: 12px; background: #27ae60; border: none; padding: 10px 20px; border-radius: 20px; color: white; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
+    <button onclick="compartilharFraseImagem(event)" style="margin-top: 12px; background: #27ae60; border: none; padding: 10px 20px; border-radius: 20px; color: white; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
         📸 Compartilhar Imagem
     </button>
 </div>
@@ -7407,18 +7407,46 @@ async function compartilharFraseImagem(event) {
     }
 
     const btn = event?.currentTarget;
-    const txtOriginal = btn ? btn.innerText : "";
-    if (btn) {
-        btn.innerText = "⏳ Preparando...";
-        btn.disabled = true;
-    }
+    const textoOriginal = btn ? btn.innerText : "";
 
     try {
+        if (btn) {
+            btn.innerText = "⏳ Gerando frase...";
+            btn.disabled = true;
+        }
+
         const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
         const urlBase = window.location.href.split('?')[0];
         const linkHome = `${urlBase}?app=${appID}`;
 
-        // 🔎 1. Buscar oportunidades no servidor
+
+        // 1️⃣ GERA E COMPARTILHA A FRASE
+        const blobFrase = await gerarBlobFrase();
+        await dispararShareIndividual(blobFrase, "frase.jpg", linkHome);
+
+        // 2️⃣ APÓS FECHAR O SHARE → NOVA INTERAÇÃO
+        setTimeout(() => {
+            const desejaGerar = confirm("Gerar cards das oportunidades agora?");
+            if (desejaGerar) {
+                compartilharOportunidades(); // Nova interação válida
+            }
+        }, 300);
+
+    } catch (err) {
+        console.error("Erro ao compartilhar frase:", err);
+    } finally {
+        if (btn) {
+            btn.innerText = textoOriginal || "Compartilhar";
+            btn.disabled = false;
+        }
+    }
+}
+
+	async function compartilharOportunidades() {
+    try {
+        const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
+        const urlBase = window.location.href.split('?')[0];
+        // Buscar oportunidades no servidor
         const response = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({
@@ -7428,53 +7456,41 @@ async function compartilharFraseImagem(event) {
         });
 
         if (!response.ok) throw new Error("Erro no servidor");
-
         let oportunidades = await response.json();
-        if (!Array.isArray(oportunidades)) {
-            oportunidades = [];
-        }
-
-        // 🖼️ 2. Compartilhar Card da Frase (Legenda: apenas link)
-        const blobFrase = await gerarBlobFrase();
-        await dispararShareIndividual(blobFrase, "frase.jpg", linkHome);
-
-        // 🚀 3. Compartilhar até 3 oportunidades reais
-        for (let i = 0; i < Math.min(oportunidades.length, 3); i++) {
-            const op = oportunidades[i];
-
-            if (!op || !op.id) continue;
-
-			if (!confirm(`Gerar card para: ${op.cat}?`)) continue;
-
-            const blobOp = await gerarCardOportunidadeImagem(op);
-
-            const linkOp =
-                `${urlBase}?app=${appID}` +
-                `&ver_demanda=${encodeURIComponent(op.id)}` +
-                `&grupo=${encodeURIComponent(op.grupo || "")}` +
-                `&cat=${encodeURIComponent(op.cat || "")}`;
-
-            await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
-        }
-
-        // 🤝 4. Se não houver oportunidades, envia card convite
+        if (!Array.isArray(oportunidades)) oportunidades = [];
+		
+        // Se não houver oportunidades
         if (oportunidades.length === 0) {
             const blobConvite = await gerarCardFinalMarketing(0);
+            const linkHome = `${urlBase}?app=${appID}`;
             await dispararShareIndividual(blobConvite, "convite.jpg", linkHome);
+            return;
         }
 
-    } catch (err) {
-        console.error("Erro ao compartilhar:", err);
-        alert("Erro ao gerar cards. Verifique sua conexão.");
-    } finally {
-        if (btn) {
-            btn.innerText = txtOriginal || "Compartilhar";
-            btn.disabled = false;
-        }
-    }
+        // Compartilha até 3 oportunidades
+
+        for (let i = 0; i < Math.min(oportunidades.length, 3); i++) {
+    const op = oportunidades[i];
+
+    const continuar = confirm(`Gerar card de oportunidade: ${op.cat}?`);
+    if (!continuar) break;
+    const blobOp = await gerarCardOportunidadeImagem(op);
+
+    const linkOp =
+        `${urlBase}?app=${appID}` +
+        `&ver_demanda=${encodeURIComponent(op.id)}` +
+        `&grupo=${encodeURIComponent(op.grupo || "")}` +
+        `&cat=${encodeURIComponent(op.cat || "")}`;
+
+    await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
 }
 
-
+    } catch (err) {
+        console.error("Erro ao compartilhar oportunidades:", err);
+        alert("Erro ao gerar oportunidades.");
+    }
+}
+	
 // Filtra e embaralha oportunidades do back-end (listaDemandasCache)
 function obterOportunidadesAleatoriasParaMarketing() {
     const params = new URLSearchParams(window.location.search);
