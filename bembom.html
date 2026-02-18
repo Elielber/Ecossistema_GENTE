@@ -1432,6 +1432,23 @@
   // COLE AQUI SUA URL DO GOOGLE APPS SCRIPT
 const API_URL = "https://script.google.com/macros/s/AKfycbzZe88RI-K75F28JKfE1pD6YbMKWK4kuO-fdexmhOp_4_dO_-oeDwyVtJazuiA3le5rcA/exec"; 
 
+	// máquina de estados
+const MarketingState = {
+    KEY: "PB_MARKETING",
+
+    salvar(data) {
+        localStorage.setItem(this.KEY, JSON.stringify(data));
+    },
+
+    obter() {
+        const raw = localStorage.getItem(this.KEY);
+        return raw ? JSON.parse(raw) : null;
+    },
+
+    limpar() {
+        localStorage.removeItem(this.KEY);
+    }
+};
 
 /* ============================================================
    🚀 MOTOR DO ECOSSISTEMA GENTE (Versão Final Estável)
@@ -1860,9 +1877,26 @@ function checkPremiumLimit() {
     return true;
 	}
 	
+	const MarketingState = {
+    KEY: "PB_MARKETING",
+
+    salvar(data) {
+        localStorage.setItem(this.KEY, JSON.stringify(data));
+    },
+
+    obter() {
+        const raw = localStorage.getItem(this.KEY);
+        return raw ? JSON.parse(raw) : null;
+    },
+
+    limpar() {
+        localStorage.removeItem(this.KEY);
+        localStorage.removeItem("PB_MARKETING_OPPS");
+    }
+};
+
     // --- FUNÇÃO ATUALIZADA DE SALVAR (COM ENVIO DE RISCO) ---
-   	
-      window.onload = () => { 
+   	      window.onload = () => { 
     // 1. Inicialização
     popularCategorias(); 
     loadData();
@@ -2010,6 +2044,35 @@ if (verDemandaId) {
             renderOportunidades();
         }
     }, 60000); // Ajustado para 60 segundos
+			  
+// 7. RECUPERAÇÃO DE MARKETING
+const estadoMarketing = MarketingState.obter();
+
+if (!verDemandaId && estadoMarketing && estadoMarketing.ativo) {
+
+    console.log("🔄 Retomando marketing...");
+
+    // 🔒 Evita loop imediato
+    MarketingState.salvar({
+        ...estadoMarketing,
+        ativo: false
+    });
+
+    if (estadoMarketing.etapa === "oportunidades") {
+
+        setTimeout(() => {
+            const continuar = confirm("Deseja continuar gerando os cards?");
+            
+            if (continuar) {
+                compartilharOportunidades(estadoMarketing.indice || 0);
+            } else {
+                MarketingState.limpar();
+            }
+
+        }, 800);
+    }
+}
+
 };
 
  
@@ -7400,96 +7463,122 @@ async function obterOportunidadesMarketingServidor() {
 }
 
 // 2. Função de compartilhamento consolidada (Frase + Oportunidades Reais)
-async function compartilharFraseImagem(event) {
+async function iniciarMarketing(event) {
     if (!fraseAtualObj) {
         alert("Aguarde o carregamento da frase...");
         return;
     }
 
     const btn = event?.currentTarget;
-    const textoOriginal = btn ? btn.innerText : "";
+    if (btn) {
+        btn.innerText = "⏳ Gerando frase...";
+        btn.disabled = true;
+    }
 
     try {
-        if (btn) {
-            btn.innerText = "⏳ Gerando frase...";
-            btn.disabled = true;
-        }
-
         const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
         const urlBase = window.location.href.split('?')[0];
         const linkHome = `${urlBase}?app=${appID}`;
 
+        // 🔐 Salva estado inicial
+        MarketingState.salvar({
+            ativo: true,
+            etapa: "frase"
+        });
 
-        // 1️⃣ GERA E COMPARTILHA A FRASE
         const blobFrase = await gerarBlobFrase();
         await dispararShareIndividual(blobFrase, "frase.jpg", linkHome);
 
-        // 2️⃣ APÓS FECHAR O SHARE → NOVA INTERAÇÃO
-        setTimeout(() => {
-            const desejaGerar = confirm("Gerar cards das oportunidades agora?");
-            if (desejaGerar) {
-                compartilharOportunidades(); // Nova interação válida
-            }
-        }, 300);
+        // Após compartilhar frase → preparar próxima etapa
+        MarketingState.salvar({
+            ativo: true,
+            etapa: "oportunidades",
+            indice: 0
+        });
 
     } catch (err) {
-        console.error("Erro ao compartilhar frase:", err);
+        console.error("Erro na frase:", err);
+        MarketingState.limpar();
     } finally {
         if (btn) {
-            btn.innerText = textoOriginal || "Compartilhar";
+            btn.innerText = "Compartilhar";
             btn.disabled = false;
         }
     }
 }
 
-	async function compartilharOportunidades() {
+
+async function compartilharOportunidades(indiceInicial = 0) {
     try {
+        const estado = MarketingState.obter();
+        if (!estado || !estado.ativo) return;
+
         const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
         const urlBase = window.location.href.split('?')[0];
-        // Buscar oportunidades no servidor
-        const response = await fetch(API_URL, {
-            method: "POST",
-            body: JSON.stringify({
-                tipo: "BUSCAR_OPORTUNIDADES_MARKETING",
-                vertical: appID
-            })
-        });
 
-        if (!response.ok) throw new Error("Erro no servidor");
-        let oportunidades = await response.json();
-        if (!Array.isArray(oportunidades)) oportunidades = [];
-		
-        // Se não houver oportunidades
+        // 🔄 Recupera oportunidades do cache ou servidor
+        let oportunidades = JSON.parse(localStorage.getItem("PB_MARKETING_OPPS") || "null");
+
+        if (!Array.isArray(oportunidades)) {
+            const response = await fetch(API_URL, {
+                method: "POST",
+                body: JSON.stringify({
+                    tipo: "BUSCAR_OPORTUNIDADES_MARKETING",
+                    vertical: appID
+                })
+            });
+
+            oportunidades = await response.json();
+            if (!Array.isArray(oportunidades)) oportunidades = [];
+
+            localStorage.setItem("PB_MARKETING_OPPS", JSON.stringify(oportunidades));
+        }
+
         if (oportunidades.length === 0) {
             const blobConvite = await gerarCardFinalMarketing(0);
             const linkHome = `${urlBase}?app=${appID}`;
             await dispararShareIndividual(blobConvite, "convite.jpg", linkHome);
+            MarketingState.limpar();
             return;
         }
 
-        // Compartilha até 3 oportunidades
+        for (let i = indiceInicial; i < Math.min(oportunidades.length, 3); i++) {
 
-        for (let i = 0; i < Math.min(oportunidades.length, 3); i++) {
-    const op = oportunidades[i];
+            const op = oportunidades[i];
 
-    const continuar = confirm(`Gerar card de oportunidade: ${op.cat}?`);
-    if (!continuar) break;
-    const blobOp = await gerarCardOportunidadeImagem(op);
+            const continuar = confirm(`Gerar card de ${op.cat}?`);
+            if (!continuar) {
+                MarketingState.limpar();
+                return;
+            }
 
-    const linkOp =
-        `${urlBase}?app=${appID}` +
-        `&ver_demanda=${encodeURIComponent(op.id)}` +
-        `&grupo=${encodeURIComponent(op.grupo || "")}` +
-        `&cat=${encodeURIComponent(op.cat || "")}`;
+            const blobOp = await gerarCardOportunidadeImagem(op);
 
-    await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
-}
+            const linkOp =
+                `${urlBase}?app=${appID}` +
+                `&ver_demanda=${encodeURIComponent(op.id)}` +
+                `&grupo=${encodeURIComponent(op.grupo || "")}` +
+                `&cat=${encodeURIComponent(op.cat || "")}`;
+
+            await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
+
+            // 🔐 Atualiza progresso
+            MarketingState.salvar({
+                ativo: true,
+                etapa: "oportunidades",
+                indice: i + 1
+            });
+        }
+
+        // Finalizou tudo
+        MarketingState.limpar();
+        localStorage.removeItem("PB_MARKETING_OPPS");
 
     } catch (err) {
-        console.error("Erro ao compartilhar oportunidades:", err);
-        alert("Erro ao gerar oportunidades.");
+        console.error("Erro nas oportunidades:", err);
     }
 }
+
 	
 // Filtra e embaralha oportunidades do back-end (listaDemandasCache)
 function obterOportunidadesAleatoriasParaMarketing() {
