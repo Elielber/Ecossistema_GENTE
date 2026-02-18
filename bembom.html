@@ -1134,7 +1134,7 @@
             </div>
             <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
         <p style="font-size: 0.9em; color: #666;">Ajude a divulgar novas vagas:</p>
-        <button onclick="gerarMarketingManual()" class="btn-marketing" 
+        <button onclick="gerarMarketingManual(event)" class="btn-marketing" 
                 style="background: var(--success); color: white; width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold;">
             🚀 Gerar Cards de Oportunidades
         </button>
@@ -7426,26 +7426,6 @@ async function carregarFraseDoDia() {
     }
 }
 
-// 1. Busca oportunidades no Back-end filtradas pela Vertical
-async function obterOportunidadesMarketingServidor() {
-    const appAtualID = localStorage.getItem('PB_APP_ID') || 'OBRA';
-    try {
-        const response = await fetch(API_URL, {
-            method: "POST",
-            body: JSON.stringify({
-                tipo: "BUSCAR_OPORTUNIDADES_MARKETING",
-                vertical: appAtualID
-            })
-        });
-        const data = await response.json();
-        return Array.isArray(data) ? data : [];
-    } catch (e) {
-        console.error("Erro na busca de marketing:", e);
-        return [];
-    }
-}
-
-// 2. Função de compartilhamento consolidada (Frase + Oportunidades Reais)
 async function iniciarMarketing(event) {
     if (!fraseAtualObj) {
         alert("Aguarde o carregamento da frase...");
@@ -7457,7 +7437,7 @@ async function iniciarMarketing(event) {
 
     try {
         if (btn) {
-            btn.innerText = "⏳ Preparando...";
+            btn.innerText = "⏳ Gerando...";
             btn.disabled = true;
         }
 
@@ -7465,35 +7445,14 @@ async function iniciarMarketing(event) {
         const urlBase = window.location.href.split('?')[0];
         const linkHome = `${urlBase}?app=${appID}`;
 
-        // 1️⃣ BUSCA AS OPORTUNIDADES PRIMEIRO (Garante o cache para a volta)
-        const response = await fetch(API_URL, {
-            method: "POST",
-            body: JSON.stringify({ 
-                tipo: "BUSCAR_OPORTUNIDADES_MARKETING", 
-                vertical: appID 
-            })
-        });
-        const oportunidades = await response.json();
-        localStorage.setItem("PB_MARKETING_OPPS", JSON.stringify(oportunidades));
-
-        // 2️⃣ SALVA O ESTADO DE RETOMADA (Caso o sistema reinicie o app)
-        MarketingState.salvar({
-            ativo: true,
-            etapa: "oportunidades",
-            indice: 0
-        });
-
-        // 3️⃣ GERA A IMAGEM
+        // Gera apenas a imagem da frase
         const blobFrase = await gerarBlobFrase();
 
-        // 4️⃣ DISPARA O COMPARTILHAMENTO
-        // Quando o usuário volta daqui, o window.onload lerá o estado salvo acima
+        // Dispara o compartilhamento (Legenda limpa apenas com o link)
         await dispararShareIndividual(blobFrase, "frase.jpg", linkHome);
 
     } catch (err) {
-        console.error("Erro no fluxo de marketing:", err);
-        MarketingState.limpar();
-        alert("Erro ao preparar marketing. Verifique sua conexão.");
+        console.error("Erro no marketing da frase:", err);
     } finally {
         if (btn) {
             btn.innerText = textoOriginal;
@@ -7501,20 +7460,18 @@ async function iniciarMarketing(event) {
         }
     }
 }
-
 async function gerarMarketingManual(event) {
-
     const btn = event.currentTarget;
     const txtOriginal = btn.innerText;
 
     try {
-
         btn.innerText = "⏳ Buscando vagas...";
         btn.disabled = true;
 
         const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
         const urlBase = window.location.href.split('?')[0];
 
+        // 1. Busca oportunidades no Back-end
         const response = await fetch(API_URL, {
             method: "POST",
             body: JSON.stringify({
@@ -7525,81 +7482,37 @@ async function gerarMarketingManual(event) {
 
         const oportunidades = await response.json();
 
+        // 2. Se não houver vagas, gera card de convite
         if (!Array.isArray(oportunidades) || oportunidades.length === 0) {
-
-            alert("Não encontramos vagas abertas. Gerando card de convite.");
-
+            alert("Nenhuma vaga aberta no momento. Gerando convite para novos profissionais!");
             const blobConvite = await gerarCardFinalMarketing(0);
-
-            await dispararShareIndividual(
-                blobConvite,
-                "convite.jpg",
-                `${urlBase}?app=${appID}`
-            );
-
+            await dispararShareIndividual(blobConvite, "convite.jpg", `${urlBase}?app=${appID}`);
             return;
         }
 
+        // 3. Loop manual: um 'confirm' para cada card (Garante interação válida no navegador)
         for (let i = 0; i < Math.min(oportunidades.length, 3); i++) {
-
             const op = oportunidades[i];
-
-            const continuar = confirm(`Gerar card para: ${op.cat}?`);
-
+            
+            // Pergunta antes de cada card para reativar o 'navigator.share'
+            const continuar = confirm(`Gerar card de marketing para: ${op.cat}?`);
             if (!continuar) break;
 
-            btn.innerText = "⏳ Desenhando card...";
-
+            btn.innerText = "⏳ Desenhando...";
             const blobOp = await gerarCardOportunidadeImagem(op);
-
             const linkOp = `${urlBase}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo || "")}&cat=${encodeURIComponent(op.cat || "")}`;
 
-            await dispararShareIndividual(
-                blobOp,
-                `vaga-${op.id}.jpg`,
-                linkOp
-            );
+            await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
         }
 
     } catch (err) {
-
         console.error("Erro no marketing manual:", err);
         alert("Erro ao conectar com o servidor.");
-
     } finally {
-
         btn.innerText = txtOriginal;
         btn.disabled = false;
     }
 }
-
-
-	
-// Filtra e embaralha oportunidades do back-end (listaDemandasCache)
-function obterOportunidadesAleatoriasParaMarketing() {
-    const params = new URLSearchParams(window.location.search);
-    const appAtualID = params.get('app') || localStorage.getItem('PB_APP_ID') || 'OBRA';
-    
-    if (!VERTICAIS[appAtualID]) return [];
-
-    const especialidadesDaVertical = [];
-    Object.values(VERTICAIS[appAtualID].categorias).forEach(lista => especialidadesDaVertical.push(...lista));
-
-    // Filtra demandas ABERTAS que pertencem à vertical atual
-    let filtradas = listaDemandasCache.filter(d => 
-        (d.status === 'ABERTA' || d.situacao === 'ABERTA') && 
-        especialidadesDaVertical.includes(d.cat)
-    );
-
-    // Embaralha (Fisher-Yates) para garantir aleatoriedade no marketing
-    for (let i = filtradas.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [filtradas[i], filtradas[j]] = [filtradas[j], filtradas[i]];
-    }
-
-    return filtradas.slice(0, 3); // Limite de 3 conforme solicitado
-}
-
 // Gera o link de autocompletação para o novo prestador
 function montarLinkOportunidade(op) {
     const baseUrl = window.location.href.split('?')[0];
