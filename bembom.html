@@ -7380,79 +7380,70 @@ async function carregarFraseDoDia() {
     }
 }
 
-function compartilharFraseImagem() {
-    // Verifica se existe frase carregada
-    if (typeof fraseAtualObj === 'undefined' || !fraseAtualObj) return;
+// 1. Busca oportunidades no Back-end filtradas pela Vertical
+async function obterOportunidadesMarketingServidor() {
+    const appAtualID = localStorage.getItem('PB_APP_ID') || 'OBRA';
+    try {
+        const response = await fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify({
+                tipo: "BUSCAR_OPORTUNIDADES_MARKETING",
+                vertical: appAtualID
+            })
+        });
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
+    } catch (e) {
+        console.error("Erro na busca de marketing:", e);
+        return [];
+    }
+}
 
-    const btn = event.currentTarget; // Captura o botão clicado
-    const txtOriginal = btn.innerText;
-    btn.innerText = "⏳ Gerando...";
-    btn.disabled = true;
-
-    // Configura o Canvas (1080x1080 para Instagram/Zap)
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = 1080;
-    canvas.height = 1080;
-
-    // --- 1. FUNDO ---
-    const grd = ctx.createLinearGradient(0, 0, 0, 1080);
-    grd.addColorStop(0, "#2c3e50");   // Topo escuro
-    grd.addColorStop(1, "#000000");   // Base preta
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, 1080, 1080);
-    
-    // Borda superior colorida (Identidade visual)
-    ctx.fillStyle = APP.cor; 
-    ctx.fillRect(0, 0, 1080, 20);
-
-    // --- 2. MARCA D'ÁGUA GIGANTE (Ícone da Vertical) ---
-    ctx.font = "bold 400px sans-serif";
-    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
-    ctx.textAlign = "center";
-    ctx.fillText("🤝", 540, 680); // Pode usar APP.icone aqui se quiser a marca d'água dinâmica
-
-    // --- 3. CABEÇALHO ---
-    // Ícone Principal
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "80px sans-serif";
-    ctx.fillText(APP.icone, 540, 150); 
-    
-    // Nome do App (Na cor da Vertical)
-    ctx.fillStyle = APP.cor; 
-    ctx.font = "bold 50px sans-serif";
-    ctx.fillText(APP.nome.toUpperCase(), 540, 220); 
-
-    ctx.fillStyle = "#bdc3c7"; // Cinza claro
-    ctx.font = "30px sans-serif";
-    ctx.fillText("Inspiração do Dia", 540, 270);
-
-    // --- 4. A FRASE ---
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "italic 55px serif"; 
-    
-    const texto = `"${fraseAtualObj.frase}"`;
-    let startY = 450;
-    if(texto.length < 50) startY = 500; 
-    
-    // Chama a função wrapText existente no seu código
-    // Se der erro aqui, certifique-se que a função wrapText está declarada no arquivo
-    if (typeof wrapText === "function") {
-        wrapText(ctx, texto, 540, startY, 900, 75);
-    } else {
-        // Fallback simples se wrapText não existir
-        ctx.fillText(texto, 540, 500); 
+// 2. Função de compartilhamento consolidada (Frase + Oportunidades Reais)
+async function compartilharFraseImagem() {
+    if (!fraseAtualObj) {
+        alert("Carregando frase..."); return;
     }
 
-    // --- 5. AUTOR ---
-    ctx.fillStyle = APP.cor; 
-    ctx.font = "bold 40px sans-serif";
-    ctx.fillText(`— ${fraseAtualObj.autor}`, 540, 850);
+    const btn = event.currentTarget;
+    const txtOriginal = btn.innerText;
+    btn.innerText = "⏳ Preparando Cards...";
+    btn.disabled = true;
 
-    // --- 6. RODAPÉ (MODIFICADO AQUI) ---
-    ctx.fillStyle = "rgba(255,255,255,0.8)";
-    ctx.font = "28px sans-serif";
+    try {
+        const oportunidades = await obterOportunidadesMarketingServidor();
+        const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
+        const urlBase = window.location.href.split('?')[0];
 
+        // CARD 1: Frase do Dia (Sempre enviado)
+        const blobFrase = await gerarBlobFrase();
+        const legendaFrase = `💡 *FRASE DO DIA*\n"${fraseAtualObj.frase}"\n\n🚀 Conheça o ${APP.nome}: ${urlBase}?app=${appID}`;
+        await dispararShareIndividual(blobFrase, "frase.jpg", legendaFrase);
+
+        // CARDS 2 a 4: Oportunidades Reais (Sequencial)
+        if (oportunidades.length > 0) {
+            for (let i = 0; i < Math.min(oportunidades.length, 3); i++) {
+                const op = oportunidades[i];
+                if (confirm(`Gerar card para oportunidade de: ${op.cat}?`)) {
+                    const blobOp = await gerarCardOportunidadeImagem(op);
+                    const linkOp = `${urlBase}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo)}&cat=${encodeURIComponent(op.cat)}`;
+                    const legendaOp = `🚀 *NOVA OPORTUNIDADE*\n📍 ${op.cidade}\n👉 Vaga para: ${op.cat.toUpperCase()}\n\n🔗 Detalhes aqui: ${linkOp}`;
+                    await dispararShareIndividual(blobOp, `vaga.jpg`, legendaOp);
+                }
+            }
+        } else {
+            // Se não houver vagas, envia apenas o card de convite
+            const blobConvite = await gerarCardFinalMarketing(0);
+            const legendaConvite = `🤝 Seja o primeiro profissional da região! Cadastre-se: ${urlBase}?app=${appID}`;
+            await dispararShareIndividual(blobConvite, "convite.jpg", legendaConvite);
+        }
+
+    } catch (err) {
+        console.warn("Fluxo finalizado.");
+    } finally {
+        btn.innerText = txtOriginal;
+        btn.disabled = false;
+    }
 }
 
 // Filtra e embaralha oportunidades do back-end (listaDemandasCache)
@@ -7503,19 +7494,67 @@ async function dispararShareIndividual(blob, fileName, text) {
 
 
 // Card 1: Frase do Dia
+// Card 1 Atualizado: Frase do Dia com estilo visual aprimorado
 async function gerarBlobFrase() {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = 1080; canvas.height = 1080;
+    canvas.width = 1080; 
+    canvas.height = 1080;
+
+    // --- 1. FUNDO EM DEGRADÊ ---
     const grd = ctx.createLinearGradient(0, 0, 0, 1080);
-    grd.addColorStop(0, "#2c3e50"); grd.addColorStop(1, "#000000");
-    ctx.fillStyle = grd; ctx.fillRect(0, 0, 1080, 1080);
-    ctx.fillStyle = APP.cor; ctx.fillRect(0, 0, 1080, 25);
-    ctx.textAlign = "center"; ctx.fillStyle = "#ffffff";
-    ctx.font = "italic 55px serif";
-    wrapText(ctx, `"${fraseAtualObj.frase}"`, 540, 450, 900, 75);
-    ctx.fillStyle = APP.cor; ctx.font = "bold 40px sans-serif";
+    grd.addColorStop(0, "#2c3e50");   // Topo escuro
+    grd.addColorStop(1, "#000000");   // Base preta
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, 1080, 1080);
+    
+    // Borda superior colorida (Identidade visual da vertical)
+    ctx.fillStyle = APP.cor; 
+    ctx.fillRect(0, 0, 1080, 20);
+
+    // --- 2. MARCA D'ÁGUA GIGANTE ---
+    ctx.font = "bold 400px sans-serif";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+    ctx.textAlign = "center";
+    ctx.fillText("🤝", 540, 680); 
+
+    // --- 3. CABEÇALHO ---
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "80px sans-serif";
+    ctx.fillText(APP.icone, 540, 150); 
+    
+    ctx.fillStyle = APP.cor; 
+    ctx.font = "bold 50px sans-serif";
+    ctx.fillText(APP.nome.toUpperCase(), 540, 220); 
+
+    ctx.fillStyle = "#bdc3c7"; // Cinza claro
+    ctx.font = "30px sans-serif";
+    ctx.fillText("Inspiração do Dia", 540, 270);
+
+    // --- 4. A FRASE (Com lógica de posicionamento) ---
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "italic 55px serif"; 
+    
+    const texto = `"${fraseAtualObj.frase}"`;
+    let startY = (texto.length < 50) ? 500 : 450;
+    
+    // Utiliza a função wrapText para quebra automática de linha
+    if (typeof wrapText === "function") {
+        wrapText(ctx, texto, 540, startY, 900, 75);
+    } else {
+        ctx.fillText(texto, 540, startY); 
+    }
+
+    // --- 5. AUTOR ---
+    ctx.fillStyle = APP.cor; 
+    ctx.font = "bold 40px sans-serif";
     ctx.fillText(`— ${fraseAtualObj.autor}`, 540, 850);
+
+    // --- 6. RODAPÉ ---
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.font = "24px sans-serif";
+    ctx.fillText("Gerado automaticamente via Ecossistema GENTE", 540, 1030);
+
     return new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
 }
 
