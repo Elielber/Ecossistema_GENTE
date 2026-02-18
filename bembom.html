@@ -7561,42 +7561,6 @@ async function gerarCardFinalMarketing(total) {
 
 
 
-async function compartilharFraseImagem() {
-    const oportunidades = obterOportunidadesAleatoriasParaMarketing();
-    const btn = event.currentTarget;
-    const txtOriginal = btn.innerText;
-    btn.innerText = "⏳ Preparando..."; btn.disabled = true;
-
-    try {
-        const appID = localStorage.getItem('PB_APP_ID') || 'OBRA';
-
-        // 1. Enviar Frase
-        const blobFrase = await gerarBlobFrase();
-        const legendaFrase = `💡 *FRASE DO DIA*\n"${fraseAtualObj.frase}"\n\n🚀 Gestão para Autônomos: ${window.location.href.split('?')[0]}?app=${appID}`;
-        await dispararShareIndividual(blobFrase, "frase.jpg", legendaFrase);
-
-        // 2. Enviar Oportunidades (Loop Sequencial)
-        for (const op of oportunidades) {
-            if (confirm(`Gerar card para: ${op.cat}?`)) {
-                const blobOp = await gerarCardOportunidadeImagem(op);
-                const linkOp = montarLinkOportunidade(op);
-                const legendaOp = `🚀 OPORTUNIDADE: ${op.cat.toUpperCase()}\n\n🔗 Clique para ver e orçar: ${linkOp}`;
-                await dispararShareIndividual(blobOp, `op-${op.id}.jpg`, legendaOp);
-            }
-        }
-
-        // 3. Enviar Card Final
-        const total = listaDemandasCache.filter(d => (d.status === 'ABERTA' || d.situacao === 'ABERTA')).length;
-        const blobFinal = await gerarCardFinalMarketing(oportunidades.length > 0 ? total : 0);
-        const legendaFinal = total > 0 ? `📈 ${total} pedidos ativos! Cadastre-se: ${window.location.href.split('?')[0]}?app=${appID}` : `🤝 Seja o primeiro! Cadastre-se: ${window.location.href.split('?')[0]}?app=${appID}`;
-        await dispararShareIndividual(blobFinal, "mercado.jpg", legendaFinal);
-
-    } catch (err) {
-        console.warn("Fluxo finalizado ou cancelado.");
-    } finally {
-        btn.innerText = txtOriginal; btn.disabled = false;
-    }
-}
 	
 function abrirModalSuporte() {
     document.getElementById('modal-suporte').style.display = 'block';
