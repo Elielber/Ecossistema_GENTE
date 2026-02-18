@@ -7434,13 +7434,20 @@ async function gerarMarketingContextualVertical(event) {
     const btn = event.currentTarget;
     const txtOriginal = btn.innerText;
 
-    const appID = getAppIDAtual();
-    const nomeVertical = APP.nome || appID;
-
     try {
 
+        const appID = getAppIDAtual();
+
+        if (!VERTICAIS || !VERTICAIS[appID]) {
+            throw new Error("Vertical inválida.");
+        }
+
+        // 🔥 Força sincronização da identidade visual
+        APP = VERTICAIS[appID];
+
+        const nomeVertical = APP.nome || appID;
+
         btn.disabled = true;
-        btn.innerText = "⏳ Preparando...";
 
         // 🔄 Se mudou de vertical, reseta controle
         if (verticalMarketingAtual !== appID) {
@@ -7449,7 +7456,9 @@ async function gerarMarketingContextualVertical(event) {
             verticalMarketingAtual = appID;
         }
 
-        // 📡 Busca apenas se ainda não carregou
+        // =========================================================
+        // 📡 PRIMEIRO CLIQUE → APENAS BUSCA AS VAGAS (SEM SHARE)
+        // =========================================================
         if (listaMarketing.length === 0) {
 
             btn.innerText = "⏳ Buscando vagas...";
@@ -7463,48 +7472,66 @@ async function gerarMarketingContextualVertical(event) {
             });
 
             listaMarketing = await response.json();
+            indiceMarketing = 0;
 
             if (!Array.isArray(listaMarketing) || listaMarketing.length === 0) {
                 alert(`No momento não há vagas abertas para ${nomeVertical}.`);
+                btn.innerText = txtOriginal;
                 return;
             }
+
+            btn.innerText = "🚀 Gerar Primeira Vaga";
+            return; // 🔴 IMPORTANTE: NÃO FAZ SHARE AQUI
         }
 
-        // 🚫 Acabaram as vagas
+        // =========================================================
+        // 🚫 Se acabaram as vagas
+        // =========================================================
         if (!listaMarketing[indiceMarketing]) {
             alert("Todas as vagas já foram compartilhadas.");
             indiceMarketing = 0;
+            btn.innerText = "🚀 Recomeçar Vagas";
             return;
         }
 
-        // 🎯 Pega apenas UMA vaga por clique
+        // =========================================================
+        // 🎯 AQUI SIM: 1 CLIQUE = 1 SHARE
+        // =========================================================
+
         const op = listaMarketing[indiceMarketing];
 
         btn.innerText = "🎨 Gerando card...";
 
+        if (!op.id) {
+            throw new Error("Vaga sem ID.");
+        }
+
         const blobOp = await gerarCardOportunidadeImagem(op);
 
+        if (!blobOp) {
+            throw new Error("Falha ao gerar imagem.");
+        }
+
         const urlBase = window.location.href.split('?')[0];
+
         const linkOp = `${urlBase}?app=${appID}&ver_demanda=${op.id}&grupo=${encodeURIComponent(op.grupo || "")}&cat=${encodeURIComponent(op.cat || "")}`;
 
+        // 🔥 ESTE SHARE AGORA É DIRETO DO CLIQUE (SEM FETCH ANTES)
         await dispararShareIndividual(blobOp, `vaga-${op.id}.jpg`, linkOp);
 
-        // ➕ Avança para próxima vaga
         indiceMarketing++;
 
-        btn.innerText = "✅ Gerar Próxima Vaga";
+        btn.innerText = "🚀 Gerar Próxima Vaga";
 
-  } catch (err) {
-    console.error("ERRO DETALHADO:", err);
-    alert("Erro real: " + err.message);
-}
+    } catch (err) {
 
-	
-	finally {
+        console.error("Erro marketing:", err);
+        alert("Erro: " + err.message);
+
+        btn.innerText = txtOriginal;
+
+    } finally {
         btn.disabled = false;
-        if (btn.innerText === "⏳ Preparando..." || btn.innerText === "⏳ Buscando vagas...") {
-            btn.innerText = txtOriginal;
-        }
     }
 }
 
