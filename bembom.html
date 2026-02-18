@@ -7503,23 +7503,21 @@ function compartilharFraseImagem() {
 // Filtra oportunidades diretamente da Vertical (Sem depender do login do prestador)
 async function obterOportunidadesParaMarketingPorVertical() {
     const appAtualID = localStorage.getItem('PB_APP_ID') || 'OBRA';
-    
     try {
-        // Busca TODAS as demandas da vertical no servidor
-        const response = await fetch(API_URL + "?acao=BUSCAR_OPORTUNIDADES_MARKETING&vertical=" + appAtualID);
+        const response = await fetch(API_URL, {
+            method: "POST",
+            body: JSON.stringify({
+                tipo: "BUSCAR_OPORTUNIDADES_MARKETING",
+                vertical: appAtualID
+            })
+        });
         const filtradas = await response.json();
-
         if (!Array.isArray(filtradas)) return [];
-
-        // Embaralha para variar os cards no status
-        for (let i = filtradas.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [filtradas[i], filtradas[j]] = [filtradas[j], filtradas[i]];
-        }
-
-        return filtradas.slice(0, 3); // Retorna as 3 primeiras
+        
+        // Embaralha resultados
+        return filtradas.sort(() => Math.random() - 0.5).slice(0, 3);
     } catch (e) {
-        console.error("Erro ao buscar oportunidades da vertical:", e);
+        console.error("Erro ao buscar marketing:", e);
         return [];
     }
 }
