@@ -5587,17 +5587,23 @@ function gerarZap() {
     // Finaliza garantindo que o resultado tenha apenas 4 dígitos hexadecimais
     return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
 }
-   function generatePixPayload(key, name, city, amount, txid = "APOIO") {
+  function generatePixPayload(key, name, city, amount, txid = "APOIO", mensagem = "Apoio ao Projeto BemBom") {
     if (!key) return null;
 
     name = name.toUpperCase().substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     city = city.toUpperCase().substring(0, 15).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     amount = parseFloat(amount).toFixed(2);
     txid = txid.toUpperCase().replace(/\s/g, '').substring(0, 25);
+    
+    // Formata a mensagem (limite de 25 caracteres para evitar erros em alguns bancos)
+    mensagem = mensagem.substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    // Montagem do campo 26 com a mensagem (Tag 02)
+    const infoAdicional = '0014br.gov.bcb.pix' + '01' + key.length.toString().padStart(2, '0') + key + '02' + mensagem.length.toString().padStart(2, '0') + mensagem;
 
     const p = [
         '000201',
-        '26' + (key.length + 22).toString().padStart(2, '0') + '0014br.gov.bcb.pix' + '01' + key.length.toString().padStart(2, '0') + key,
+        '26' + infoAdicional.length.toString().padStart(2, '0') + infoAdicional,
         '52040000',
         '5303986',
         '54' + amount.length.toString().padStart(2, '0') + amount,
