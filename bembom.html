@@ -5588,7 +5588,7 @@ function gerarZap() {
     return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
 }
   // Adicionamos 'msg' como o último parâmetro
-function generatePixPayload(key, name, city, amount, txid = "APOIO", msg = "") {
+function generatePixPayload(key, name, city, amount, txid = "BEMBOM", msg = "") {
     if (!key) return null;
 
     name = name.toUpperCase().substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -5621,7 +5621,21 @@ function generatePixPayload(key, name, city, amount, txid = "APOIO", msg = "") {
     pl += crc16ccitt(pl); 
     return pl;
 }
-    function abrirModalPix(){ const t=updateTotal(0); if(t<=0){alert("Zerado");return;} if(!state.config.pixKey){document.getElementById('pix-alert').style.display='block';document.getElementById('pix-container').style.display='none';} else { document.getElementById('pix-alert').style.display='none';document.getElementById('pix-container').style.display='block'; const pl=generatePixPayload(state.config.pixKey,state.config.pixName||"User",state.config.pixCity||"BR",t); document.getElementById('txt-brcode').innerText=pl; document.getElementById('val-pix-display').innerText=t.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); document.getElementById('img-qr').src=`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(pl)}`; } document.getElementById('modal-pix').style.display='flex'; }
+    function abrirModalPix(){ const t=updateTotal(0); if(t<=0){alert("Zerado");return;} if(!state.config.pixKey){document.getElementById('pix-alert').style.display='block';document.getElementById('pix-container').style.display='none';} else {
+    document.getElementById('pix-alert').style.display = 'none';
+    document.getElementById('pix-container').style.display = 'block';
+
+    const msgServico = "Pagamento via BemBom";
+
+    // Chamada atualizada para o prestador
+    const pl = generatePixPayload(
+        state.config.pixKey, 
+        state.config.pixName || "User", 
+        state.config.pixCity || "BR", 
+        t, 
+        "BEMBOM", 
+        msgServico
+    ); document.getElementById('txt-brcode').innerText=pl; document.getElementById('val-pix-display').innerText=t.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); document.getElementById('img-qr').src=`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(pl)}`; } document.getElementById('modal-pix').style.display='flex'; }
     function copiarPix(){ navigator.clipboard.writeText(document.getElementById('txt-brcode').innerText).then(()=>alert("Copiado!")); }
 	function abrirModalAvaliacao(idDemanda, nomePrestador, zapPrestador) {
     document.getElementById('aval-id-demanda').value = idDemanda;
@@ -7942,13 +7956,15 @@ async function doarViaPix() {
     let textoFinal = "";
     let mensagemAlerta = "";
 
-    if (!isNaN(valorNumerico) && valorNumerico > 0) {
-        // GERA O PIX COPIA E COLA
-        // Passamos 'msgApoio' como o 6º parâmetro
-        textoFinal = generatePixPayload(chavePix, nomeRecebedor, cidadeRecebedor, valorNumerico, txid, msgApoio);
-        
-        mensagemAlerta = `Agradecemos o apoio de R$ ${valorNumerico.toFixed(2)}! 🚀\n\nO código 'Pix Copia e Cola' foi copiado.\n\nAgora abra o app do seu banco, vá em 'Pix' e escolha 'Copia e Cola'.\n\nA mensagem "${msgApoio}" aparecerá na confirmação.`;
-    } else {
+   if (!isNaN(valorNumerico) && valorNumerico > 0) {
+    const msgApoio = "Apoio ao Projeto BemBom";
+    const meuTxid = "APOIO";
+    
+    // Chamada atualizada com os 6 parâmetros
+    textoFinal = generatePixPayload(chavePix, nomeRecebedor, cidadeRecebedor, valorNumerico, meuTxid, msgApoio);
+    
+    mensagemAlerta = `Agradecemos o apoio de R$ ${valorNumerico.toFixed(2)}! 🚀\n\nO código foi copiado. A mensagem "${msgApoio}" aparecerá no seu banco.`;
+} else {
         textoFinal = chavePix;
         mensagemAlerta = `A chave Pix (${chavePix}) foi copiada! ❤️\n\nAgora abra o app do seu banco e cole esta chave no campo 'Transferir' ou 'Pix' para definir o valor lá.`;
     }
