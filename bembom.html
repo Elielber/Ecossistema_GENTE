@@ -5570,23 +5570,47 @@ function gerarZap() {
     window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
 }
     
-    function crc16ccitt(str) { let crc=0xFFFF; for(let i=0;i<str.length;i++){ let c=str.charCodeAt(i); crc^=(c<<8); for(let j=0;j<8;j++){ if(crc&0x8000)crc=(crc<<1)^0x1021; else crc=crc<<1; } } return (crc&0xFFFF).toString(16).toUpperCase().padStart(4,'0'); }
-    function generatePixPayload(key,name,city,amount,txid="***"){ if(!key)return null; name=name.substring(0,25).normalize("NFD").replace(/[\u0300-\u036f]/g,""); city=city.substring(0,15).normalize("NFD").replace(/[\u0300-\u036f]/g,""); amount=amount.toFixed(2); 
-	const p = [
-  '000201',
-  // O segredo está aqui: o domínio em MINÚSCULAS
-  '26' + (18 + key.length + 4).toString().padStart(2, '0') + '0014br.gov.bcb.pix' + '01' + key.length.toString().padStart(2, '0') + key,
-  '52040000',
-  '5303986',
-  '54' + amount.length.toString().padStart(2, '0') + amount,
-  '5802BR',
-  // Garanta que o nome esteja em maiúsculas e sem acentos
-  '59' + name.length.toString().padStart(2, '0') + name.toUpperCase(),
-  '60' + city.length.toString().padStart(2, '0') + city.toUpperCase(),
-  // Use um TXID simples sem asteriscos
-  '62' + (4 + txid.length + 4).toString().padStart(2, '0') + '05' + txid.length.toString().padStart(2, '0') + txid
-];
-	let pl=p.join('')+'6304'; pl+=crc16ccitt(pl); return pl; }
+    function crc16ccitt(str) {
+    let crc = 0xFFFF;
+    for (let i = 0; i < str.length; i++) {
+        let c = str.charCodeAt(i);
+        crc ^= (c << 8);
+        for (let j = 0; j < 8; j++) {
+            // O >>> 0 garante que o JavaScript trate o número como positivo
+            if ((crc & 0x8000) !== 0) {
+                crc = ((crc << 1) ^ 0x1021) >>> 0;
+            } else {
+                crc = (crc << 1) >>> 0;
+            }
+        }
+    }
+    // Finaliza garantindo que o resultado tenha apenas 4 dígitos hexadecimais
+    return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+}
+   function generatePixPayload(key, name, city, amount, txid = "APOIO") {
+    if (!key) return null;
+
+    name = name.toUpperCase().substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    city = city.toUpperCase().substring(0, 15).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    amount = parseFloat(amount).toFixed(2);
+    txid = txid.toUpperCase().replace(/\s/g, '').substring(0, 25);
+
+    const p = [
+        '000201',
+        '26' + (key.length + 22).toString().padStart(2, '0') + '0014br.gov.bcb.pix' + '01' + key.length.toString().padStart(2, '0') + key,
+        '52040000',
+        '5303986',
+        '54' + amount.length.toString().padStart(2, '0') + amount,
+        '5802BR',
+        '59' + name.length.toString().padStart(2, '0') + name,
+        '60' + city.length.toString().padStart(2, '0') + city,
+        '62' + (txid.length + 4).toString().padStart(2, '0') + '05' + txid.length.toString().padStart(2, '0') + txid
+    ];
+
+    let pl = p.join('') + '6304';
+    pl += crc16ccitt(pl); 
+    return pl;
+}
     function abrirModalPix(){ const t=updateTotal(0); if(t<=0){alert("Zerado");return;} if(!state.config.pixKey){document.getElementById('pix-alert').style.display='block';document.getElementById('pix-container').style.display='none';} else { document.getElementById('pix-alert').style.display='none';document.getElementById('pix-container').style.display='block'; const pl=generatePixPayload(state.config.pixKey,state.config.pixName||"User",state.config.pixCity||"BR",t); document.getElementById('txt-brcode').innerText=pl; document.getElementById('val-pix-display').innerText=t.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); document.getElementById('img-qr').src=`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(pl)}`; } document.getElementById('modal-pix').style.display='flex'; }
     function copiarPix(){ navigator.clipboard.writeText(document.getElementById('txt-brcode').innerText).then(()=>alert("Copiado!")); }
 	function abrirModalAvaliacao(idDemanda, nomePrestador, zapPrestador) {
