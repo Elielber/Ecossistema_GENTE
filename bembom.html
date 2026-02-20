@@ -7892,34 +7892,40 @@ function compartilharOportunidade(idDemanda, titulo, cidade, especialidade, grup
     }
 }
 async function doarViaPix() {
+    // 1. Definição das constantes conforme o padrão do seu banco
     const chavePix = "ecossistemagente@gmail.com";
-    const nomeRecebedor = "ELIELBER DA SILVA ANTUNES";
-    const cidadeRecebedor = "RIO DE JANEIRO"; // Sem acentos conforme sua função
+    const nomeRecebedor = "ELIELBER DA SILVA ANTUNES"; 
+    const cidadeRecebedor = "RIO DE JANEIRO";
+    const txid = "APOIO"; // TXID simples e seguro
 
-    // 1. Pergunta o valor com transparência
-    let valorInput = prompt("Muito obrigado ❤️\n Quanto você gostaria de doar para apoiar este projeto?\n(Ex: 5,00 ou deixe em branco para definir no banco)");
+    // 2. Pergunta o valor com transparência
+    let valorInput = prompt("Agradecemos muito o apoio! ❤️\n\nQual valor você gostaria de doar? (Ex: 5,00 ou deixe vazio para copiar apenas a chave e-mail)");
 
-    if (valorInput === null) return; // Usuário desistiu
+    if (valorInput === null) return; // Se o usuário cancelar no 'X' ou 'Cancelar'
 
     let valorNumerico = parseFloat(valorInput.replace(',', '.'));
-    let payloadFinal = "";
+    let textoFinal = "";
+    let mensagemAlerta = "";
 
     if (!isNaN(valorNumerico) && valorNumerico > 0) {
-        // 2. GERA O COPIA E COLA REAL (Usando sua função existente)
-        payloadFinal = generatePixPayload(chavePix, nomeRecebedor, cidadeRecebedor, valorNumerico);
+        // GERA O PIX COPIA E COLA (Com valor definido)
+        textoFinal = generatePixPayload(chavePix, nomeRecebedor, cidadeRecebedor, valorNumerico, txid);
         
-        const mensagemComValor = `Agradecemos o apoio de R$ ${valorNumerico.toFixed(2)}! 🚀\n\nO código 'Pix Copia e Cola' foi gerado. Agora basta abrir seu banco, ir em 'Pix' e escolher 'Copia e Cola'.`;
-        
-        await navigator.clipboard.writeText(payloadFinal);
-        alert(mensagemComValor);
+        mensagemAlerta = `Agradecemos o apoio de R$ ${valorNumerico.toFixed(2)}! 🚀\n\nO código 'Pix Copia e Cola' foi copiado.\n\nAgora abra o app do seu banco, vá em 'Pix' e escolha 'Copia e Cola'.`;
     } else {
-        // 3. APENAS COPIA A CHAVE (Caso ele não defina valor)
-        payloadFinal = chavePix;
+        // APENAS COPIA A CHAVE E-MAIL (Se o usuário não definiu valor)
+        textoFinal = chavePix;
         
-        const mensagemSemValor = `A chave Pix (${chavePix}) foi copiada! ❤️\n\nAbra seu banco e use a opção 'Transferir' ou 'Pagar' para colar esta chave e definir o valor que desejar.`;
-        
-        await navigator.clipboard.writeText(payloadFinal);
-        alert(mensagemSemValor);
+        mensagemAlerta = `A chave Pix (${chavePix}) foi copiada! ❤️\n\nAgora abra o app do seu banco e cole esta chave no campo 'Transferir' ou 'Pix' para definir o valor lá.`;
+    }
+
+    // 3. Execução da cópia para o celular do usuário
+    try {
+        await navigator.clipboard.writeText(textoFinal);
+        alert(mensagemAlerta);
+    } catch (err) {
+        // Fallback caso o navegador bloqueie o clipboard (comum em iPhones antigos)
+        alert("Chave/Código: " + textoFinal + "\n\n" + mensagemAlerta);
     }
 }
 
