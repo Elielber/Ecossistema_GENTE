@@ -5587,7 +5587,8 @@ function gerarZap() {
     // Finaliza garantindo que o resultado tenha apenas 4 dígitos hexadecimais
     return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
 }
-  function generatePixPayload(key, name, city, amount, txid = "APOIO", mensagem = "Apoio ao Projeto BemBom") {
+  // Adicionamos 'msg' como o último parâmetro
+function generatePixPayload(key, name, city, amount, txid = "APOIO", msg = "") {
     if (!key) return null;
 
     name = name.toUpperCase().substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -5595,15 +5596,18 @@ function gerarZap() {
     amount = parseFloat(amount).toFixed(2);
     txid = txid.toUpperCase().replace(/\s/g, '').substring(0, 25);
     
-    // Formata a mensagem (limite de 25 caracteres para evitar erros em alguns bancos)
-    mensagem = mensagem.substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-    // Montagem do campo 26 com a mensagem (Tag 02)
-    const infoAdicional = '0014br.gov.bcb.pix' + '01' + key.length.toString().padStart(2, '0') + key + '02' + mensagem.length.toString().padStart(2, '0') + mensagem;
+    // Montagem da parte variável do campo 26
+    let campo26 = '0014br.gov.bcb.pix' + '01' + key.length.toString().padStart(2, '0') + key;
+    
+    // SE houver mensagem, adiciona a tag 02
+    if (msg.length > 0) {
+        let msgLimpa = msg.substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        campo26 += '02' + msgLimpa.length.toString().padStart(2, '0') + msgLimpa;
+    }
 
     const p = [
         '000201',
-        '26' + infoAdicional.length.toString().padStart(2, '0') + infoAdicional,
+        '26' + campo26.length.toString().padStart(2, '0') + campo26,
         '52040000',
         '5303986',
         '54' + amount.length.toString().padStart(2, '0') + amount,
@@ -7922,43 +7926,41 @@ function compartilharOportunidade(idDemanda, titulo, cidade, especialidade, grup
     }
 }
 async function doarViaPix() {
-    // 1. Definição das constantes conforme o padrão do seu banco
+    // 1. Definição das constantes
     const chavePix = "ecossistemagente@gmail.com";
     const nomeRecebedor = "ELIELBER DA SILVA ANTUNES"; 
     const cidadeRecebedor = "RIO DE JANEIRO";
-    const txid = "APOIO"; // TXID simples e seguro
+    const txid = "APOIO";
+    const msgApoio = "Apoio ao Projeto BemBom"; 
 
-    // 2. Pergunta o valor com transparência
+    // 2. Pergunta o valor
     let valorInput = prompt("Agradecemos muito o apoio! ❤️\n\nQual valor você gostaria de doar? (Ex: 5,00 ou deixe vazio para copiar apenas a chave e-mail)");
 
-    if (valorInput === null) return; // Se o usuário cancelar no 'X' ou 'Cancelar'
+    if (valorInput === null) return;
 
     let valorNumerico = parseFloat(valorInput.replace(',', '.'));
     let textoFinal = "";
     let mensagemAlerta = "";
 
     if (!isNaN(valorNumerico) && valorNumerico > 0) {
-        // GERA O PIX COPIA E COLA (Com valor definido)
-        textoFinal = generatePixPayload(chavePix, nomeRecebedor, cidadeRecebedor, valorNumerico, txid);
+        // GERA O PIX COPIA E COLA
+        // Passamos 'msgApoio' como o 6º parâmetro
+        textoFinal = generatePixPayload(chavePix, nomeRecebedor, cidadeRecebedor, valorNumerico, txid, msgApoio);
         
-        mensagemAlerta = `Agradecemos o apoio de R$ ${valorNumerico.toFixed(2)}! 🚀\n\nO código 'Pix Copia e Cola' foi copiado.\n\nAgora abra o app do seu banco, vá em 'Pix' e escolha 'Copia e Cola'.`;
+        mensagemAlerta = `Agradecemos o apoio de R$ ${valorNumerico.toFixed(2)}! 🚀\n\nO código 'Pix Copia e Cola' foi copiado.\n\nAgora abra o app do seu banco, vá em 'Pix' e escolha 'Copia e Cola'.\n\nA mensagem "${msgApoio}" aparecerá na confirmação.`;
     } else {
-        // APENAS COPIA A CHAVE E-MAIL (Se o usuário não definiu valor)
         textoFinal = chavePix;
-        
         mensagemAlerta = `A chave Pix (${chavePix}) foi copiada! ❤️\n\nAgora abra o app do seu banco e cole esta chave no campo 'Transferir' ou 'Pix' para definir o valor lá.`;
     }
 
-    // 3. Execução da cópia para o celular do usuário
+    // 3. Execução da cópia
     try {
         await navigator.clipboard.writeText(textoFinal);
         alert(mensagemAlerta);
     } catch (err) {
-        // Fallback caso o navegador bloqueie o clipboard (comum em iPhones antigos)
         alert("Chave/Código: " + textoFinal + "\n\n" + mensagemAlerta);
     }
 }
-
 </script>
 </body>
 </html>
