@@ -1139,7 +1139,7 @@
     
     <div style="display: flex; gap: 8px; align-items: center;">
         
-        <button onclick="copiarPix()" class="btn-doacao" 
+        <button onclick="doarViaPix()" class="btn-doacao" 
             style="flex: 1; background-color: #32bcad; color: white; border: none; padding: 12px 5px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.9em; transition: 0.3s;">
             ☕ Doar
         </button>
@@ -7876,31 +7876,36 @@ function compartilharOportunidade(idDemanda, titulo, cidade, especialidade, grup
         window.open(`https://wa.me/?text=${encodeURIComponent(textoCompartilhar + "\n" + linkOportunidade)}`, '_blank');
     }
 }
-function copiarPix() {
-    const chaveEmail = "ecossistemagente@gmail.com";
-    
-    // 1. Pergunta o valor para dar controle ao usuário
-    let valor = prompt("Agradecemos muito sua intenção de apoiar! ❤️\n\nQual valor você gostaria de doar? (Ex: 5,00 ou deixe vazio para copiar apenas a chave e-mail)");
+async function doarViaPix() {
+    const chavePix = "ecossistemagente@gmail.com";
+    const nomeRecebedor = "Ecossistema Gente";
+    const cidadeRecebedor = "CAMPOS"; // Sem acentos conforme sua função
 
-    if (valor === null) return; // Usuário cancelou
+    // 1. Pergunta o valor com transparência
+    let valorInput = prompt("Quanto você gostaria de doar para apoiar este projeto? ❤️\n(Ex: 5,00 ou deixe em branco para definir no banco)");
 
-    let textoParaCopiar = chaveEmail;
-    let mensagemFinal = "";
+    if (valorInput === null) return; // Usuário desistiu
 
-    if (valor.trim() !== "") {
-        // Se ele definiu valor, avisamos que a chave e-mail é o caminho mais simples
-        // Nota: Gerar o código "Copia e Cola" real (Payload) exige uma biblioteca complexa.
-        // O caminho mais seguro para autônomos é focar na cópia da CHAVE.
-        mensagemFinal = `Você decidiu doar R$ ${valor}.\n\nA chave (${chaveEmail}) foi copiada! \n\nAgora abra seu banco e cole esta chave no campo 'Transferir' ou 'Pix'.`;
+    let valorNumerico = parseFloat(valorInput.replace(',', '.'));
+    let payloadFinal = "";
+
+    if (!isNaN(valorNumerico) && valorNumerico > 0) {
+        // 2. GERA O COPIA E COLA REAL (Usando sua função existente)
+        payloadFinal = generatePixPayload(chavePix, nomeRecebedor, cidadeRecebedor, valorNumerico);
+        
+        const mensagemComValor = `Agradecemos o apoio de R$ ${valorNumerico.toFixed(2)}! 🚀\n\nO código 'Pix Copia e Cola' foi gerado. Agora basta abrir seu banco, ir em 'Pix' e escolher 'Copia e Cola'.`;
+        
+        await navigator.clipboard.writeText(payloadFinal);
+        alert(mensagemComValor);
     } else {
-        textoParaCopiar = chaveEmail;
-        mensagemFinal = `Chave (${chaveEmail}) copiada!\n\nAgora basta abrir o app do seu banco e colar no campo 'Pix' ou 'Transferir'.`;
+        // 3. APENAS COPIA A CHAVE (Caso ele não defina valor)
+        payloadFinal = chavePix;
+        
+        const mensagemSemValor = `A chave Pix (${chavePix}) foi copiada! ❤️\n\nAbra seu banco e use a opção 'Transferir' ou 'Pagar' para colar esta chave e definir o valor que desejar.`;
+        
+        await navigator.clipboard.writeText(payloadFinal);
+        alert(mensagemSemValor);
     }
-
-    // 2. Executa a cópia
-    navigator.clipboard.writeText(textoParaCopiar).then(() => {
-        alert(mensagemFinal);
-    });
 }
 
 </script>
