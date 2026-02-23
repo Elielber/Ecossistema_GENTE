@@ -134,17 +134,26 @@
             </div>
         </section>
 
-        <section id="tab-briefing" class="tab-content">
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="font-semibold text-slate-800 mb-2">Distribuição Estratégica</h2>
-                <p class="text-xs text-slate-500 mb-6 border-b border-slate-100 pb-4">
-                    Selecione o formato de saída. O <strong>Resumo Executivo</strong> é otimizado para leitura rápida, enquanto o <strong>Dossiê Analítico</strong> detalha as 4 metodologias aplicadas (Toulmin, Bardin, Fairclough e Equilíbrio de Nash).
+       <section id="tab-briefing" class="tab-content">
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="font-semibold text-slate-800">Resumo Executivo (Preview)</h2>
+                    <span class="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded font-bold uppercase">Tom Relacional</span>
+                </div>
+                
+                <div id="texto-resumo" class="text-sm text-slate-700 leading-relaxed space-y-3 bg-slate-50 p-4 rounded-lg border border-slate-100 mb-6">
+                    Execute a auditoria para visualizar o resumo.
+                </div>
+                
+                <h2 class="font-semibold text-slate-800 mb-2 border-t border-slate-100 pt-4">Distribuição Estratégica</h2>
+                <p class="text-[11px] text-slate-500 mb-4">
+                    O <strong>WhatsApp</strong> copiará o texto relacional acima. O <strong>PDF</strong> gerará o dossiê com o aprofundamento das 4 metodologias.
                 </p>
                 
-                <div class="space-y-4">
+                <div class="space-y-3">
                     <button onclick="copiarZap()" class="w-full bg-[#25D366] text-white font-bold py-3 px-4 rounded-lg shadow-sm hover:bg-[#1da851] transition text-sm flex items-center justify-between">
                         <span class="flex items-center gap-2">
-                            <span class="text-lg">💬</span> Resumo para WhatsApp
+                            <span class="text-lg">💬</span> Enviar Resumo p/ WhatsApp
                         </span>
                         <span class="text-[10px] uppercase opacity-80 font-normal tracking-widest">Copiar</span>
                     </button>
@@ -322,6 +331,7 @@
                setTimeout(() => {
                     renderizarRelatorio();
                     renderizarProjecaoPlays(); 
+					gerarResumoExecutivo();
                     btn.classList.remove('hidden');
                     loader.classList.add('hidden');
                     switchTab('relatorio');
@@ -370,106 +380,87 @@
         }
 
         // =====================================================================
-        // MOTOR 1: TOULMIN (Extração Estrutural e Lógica)
+        // MOTORES METODOLÓGICOS (Inteligência Dinâmica e Global)
         // =====================================================================
         function extratorToulmin(textoBase) {
             let alternativasEncontradas = [];
-            
-            // Procura verbos de imposição seguidos dos seus objetos (A Alegação)
-            const regexAcao = /(?:aprov[ou|ar|a]+|decidi[u|r]|extin[ção|guiu|gir]|institu[iu|ir]|retorno\s+a[o]?)\s+([^,\.]+)/gi;
+            // Regex alargada para detetar qualquer ordem institucional:
+            const regexAcao = /(?:aprov[ou|ar|a]+|decidi[u|r]|extin[ção|guiu|gir]|institu[iu|ir]|determina(?:-se)?|retorno\s+a[o]?)\s+([^,\.]+)/gi;
             let match;
             
             while ((match = regexAcao.exec(textoBase)) !== null) {
-                // Filtra capturas muito curtas para evitar lixo sintático
                 if(match[1].length > 8 && match[1].length < 80) {
-                    // Capitaliza a primeira letra para ficar elegante no relatório
                     let textoLimpo = match[1].trim();
                     textoLimpo = textoLimpo.charAt(0).toUpperCase() + textoLimpo.slice(1);
                     alternativasEncontradas.push(textoLimpo);
                 }
             }
-            
-            // Remove duplicatas
             let unicas = [...new Set(alternativasEncontradas)];
-            return unicas.length > 0 ? unicas : ["Ação diretiva implícita (Verifique o parágrafo principal do documento)"];
+            return unicas.length > 0 ? unicas : ["Implementação de Nova Diretriz de Gestão"];
         }
 
-        // =====================================================================
-        // MOTOR 2: BARDIN (Análise de Conteúdo, Frequência e Peso)
-        // =====================================================================
         function extratorBardin(textoBase) {
             const textoLower = textoBase.toLowerCase();
-            
-            // Dicionário Analítico da Gestão Pública
+            // Taxonomia Universal da Gestão Pública e Corporativa
             const taxonomia = {
-                "Cultura Organizacional e Sinergia": ["cultura", "integração", "pertencimento", "alinhamento", "colaboração", "clima", "presencial", "sinergia"],
-                "Segurança Jurídica e Conformidade": ["passivo", "jurídic", "controle", "jornada", "legislação", "segurança", "ponto", "roleta", "lei"],
+                "Cultura e Sinergia Organizacional": ["cultura", "integração", "pertencimento", "alinhamento", "colaboração", "clima", "presencial", "sinergia"],
+                "Segurança e Conformidade": ["passivo", "jurídic", "controle", "jornada", "legislação", "segurança", "ponto", "roleta", "lei"],
                 "Desempenho Institucional": ["desempenho", "produtividade", "eficiência", "resultados", "entregas", "metas"],
-                "Sustentabilidade Financeira (OPEX)": ["financeiro", "custo", "despesa", "orçamento", "economia", "gasto", "financeira"]
+                "Sustentabilidade Financeira": ["financeiro", "custo", "despesa", "orçamento", "economia", "gasto", "financeira"]
             };
 
             let criteriosExtraidos = [];
-
             for (let [categoria, radicais] of Object.entries(taxonomia)) {
                 let frequencia = 0;
-                
-                // Conta quantas vezes os radicais aparecem no texto
                 radicais.forEach(radical => {
-                    // Regex para pegar a palavra baseada no radical
                     let regex = new RegExp(radical + "\\w*", "g");
                     let ocorrencias = textoLower.match(regex);
                     if (ocorrencias) frequencia += ocorrencias.length;
                 });
 
                 if (frequencia > 0) {
-                    let pesoQualitativo = frequencia >= 4 ? "Alta densidade/Prioridade Máxima" : "Relevância Secundária";
+                    let pesoQualitativo = frequencia >= 4 ? "Alta densidade e priorização" : "Relevância secundária";
                     criteriosExtraidos.push({
                         nome: categoria, 
                         frequencia: frequencia,
-                        analise: `[Bardin] Ocorrência de ${frequencia} termos relacionados. ${pesoQualitativo} no constructo do discurso oficial.`
+                        analise: `[Bardin] Deteção de ${frequencia} termos associados. ${pesoQualitativo} na construção da narrativa primária.`
                     });
                 }
             }
-            
-            // Ordena do critério mais citado para o menos citado
             return criteriosExtraidos.sort((a, b) => b.frequencia - a.frequencia);
         }
 
-        // =====================================================================
-        // MOTOR 3: FAIRCLOUGH (Análise Crítica e Detecção de Omissões)
-        // =====================================================================
         function extratorFairclough(textoDir, textoCrit) {
             let alertas = [];
-            let dirLower = textoDir.toLowerCase();
             
             if (textoCrit && textoCrit.trim().length > 10) {
-                let critLower = textoCrit.toLowerCase();
+                // A inteligência dinâmica cruza os pesos semânticos (Bardin) de ambos os lados para encontrar assimetrias
+                const criteriosOficial = extratorBardin(textoDir);
+                const criteriosCritica = extratorBardin(textoCrit);
                 
-                // Regra de Omissão Tática (Framing Bias)
-                if ((critLower.includes("financeir") || critLower.includes("despesa") || critLower.includes("custo")) && 
-                    !(dirLower.includes("financeir") || dirLower.includes("custo"))) {
-                    alertas.push("<strong>Viés de Enquadramento (Framing Bias):</strong> O documento opositor ancora argumentos na 'Sustentabilidade Financeira'. A ausência deste léxico no documento oficial configura uma omissão tática. Em auditorias, a exclusão de impacto orçamentário caracteriza fragilidade processual.");
+                const nomesOficial = criteriosOficial.map(c => c.nome);
+                
+                criteriosCritica.forEach(c => {
+                    if (c.frequencia >= 2 && !nomesOficial.includes(c.nome)) {
+                        alertas.push(`<strong>Viés de Enquadramento:</strong> O documento secundário foca a sua argumentação em '<strong>${c.nome}</strong>'. A omissão total deste léxico na diretriz oficial configura um ponto cego tático (risco de governança em instâncias superiores).`);
+                    }
+                    if (c.frequencia >= 2 && nomesOficial.includes(c.nome)) {
+                        alertas.push(`<strong>Ruptura de Signos:</strong> Divergência diametral detetada no critério '<strong>${c.nome}</strong>'. As partes utilizam o mesmo fundamento conceptual para defender cenários operacionais opostos. Requer blindagem quantitativa urgente.`);
+                    }
+                });
+                
+                if (alertas.length === 0) {
+                    alertas.push("<strong>Alinhamento Narrativo:</strong> Não foram detetadas omissões severas ou disputas semânticas diretas entre a decisão e o contraponto fornecido.");
                 }
                 
-                // Regra de Disputa de Signos
-                if ((critLower.includes("produtiv") || critLower.includes("eficiênci")) && 
-                    (dirLower.includes("produtiv") || dirLower.includes("eficiênci"))) {
-                    alertas.push("<strong>Ruptura de Signos (Disputa Semântica):</strong> Constata-se divergência diametral na apropriação do termo 'Eficiência'. A gestão atrela o conceito à presencialidade; a oposição, a entregas remotas. Requer blindagem via dados quantitativos.");
-                }
             } else {
-                alertas.push("<strong>Alerta de Isolação (Groupthink):</strong> O documento foi analisado sem contraponto externo. Recomenda-se submeter manifestações do público-alvo para mapeamento preventivo de conflitos laborais.");
+                alertas.push("<strong>Isolação (Groupthink):</strong> A decisão foi estruturada sem evidência de contraponto. O viés de isolação institucional é alto. Em situações críticas, recomenda-se mapear resistências preventivamente.");
             }
-
-            // Regra de Justificativa Subjetiva vs Objetiva
-            if (dirLower.includes("cultura") && dirLower.includes("pertencimento") && !dirLower.match(/\d+(%| reais| milhões| horas)/)) {
-                 alertas.push("<strong>Risco de Fundamentação Intangível:</strong> O discurso oficial foca em variáveis comportamentais ('cultura', 'integração') sem apresentar métricas exatas associadas. Necessária validação matricial (Razão de Consistência) para provar objetividade.");
-            }
-
             return alertas;
         }
 
         // =====================================================================
-        // FUNÇÃO PRINCIPAL DE PROCESSAMENTO (Substitua a sua antiga por esta)
+        // FUNÇÃO PRINCIPAL DE PROCESSAMENTO 
         // =====================================================================
         async function processarArquivos() {
             const btn = document.getElementById('btn-processar');
@@ -526,135 +517,146 @@
             document.getElementById('lista-alertas').innerHTML = dadosAuditoria.alertas.map(a => `<li class="relative pl-5 before:content-[''] before:absolute before:left-0 before:top-2 before:w-2 before:h-2 before:bg-amber-500 before:rounded-full">${a}</li>`).join('');
         }
 
+        
         // =====================================================================
-        // MOTORES DE DISTRIBUIÇÃO (WhatsApp e Dossiê PDF)
+        // MOTORES DE DISTRIBUIÇÃO (Resumo em Tela e WhatsApp)
         // =====================================================================
+
+        function gerarResumoExecutivo() {
+            if(!dadosAuditoria.alternativas.length) return;
+            
+            const temConflito = dadosAuditoria.alertas.some(a => a.includes("Disputa") || a.includes("Viés"));
+            const criterioPrincipal = dadosAuditoria.criteriosDirex[0]?.nome || "variáveis internas";
+            
+            let html = `<p><strong>Decisão Mapeada:</strong> ${dadosAuditoria.alternativas[0]}</p>`;
+            html += `<p><strong>Foco da Narrativa:</strong> O algoritmo identificou que o peso maior da nossa justificativa está estruturado em <em>${criterioPrincipal}</em>.</p>`;
+            
+            if (temConflito) {
+                html += `<p><strong>⚠️ Ponto de Atenção:</strong> O cruzamento dos documentos aponta um desalinhamento importante com o público afetado.</p>`;
+                html += `<p><strong>Sugestão Tática:</strong> Para evitar um desgaste invisível (queda de produtividade), seria estratégico pensarmos em alguma flexibilização ou contrapartida operacional que traga a equipe para um cenário de colaboração.</p>`;
+            } else {
+                html += `<p><strong>Cenário:</strong> O ambiente aponta para a absorção da regra. Vale apenas monitorarmos o clima da equipe nos próximos meses.</p>`;
+            }
+            
+            document.getElementById('texto-resumo').innerHTML = html;
+        }
 
         function copiarZap() {
             if(!dadosAuditoria.alternativas.length) return alert("Execute a auditoria primeiro.");
             
             const temConflito = dadosAuditoria.alertas.some(a => a.includes("Disputa") || a.includes("Viés"));
-            const nash = temConflito ? "DD (Conflito/Travamento - Risco de Queda de Produtividade)" : "DC (Conformidade Passiva)";
+            const criterioPrincipal = dadosAuditoria.criteriosDirex[0]?.nome || "critérios internos";
             
-            // Formatação nativa do WhatsApp usando * para negrito
-            let zap = `*RELATÓRIO EXECUTIVO - GENTE FORENSE* ⚖️\n\n`;
-            zap += `*Decisão:* ${dadosAuditoria.alternativas[0]}\n`;
-            zap += `*Fator Crítico (Bardin):* ${dadosAuditoria.criteriosDirex[0]?.nome || "N/A"}\n\n`;
+            // Texto conversacional para WhatsApp
+            let zap = `Olá! Passando para compartilhar um panorama rápido da análise que rodei no sistema sobre a nossa decisão de *${dadosAuditoria.alternativas[0]}*.\n\n`;
+            
+            zap += `O algoritmo confirmou que a nossa justificativa está muito bem ancorada em *${criterioPrincipal}*.\n\n`;
             
             if(temConflito) {
-                zap += `🚨 *Alerta de Governança (Fairclough):* Foi detectada divergência estrutural entre a narrativa oficial e o contraponto (viés de omissão ou disputa de conceitos).\n\n`;
+                zap += `🚨 *Ponto de atenção:* O cruzamento dos documentos detectou um desalinhamento forte com a base (risco de resistência silenciosa).\n\n`;
+                zap += `💡 *Sugestão:* Para não travarmos a operação num cenário de perde-perde, talvez seja interessante pensarmos em alguma contrapartida operacional ou projeto de gestão paralela para trazer a equipe de volta para o ganha-ganha.\n\n`;
+            } else {
+                zap += `📊 *Cenário:* O sistema projeta que a decisão será absorvida com tranquilidade, mas sugere acompanharmos o engajamento da equipe.\n\n`;
             }
             
-            zap += `📊 *Projeção Estratégica (Nash):* A imposição atual projeta um cenário *${nash}*. Recomenda-se alinhar táticas de mitigação para atingir o quadrante de ganha-ganha (CC).\n\n`;
-            zap += `_Gerado por ecossistema GENTE_`;
+            zap += `Se precisar do detalhamento técnico para anexar a algum processo, me avisa que te mando o Dossiê completo em PDF gerado pelo sistema. Um abraço!`;
 
             navigator.clipboard.writeText(zap).then(() => {
-                alert("Resumo executivo copiado! Pronto para colar no WhatsApp.");
+                alert("Resumo relacional copiado! Pronto para colar no WhatsApp.");
             });
         }
 
         function baixarPDF() {
             if(!dadosAuditoria.alternativas.length) return alert("Execute a auditoria primeiro.");
-            
-            // Inicializa o jsPDF
-            const { jsPDF } = window.jspdf;
+            const { jsPDF } = window.jspdf; 
             const doc = new jsPDF();
             
-            let y = 20; // Posição vertical inicial
-            const margin = 15;
-            const maxWidth = 180; // Largura máxima antes da quebra de linha
-            const pageHeight = 280; // Altura segura antes de criar nova página
-
-            // Função auxiliadora para desenhar texto, gerenciar quebras de página e estilos
-            function addText(text, fontSize = 10, fontStyle = "normal", color = [0,0,0], indent = 0) {
-                doc.setFontSize(fontSize);
-                doc.setFont("helvetica", fontStyle);
-                doc.setTextColor(color[0], color[1], color[2]);
-                const lines = doc.splitTextToSize(text, maxWidth - indent);
-                
-                // Verifica se precisa de nova página
-                if (y + (lines.length * (fontSize * 0.4)) > pageHeight) {
+            let y = 0; 
+            const margin = 20; 
+            const maxWidth = 170; 
+            const pageHeight = 280;
+            const primaryColor = [20, 30, 50]; 
+            const secondaryColor = [80, 90, 110]; 
+            const accentColor = [37, 99, 235];
+            
+            function checkPageBreak(requiredSpace = 20) {
+                if (y + requiredSpace > pageHeight) {
                     doc.addPage();
-                    y = 20;
+                    drawHeaderFooter();
+                    y = 35; 
                 }
-                doc.text(lines, margin + indent, y);
-                y += (lines.length * (fontSize * 0.4)) + 4; // Avança o cursor Y
             }
 
-            // ================= CABEÇALHO DO DOCUMENTO =================
-            addText("DOSSIÊ DE AUDITORIA E RASTREABILIDADE DECISÓRIA", 15, "bold", [15, 23, 42]);
-            y += 1;
-            doc.setDrawColor(200, 200, 200);
-            doc.line(margin, y, 210 - margin, y); // Linha separadora
-            y += 6;
+            function drawHeaderFooter() {
+                const pageNum = doc.internal.getCurrentPageInfo().pageNumber;
+                if (pageNum > 1) {
+                    doc.setFillColor(245, 247, 250); doc.rect(0, 0, 210, 20, 'F');
+                    doc.setFontSize(8); doc.setFont("helvetica", "bold"); doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]); doc.text("GENTE FORENSE", margin, 12);
+                    doc.setFont("helvetica", "normal"); doc.setTextColor(150, 150, 150); doc.text("Auditoria Científica de Decisões Institucionais", 210 - margin, 12, {align: "right"});
+                    doc.setDrawColor(220, 220, 220); doc.line(margin, 20, 210 - margin, 20);
+                }
+                doc.setDrawColor(220, 220, 220); doc.line(margin, 285, 210 - margin, 285);
+                doc.setFontSize(8); doc.setFont("helvetica", "italic"); doc.setTextColor(150, 150, 150);
+                doc.text(`Gerado com segurança (Zero-Trust) em ${new Date().toLocaleDateString('pt-BR')}`, margin, 292);
+                doc.setFont("helvetica", "normal"); doc.text(`Página ${pageNum}`, 210 - margin, 292, {align: "right"});
+            }
 
-            addText("ESCOPO E METODOLOGIA CIENTÍFICA", 11, "bold", [37, 99, 235]);
-            addText("Este documento técnico apresenta a desconstrução estrutural e a avaliação de conformidade do acervo documental submetido. O objetivo é fornecer à Alta Gestão uma auditoria narrativa e projeção de riscos institucionais, processada integralmente via algoritmos heurísticos fundamentados em quatro frameworks consagrados de análise de sistemas sociais, linguística e pesquisa operacional.", 10, "normal", [60, 60, 60]);
-            y += 4;
+            function printParagraph(title, text, isMainTitle = false) {
+                if(isMainTitle) {
+                    checkPageBreak(30); y += 5; doc.setFontSize(14); doc.setFont("helvetica", "bold"); doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+                    doc.text(title, margin, y); y += 2; doc.setDrawColor(accentColor[0], accentColor[1], accentColor[2]); doc.setLineWidth(0.5); doc.line(margin, y, margin + 20, y); y += 8;
+                } else if(title) {
+                    checkPageBreak(15); doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2]);
+                    doc.text(title, margin, y); y += 6;
+                }
+                doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(60, 60, 60);
+                const lines = doc.splitTextToSize(text, maxWidth); checkPageBreak(lines.length * 5);
+                doc.text(lines, margin, y); y += (lines.length * 5.5) + 6; 
+            }
 
-            // ================= 1. TOULMIN =================
-            addText("1. ESTRUTURA LÓGICA (Método de Stephen Toulmin)", 11, "bold", [37, 99, 235]);
-            addText("Metodologia: O framework de argumentação de Toulmin desmembra a retórica para isolar a 'Alegação Central' (a ação diretiva imposta) de seus 'Apoios' legais. Identifica o núcleo impositivo da decisão.", 9, "italic", [120, 120, 120]);
-            addText("Ato Diretivo (Alegação) Identificado:", 10, "bold", [0,0,0], 0);
-            dadosAuditoria.alternativas.forEach(alt => {
-                addText("• " + alt, 10, "normal", [0,0,0], 5);
-            });
-            y += 4;
+            // --- CAPA ---
+            doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]); doc.rect(0, 0, 210, 80, 'F');
+            doc.setFontSize(24); doc.setFont("helvetica", "bold"); doc.setTextColor(255, 255, 255); doc.text("PARECER TÉCNICO", margin, 45);
+            doc.setFontSize(12); doc.setFont("helvetica", "normal"); doc.setTextColor(200, 210, 230); doc.text("Auditoria de Rastreabilidade e Cenários Prospectivos", margin, 55);
 
-            // ================= 2. BARDIN =================
-            addText("2. PESOS AXIOLÓGICOS (Análise de Conteúdo - Laurence Bardin)", 11, "bold", [37, 99, 235]);
-            addText("Metodologia: O método qualitativo de Bardin infere as prioridades e o modelo mental do tomador de decisão através do mapeamento de coocorrência e densidade (frequência) de clusters semânticos. É utilizado para fundamentar matematicamente a ponderação de critérios.", 9, "italic", [120, 120, 120]);
-            dadosAuditoria.criteriosDirex.forEach(c => {
-                addText(c.nome.toUpperCase(), 10, "bold", [50,50,50], 0);
-                addText(c.analise, 10, "normal", [0,0,0], 5);
-                y += 2;
-            });
-            y += 2;
+            y = 100;
+            doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]); doc.text("SÍNTESE EXECUTIVA", margin, y); y += 8;
+            doc.setFont("helvetica", "normal");
+            
+            const txtCapa = "Compreendemos que transições estruturais e imposições de alto impacto sistémico são os momentos mais sensíveis na Alta Gestão. Este relatório apoia as lideranças com um diagnóstico isento que valida os aspetos prioritários da decisão, rastreia assimetrias de interpretação e projeta potenciais reações na malha organizacional. O documento atua como radar preventivo na sustentabilidade das mudanças propostas.";
+            doc.text(doc.splitTextToSize(txtCapa, maxWidth), margin, y); drawHeaderFooter();
+            
+            // --- PÁGINA 2 ---
+            doc.addPage(); drawHeaderFooter(); y = 35;
+            printParagraph("1. Objeto da Análise e Estrutura", "Decisão Mapeada: " + dadosAuditoria.alternativas.join(" | "), true);
+            printParagraph("Análise Lógica (Toulmin)", "A heurística validou o corpo documental para isolar e fixar o foco da 'Alegação Central', desconsiderando ruídos informativos e focando na mudança institucional promovida.");
 
-            // ================= 3. FAIRCLOUGH =================
-            addText("3. RISCOS DE GOVERNANÇA (Análise Crítica do Discurso - N. Fairclough)", 11, "bold", [37, 99, 235]);
-            addText("Metodologia: A ACD examina as relações de poder e a prática institucional por trás do texto. O algoritmo cruza o documento primário com os manifestos adjacentes para detectar vieses de enquadramento (Framing Bias), omissões estratégicas e disputas de significados que expõem a decisão a fragilidades em auditorias externas.", 9, "italic", [120, 120, 120]);
+            printParagraph("2. Fundamentação Qualitativa (Axiologia)", "", true);
+            printParagraph("", "Baseado no método de Laurence Bardin, mapeámos a densidade dos vocabulários para inferir onde a Direção colocou o seu peso de argumentação e foco:");
+            dadosAuditoria.criteriosDirex.forEach(c => printParagraph("• " + c.nome.toUpperCase(), c.analise));
+
+            // --- PÁGINA 3 ---
+            doc.addPage(); drawHeaderFooter(); y = 35;
+            printParagraph("3. Riscos de Governança (Análise Crítica)", "", true);
+            printParagraph("", "O motor Fairclough cruzou a densidade argumentativa primária com o contexto paralelo/manifestações em busca de desníveis interpretativos e vieses de gestão:");
             
             if(dadosAuditoria.alertas.length > 0) {
-                dadosAuditoria.alertas.forEach(a => {
-                    // Limpa as tags HTML (<strong>) geradas para a tela
-                    let textoLimpo = a.replace(/<\/?strong>/g, "");
-                    addText("• " + textoLimpo, 10, "normal", [0,0,0], 5);
-                    y += 2;
-                });
+                dadosAuditoria.alertas.forEach(a => printParagraph("Alerta de Desvio Detectado", a.replace(/<\/?strong>/g, "")));
             } else {
-                addText("Nenhum desvio crítico ou assimetria de governança detectado no escopo documental.", 10, "normal", [0,0,0], 5);
+                printParagraph("Diagnóstico de Segurança", "O acervo encontra-se concêntrico; não foram mapeadas fissuras discursivas evidentes nesta amostra documental.");
             }
-            y += 4;
 
-            // ================= 4. NASH =================
-            addText("4. PROJEÇÃO ESTRATÉGICA (Teoria dos Jogos / Equilíbrio de Nash)", 11, "bold", [37, 99, 235]);
-            addText("Metodologia: Modelagem prospectiva de cenários baseada na matriz de ganhos (*payoffs*). Avalia os incentivos à retaliação, inércia ou cooperação entre os atores sistêmicos (Decisor vs. Impactados).", 9, "italic", [120, 120, 120]);
-            
-            const temConflito = dadosAuditoria.alertas.some(a => a.includes("Disputa") || a.includes("Viés"));
-            const nash = temConflito ? "DD (Lose-Lose / Travamento e Retaliação)" : "DC (Conformidade / Imposição e Submissão)";
-            
-            addText("Estado Atual Projetado: " + nash, 10, "bold", [temConflito ? 200 : 0, temConflito ? 50 : 0, temConflito ? 50 : 0]);
+            printParagraph("4. Projeção Estratégica (Teoria dos Jogos)", "", true);
+            const temConflito = dadosAuditoria.alertas.some(a => a.includes("Ruptura") || a.includes("Viés") || a.includes("Isolação"));
+            const nash = temConflito ? "DD (Lose-Lose / Travamento e Retaliação Oculta)" : "DC (Conformidade Funcional / Submissão à Nova Regra)";
+            printParagraph("Equilíbrio de Nash Projetado", "Estado Inicial Provável: " + nash);
             
             let nashText = temConflito 
-                ? "Síntese: Constatou-se uma assimetria extrema de interesses. A imposição rígida (Estratégia D) frente à forte resistência mapeada trava o sistema no quadrante DD. O resultado projetado no médio prazo inclui judicialização, perda de conhecimento tácito, evasão de talentos e queda oculta de produtividade (Quiet Quitting). Para assegurar a governança, a Diretoria deve adotar manobras táticas de mitigação operacional para deslocar o equilíbrio para a Cooperação Mútua (CC)."
-                : "Síntese: O ambiente projeta absorção da regra com conformidade passiva (DC). A gestão deve monitorar indicadores secundários de moral e retenção de talentos no próximo semestre.";
-            
-            addText(nashText, 10, "normal", [0,0,0], 0);
-            y += 15;
+                ? "Conclusão: Identificou-se uma grave assimetria de interesses e interpretação entre as partes envolvidas. Manter uma imposição rígida forçará o sistema a ancorar no quadrante DD, propício à resistência não-declarada, perda de qualidade sistémica ou atrito persistente. É imperativo adotar mecanismos táticos (ações flexibilizadoras, compensatórias ou comunicações ativas) com a intenção deliberada de reconduzir a base ao quadrante de Cooperação (CC)."
+                : "Conclusão: Prevê-se uma absorção adequada da mudança. Como a submissão formal (DC) pode não reter motivação de longo prazo na base, os líderes operacionais devem atuar na mitigação dos primeiros sintomas de desgaste e confirmar a adaptação natural à norma imposta.";
+            printParagraph("Recomendação Consultiva", nashText);
 
-            // ================= RODAPÉ / ASSINATURA =================
-            doc.setDrawColor(200, 200, 200);
-            doc.line(margin, y, 210 - margin, y);
-            y += 5;
-            
-            // Pega a data atual
-            const dataAtual = new Date().toLocaleDateString('pt-BR');
-            addText(`Documento gerado localmente pelo Motor GENTE Forense em ${dataAtual}.`, 8, "italic", [150, 150, 150]);
-            addText("Processamento Client-Side (Zero-Trust). Nenhum dado foi transmitido a servidores externos.", 8, "italic", [150, 150, 150]);
-
-            // Baixa o arquivo
-            doc.save("Dossie_Tecnico_Forense_Analise_Profunda.pdf");
+            doc.save("Parecer_Consultivo_GENTE_Forense_Global.pdf");
         }
         function downloadJSON(data, filename) {
             const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
