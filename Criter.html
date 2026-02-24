@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seleção de Critérios com Otimização Preditiva</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --font-family: 'Inter', sans-serif;
+            --color-text-dark: #3A3A3A;
+            --color-text-light: #FFFFFF;
+            --color-bg-sand: #FFFFFF;
+            --color-primary: #005A7A;
+            --color-primary-dark: #004B66;
+            --color-primary-light: #E6F0F4;
+        }
+        body { font-family: var(--font-family), sans-serif; background-color: var(--color-bg-sand); color: var(--color-text-dark); }
+        .form-section { display: none; }
+        .form-section.active { display: block; }
+        .btn-primary { background-color: var(--color-primary); color: var(--color-text-light); }
+        .btn-primary:hover { background-color: var(--color-primary-dark); }
+        .btn-secondary { background-color: #e5e7eb; color: #374151; }
+        .btn-secondary:hover { background-color: #d1d5db; }
+        .comparison-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; padding: 0.75rem 0.25rem; border-bottom: 1px solid #eee; }
+        .comparison-item:last-child { border-bottom: none; }
+        .slider-wrapper { position: relative; display: flex; align-items: center; width: 100%; }
+        .slider-track-background, .consistent-range-indicator { position: absolute; top: 50%; transform: translateY(-50%); height: 8px; border-radius: 9999px; pointer-events: none; }
+        .slider-track-background { left: 0; right: 0; background-color: #e5e7eb; }
+        .consistent-range-indicator { background-color: rgba(34, 197, 94, 0.5); transition: left 0.2s ease, width 0.2s ease; }
+        input[type="range"] { position: relative; z-index: 2; background-color: transparent; -webkit-appearance: none; appearance: none; width: 100%; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <header class="shadow-md sticky top-0 z-50 mb-8 p-4 rounded-lg" style="background-color: var(--color-bg-sand);">
+        <div class="max-w-5xl mx-auto flex justify-between items-center">
+            <div class="text-left">
+                <h1 class="text-2xl font-bold" style="color: var(--color-primary);" id="headerTitle">Seleção de Critérios</h1>
+                <p class="text-sm text-gray-500" id="headerSubtitle">Etapa 1: Configuração da Decisão</p>
+                <p id="timer-container" class="text-xs text-gray-500 mt-1 hidden">
+                    <strong>Tempo Decorrido:</strong> <span id="timer-decorrido" class="font-mono">00:00</span> / 
+                    <strong>Estimado:</strong> <span id="timer-estimado" class="font-mono">--:--</span>
+                </p>
+            </div>
+            <div class="flex flex-wrap justify-end gap-2">
+                <button id="btn-voltar" class="btn-secondary py-2 px-4 rounded-md hidden">Voltar</button>
+                <button id="btn-proximo" class="btn-primary py-2 px-4 rounded-md hidden">Próximo</button>
+                <button id="btn-carregar" class="btn-secondary py-2 px-4 rounded-md hidden">Carregar</button>
+                <button id="btn-salvar-rascunho" class="btn-secondary py-2 px-4 rounded-md hidden">Salvar Rascunho</button>
+                <button id="btn-finalizar" class="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 hidden">Finalizar e Calcular</button>
+                <button id="btn-salvar-final" class="btn-primary py-2 px-4 rounded-md hidden">Salvar Modelo Final</button>
+            </div>
+        </div>
+    </header>
+    
+    <div class="max-w-5xl mx-auto p-6 md:p-8 rounded-lg shadow-lg">
+        <div id="step1" class="form-section active">
+            <h2 class="text-2xl font-semibold mb-4">Configuração da Decisão</h2>
+            <div class="space-y-4">
+                 <div>
+                    <label for="objetivo" class="block text-sm font-medium text-gray-700">Objetivo Principal:</label>
+                    <input type="text" id="objetivo" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="Selecionar o melhor software de CRM">
+                </div>
+                <div>
+                    <label for="dimensao" class="block text-sm font-medium text-gray-700">Dimensão Principal (para carregar modelo):</label>
+                    <select id="dimensao" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+						<option value="Contratacao_de_operador_logistico">Contratação de operador logistico</option>
+                        <option value="financeira_e_economica">Financeira e Econômica</option>
+                        <option value="tecnica_e_operacional">Técnica e Operacional</option>
+                        <option value="estrategica_e_de_mercado">Estratégica e de Mercado</option>
+                        <option value="riscos_seguranca_e_conformidade">Riscos, Segurança e Conformidade</option>
+                        <option value="relacionamento_e_parceria">Relacionamento e Parceria</option>
+                        <option value="gestao_da_mudanca_e_impacto">Gestão da Mudança e Impacto</option>
+                        <option value="esg_socioambiental">ESG Socioambiental</option>
+                    </select>
+                </div>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="tempoLimite" class="block text-sm font-medium text-gray-700">Tempo Limite Total (minutos)</label>
+                        <input type="number" id="tempoLimite" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="45">
+                    </div>
+                    <div>
+                        <label for="alternativas" class="block text-sm font-medium text-gray-700">Alternativas (uma por linha)</label>
+                        <textarea id="alternativas" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">CRM Alfa
+CRM Beta
+CRM Gama</textarea>
+                    </div>
+                </div>
+                <div>
+                    <label for="subcriteriosEdit" class="block text-sm font-medium text-gray-700">Estrutura de Critérios e Subcritérios:</label>
+                    <textarea id="subcriteriosEdit" rows="8" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm font-mono text-sm"></textarea>
+                    <p class="text-xs text-gray-500 mt-1">Use '#' para definir um Critério (cluster). As linhas seguintes são os subcritérios.</p>
+                </div>
+                <div class="border-t pt-4 mt-4">
+                     <h3 class="font-semibold text-lg mb-2 text-gray-700">Identificação do Avaliador</h3>
+                     <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="judgeName" class="block text-sm font-medium text-gray-700">Nome do Avaliador:</label>
+                            <input type="text" id="judgeName" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="Utilizador Individual">
+                        </div>
+                        <div>
+                            <label for="judgeRole" class="block text-sm font-medium text-gray-700">Função/Cargo:</label>
+                            <input type="text" id="judgeRole" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="Avaliador">
+                        </div>
+                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="step2" class="form-section">
+            <h2 class="text-2xl font-semibold mb-4">Dashboard de Julgamento</h2>
+            <div class="flex justify-between items-center mb-4 flex-wrap gap-4">
+                <p class="text-sm text-gray-600 flex-grow">Ajuste os sliders para refletir sua preferência. Mantenha o CR abaixo de 0.10.</p>
+                <div class="text-right border-l-4 pl-4" style="border-color: var(--color-primary-light)">
+                    <span class="font-bold text-sm text-gray-600">Razão de Consistência (CR):</span>
+                    <span id="cr-display" class="font-bold text-lg ml-2 p-2 rounded-md">--</span>
+                </div>
+            </div>
+            <div id="comparison-dashboard" class="space-y-1"></div>
+        </div>
+
+       
+            <div id="step3" class="form-section">
+    <h2 class="text-2xl font-semibold mb-4">Resultados da Seleção</h2>
+
+    <div id="summary-text" class="mb-4 p-4 rounded-lg" style="background-color: var(--color-primary-light);"></div>
+    <div id="best-arrangement-container" class=" p-6 rounded-lg shadow mb-8"></div>
+    
+    <div class="p-6 md:p-8 bg-gray-50 rounded-lg shadow-inner">
+        <h2 class="text-3xl font-bold text-gray-800 mb-2">Resumo do Modelo Otimizado</h2>
+        <p class="text-gray-600 mb-8">Abaixo estão os resultados da sua análise, otimizados para o seu tempo e preferências.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            
+           <div class=" p-6 rounded-lg shadow">
+    <div class="flex justify-between items-start">
+        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Valor Capturado</h3>
+        </div>
+    <p class="text-4xl font-bold text-green-600 mt-2"><span id="report-valor-total">---</span></p>
+	<div class="tooltip-text">
+                <h4 class="font-bold mb-1">O que é o Valor Capturado?</h4>
+                <p id="tooltip-valor-texto">Mede o percentual das suas preferências que foi capturado pelo modelo otimizado, focando no que é mais crucial para sua decisão.</p>
+            </div>
+</div>
+
+            <div class=" p-6 rounded-lg shadow">
+                <div class="flex justify-between items-start">
+                    <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Custo Total</h3>
+                    </div>
+                <p class="text-4xl font-bold text-blue-600 mt-2"><span id="report-custo-total">---</span></p>
+            <div class="tooltip-text">
+                            <h4 class="font-bold mb-1">O que é o Custo Total?</h4>
+                            <p>É o "preço" em esforço do modelo otimizado. Representa o número exato de comparações que a análise completa exigirá. É um sinal de uma solução eficiente e focada para você.</p>
+                        </div>
+			</div>
+
+            <div class=" p-6 rounded-lg shadow">
+                <div class="flex justify-between items-start">
+                    <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Orçamento</h3>
+                </div>
+                <p class="text-4xl font-bold text-gray-700 mt-2"><span id="report-orcamento">---</span></p>
+            <div class="tooltip-text">
+                            <h4 class="font-bold mb-1">O que é o Orçamento?</h4>
+                            <p>É o seu "orçamento de atenção". A ferramenta estima o limite de esforço que você pode fazer com base no seu ritmo e tempo definidos, garantindo decisões de alta qualidade sem fadiga mental.</p>
+                     </div>
+			</div>
+        </div>
+
+        <div class=" p-6 rounded-lg shadow">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Detalhamento do Custo do Modelo</h3>
+            <div class="space-y-4 text-gray-700">
+                <div class="flex justify-between items-center pb-2 border-b border-gray-100">
+                    <div class="flex items-center">
+                        <span>Nível de Critérios</span>
+                        <div class="relative tooltip-container ml-2">
+                            <div class="tooltip-text">Define a importância geral dos grandes temas.</div>
+                        </div>
+                    </div>
+                    <span class="font-bold text-lg text-blue-600"><span id="report-custo-criterios">--</span> julgamentos</span>
+                </div>
+                <div class="flex justify-between items-center pb-2 border-b border-gray-100">
+                    <div class="flex items-center">
+                        <span>Nível de Subcritérios</span>
+                         <div class="relative tooltip-container ml-2">
+                            <div class="tooltip-text">Mapeia as complexas interdependências entre os detalhes.</div>
+                        </div>
+                    </div>
+                    <span class="font-bold text-lg text-blue-600"><span id="report-custo-subcriterios">--</span> julgamentos</span>
+                </div>
+                <div class="flex justify-between items-center pb-2">
+                    <div class="flex items-center">
+                        <span>Nível de Alternativas</span>
+                         <div class="relative tooltip-container ml-2">
+                            <div class="tooltip-text">Avalia suas opções finais contra o que é mais importante.</div>
+                        </div>
+                    </div>
+                    <span class="font-bold text-lg text-blue-600"><span id="report-custo-alternativas">--</span> julgamentos</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </div>
+<script>
+    // =====================================================================
+    // BANCO DE DADOS E ESTADO GLOBAL DA APLICAÇÃO
+    // =====================================================================
+    const bancoDeCriteriosMestre = {
+		Contratacao_de_operador_logistico:`# Critérios Financeiros (Custos Totais)
+Custo de Transporte/Frete - Tabelas de preço
+Custo de Transporte/Frete - taxas de generalidade
+Custo de Transporte/Frete - Ad Valorem (seguro)
+Custo de Armazenagem - Valor por posição-palete ou m²
+Custo de Armazenagem - taxas de handling (movimentação de entrada/saída)
+Custo de TI e Integração - Taxas de setup de sistemas (EDI, API)
+Custo de TI e Integração - mensalidades de WMS/TMS
+Passivos Ocultos - Cláusulas de responsabilidade sobre avarias (perdas e danos)
+Passivos Ocultos - idoneidade fiscal (risco de corresponsabilidade)
+
+# Nível de Serviço e Performance (SLA)
+Acuracidade de Inventário - Precisão do operador na gestão do estoque físico vs. sistema (fundamental para evitar stockouts virtuais)
+Tempo de Ciclo (Lead Time) - Velocidade do pedido até a entrega (Order Cycle Time)
+Capacidade de Rastreamento (Tracking) - Visibilidade em tempo real para o contratante e para o cliente final
+
+# Capacidade Técnica e Infraestrutura
+Tecnologia - Uso de WMS (Warehouse Management System)
+Tecnologia - TMS (Transportation Management System) robustos
+Tecnologia - Capacidade de integração com seu ERP ou plataforma de e-commerce
+Capilaridade - Cobertura geográfica (rede de distribuição)
+Estrutura Física - Qualidade dos armazéns
+Estrutura Física - segurança patrimonial
+Estrutura Física - certificações (ISO, Anvisa - se aplicável a fármacos/alimentos)
+Flexibilidade e Escalabilidade - Capacidade de absorver picos de demanda (Black Friday, sazonalidade)
+
+# Critérios Estratégicos e de Risco
+Saúde Financeira - O operador tem solvência?
+Experiência no Setor - commodities
+Experiência no Setor - e-commerce fracionado
+Cultura e Comunicação - Facilidade de acesso aos gestores
+Cultura e Comunicação - alinhamento de valores (ex: práticas de ESG)`,
+
+  financeira_e_economica: `# Análise de Investimento e Custos (CAPEX & OPEX)
+Custos de Aquisição e Implementação - Custo de Licenciamento (Perpétuo, Assinatura, por Usuário)
+Custos de Aquisição e Implementação - Custo de Hardware e Infraestrutura associada
+Custos de Aquisição e Implementação - Custo de Serviços de Consultoria e Implantação
+Custos de Aquisição e Implementação - Custo de Migração de Dados e Sistemas Legados
+Custos de Aquisição e Implementação - Custo de Customização e Desenvolvimento Inicial
+Custos Operacionais Contínuos - Taxas de Suporte e Manutenção Anual
+Custos Operacionais Contínuos - Custos de Consumo (Energia, Cloud, API Calls)
+Custos Operacionais Contínuos - Custos com Pessoal Dedicado (Operadores, Analistas)
+Custos Operacionais Contínuos - Custos de Treinamento Contínuo e Reciclagem
+Custo Total de Propriedade (TCO) - Projeção de Custos de Upgrade e Expansão
+Custo Total de Propriedade (TCO) - Custos de Descomissionamento / Fim de Vida (End-of-Life)
+Custo Total de Propriedade (TCO) - Custos de Conformidade Regulatória contínua
+Estrutura de Capital e Financiamento - Impacto no Fluxo de Caixa da Empresa
+Estrutura de Capital e Financiamento - Necessidade de Financiamento Externo / Capital de Giro
+Estrutura de Capital e Financiamento - Custo de Capital (WACC)
+
+# Análise de Rentabilidade e Geração de Valor
+Indicadores de Retorno Sobre Investimento (ROI) - Valor Presente Líquido (VPL)
+Indicadores de Retorno Sobre Investimento (ROI) - Taxa Interna de Retorno (TIR) e TIR Modificada (TIRM)
+Indicadores de Retorno Sobre Investimento (ROI) - Período de Payback (Simples e Descontado)
+Indicadores de Retorno Sobre Investimento (ROI) - Índice de Lucratividade
+Impacto Direto nas Receitas - Geração de Novas Linhas de Receita
+Impacto Direto nas Receitas - Aumento do Valor do Tempo de Vida do Cliente (LTV)
+Impacto Direto nas Receitas - Potencial de Aumento de Preços / Margem
+Impacto Direto nas Receitas - Redução da Taxa de Evasão de Clientes (Churn)
+Ganhos de Eficiência e Redução de Custos - Automação de Tarefas Manuais (Horas / Homem economizadas)
+Ganhos de Eficiência e Redução de Custos - Redução de Desperdícios (Material, Tempo)
+Ganhos de Eficiência e Redução de Custos - Otimização do Uso de Ativos
+Ganhos de Eficiência e Redução de Custos - Redução de Custos de Não-Conformidade / Multas`,
+
+  tecnica_e_operacional: `# Desempenho, Escalabilidade e Confiabilidade
+Métricas de Performance - Latência e Tempo de Resposta
+Métricas de Performance - Vazão (Throughput) / Capacidade de Processamento
+Métricas de Performance - Eficiência no Uso de Recursos (CPU, Memória, Rede)
+Escalabilidade e Elasticidade - Capacidade de Escala Vertical (Upgrade de máquina)
+Escalabilidade e Elasticidade - Capacidade de Escala Horizontal (Adição de máquinas)
+Escalabilidade e Elasticidade - Capacidade de Auto-scaling em resposta à demanda
+Disponibilidade e Resiliência - Nível de Disponibilidade (% de Uptime)
+Disponibilidade e Resiliência - Tempo Médio Entre Falhas (MTBF)
+Disponibilidade e Resiliência - Tempo Médio Para Reparo (MTTR)
+
+# Arquitetura, Inovação e Manutenibilidade
+Qualidade da Arquitetura de Software / Hardware - Modularidade e Baixo Acoplamento
+Qualidade da Arquitetura de Software / Hardware - Aderência a Padrões de Mercado
+Qualidade da Arquitetura de Software / Hardware - Nível de Débito Técnico herdado
+Inovação e Ciclo de Vida Tecnológico - Modernidade da Stack Tecnológica
+Inovação e Ciclo de Vida Tecnológico - Frequência e Qualidade das Atualizações / Releases
+Inovação e Ciclo de Vida Tecnológico - Roadmap de Inovação e Novas Funcionalidades
+Facilidade de Manutenção e Evolução - Qualidade e Abrangência da Documentação Técnica
+Facilidade de Manutenção e Evolução - Facilidade para Depuração e Diagnóstico de Problemas
+Facilidade de Manutenção e Evolução - Simplicidade para Extensão e Customização
+
+# Usabilidade, Acessibilidade e Experiência do Usuário (UX)
+Facilidade de Uso e Aprendizagem - Intuitividade da Interface (UI)
+Facilidade de Uso e Aprendizagem - Curva de Aprendizagem para novos usuários
+Facilidade de Uso e Aprendizagem - Qualidade da Documentação e Tutoriais para o usuário final
+Acessibilidade e Inclusão - Conformidade com Padrões de Acessibilidade (ex: WCAG)
+Acessibilidade e Inclusão - Suporte a Múltiplos Idiomas e Localidades
+Integração e Operações de TI - Qualidade e Cobertura das APIs
+Integração e Operações de TI - Facilidade de Monitoramento e Observabilidade
+Integração e Operações de TI - Integração com Ferramentas de Autenticação (SSO) e Segurança`,
+
+  estrategica_e_de_mercado: `# Alinhamento Estratégico e de Negócios
+Sinergia com a Visão e Missão - Contribuição para o Core Business da empresa
+Sinergia com a Visão e Missão - Habilitação de novos modelos de negócio
+Sinergia com a Visão e Missão - Fortalecimento da cultura e valores organizacionais
+Adequação ao Planejamento Estratégico - Impacto direto nos KPIs e OKRs estratégicos
+Adequação ao Planejamento Estratégico - Sinergia com outros projetos e iniciativas em andamento
+
+# Posicionamento Competitivo e de Marca
+Vantagem Competitiva Sustentável - Criação de Diferenciais únicos e difíceis de copiar
+Vantagem Competitiva Sustentável - Potencial de Aumento de Market Share
+Vantagem Competitiva Sustentável - Agilidade para responder a movimentos da concorrência
+Impacto na Marca (Brand Equity) - Fortalecimento da Percepção de Inovação da Marca
+Impacto na Marca (Brand Equity) - Risco ou Benefício Reputacional
+Impacto na Marca (Brand Equity) - Melhoria na Experiência e Satisfação do Cliente (CX)
+
+# Inteligência de Mercado e Adaptação
+Capacidade de Adaptação a Mudanças - Flexibilidade para se adaptar a novas regulamentações
+Capacidade de Adaptação a Mudanças - Resiliência a choques de mercado e crises
+Geração de Insights e Dados - Capacidade de coletar dados valiosos sobre clientes / operações
+Geração de Insights e Dados - Potencial para uso em Análise de Dados e Inteligência Artificial`,
+
+  riscos_seguranca_e_conformidade: `# Gestão de Riscos Estratégicos e Operacionais
+Análise de Riscos Intrínsecos - Risco de Execução e Implementação do Projeto
+Análise de Riscos Intrínsecos - Risco de Dependência Excessiva de Fornecedor (Lock-in)
+Análise de Riscos Intrínsecos - Risco de Obsolescência Tecnológica
+Análise de Riscos Intrínsecos - Risco Geopolítico e na Cadeia de Suprimentos
+Planos de Mitigação e Contingência - Qualidade e Viabilidade dos Planos de Mitigação
+Planos de Mitigação e Contingência - Existência de um Plano de Continuidade de Negócios (PCN)
+
+# Segurança Cibernética e de Dados
+Maturidade e Controles de Segurança - Aderência a Frameworks de Segurança (NIST, ISO 27001)
+Maturidade e Controles de Segurança - Robustez dos Controles de Acesso e Gestão de Identidade
+Maturidade e Controles de Segurança - Segurança da Cadeia de Suprimentos de Software (SBOM)
+Privacidade e Proteção de Dados - Conformidade com LGPD, GDPR, etc.
+Privacidade e Proteção de Dados - Capacidade de Gestão do Ciclo de Vida dos Dados
+
+# Conformidade (Compliance) e Governança
+Adequação Regulatória - Conformidade com leis Fiscais, Trabalhistas e Setoriais
+Adequação Regulatória - Rastreabilidade e Capacidade de Auditoria para fiscalizações
+Governança Corporativa e Contratual - Direitos de Propriedade Intelectual e Licenciamento
+Governança Corporativa e Contratual - Aderência a Políticas Internas de Ética e Conduta
+Governança Corporativa e Contratual - Transparência e Clareza dos Termos Contratuais`,
+
+  relacionamento_e_parceria: `# Capacidade e Reputação do Parceiro
+Competência e Expertise - Experiência comprovada no setor/ tecnologia
+Competência e Expertise - Qualidade técnica da equipe do parceiro
+Saúde e Estabilidade do Parceiro - Solidez Financeira
+Saúde e Estabilidade do Parceiro - Reputação no mercado e referências de clientes
+
+# Modelo de Relacionamento e Suporte
+Alinhamento Cultural e Estratégico - Compatibilidade de visão e valores
+Alinhamento Cultural e Estratégico - Modelo de governança da parceria (reuniões, escalonamento)
+Qualidade do Contrato e Níveis de Serviço (SLA) - Clareza de garantias, multas e responsabilidades
+Qualidade do Contrato e Níveis de Serviço (SLA) - Proatividade e qualidade do suporte técnico/ gerente de contas`,
+
+  gestao_da_mudanca_e_impacto: `# Planejamento, Execução e Adoção
+Qualidade do Plano de Implementação - Clareza da metodologia, fases e entregáveis
+Qualidade do Plano de Implementação - Definição clara de papéis e responsabilidades
+Gestão de Stakeholders e Comunicação - Mapeamento de stakeholders e plano de engajamento
+Gestão de Stakeholders e Comunicação - Estratégia de comunicação interna para a mudança
+Adoção e Sustentação Pós-Implementação - Estratégia de treinamento e capacitação
+Adoção e Sustentação Pós-Implementação - Canais de suporte e coleta de feedback dos usuários
+
+# Impacto Humano e Cultural
+Efeitos sobre a Equipe e Processos - Impacto na produtividade durante a transição
+Efeitos sobre a Equipe e Processos - Necessidade de redesenho de cargos e funções
+Efeitos sobre a Equipe e Processos - Nível de resistência à mudança e moral da equipe`,
+
+  esg_socioambiental: `# Fator Ambiental (E - Environmental)
+Pegada Ecológica e Recursos - Emissões de Gases de Efeito Estufa (Escopos 1, 2 e 3)
+Pegada Ecológica e Recursos - Consumo de Água e Energia
+Pegada Ecológica e Recursos - Impacto na Biodiversidade e uso da terra
+Economia Circular e Resíduos - Análise do Ciclo de Vida do Produto/ Serviço (ACV)
+Economia Circular e Resíduos - Percentual de material reciclado/ reciclável
+Economia Circular e Resíduos - Gestão e redução da geração de resíduos
+
+# Fator Social (S - Social)
+Capital Humano e Direitos Trabalhistas - Promoção de Saúde e Segurança Ocupacional
+Capital Humano e Direitos Trabalhistas - Impacto na Diversidade, Equidade e Inclusão (DE&I)
+Capital Humano e Direitos Trabalhistas - Garantia de práticas trabalhistas justas na cadeia de valor
+Impacto na Comunidade e Cliente - Relações com a comunidade local
+Impacto na Comunidade e Cliente - Acesso e acessibilidade do produto/ serviço
+Impacto na Comunidade e Cliente - Ética em marketing e proteção ao consumidor
+
+# Fator de Governança (G - Governance)
+Estrutura e Transparência Corporativa - Transparência nos relatórios (financeiros e de sustentabilidade)
+Estrutura e Transparência Corporativa - Independência e diversidade do conselho de administração
+Estrutura e Transparência Corporativa - Ética nos negócios e políticas anticorrupção`
+};
+
+     let appState = {};
+    function resetAppState() {
+        appState = {
+        currentStep: 0,
+            objetivo: "", tempoLimite: 0, alternativas: [],
+            judgeName: "Utilizador Individual", judgeRole: "Avaliador",
+            estruturaCriterios: {}, subcriterios: [], pares: [],
+            julgamentos: {}, valoresEigenvector: [], selecaoFinal: []
+        };
+    }
+    resetAppState(); // Inicializa o estado
+    // =====================================================================
+    // LÓGICA DA TELA 1 E REFERÊNCIAS GLOBAIS
+    // =====================================================================
+    const dimensaoSelect = document.getElementById('dimensao');
+    const subcriteriosTextarea = document.getElementById('subcriteriosEdit');
+    function popularTextareaPorDimensao() { subcriteriosTextarea.value = bancoDeCriteriosMestre[dimensaoSelect.value]; }
+    dimensaoSelect.addEventListener('change', popularTextareaPorDimensao);
+    popularTextareaPorDimensao();
+	
+    const headerSubtitle = document.getElementById('headerSubtitle');
+	const timerContainer = document.getElementById('timer-container');
+    const btnVoltar = document.getElementById('btn-voltar');
+    const btnProximo = document.getElementById('btn-proximo');
+    const btnCarregar = document.getElementById('btn-carregar');
+    const btnSalvarRascunho = document.getElementById('btn-salvar-rascunho');
+    const btnFinalizar = document.getElementById('btn-finalizar');
+    const btnSalvarFinal = document.getElementById('btn-salvar-final');
+
+    // Atribuir as funções aos botões
+    btnVoltar.onclick = () => goToStep(appState.currentStep - 1);
+    btnProximo.onclick = goToStep2;
+    btnCarregar.onclick = carregarSessao;
+    btnSalvarRascunho.onclick = salvarSessao;
+    btnFinalizar.onclick = goToStep3;
+    btnSalvarFinal.onclick = gerarJsonParaAnpSolver;
+
+
+updateHeaderButtons(); // Configura os botões do cabeçalho para o estado inicial
+
+    // =====================================================================
+    // MÓDULO DE LÓGICA MATEMÁTICA
+    // =====================================================================
+    const MathHelper = {
+        SAATY_SCALE_VALUES: [1/9, 1/8, 1/7, 1/6, 1/5, 1/4, 1/3, 1/2, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        SAATY_SCALE_LABELS: ['1/9', '1/8', '1/7', '1/6', '1/5', '1/4', '1/3', '1/2', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+        RI_TABLE: {1:0,2:0,3:0.58,4:0.90,5:1.12,6:1.24,7:1.32,8:1.41,9:1.45,10:1.49, 11:1.51, 12:1.48, 13:1.56, 14:1.57, 15:1.59},
+
+        createPairwiseMatrix(elements, judgmentsSource) {
+            const n = elements.length;
+            const matrix = Array(n).fill(0).map(() => Array(n).fill(0));
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    if (i === j) { matrix[i][j] = 1; } 
+                    else if (i < j) {
+                        const pairId = `${elements[i].replace(/\s/g, '')}-${elements[j].replace(/\s/g, '')}`;
+                        const sliderIndex = judgmentsSource[pairId] !== undefined ? judgmentsSource[pairId] : this.SAATY_SCALE_VALUES.indexOf(1);
+                        matrix[i][j] = this.SAATY_SCALE_VALUES[sliderIndex];
+                        matrix[j][i] = 1 / matrix[i][j];
+                    }
+                }
+            }
+            return matrix;
+        },
+        calculatePrincipalEigenvector(matrix) {
+            const n = matrix.length;
+            if (n === 0) return [];
+            if (n === 1) return [1];
+            let eigenvector = Array(n).fill(1 / n);
+            for (let iter = 0; iter < 100; iter++) {
+                const prevEigenvector = [...eigenvector];
+                let newEigenvector = Array(n).fill(0);
+                for (let i = 0; i < n; i++) {
+                    for (let j = 0; j < n; j++) { newEigenvector[i] += matrix[i][j] * prevEigenvector[j]; }
+                }
+                const sum = newEigenvector.reduce((a, b) => a + b, 0);
+                eigenvector = newEigenvector.map(val => val / sum);
+                let diff = 0;
+                for (let i = 0; i < n; i++) { diff += Math.abs(eigenvector[i] - prevEigenvector[i]); }
+                if (diff < 1e-10) break;
+            }
+            return eigenvector;
+        },
+        calculateConsistency(matrix, weights) {
+            const n = matrix.length;
+            if (n <= 2) return { CI: 0, CR: 0 };
+            const Aw = Array(n).fill(0);
+            for(let i=0; i<n; i++) { for(let j=0; j<n; j++) { Aw[i] += matrix[i][j] * weights[j]; } }
+            let lambdaMax = 0;
+            for (let i = 0; i < n; i++) { if(weights[i] > 1e-9) lambdaMax += Aw[i] / weights[i]; }
+            lambdaMax /= n;
+            const CI = (lambdaMax - n) / (n - 1);
+            const RI = this.RI_TABLE[n] || 1.59;
+            const CR = (RI > 0 ? CI / RI : 0);
+            return { CI, CR };
+        },
+        calculateConsistentRangeForPair(targetPairId, elements, judgmentsSource) {
+            const tempJudgments = { ...judgmentsSource };
+            let consistentIndices = [];
+            for (let i = 0; i < this.SAATY_SCALE_VALUES.length; i++) {
+                tempJudgments[targetPairId] = i;
+                const matrix = this.createPairwiseMatrix(elements, tempJudgments);
+                const weights = this.calculatePrincipalEigenvector(matrix);
+                const { CR } = this.calculateConsistency(matrix, weights);
+                if (CR <= 0.101) consistentIndices.push(i);
+            }
+            return consistentIndices.length > 0 ? { min: Math.min(...consistentIndices), max: Math.max(...consistentIndices) } : null;
+        }
+    };
+    
+    // =====================================================================
+    // LÓGICA DO TEMPO DE SESSÃO ATIVA E CRONÔMETRO
+    // =====================================================================
+    let tempoAtivoTotal = 0, ultimoTempoRegistro = 0, timerInatividade, monitorandoAtividade = false;
+    let timerInterval = null; // NOVO: para o cronômetro
+    const LIMITE_INATIVIDADE = 30000;
+
+    function formatTime(totalSeconds) {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = Math.floor(totalSeconds % 60);
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function updateTimerDisplay() {
+        if (!monitorandoAtividade) return;
+        const tempoGastoSegundos = (tempoAtivoTotal + (performance.now() - ultimoTempoRegistro)) / 1000;
+        document.getElementById('timer-decorrido').textContent = formatTime(tempoGastoSegundos);
+
+        const julgamentosFeitos = Object.values(appState.julgamentos).filter(val => val !== MathHelper.SAATY_SCALE_VALUES.indexOf(1)).length;
+        const tMedioCorrente = julgamentosFeitos > 3 ? tempoGastoSegundos / julgamentosFeitos : 8; // Usa padrão de 8s para as primeiras 3 decisões
+        
+        const tempoEstimadoTotalSegundos = appState.pares.length * tMedioCorrente;
+        document.getElementById('timer-estimado').textContent = formatTime(tempoEstimadoTotalSegundos);
+    }
+
+    function registrarAtividade() {
+        if (!monitorandoAtividade) return;
+        const agora = performance.now();
+        tempoAtivoTotal += (agora - ultimoTempoRegistro);
+        ultimoTempoRegistro = agora;
+        clearTimeout(timerInatividade);
+        timerInatividade = setTimeout(() => { ultimoTempoRegistro = performance.now(); }, LIMITE_INATIVIDADE);
+    }
+    
+    function iniciarMonitoramento(tempoSalvo = 0) {
+        if(monitorandoAtividade) return;
+        monitorandoAtividade = true;
+        tempoAtivoTotal = tempoSalvo;
+        ultimoTempoRegistro = performance.now();
+        ['mousemove', 'keypress', 'scroll', 'touchstart'].forEach(evt => window.addEventListener(evt, registrarAtividade));
+        
+        timerContainer.classList.remove('hidden');
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(updateTimerDisplay, 1000);
+        registrarAtividade();
+    }
+    
+    function pararMonitoramento() {
+        if(!monitorandoAtividade) return;
+        registrarAtividade();
+        monitorandoAtividade = false;
+        clearInterval(timerInterval);
+        timerInterval = null;
+        timerContainer.classList.add('hidden');
+        ['mousemove', 'keypress', 'scroll', 'touchstart'].forEach(evt => window.removeEventListener(evt, registrarAtividade));
+    }
+
+    // =====================================================================
+    // NAVEGAÇÃO E CONTROLE DAS TELAS
+    // =====================================================================
+    function goToStep(stepNumber) {
+        if(stepNumber < 0 || stepNumber > 2) return;
+        if(appState.currentStep === 1 && stepNumber !== 1) pararMonitoramento();
+        appState.currentStep = stepNumber;
+        document.querySelectorAll('.form-section').forEach(section => section.classList.remove('active'));
+        document.getElementById(`step${stepNumber + 1}`).classList.add('active');
+        updateHeaderButtons();
+    }
+	
+	function goToStep2() {
+        
+        appState.objetivo = document.getElementById('objetivo').value;
+        appState.tempoLimite = parseInt(document.getElementById('tempoLimite').value, 10) || 120;
+        appState.alternativas = document.getElementById('alternativas').value.trim().split('\n').filter(Boolean);
+        appState.judgeName = document.getElementById('judgeName').value || "Utilizador Individual";
+        appState.judgeRole = document.getElementById('judgeRole').value || "Avaliador";
+
+        const textoCompleto = document.getElementById('subcriteriosEdit').value.trim();
+        appState.estruturaCriterios = {};
+        appState.subcriterios = [];
+        let criterioAtual = "Geral";
+        textoCompleto.split('\n').forEach(linha => {
+            linha = linha.trim();
+            if (linha.startsWith('#')) criterioAtual = linha.substring(1).trim();
+            else if (linha) {
+                if (!appState.estruturaCriterios[criterioAtual]) appState.estruturaCriterios[criterioAtual] = [];
+                appState.estruturaCriterios[criterioAtual].push(linha);
+                appState.subcriterios.push(linha);
+            }
+        });
+
+        if (appState.subcriterios.length < 2) { alert("São necessários ao menos dois subcritérios."); return; }
+        if (appState.alternativas.length < 2) { alert("São necessárias ao menos duas alternativas."); return; }
+        
+        renderizarDashboardDeJulgamento();
+        iniciarMonitoramento(appState.tempoSalvo || 0);
+        goToStep(1);
+    }
+	 function updateHeaderButtons() {
+        const step = appState.currentStep;
+        const h2 = document.querySelector(`#step${step + 1} h2`);
+        headerSubtitle.textContent = h2 ? `Etapa ${step + 1}: ${h2.textContent}` : `Etapa ${step + 1}`;
+        [btnVoltar, btnProximo, btnCarregar, btnSalvarRascunho, btnFinalizar, btnSalvarFinal].forEach(btn => btn.classList.add('hidden'));
+        if (step === 0) { btnCarregar.classList.remove('hidden'); btnProximo.classList.remove('hidden'); }
+        else if (step === 1) { btnVoltar.classList.remove('hidden'); btnSalvarRascunho.classList.remove('hidden'); btnFinalizar.classList.remove('hidden'); }
+        else if (step === 2) { btnVoltar.classList.remove('hidden'); btnSalvarFinal.classList.remove('hidden'); }
+    }
+	
+	
+	// =====================================================================
+    // NOVAS FUNÇÕES: SALVAR E CARREGAR SESSÃO
+    // =====================================================================
+    function salvarSessao() {
+        pararMonitoramento(); // Garante que o tempo atual seja salvo
+        
+        const sessao = {
+            appState: appState,
+            tempoAtivoTotal: tempoAtivoTotal
+        };
+
+        const jsonString = JSON.stringify(sessao, null, 2);
+        const blob = new Blob([jsonString], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `rascunho-selecao-criterios.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        iniciarMonitoramento(tempoAtivoTotal); // Retoma o monitoramento
+        alert("Rascunho salvo com sucesso!");
+    }
+
+    function carregarSessao() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = e => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = readerEvent => {
+                try {
+                    const data = JSON.parse(readerEvent.target.result);
+                    if (!data.appState || data.tempoAtivoTotal === undefined) throw new Error("Arquivo de rascunho inválido.");
+
+                    // Restaura o estado da aplicação
+                    appState = data.appState;
+                    appState.tempoSalvo = data.tempoAtivoTotal; // Guarda o tempo para iniciar o contador com ele
+
+                    // Preenche a tela 1 com os dados carregados
+                    document.getElementById('objetivo').value = appState.objetivo;
+                    document.getElementById('tempoLimite').value = appState.tempoLimite;
+                    document.getElementById('alternativas').value = appState.alternativas.join('\n');
+                    document.getElementById('judgeName').value = appState.judgeName;
+                    document.getElementById('judgeRole').value = appState.judgeRole;
+                    
+                    // Remonta a string da estrutura de critérios para o textarea
+                    let textoEstrutura = "";
+                    for (const criterio in appState.estruturaCriterios) {
+                        textoEstrutura += `# ${criterio}\n`;
+                        textoEstrutura += appState.estruturaCriterios[criterio].join('\n') + '\n\n';
+                    }
+                    document.getElementById('subcriteriosEdit').value = textoEstrutura.trim();
+                    
+                    alert("Rascunho carregado. Clique em 'Próximo' para continuar de onde parou.");
+                    
+                } catch (err) {
+                    alert(`Erro ao carregar o arquivo: ${err.message}`);
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
+    }
+
+    // --- Lógica da Tela 2 ---
+    function renderizarDashboardDeJulgamento() {
+        const dashboard = document.getElementById('comparison-dashboard');
+        dashboard.innerHTML = '';
+        appState.pares = [];
+        const { subcriterios } = appState;
+
+        for (let i = 0; i < subcriterios.length; i++) { for (let j = i + 1; j < subcriterios.length; j++) { appState.pares.push([subcriterios[i], subcriterios[j]]); } }
+
+        appState.pares.forEach(([subA, subB]) => {
+            const pairId = `${subA.replace(/\s/g, '')}-${subB.replace(/\s/g, '')}`;
+            const initialValueIndex = MathHelper.SAATY_SCALE_VALUES.indexOf(1);
+            if(appState.julgamentos[pairId] === undefined) appState.julgamentos[pairId] = initialValueIndex;
+            
+            const item = document.createElement('div');
+            item.className = 'comparison-item';
+            item.innerHTML = `
+                <div class="w-full md:w-2/5 mb-2 md:mb-0 text-sm md:text-base">
+                    <span class="font-medium">${subA}</span>
+                    <span class="text-gray-500 mx-1">vs</span>
+                    <span class="font-medium">${subB}</span>
+                </div>
+                <div class="w-full md:w-3/5 flex items-center">
+                    <div class="flex-grow mx-4 relative slider-wrapper">
+                        <div class="slider-track-background"></div>
+                        <div class="consistent-range-indicator" id="range-${pairId}"></div>
+                        <input type="range" min="0" max="${MathHelper.SAATY_SCALE_VALUES.length - 1}" value="${appState.julgamentos[pairId]}" id="slider-${pairId}" data-pair-id="${pairId}">
+                    </div>
+                    <span class="w-12 text-center font-semibold" style="color: var(--color-primary);" id="value-${pairId}"></span>
+                </div>
+            `;
+            dashboard.appendChild(item);
+        });
+        dashboard.querySelectorAll('input[type="range"]').forEach(slider => slider.addEventListener('input', updateDashboard));
+        updateDashboard();
+    }
+
+    function updateDashboard(event) {
+        if (event) {
+            const slider = event.target;
+            const pairId = slider.dataset.pairId;
+            appState.julgamentos[pairId] = parseInt(slider.value, 10);
+        }
+        const matrix = MathHelper.createPairwiseMatrix(appState.subcriterios, appState.julgamentos);
+        appState.valoresEigenvector = MathHelper.calculatePrincipalEigenvector(matrix);
+        const { CR } = MathHelper.calculateConsistency(matrix, appState.valoresEigenvector);
+        const crDisplay = document.getElementById('cr-display');
+        crDisplay.textContent = CR.toFixed(4);
+        crDisplay.className = `font-bold text-lg ml-2 p-2 rounded-md ${CR > 0.10 ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'}`;
+        
+        document.querySelectorAll('input[type="range"]').forEach(slider => {
+            const pairId = slider.dataset.pairId;
+            document.getElementById(`value-${pairId}`).textContent = MathHelper.SAATY_SCALE_LABELS[appState.julgamentos[pairId]];
+            const range = MathHelper.calculateConsistentRangeForPair(pairId, appState.subcriterios, appState.julgamentos);
+            const rangeIndicator = document.getElementById(`range-${pairId}`);
+            if (range && rangeIndicator) {
+                const totalValues = MathHelper.SAATY_SCALE_VALUES.length - 1;
+                const leftPercent = (range.min / totalValues) * 100;
+                const widthPercent = ((range.max - range.min + 1) / totalValues) * 100;
+                rangeIndicator.style.left = `${leftPercent}%`;
+                rangeIndicator.style.width = `${widthPercent}%`;
+            } else if (rangeIndicator) {
+                rangeIndicator.style.width = '0%';
+            }
+        });
+    }
+
+    // --- Lógica da Tela 3 ---
+    function goToStep3() {
+        pararMonitoramento();
+        const MIN_T_MEDIO_SEGUNDOS = 0.5;
+        const MAX_ORCAMENTO_W = 10000;
+        const tempoTotalConsiderado = (appState.tempoLimite * 60) * (2 / 3);
+        let tMedioCalculado = (appState.pares.length > 0) ? (tempoAtivoTotal / 1000) / appState.pares.length : 10;
+        const tMedioSegundos = Math.max(tMedioCalculado, MIN_T_MEDIO_SEGUNDOS);
+        let W_calculado = tMedioSegundos > 0 ? Math.round(tempoTotalConsiderado / tMedioSegundos) : 0;
+        const W = Math.min(W_calculado, MAX_ORCAMENTO_W);
+
+        const wt = calcularPesosComoCustoMarginal();
+        const val = appState.valoresEigenvector.map(v => Math.round(v * 1000));
+        const { selectedItems, maxValue, totalWeight } = knapSack(W, wt, val, appState.subcriterios.length);
+        
+        appState.selecaoFinal = selectedItems.map(index => appState.subcriterios[index]);
+        
+        let summaryHTML = `Considerando seu limite de <strong>${appState.tempoLimite} minutos</strong> para análise da melhor alternativa para seu objetivo "<strong>${appState.objetivo}</strong>", e o seu ritmo médio de <strong>${tMedioSegundos.toFixed(1)} segundos por decisão</strong>, estimamos um orçamento para <strong>${W} comparações</strong>. Os subcritérios selecionados abaixo representam o melhor valor dentro desse limite.`;
+        
+        // Adiciona um aviso se o orçamento foi limitado pela trava de segurança
+        if (W_calculado > MAX_ORCAMENTO_W) {
+            summaryHTML += `<br><small class="text-orange-600"><strong>Aviso:</strong> O orçamento de comparações calculado (${W_calculado}) excedeu o limite de segurança do sistema e foi ajustado para ${MAX_ORCAMENTO_W}.</small>`;
+        }
+        document.getElementById('summary-text').innerHTML = summaryHTML;
+        
+        const containerArranjo = document.getElementById('best-arrangement-container');
+        let htmlArranjo = `<h3 class="font-bold text-lg" style="color: var(--color-primary);">O Melhor Arranjo de Modelo Encontrado:</h3>`;
+        
+        if (appState.selecaoFinal.length > 0) {
+            for (const criterio in appState.estruturaCriterios) {
+                const subcriteriosSelecionadosNesteCluster = appState.estruturaCriterios[criterio].filter(sc => appState.selecaoFinal.includes(sc));
+                if (subcriteriosSelecionadosNesteCluster.length > 0) {
+                    htmlArranjo += `<h4 class="font-semibold mt-3">${criterio}</h4>`;
+                    htmlArranjo += '<ul class="list-disc list-inside ml-4 text-gray-700">';
+                    subcriteriosSelecionadosNesteCluster.forEach(subcriterio => { htmlArranjo += `<li>${subcriterio}</li>`; });
+                    htmlArranjo += '</ul>';
+                }
+            }
+        } else {
+            htmlArranjo += '<p class="mt-2 text-gray-600">Nenhum critério pôde ser selecionado com o orçamento de tempo/julgamentos disponível.</p>';
+        }
+		// 1. Recria a estrutura apenas com os critérios selecionados para o cálculo final
+const estruturaFinalSelecionada = {};
+for (const criterio in appState.estruturaCriterios) {
+    const subcriteriosSelecionadosNesteCluster = appState.estruturaCriterios[criterio]
+        .filter(sc => appState.selecaoFinal.includes(sc));
+    if (subcriteriosSelecionadosNesteCluster.length > 0) {
+        estruturaFinalSelecionada[criterio] = subcriteriosSelecionadosNesteCluster;
+    }
+}
+
+// 2. Calcula o custo detalhado para a estrutura final
+const detalhamentoCustos = calcularCustoAnpTeoricoVariavel(estruturaFinalSelecionada, appState.alternativas);
+
+// 3. Preenche os novos campos no HTML com os valores calculados
+document.getElementById('report-custo-criterios').textContent = detalhamentoCustos.criterios;
+document.getElementById('report-custo-subcriterios').textContent = detalhamentoCustos.subcriterios;
+document.getElementById('report-custo-alternativas').textContent = detalhamentoCustos.alternativas;
+        containerArranjo.innerHTML = htmlArranjo;
+		
+        // 1. Calcula o percentual (valor bruto dividido por 10, pois o total é 1000)
+const percentualValor = maxValue / 10;
+
+// 2. Exibe o percentual formatado como o valor principal no card
+document.getElementById('report-valor-total').textContent = `${percentualValor.toFixed(1)}%`;
+
+// 3. (Opcional, mas recomendado) Atualiza o texto do tooltip dinamicamente
+const tooltipValor = document.getElementById('tooltip-valor-texto');
+if (tooltipValor) {
+    tooltipValor.innerHTML = `Mede o "retorno sobre o seu investimento" de atenção. Este modelo conseguiu capturar <strong>${percentualValor.toFixed(1)}%</strong> desse total, focando no que é mais crucial para sua decisão.`;
+}
+document.getElementById('report-custo-total').textContent = detalhamentoCustos.total;
+document.getElementById('report-orcamento').textContent = W;
+        goToStep(2);
+    }
+    
+    // =====================================================================
+    // CÁLCULO DE CUSTO 
+    // =====================================================================
+   // Função auxiliar para calcular o número de pares
+function pares(n) {
+    return n > 1 ? (n * (n - 1)) / 2 : 0;
+}
+
+/**
+ * MOTOR DE CÁLCULO CORRETO E DEFINITIVO
+ * Calcula o custo para um modelo ANP completo com subcritérios variáveis.
+ * @param {object} estrutura - Estrutura de critérios e subcritérios.
+ * @param {string[]} alternativas - Array de alternativas.
+ * @returns {object} Objeto com o custo total e o detalhamento por nível.
+ */
+function calcularCustoAnpTeoricoVariavel(estrutura, alternativas) {
+    const criterios = Object.keys(estrutura);
+    const Nc = criterios.length;
+    const Na = alternativas.length;
+    
+    if (Nc === 0) { // Se não houver critérios, o custo é zero.
+      return {criterios: 0, subcriterios: 0, alternativas: 0, total: 0};
+    }
+
+    const s_list = Object.values(estrutura).map(subcriterios => subcriterios.length);
+    const S_total = s_list.reduce((sum, s_i) => sum + s_i, 0);
+
+    // Nível de Critérios
+    const totalCriterios = pares(Nc) + (Nc * pares(Nc - 1));
+
+    // Nível de Subcritérios
+    const custoIntraSub = s_list.reduce((sum, s_i) => sum + pares(s_i), 0);
+    let custoInterSub = 0;
+    const somaTotalParesSub = custoIntraSub;
+    for (const s_i of s_list) {
+        const somaParesOutrosClusters = somaTotalParesSub - pares(s_i);
+        custoInterSub += s_i * somaParesOutrosClusters;
+    }
+    const totalSubcriterios = custoIntraSub + custoInterSub;
+    
+    // Nível de Alternativas
+    const custoAltVsSub = S_total * pares(Na);
+    const custoFeedbackAlt = Na * pares(Nc);
+    const totalAlternativas = custoAltVsSub + custoFeedbackAlt;
+    
+    const totalGeral = totalCriterios + totalSubcriterios + totalAlternativas;
+
+    return {
+        criterios: totalCriterios,
+        subcriterios: totalSubcriterios,
+        alternativas: totalAlternativas,
+        total: totalGeral
+    };
+}
+
+    function calcularPesosComoCustoMarginal() {
+    // Usa o motor de cálculo correto para obter o custo total inicial.
+    const custoTotalComTodos = calcularCustoAnpTeoricoVariavel(appState.estruturaCriterios, appState.alternativas).total;
+
+    return appState.subcriterios.map(subcriterioASerRemovido => {
+        const estruturaTemporaria = JSON.parse(JSON.stringify(appState.estruturaCriterios));
+        let criterioPaiVazio = "";
+        
+        for (const crit in estruturaTemporaria) {
+            const index = estruturaTemporaria[crit].indexOf(subcriterioASerRemovido);
+            if (index > -1) {
+                estruturaTemporaria[crit].splice(index, 1);
+                if (estruturaTemporaria[crit].length === 0) {
+                    criterioPaiVazio = crit;
+                }
+                break;
+            }
+        }
+
+        // Se um critério ficou sem subcritérios, ele deve ser removido da estrutura.
+        if (criterioPaiVazio) {
+            delete estruturaTemporaria[criterioPaiVazio];
+        }
+        
+        // Usa o MESMO motor de cálculo correto para obter o custo da estrutura reduzida.
+        const custoTotalSemUm = calcularCustoAnpTeoricoVariavel(estruturaTemporaria, appState.alternativas).total;
+        
+        return Math.round(custoTotalComTodos - custoTotalSemUm);
+    });
+}
+
+    function gerarJsonParaAnpSolver() {
+        const estruturaSelecionada = {};
+        for (const criterio in appState.estruturaCriterios) {
+            const subcriteriosSelecionadosNesteCluster = appState.estruturaCriterios[criterio].filter(sc => appState.selecaoFinal.includes(sc));
+            if (subcriteriosSelecionadosNesteCluster.length > 0) {
+                estruturaSelecionada[criterio] = subcriteriosSelecionadosNesteCluster;
+            }
+        }
+        
+        // AJUSTE: Monta o objeto no formato final desejado
+        const modeloAnp = {
+            metadata: {
+                judgeName: appState.judgeName,
+                judgeRole: appState.judgeRole,
+                savedAt: new Date().toISOString()
+            },
+            dynamicClusters: {
+                ObjetivoPrincipal: appState.objetivo,
+                "Criterios de Decisao": {
+                    elements: Object.keys(estruturaSelecionada),
+                    sub_elements_map: estruturaSelecionada
+                },
+                "Alternativas para alcane do Objetivo": {
+                    elements: appState.alternativas
+                }
+            },
+            judgments: {} // Objeto de julgamentos vazio, como solicitado
+        };
+
+        const jsonString = JSON.stringify(modeloAnp, null, 2);
+        const blob = new Blob([jsonString], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `modelo-anp-solver-${appState.objetivo.replace(/\s/g, '_')}.json`;
+        document.body.appendChild(a);
+a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // =====================================================================
+    // ALGORITMO DA MOCHILA (0/1 Knapsack)
+    // =====================================================================
+    function knapSack(W, wt, val, n) {
+        if (W <= 0) return { selectedItems: [], maxValue: 0, totalWeight: 0 };
+        let K = Array(n + 1).fill(0).map(() => Array(W + 1).fill(0));
+        for (let i = 0; i <= n; i++) {
+            for (let w = 0; w <= W; w++) {
+                if (i === 0 || w === 0) K[i][w] = 0;
+                else if (wt[i - 1] <= w) K[i][w] = Math.max(val[i - 1] + K[i - 1][w - wt[i - 1]], K[i - 1][w]);
+                else K[i][w] = K[i - 1][w];
+            }
+        }
+        const maxValue = K[n][W];
+        let totalWeight = 0, selectedItems = [];
+        for (let i = n, w = W; i > 0 && K[i][w] > 0; i--) {
+            if (K[i][w] !== K[i - 1][w]) {
+                selectedItems.push(i - 1);
+                totalWeight += wt[i - 1];
+                w -= wt[i - 1];
+            }
+        }
+        return { selectedItems: selectedItems.reverse(), maxValue, totalWeight };
+    }
+
+</script>
+</body>
+
+</html>

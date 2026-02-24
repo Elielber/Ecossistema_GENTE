@@ -1,0 +1,1938 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANP-Solver: Relatório Interativo Otimizado</title>
+
+    <!-- Dependências Externas -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <!-- Fontes do Google -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+	
+    <style>
+        /* ================================================================== */
+/* =================== Folha de Estilos Unificada =================== */
+/* ============== (Atualizada com a Nova Identidade Visual) ========= */
+/* ================================================================== */
+
+/* --- Variáveis de Tema (Custom Properties) --- */
+:root {
+    --font-family: 'Inter', sans-serif;
+    
+    /* Cores do Módulo 1 (Principal) */
+    --color-m1-cinza-principal: #4A4A4A;
+    --color-m1-cinza-arcos: #787878;
+    --color-m1-fundo-claro: #E0E0E0;
+
+    /* Cores dos Outros Módulos */
+    --color-m2-azul-gestao: #1D3557;
+    --color-m3-vermelho-temperatura: #8C1F28;
+    --color-m4-marrom-interacao: #7A4B29;
+    --color-m5-verde-resultado: #2A574A;
+
+    /* Cores de Texto e Suporte */
+    --color-texto-escuro: #1F1F1F;
+    --color-texto-secundario: #4A4A4A;
+    --color-texto-claro: #FFFFFF;
+    --color-fundo-branco: #FFFFFF;
+    --color-fundo-secao: #F8F9FA;
+    --color-borda: #CCCCCC;
+}
+
+/* --- Estilos Globais e da Apresentação --- */
+html {
+    scroll-behavior: smooth;
+}
+body {
+    font-family: var(--font-family);
+    background-color: var(--color-fundo-branco); /* Fundo branco para a apresentação */
+    color: var(--color-texto-escuro);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- Sistema de troca de tela: Apresentação <-> Solver --- */
+#solver { display: none; }
+#solver:target { display: block; }
+body:has(#solver:target) {
+    background-color: var(--color-m1-fundo-claro); /* Fundo cinza claro para o solver */
+}
+body:has(#solver:target) #apresentacao { display: none; }
+
+/* ================================================================== */
+/* =================== TELA DE APRESENTAÇÃO (#apresentacao) ========= */
+/* ================================================================== */
+#apresentacao header {
+    background-color: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+}
+#apresentacao .container .text-xl { /* "ANP-Solver" logo text */
+    color: var(--color-m1-cinza-principal);
+}
+#apresentacao .nav-link { color: var(--color-texto-secundario); transition: color 0.3s ease; }
+#apresentacao .nav-link:hover { color: var(--color-m2-azul-gestao); }
+#apresentacao a[href="#solver"] { /* Botão "Abrir Ferramenta" */
+    background-color: var(--color-m1-cinza-principal);
+    color: var(--color-texto-claro);
+}
+#apresentacao a[href="#solver"]:hover {
+    background-color: #333333;
+}
+#apresentacao h1 {
+    color: var(--color-m2-azul-gestao); /* Título principal com o azul de "Alta Gestão" */
+}
+#apresentacao h2 {
+    color: var(--color-texto-escuro);
+}
+#apresentacao #challenge h3 { /* Títulos dos desafios */
+    color: var(--color-m3-vermelho-temperatura);
+}
+#apresentacao #solution .text-blue-500 { /* Ícones de vantagens "➔" */
+    color: var(--color-m1-cinza-principal);
+}
+
+/* --- Estilização dos 5 Passos ("Como Funciona?") --- */
+.step-card { 
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-color: var(--color-borda);
+}
+.step-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+#how-it-works .step-card:nth-of-type(1) .text-2xl { color: var(--color-m1-cinza-principal); } /* Passo 1: Cinza */
+#how-it-works .step-card:nth-of-type(2) .text-2xl { color: var(--color-m4-marrom-interacao); } /* Passo 2: Marrom */
+#how-it-works .step-card:nth-of-type(3) .text-2xl { color: var(--color-m2-azul-gestao); } /* Passo 3: Azul */
+#how-it-works .step-card:nth-of-type(4) .text-2xl { color: var(--color-m3-vermelho-temperatura); } /* Passo 4: Vermelho */
+#how-it-works .step-card:nth-of-type(5) .text-2xl { color: var(--color-m5-verde-resultado); } /* Passo 5: Verde */
+
+/* ================================================================== */
+/* =================== FERRAMENTA SOLVER (#solver) ================== */
+/* ================================================================== */
+#solver .header-bg { /* Cabeçalho do Solver */
+    background-color: var(--color-m1-cinza-principal);
+    color: var(--color-texto-claro);
+}
+#solver aside, #solver section { /* Cards do menu e formulário */
+    background-color: var(--color-fundo-branco);
+}
+#solver .nav-step.active-step { /* Item ativo no menu lateral */
+    background-color: var(--color-m1-cinza-principal);
+    color: var(--color-texto-claro);
+    font-weight: bold;
+}
+#solver .nav-step:not(.active-step) {
+    color: var(--color-texto-secundario);
+}
+#solver h2, #solver h3 {
+    color: var(--color-texto-escuro);
+}
+
+/* --- Botões do Solver --- */
+#solver button { transition: background-color 0.3s ease, border-color 0.3s ease; }
+
+#solver #save-judgments-btn, 
+#solver #generate-detailed-report-btn,
+#solver #generate-individual-report-btn {
+    background-color: var(--color-m5-verde-resultado); /* Verde para Salvar e Relatório */
+    color: var(--color-texto-claro);
+}
+#solver #save-judgments-btn:hover, 
+#solver #generate-detailed-report-btn:hover,
+#solver #generate-individual-report-btn:hover {
+    background-color: #1E3D35; /* Verde mais escuro */
+}
+#solver #load-judgments-btn, 
+#solver #next-step-btn, 
+#solver #calculate-btn,
+#solver #add-json-btn,
+#solver #copy-json-btn,
+#run-integrity-tests-btn {
+    background-color: var(--color-m2-azul-gestao); /* Azul para Ações Principais */
+    color: var(--color-texto-claro);
+}
+#solver #load-judgments-btn:hover, 
+#solver #next-step-btn:hover, 
+#solver #calculate-btn:hover,
+#solver #add-json-btn:hover,
+#solver #copy-json-btn:hover,
+#run-integrity-tests-btn:hover {
+    background-color: #12243C; /* Azul mais escuro */
+}
+#solver #prev-step-btn {
+    background-color: transparent;
+    border: 1px solid var(--color-texto-claro);
+    color: var(--color-texto-claro);
+}
+#solver #prev-step-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* --- Sliders de Comparação --- */
+.comparison-item {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid #eee;
+}
+.comparison-item:last-child { border-bottom: none; }
+.slider-wrapper { position: relative; display: flex; align-items: center; width: 100%; }
+.slider-track-background, .consistent-range-indicator {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    height: 8px; border-radius: 9999px; pointer-events: none;
+}
+.slider-track-background { left: 0; right: 0; background-color: #e5e7eb; }
+.consistent-range-indicator { 
+    background-color: rgba(42, 87, 74, 0.5); /* Verde com opacidade */
+    transition: left 0.2s ease, width 0.2s ease; 
+}
+input[type="range"] { position: relative; z-index: 2; background-color: transparent; -webkit-appearance: none; appearance: none; width: 100%;}
+
+/* --- Gráficos --- */
+.chart-container { position: relative; width: 100%; max-width: 800px; margin: auto; }
+.alternatives-chart-container { height: 150px; }
+.subcriteria-chart-container { height: 450px; }
+
+/* --- Modais e Spinner --- */
+.modal-overlay, .loading-spinner-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; justify-content: center; align-items: center; z-index: 1000;
+}
+.modal-overlay { background-color: rgba(0, 0, 0, 0.5); }
+.modal-content { background-color: white; padding: 2rem; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); text-align: center; max-width: 400px; }
+#consistency-modal .text-xl { color: var(--color-m3-vermelho-temperatura); } /* Título do Modal */
+#consistency-modal #close-modal-btn { background-color: var(--color-m3-vermelho-temperatura); } /* Botão do Modal */
+#consistency-modal #close-modal-btn:hover { background-color: #61151B; } /* Vermelho mais escuro */
+
+.loading-spinner-overlay { background-color: rgba(255, 255, 255, 0.8); flex-direction: column; z-index: 1001; }
+.spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-left-color: var(--color-m1-cinza-principal); /* Spinner com a cor principal */
+    border-radius: 50%; width: 50px; height: 50px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- Tabelas de Matriz --- */
+.matrix-table {
+    width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem; font-size: 0.875rem;
+}
+.matrix-table th, .matrix-table td { border: 1px solid var(--color-borda); padding: 0.2rem; text-align: center; vertical-align: middle; }
+.matrix-table thead th { background-color: #f3f4f6; font-weight: 600; }
+.matrix-table tbody th { text-align: left !important; font-weight: bold; background-color: #f9f9f9; }
+.matrix-table.wide-table thead th {
+    height: 90px; white-space: nowrap; vertical-align: bottom; position: relative; padding: 0 !important;
+}
+.matrix-table.wide-table thead th > div {
+    position: absolute; bottom: 10px; left: 100%;
+    width: 80px; transform-origin: bottom left;
+    transform: translateX(0%) rotate(-90deg); 
+    white-space: normal; 
+}
+.matrix-table tbody th { width: 100mm; }
+.matrix-table.wide-table thead th > div > span {
+    display: block; border-bottom: 1px solid #ccc; padding: 5px 10px; text-align: left;
+}
+.landscape-section .matrix-table.wide-table th,
+.landscape-section .matrix-table.wide-table td { font-size: 5pt !important; padding: 0.1rem !important; }
+
+/* --- Testes de Integridade e Resultados --- */
+.test-result-item.failed {
+    background-color: #fee2e2;
+    border-left: 4px solid var(--color-m3-vermelho-temperatura);
+    padding: 1rem;
+}
+.test-result-item.passed {
+    background-color: #dcfce7;
+    border-left: 4px solid var(--color-m5-verde-resultado);
+    padding: 1rem;
+}
+.print-prepare {
+    display: block !important; position: absolute;
+    left: -9999px; top: 0; width: 210mm;
+}
+
+/* --- Estilos Responsivos --- */
+@media (max-width: 768px) {
+    main.container { flex-direction: column; }
+    aside { position: static; width: 100%; margin-bottom: 1rem; }
+    #anp-form { order: 2; }
+    .chart-container { height: 300px; max-height: 70vh; }
+}
+
+/* ================================================================== */
+/* =================== Estilos de Impressão ========================= */
+/* ================================================================== */
+@media print {
+    /* --- Regra para TODAS as páginas --- */
+    @page {
+        size: A4 portrait; margin: 2cm;
+        @bottom-right {
+            content: "Página " counter(page);
+            font-size: 9pt; color: #555;
+        }
+    }
+    /* --- Regra APENAS para a PRIMEIRA página (a capa) --- */
+    @page :first {
+        @bottom-right { content: ""; }
+    }
+    /* Definições de página (retrato padrão, paisagem nomeada) */
+    @page { size: A4 portrait; margin: 2cm; }
+    @page landscape { size: A4 landscape; margin: 1.5cm; }
+
+    /* Estilos gerais do corpo para impressão */
+    body {
+        background-color: #fff !important; color: #000 !important;
+        font-size: 11pt; -webkit-print-color-adjust: exact; 
+        print-color-adjust: exact;
+    }
+    
+    /* Esconde tudo, exceto o conteúdo do relatório */
+    body > * { display: none !important; }
+    #solver, #report-content-to-print { display: block !important; }
+    #solver > :not(#report-content-to-print) { display: none !important; }
+    #appendixAContent .matrix-table {
+        table-layout: auto; width: auto; display: inline-table; margin-bottom: 2rem;
+    }
+    #appendixAContent .matrix-table.table-larga {
+        table-layout: fixed; width: 100%; display: table;
+        font-size: 5.5pt; overflow-wrap: break-word;
+    }
+    #appendixAContent .matrix-table.table-larga th,
+    #appendixAContent .matrix-table.table-larga td { padding: 2px; }
+    #report-content-to-print { position: static !important; }
+    .report-section-break { page-break-before: always; }
+    .landscape-page { page: landscape; }
+    .report-section-break h2 { page-break-after: avoid; }
+    h1, h2, h3, h4, .chart-container { page-break-inside: avoid; }
+    h1, h2, h3, h4, h5 { color: #000 !important; }
+    .cover-page {
+        display: flex !important; flex-direction: column; justify-content: center;
+        align-items: center; height: 24cm; text-align: center;
+    }
+    .cover-page h1 { font-size: 24pt; }
+    .cover-page p { font-size: 12pt; margin-top: 1rem; }
+    .chart-container {
+        width: 100% !important; max-width: 17cm !important; margin: 1cm auto;
+    }
+    .alternatives-chart-container-print { height: 4cm !important; }
+    .subcriteria-chart-container-print { height: 12cm !important; }
+    .matrix-table { font-size: 8pt; }
+    .matrix-table th, .matrix-table td { border: 1px solid #aaa; padding: 0.25rem; }
+    .matrix-table th { background-color: #f2f2f2 !important; }
+    .landscape-page .matrix-table { font-size: 6pt !important; }
+}
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- ================================================================== -->
+    <!-- ======================= TELA DE APRESENTAÇÃO ===================== -->
+    <!-- ================================================================== -->
+    <div id="apresentacao">
+        <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-50 shadow-sm">
+            <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
+                <div class="text-xl font-bold text-gray-800">ANP-Solver</div>
+                <div class="hidden md:flex space-x-8">
+                    <a href="#challenge" class="nav-link text-gray-600">O Desafio</a>
+                    <a href="#solution" class="nav-link text-gray-600">A Solução</a>
+                    <a href="#how-it-works" class="nav-link text-gray-600">Como Funciona</a>
+                </div>
+                <a href="#solver" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors">
+                    Abrir Ferramenta
+                </a>
+            </nav>
+        </header>
+
+        <main class="container mx-auto px-6 py-12">
+            <section class="text-center mb-24">
+                <h1 class="text-4xl md:text-5xl font-bold text-gray-800 mb-4">ANP-SOLVER: Tomada de Decisão em Grupo para Problemas Multicritério Interdependentes com uma Ferramenta Intuitiva, Portátil e Autocontida</h1>
+                <p class="text-lg text-gray-600 max-w-3xl mx-auto">Uma ferramenta que torna o método *Analytic Network Process* acessível, intuitivo, portátil e seguro para todos os gestores.</p>
+            </section>
+
+            <section id="challenge" class="mb-24 scroll-mt-20">
+                <h2 class="text-3xl font-bold text-center mb-12 text-gray-800">O Desafio: Barreiras em Softwares de Decisão</h2>
+                <div class="grid md:grid-cols-3 gap-8">
+                    <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                        <h3 class="font-bold text-xl mb-2">Interfaces Complexas</h3>
+                        <p class="text-gray-600">Curvas de aprendizado íngremes afastam usuários que não são especialistas no método.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                        <h3 class="font-bold text-xl mb-2">Instalação e Segurança da Informação</h3>
+                        <p class="text-gray-600">A necessidade de instalação e dependência de sistemas operacionais específicos limitam o acesso.</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                        <h3 class="font-bold text-xl mb-2">Falta de Autonomia</h3>
+                        <p class="text-gray-600">A dependência de suporte técnico dificulta o julgamento consciente e a colaboração.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="solution" class="mb-24 scroll-mt-20">
+                <h2 class="text-3xl font-bold text-center mb-12 text-gray-800">A Solução: ANP-Solver</h2>
+                <div class="bg-white p-8 rounded-lg shadow-xl border border-gray-200">
+                    <div class="grid md:grid-cols-2 gap-8 items-center">
+                        <div>
+                            <h3 class="font-bold text-2xl mb-6">Principais Vantagens</h3>
+                            <ul class="space-y-4">
+                                <li class="flex items-start"><span class="text-blue-500 text-xl mr-3">➔</span><div><strong>Totalmente Portátil:</strong> Funciona em qualquer navegador, sem instalação e offline.</div></li>
+                                <li class="flex items-start"><span class="text-blue-500 text-xl mr-3">➔</span><div><strong>Interface Intuitiva:</strong> Fluxo passo a passo com *sliders* para facilitar os julgamentos.</div></li>
+                                <li class="flex items-start"><span class="text-blue-500 text-xl mr-3">➔</span><div><strong>Feedback Imediato:</strong> Cálculo da Razão de Consistência (CR) em tempo real.</div></li>
+                                <li class="flex items-start"><span class="text-blue-500 text-xl mr-3">➔</span><div><strong>Sistema Start-Stop:</strong> Avalie com calma, pause e continue quando quiser com total descrição.</div></li>
+                                <li class="flex items-start"><span class="text-blue-500 text-xl mr-3">➔</span><div><strong>Decisão em Grupo:</strong> Suporte a múltiplos juízes via importação/exportação de dados.</div></li>
+								<li class="flex items-start"><span class="text-blue-500 text-xl mr-3">➔</span><div><strong>Relatório Gerencial:</strong> Sua decisão com justificativa técnica.</div></li>
+							
+							</ul>
+                        </div>
+                        <div class="chart-container" style="height: 350px;">
+                            <canvas id="presentationResultsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="how-it-works" class="mb-24 scroll-mt-20">
+                 <h2 class="text-3xl font-bold text-center mb-12 text-gray-800">Como Funciona?</h2>
+                 <div class="grid md:grid-cols-5 gap-8">
+                    <div class="step-card bg-white p-6 rounded-lg shadow-md border text-center"><div class="text-2xl font-bold text-blue-500 mb-2">1</div><h3 class="font-semibold mb-2">Definição do Modelo</h3><p class="text-sm text-gray-600">Defina o objetivo, critérios e alternativas.</p></div>
+                    <div class="step-card bg-white p-6 rounded-lg shadow-md border text-center"><div class="text-2xl font-bold text-blue-500 mb-2">2</div><h3 class="font-semibold mb-2">Julgamentos Par a Par</h3><p class="text-sm text-gray-600">Compare a importância relativa com *sliders* intuitivos.</p></div>
+                    <div class="step-card bg-white p-6 rounded-lg shadow-md border text-center"><div class="text-2xl font-bold text-blue-500 mb-2">3</div><h3 class="font-semibold mb-2">Cálculo e Consistência</h3><p class="text-sm text-gray-600">A ferramenta calcula pesos e verifica a consistência (CR ≤ 0.10).</p></div>
+                    <div class="step-card bg-white p-6 rounded-lg shadow-md border text-center"><div class="text-2xl font-bold text-blue-500 mb-2">4</div><h3 class="font-semibold mb-2">Supermatriz e Resultado</h3><p class="text-sm text-gray-600">Os pesos são sintetizados para ranquear as alternativas.</p></div>
+                    <div class="step-card bg-white p-6 rounded-lg shadow-md border text-center"><div class="text-2xl font-bold text-blue-500 mb-2">5</div><h3 class="font-semibold mb-2">Relatório em PDF</h3><p class="text-sm text-gray-600">Exporte o relatório do seu processo decisório com embasamento técnico.</p></div>
+                 
+				 </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- ======================= FERRAMENTA SOLVER ======================== -->
+    <!-- ================================================================== -->
+    <div id="solver">
+        <header class="header-bg text-white py-4 shadow-md sticky top-0 z-50">
+    <div class="container mx-auto px-6 flex justify-between items-center">
+        <div class="text-left">
+            <h1 class="text-2xl font-bold" id="headerTitle">ANP-Solver</h1>
+            <p class="mt-1 text-md" id="headerSubtitle"></p>
+        </div>
+
+        <div class="flex flex-wrap justify-end gap-2">
+    <button type="button" id="save-judgments-btn" class="px-4 py-2 rounded-lg text-white bg-green-500 hover:bg-green-600 transition-colors">Salvar Rascunho</button>
+    
+    <button type="button" id="load-judgments-btn" class="px-4 py-2 rounded-lg text-white bg-blue-500 hover:bg-blue-600 transition-colors">Carregar Rascunho</button>
+    
+    <button type="button" id="prev-step-btn" class="px-4 py-2 rounded-lg text-white bg-white/10 hover:bg-white/20 border border-white/30 transition-colors">Anterior</button>
+    
+    <button type="button" id="next-step-btn" class="px-4 py-2 rounded-lg text-white bg-blue-500 hover:bg-blue-600 transition-colors">Próximo</button>
+    <button type="button" id="calculate-btn" class="px-4 py-2 rounded-lg text-white bg-blue-500 hover:bg-blue-600 transition-colors hidden">Calcular ANP</button>
+    <button type="button" id="generate-detailed-report-btn" class="px-4 py-2 rounded-lg text-white bg-green-500 hover:bg-green-600 transition-colors hidden">Gerar Relatório Detalhado</button>
+</div>
+    </div>
+</header>
+
+        <main class="container mx-auto px-6 py-12 flex flex-col md:flex-row gap-8">
+            <aside class="w-full md:w-1/4 bg-white p-6 rounded-xl shadow-lg h-fit md:sticky top-28">
+                <h3 class="font-bold text-xl mb-4 text-gray-800">Menu de Avaliação</h3>
+                <button id="toggle-menu-btn" class="md:hidden w-full text-left py-2 px-3 rounded-lg text-gray-700 bg-gray-100 hover:bg-gray-200 font-medium">
+                    Mostrar/Esconder Etapas
+                </button>
+                <nav id="collapsible-menu" class="hidden md:block"><ul class="space-y-2" id="nav-steps-list"></ul></nav>
+            </aside>
+
+            <section class="w-full md:w-3/4 bg-white p-6 rounded-xl shadow-lg">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800" id="current-section-title"></h2>
+                
+                <form id="anp-form" class="space-y-8"></form>
+
+                
+            </section>
+        </main>
+
+        <div id="consistency-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <h4 class="text-xl font-bold text-red-600 mb-4">Atenção: Inconsistência nos Julgamentos!</h4>
+                <p class="text-gray-700 mb-4">Os seus julgamentos apresentaram inconsistências nos seguintes pontos:</p>
+                <ul id="consistency-warnings-list" class="text-red-700 text-left mb-4 list-disc list-inside"></ul>
+                <button id="close-modal-btn" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">Entendi</button>
+            </div>
+        </div>
+
+        <div id="loading-spinner-overlay" class="loading-spinner-overlay hidden">
+            <div class="spinner"></div>
+            <p class="mt-4 text-gray-700 text-lg font-semibold">A calcular os resultados...</p>
+        </div>
+
+        <div id="report-content-to-print" class="hidden print:block"></div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- ======================= CÓDIGO JAVASCRIPT ======================== -->
+    <!-- ================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const ctx = document.getElementById('presentationResultsChart')?.getContext('2d');
+            if (ctx) {
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Processo B', 'Processo A', 'Serviço A', 'Produto C', 'Produto A'],
+                        datasets: [{
+                            label: 'Prioridade Global',
+                            data: [0.35, 0.25, 0.20, 0.15, 0.05],
+                            backgroundColor: ['#DC2626', '#3B82F6', '#3B82F6', '#3B82F6', '#3B82F6'],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { beginAtZero: true, ticks: { callback: value => (value * 100) + '%' } } }
+                    }
+                });
+            }
+            ANPSolverApp.init();
+        });
+
+        const ANPSolverApp = {
+            // --- CONSTANTES ---
+            MAX_ITERATIONS: 200,
+            TOLERANCE: 1e-10,
+            SAATY_SCALE_VALUES: [1/9, 1/8, 1/7, 1/6, 1/5, 1/4, 1/3, 1/2, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+            SAATY_SCALE_LABELS: ['1/9', '1/8', '1/7', '1/6', '1/5', '1/4', '1/3', '1/2', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+            RI_TABLE: {1:0,2:0,3:0.58,4:0.90,5:1.12,6:1.24,7:1.32,8:1.41,9:1.45,10:1.49},
+
+            // --- ESTADO DA APLICAÇÃO ---
+            state: {
+                currentStep: 0,
+                totalSteps: 0,
+                appOpenTime: null,
+                anpProcessingTime: 0,
+                integrityTestResults: [],
+                dynamicClusters: {},
+                individualJudge: { name: "Utilizador Individual", role: "Avaliador" },
+                groupJudges: [], 
+                allJudgments: { 'group-relevance': {} },
+                currentJudgments: {}
+            },
+
+            // --- CACHE DE ELEMENTOS DO DOM ---
+            cache: {},
+
+            // --- INICIALIZAÇÃO ---
+            init() {
+                this.state.appOpenTime = new Date();
+                this.loadDefaultData();
+                this.cacheDOMElements();
+                this.bindEvents();
+                this.renderCurrentStep();
+            },
+            
+            loadDefaultData() {
+                this.state.dynamicClusters = {
+                    "ObjetivoPrincipal": "Ex: Escolher a linha de negócio para implementação do sistema GENTE.",
+                    "Criterios de Decisao": {
+                        elements: ["Beneficios Potenciais", "Viabilidade Implementação", "Riscos e Desafios", "Alinhamento Estrategico"],
+                        sub_elements_map: {
+                            "Beneficios Potenciais": ["Aumento da Produtividade", "Melhoria na Qualidade", "Redução de Custos Operacionais", "Melhor Tomada de Decisão", "Alinhamento Estrategico Geral"],
+							"Viabilidade Implementação": ["Disponibilidade de Dados", "Facilidade de Coleta de Dados", "Nivel de Maturidade da Área", "Engajamento da Equipe", "Recursos Tecnologicos Existentes"],                    
+							"Riscos e Desafios": ["Resistência a Mudanca", "Complexidade dos Processos", "Alto Custo Inicial", "Dificuldade de Medicao", "Sobrecarga da Equipe"],                    
+							"Alinhamento Estrategico": ["Suporte a Visão da Empresa", "Impacto em Metas de Longo Prazo", "Sinergia com Outros Projetos"]
+                        }
+                    },
+                    "Alternativas para alcane do Objetivo": {
+                        elements: ["Produto A", "Produto B", "Produto C", "Serviço A", "Serviço B"]
+                    }
+                };
+            },
+
+            cacheDOMElements() {
+                this.cache = {
+                    form: document.getElementById('anp-form'),
+                    headerTitle: document.getElementById('headerTitle'),
+                    headerSubtitle: document.getElementById('headerSubtitle'),
+                    sectionTitle: document.getElementById('current-section-title'),
+                    navList: document.getElementById('nav-steps-list'),
+                    prevBtn: document.getElementById('prev-step-btn'),
+                    nextBtn: document.getElementById('next-step-btn'),
+                    calcBtn: document.getElementById('calculate-btn'),
+                    reportBtn: document.getElementById('generate-detailed-report-btn'),
+                    saveBtn: document.getElementById('save-judgments-btn'),
+                    loadBtn: document.getElementById('load-judgments-btn'),
+                    consistencyModal: document.getElementById('consistency-modal'),
+                    warningsList: document.getElementById('consistency-warnings-list'),
+                    spinner: document.getElementById('loading-spinner-overlay'),
+                    toggleMenuBtn: document.getElementById('toggle-menu-btn'),
+                    collapsibleMenu: document.getElementById('collapsible-menu'),
+                    reportPrintContent: document.getElementById('report-content-to-print')
+                };
+            },
+
+            bindEvents() {
+                this.cache.navList.addEventListener('click', e => {
+                    if (e.target && e.target.matches('button.nav-step')) {
+                        this.ui.updateModelFromUI();
+                        this.state.currentStep = parseInt(e.target.dataset.step, 10);
+                        this.renderCurrentStep();
+                    }
+                });
+                
+                this.cache.prevBtn.addEventListener('click', () => this.navigate(-1));
+                this.cache.nextBtn.addEventListener('click', () => this.navigate(1));
+                this.cache.calcBtn.addEventListener('click', () => this.handleCalculation());
+                
+                this.cache.reportBtn.addEventListener('click', () => this.report.generate());
+                this.cache.saveBtn.addEventListener('click', () => this.file.saveJudgmentsToFile());
+                this.cache.loadBtn.addEventListener('click', () => this.file.loadJudgmentsFromFile());
+                
+                document.getElementById('close-modal-btn').addEventListener('click', () => this.ui.showConsistencyModal(false));
+                this.cache.toggleMenuBtn.addEventListener('click', () => this.cache.collapsibleMenu.classList.toggle('hidden'));
+
+                this.cache.form.addEventListener('submit', e => e.preventDefault());
+            },
+
+            // --- NAVEGAÇÃO E RENDERIZAÇÃO ---
+            navigate(direction) {
+                this.ui.updateModelFromUI();
+                const newStep = this.state.currentStep + direction;
+                if (newStep >= 0 && newStep < this.state.totalSteps) {
+                    this.state.currentStep = newStep;
+                    this.renderCurrentStep();
+                }
+            },
+
+            renderCurrentStep() {
+				window.scrollTo({ top: 0, behavior: 'smooth' });
+                const stepConfig = this.getStepConfiguration();
+                this.state.totalSteps = stepConfig.length;
+                const currentConfig = stepConfig[this.state.currentStep];
+
+                if (!currentConfig) { return; } 
+                
+                this.cache.headerTitle.textContent = this.state.dynamicClusters.ObjetivoPrincipal || "ANP-Solver";
+                this.cache.headerSubtitle.textContent = currentConfig.subtitle || `Insira as suas preferências para determinar a melhor linha de negócio.`;
+                this.cache.sectionTitle.textContent = currentConfig.title;
+
+                this.cache.form.innerHTML = currentConfig.content;
+                if(currentConfig.onRender) currentConfig.onRender.bind(this)();
+
+                this.ui.renderNavMenu(stepConfig);
+                this.ui.updateNavButtonsVisibility();
+                this.checkAllConsistencyForCurrentStep();
+                setTimeout(() => this.ui.updateAllConsistencyGuidesOnScreen(), 50);
+            },
+            
+            getStepConfiguration() {
+                const app = this;
+                const steps = [];
+                steps.push({
+                    title: "Definição dos Parâmetros da Avaliação",
+                    content: app.ui.buildParametersContent(),
+                    onRender: app.ui.handleParametersRender
+                });
+                steps.push({
+                    title: "Testes de Integridade do Sistema",
+                    subtitle: "Execute testes para verificar as funcionalidades matemáticas do ANP-Solver.",
+                    content: app.ui.buildIntegrityTestsContent(),
+                    onRender: () => {
+                        const btn = document.getElementById('run-integrity-tests-btn');
+                        if (btn) btn.addEventListener('click', () => app.tests.runAll());
+                        app.ui.displayTestResults(app.state.integrityTestResults);
+                    }
+                });
+                steps.push({
+                    title: "Importância Relativa dos Grupos de Critérios",
+                    content: app.ui.buildComparisonContent('comparisons-criteria-clusters', 'localWeightsDisplay-cluster-criteria'),
+                    onRender: () => app.ui.renderComparisonSliders('cluster-criteria', app.state.dynamicClusters["Criterios de Decisao"].elements, null, 'comparisons-criteria-clusters')
+                });
+                steps.push({
+                    title: "Interdependência entre Clusters de Critérios Principais",
+                    content: app.ui.buildDynamicComparisonContent('comparisons-main-criteria-interdependence'),
+                    onRender: () => app.ui.renderGroupedComparisonSliders('interdependence-main-crit', app.state.dynamicClusters["Criterios de Decisao"].elements, app.state.dynamicClusters["Criterios de Decisao"].elements)
+                });
+                app.state.dynamicClusters["Criterios de Decisao"].elements.forEach(cluster => {
+                    steps.push({
+                        title: `Detalhamento: ${cluster}`,
+                        content: app.ui.buildComparisonContent(`comparisons-subcriteria-${cluster.replace(/\s/g, '')}`, `localWeightsDisplay-subcriteria-${cluster.replace(/\s/g, '')}`),
+                        onRender: () => app.ui.renderComparisonSliders('sub-criterion', app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map[cluster] || [], cluster, `comparisons-subcriteria-${cluster.replace(/\s/g, '')}`)
+                    });
+                });
+                const allSubcriteria = Object.values(app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map).flat();
+                steps.push({
+                    title: "Interdependência entre Subcritérios",
+                    content: app.ui.buildDynamicComparisonContent('comparisons-subcrit-interdependence'),
+                    onRender: () => app.ui.renderGroupedComparisonSliders('subcrit-interdependence', allSubcriteria, allSubcriteria)
+                });
+                steps.push({
+                    title: "Feedback: Alternativas → Subcritérios",
+                    content: app.ui.buildDynamicComparisonContent('comparisons-alt-to-subcrit'),
+                    onRender: () => app.ui.renderGroupedComparisonSliders('alt-to-subcrit-feedback', app.state.dynamicClusters["Alternativas para alcane do Objetivo"].elements, allSubcriteria)
+                });
+                steps.push({
+                    title: "Comparando Linhas de Negócio por Critério",
+                    content: app.ui.buildDynamicComparisonContent('comparisons-alternatives-by-criterion'),
+                    onRender: () => app.ui.renderGroupedComparisonSliders('alt-by-crit', allSubcriteria, app.state.dynamicClusters["Alternativas para alcane do Objetivo"].elements)
+                });
+                steps.push({
+                    title: "Resultados da Avaliação ANP Individual",
+                    subtitle: "Resultados calculados com base nos seus julgamentos.",
+                    content: app.ui.buildResultsContent(false),
+                    onRender: () => {
+                        const results = app.calculateANP(app.state.currentJudgments);
+                        app.ui.renderResults(results, false);
+                    }
+                });
+                steps.push({
+                    title: "Registo das Avaliações Individuais",
+                    subtitle: "Importe os ficheiros JSON de cada juiz para iniciar a avaliação em grupo.",
+                    content: app.ui.buildGroupImportContent(),
+                    onRender: () => {
+                        document.getElementById('add-json-btn').addEventListener('click', () => app.group.importJudgeJson());
+                        app.ui.renderImportedJudgmentsSummary();
+                    }
+                });
+                steps.push({
+                    title: "Relevância dos Juízes",
+                    subtitle: "Compare a relevância de cada juiz para a decisão final.",
+                    content: app.ui.buildComparisonContent('judge-relevance-comparisons', 'judge-relevance-weights-display'),
+                    onRender: () => app.group.renderRelevanceComparisons()
+                });
+                steps.push({
+                    title: "Relatório Final Agregado",
+                    subtitle: "Resultados finais da avaliação de grupo.",
+                    content: app.ui.buildResultsContent(true),
+                    onRender: async () => {
+                        const results = await app.group.calculateAggregatedANP();
+                        app.ui.renderResults(results, true);
+                    }
+                });
+                return steps;
+            },
+
+            // --- LÓGICA DE CÁLCULO E NEGÓCIO ---
+            async handleCalculation() {
+                this.ui.toggleSpinner(true);
+                await new Promise(resolve => setTimeout(resolve, 50));
+                
+                const startTime = performance.now();
+                const stepConfig = this.getStepConfiguration();
+                const isGroupCalc = this.state.currentStep === stepConfig.findIndex(s => s.title.startsWith("Relevância"));
+                
+                this.ui.updateModelFromUI();
+
+                if (isGroupCalc) {
+                    this.state.currentStep = stepConfig.findIndex(s => s.title.startsWith("Relatório"));
+                } else {
+                    this.state.currentStep = stepConfig.findIndex(s => s.title === "Resultados da Avaliação ANP Individual");
+                }
+                
+                this.renderCurrentStep();
+                
+                const endTime = performance.now();
+                this.state.anpProcessingTime = endTime - startTime;
+
+                this.ui.toggleSpinner(false);
+            },
+            
+            checkAllConsistencyForCurrentStep() {
+                const app = this;
+                const warnings = [];
+                const stepConfig = app.getStepConfiguration();
+                const currentConfig = stepConfig[app.state.currentStep];
+                
+                if (!currentConfig || (!currentConfig.content.includes('comparisons-') && !currentConfig.content.includes('judge-relevance-comparisons'))) {
+                    return;
+                }
+
+                const formContent = new DOMParser().parseFromString(currentConfig.content, 'text/html');
+                const comparisonDivs = formContent.querySelectorAll('div[id^="comparisons-"], div[id^="judge-relevance-comparisons"]');
+
+                comparisonDivs.forEach(div => {
+                    const sliders = div.innerHTML ? app.cache.form.querySelectorAll(`#${div.id} input[type="range"]`) : [];
+                    if (sliders.length === 0) return;
+                    
+                    const firstSlider = sliders[0];
+                    const type = firstSlider.dataset.type;
+                    const parent = firstSlider.dataset.parent || null;
+                    const judgmentsSource = type === 'judge-relevance' ? app.state.allJudgments['group-relevance'] : app.state.currentJudgments;
+                    const elements = app.ui.getElementsForSliderContext(type, parent);
+
+                    if (elements.length > 2) {
+                        const matrix = app.math.createPairwiseMatrix(elements, judgmentsSource, type, parent);
+                        const weights = app.math.getLocalWeights(elements, judgmentsSource, type, parent);
+                        const { CR } = app.math.calculateConsistency(matrix, weights);
+                        if (CR > 0.1) {
+                            let context = app.cache.sectionTitle.textContent;
+                            warnings.push(`${context} (CR = ${CR.toFixed(3)})`);
+                        }
+                    }
+                });
+                
+                const uniqueWarnings = [...new Set(warnings)];
+                if (uniqueWarnings.length > 0) {
+                    this.ui.showConsistencyModal(true, uniqueWarnings);
+                } else {
+                    this.ui.showConsistencyModal(false);
+                }
+            },
+
+            calculateANP(judgmentsSource, isAggregated = false, judgeRelevanceWeights = null) {
+                const app = this;
+                const mainCriteria = app.state.dynamicClusters["Criterios de Decisao"].elements;
+                const alternativas = app.state.dynamicClusters["Alternativas para alcane do Objetivo"].elements;
+                
+                const allSubcriteriaWithClusters = [];
+                const subcriteriaToClusterMap = {};
+                mainCriteria.forEach(clusterName => {
+                    const subElements = app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map[clusterName] || [];
+                    subElements.forEach(subEl => {
+                        allSubcriteriaWithClusters.push(subEl);
+                        subcriteriaToClusterMap[subEl] = clusterName;
+                    });
+                });
+                
+                const allElementsList = [...mainCriteria, ...allSubcriteriaWithClusters, ...alternativas];
+                const allElementsMap = allElementsList.reduce((acc, el, i) => ({ ...acc, [el]: i }), {});
+                const numTotalElements = allElementsList.length;
+
+                let unweightedSupermatrix = Array(numTotalElements).fill(0).map(() => Array(numTotalElements).fill(0));
+
+                const mainCritWeights = app.math.getLocalWeights(mainCriteria, judgmentsSource, 'cluster-criteria');
+                const mainCritWeightsMap = mainCriteria.reduce((acc, el, i) => ({ ...acc, [el]: mainCritWeights[i] }), {});
+
+                const subCritWeightsMap = {};
+                mainCriteria.forEach(clusterName => {
+                    const subElements = app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map[clusterName] || [];
+                    const subWeights = app.math.getLocalWeights(subElements, judgmentsSource, 'sub-criterion', clusterName);
+                    subElements.forEach((el, i) => subCritWeightsMap[el] = subWeights[i]);
+                });
+
+                const mainCritInterdependenceWeights = {};
+                if (mainCriteria.length > 1) { mainCriteria.forEach(inf => { mainCritInterdependenceWeights[inf] = app.math.getLocalWeights(mainCriteria, judgmentsSource, 'interdependence-main-crit', inf); }); }
+                
+                const subCritInterdependenceWeights = {};
+                if (allSubcriteriaWithClusters.length > 1) { allSubcriteriaWithClusters.forEach(inf => { subCritInterdependenceWeights[inf] = app.math.getLocalWeights(allSubcriteriaWithClusters, judgmentsSource, 'subcrit-interdependence', inf); }); }
+
+                const altToSubcritFeedbackWeights = {};
+                if (alternativas.length > 0 && allSubcriteriaWithClusters.length > 1) { alternativas.forEach(inf => { altToSubcritFeedbackWeights[inf] = app.math.getLocalWeights(allSubcriteriaWithClusters, judgmentsSource, 'alt-to-subcrit-feedback', inf); }); }
+
+                const altBySubcritWeights = {};
+                allSubcriteriaWithClusters.forEach(subCriterion => { altBySubcritWeights[subCriterion] = app.math.getLocalWeights(alternativas, judgmentsSource, 'alt-by-crit', subCriterion); });
+
+                mainCriteria.forEach((colCrit) => { 
+                    const weights = mainCritInterdependenceWeights[colCrit] || Array(mainCriteria.length).fill(0); 
+                    mainCriteria.forEach((rowCrit, rowIdx) => { unweightedSupermatrix[allElementsMap[rowCrit]][allElementsMap[colCrit]] = weights[rowIdx] || 0; }); 
+                });
+                mainCriteria.forEach(mainCrit => { const subElements = app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map[mainCrit] || []; subElements.forEach(subEl => { unweightedSupermatrix[allElementsMap[subEl]][allElementsMap[mainCrit]] = subCritWeightsMap[subEl] || 0; }); });
+                allSubcriteriaWithClusters.forEach(subCrit => { const weights = altBySubcritWeights[subCrit] || []; alternativas.forEach((alt, altIdx) => { unweightedSupermatrix[allElementsMap[alt]][allElementsMap[subCrit]] = weights[altIdx] || 0; }); });
+                alternativas.forEach(alt => { const weights = altToSubcritFeedbackWeights[alt] || []; allSubcriteriaWithClusters.forEach((subCrit, subCritIdx) => { unweightedSupermatrix[allElementsMap[subCrit]][allElementsMap[alt]] = weights[subCritIdx] || 0; }); });
+                allSubcriteriaWithClusters.forEach(colSubCrit => { const weights = subCritInterdependenceWeights[colSubCrit] || []; allSubcriteriaWithClusters.forEach((rowSubCrit, rowSubCritIdx) => { unweightedSupermatrix[allElementsMap[rowSubCrit]][allElementsMap[colSubCrit]] = weights[rowSubCritIdx] || 0; }); });
+                
+                let weightedSupermatrix = unweightedSupermatrix.map(row => [...row]);
+                for (let j = 0; j < numTotalElements; j++) { const influencingElement = allElementsList[j]; let clusterWeight = 0; if (mainCriteria.includes(influencingElement)) { clusterWeight = mainCritWeightsMap[influencingElement]; } else if (allSubcriteriaWithClusters.includes(influencingElement)) { const parentCluster = subcriteriaToClusterMap[influencingElement]; clusterWeight = mainCritWeightsMap[parentCluster];} else { clusterWeight = 1.0; } for (let i = 0; i < numTotalElements; i++) { weightedSupermatrix[i][j] *= clusterWeight; } }
+                for (let j = 0; j < numTotalElements; j++) { let colSum = weightedSupermatrix.reduce((sum, row) => sum + row[j], 0); if (colSum > 0) { for (let i = 0; i < numTotalElements; i++) { weightedSupermatrix[i][j] /= colSum; } } }
+                
+                let limitSupermatrix = app.math.matrixPower(weightedSupermatrix);
+                let globalPriorities = limitSupermatrix.map(row => row[0] || 0);
+                
+                const extractAndNormalize = (elementList) => { let p = {}, s = 0; elementList.forEach(el => { const pri = globalPriorities[allElementsMap[el]] || 0; p[el] = pri; s += pri; }); if (s > 0) { Object.keys(p).forEach(k => p[k] /= s); } return p; };
+                
+                return {
+                    isAggregated, judgeRelevanceWeights,
+                    alternativePriorities: extractAndNormalize(alternativas),
+                    subcriteriaPriorities: extractAndNormalize(allSubcriteriaWithClusters),
+                    unweightedSupermatrix, weightedSupermatrix, limitSupermatrix,
+                    allElementsList, mainCriteria, allSubcriteria: allSubcriteriaWithClusters, alternativas,
+                    judgments: judgmentsSource
+                };
+            },
+            
+            // --- SUB-MÓDULOS ---
+            ui: {},
+            math: {},
+            file: {},
+            group: {},
+            tests: {},
+            report: {}
+        };
+
+        // Preenche os submódulos com as suas respetivas funções
+        Object.assign(ANPSolverApp.ui, {
+            updateModelFromUI() {
+                const app = ANPSolverApp;
+                if (app.state.currentStep === 0) {
+                    this.updateModelFromParameters();
+                }
+            },
+            updateModelFromParameters() {
+                const app = ANPSolverApp;
+                app.state.dynamicClusters.ObjetivoPrincipal = document.getElementById('mainObjective')?.value || '';
+                app.state.dynamicClusters["Alternativas para alcane do Objetivo"].elements = document.getElementById('alternatives')?.value.split('\n').map(s => s.trim()).filter(Boolean) || [];
+                const mainCriteriaElements = document.getElementById('mainCriteria')?.value.split('\n').map(s => s.trim()).filter(Boolean) || [];
+                
+                const newSubElementsMap = {};
+                mainCriteriaElements.forEach(criterion => {
+                    const textarea = document.getElementById(`subCriteria-${criterion.replace(/\s/g, '')}`);
+                    if (textarea) {
+                        newSubElementsMap[criterion] = textarea.value.split('\n').map(s => s.trim()).filter(Boolean);
+                    } else {
+                        newSubElementsMap[criterion] = app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map[criterion] || [];
+                    }
+                });
+                app.state.dynamicClusters["Criterios de Decisao"].elements = mainCriteriaElements;
+                app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map = newSubElementsMap;
+                
+                app.state.individualJudge.name = document.getElementById('individual-judge-name')?.value || 'Utilizador Individual';
+                app.state.individualJudge.role = document.getElementById('individual-judge-role')?.value || 'Avaliador';
+            },
+            buildParametersContent() {
+                return `
+                    <div class="mb-4">
+                        <label for="mainObjective" class="block text-sm font-medium text-gray-700">Objetivo Principal:</label>
+                        <input type="text" id="mainObjective" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                    </div>
+                    <div class="mb-4">
+                        <label for="alternatives" class="block text-sm font-medium text-gray-700">Alternativas (uma por linha):</label>
+                        <textarea id="alternatives" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 h-32"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label for="mainCriteria" class="block text-sm font-medium text-gray-700">Clusters de Critérios (um por linha):</label>
+                        <textarea id="mainCriteria" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 h-24"></textarea>
+                    </div>
+                    <div id="subCriteriaInputs" class="mb-4 p-4 border border-gray-200 rounded-md bg-gray-50"></div>
+                    <div class="mt-8">
+                        <h3 class="font-semibold text-lg mb-4 text-gray-700">Identificação do Juiz</h3>
+                        <div class="mb-4">
+                            <label for="individual-judge-name" class="block text-sm font-medium text-gray-700">Nome do Juiz:</label>
+                            <input type="text" id="individual-judge-name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        </div>
+                        <div class="mb-4">
+                            <label for="individual-judge-role" class="block text-sm font-medium text-gray-700">Cargo/Função:</label>
+                            <input type="text" id="individual-judge-role" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        </div>
+                    </div>
+                `;
+            },
+            handleParametersRender() {
+                const app = ANPSolverApp;
+                document.getElementById('mainObjective').value = app.state.dynamicClusters.ObjetivoPrincipal;
+                document.getElementById('alternatives').value = app.state.dynamicClusters["Alternativas para alcane do Objetivo"].elements.join('\n');
+                document.getElementById('mainCriteria').value = app.state.dynamicClusters["Criterios de Decisao"].elements.join('\n');
+                document.getElementById('individual-judge-name').value = app.state.individualJudge.name;
+                document.getElementById('individual-judge-role').value = app.state.individualJudge.role;
+                document.getElementById('mainCriteria').addEventListener('input', () => app.ui.renderSubCriteriaInputs());
+                app.ui.renderSubCriteriaInputs();
+            },
+            renderSubCriteriaInputs() {
+                const app = ANPSolverApp;
+                const container = document.getElementById('subCriteriaInputs');
+                if (!container) return;
+                const mainCriteria = document.getElementById('mainCriteria').value.split('\n').map(s => s.trim()).filter(Boolean);
+                
+                container.innerHTML = `<h4 class="font-semibold text-base mb-3 text-gray-700">Subelementos por Cluster:</h4>`;
+                
+                mainCriteria.forEach(criterion => {
+                    const div = document.createElement('div');
+                    div.className = 'mb-3';
+                    const subElements = app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map[criterion] || [];
+                    div.innerHTML = `
+                        <label for="subCriteria-${criterion.replace(/\s/g, '')}" class="block text-sm font-medium text-gray-700">Subelementos para "${criterion}":</label>
+                        <textarea id="subCriteria-${criterion.replace(/\s/g, '')}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 h-20">${subElements.join('\n')}</textarea>
+                    `;
+                    container.appendChild(div);
+                });
+            },
+            buildIntegrityTestsContent() { return `
+                <p class="text-gray-600 mb-6">Execute os testes para verificar a correção das funcionalidades matemáticas do ANP-Solver.</p>
+                <button type="button" id="run-integrity-tests-btn" class="px-6 py-3 rounded-lg btn-primary transition-colors">Executar Testes</button>
+                <div id="integrity-test-results-container" class="mt-8 space-y-4"></div>
+            `; },
+            displayTestResults(results) {
+                const container = document.getElementById('integrity-test-results-container');
+                if (!container) return;
+                container.innerHTML = '';
+                results.forEach(result => {
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = `test-result-item ${result.passed ? 'passed' : 'failed'}`;
+                    resultDiv.innerHTML = `
+                        <h4 class="font-bold">${result.name}</h4>
+                        <p class="text-sm text-gray-700 mb-1">${result.description}</p>
+                        <p class="font-semibold">${result.passed ? 'Status: SUCESSO ✅' : `Status: FALHA ❌ - ${result.error}`}</p>
+                    `;
+                    container.appendChild(resultDiv);
+                });
+            },
+            buildComparisonContent(compId, weightId) { return `
+                <div id="${compId}"></div>
+                <div id="${weightId}" class="mt-6 p-4 bg-gray-50 rounded-md text-sm"></div>
+            `; },
+            buildDynamicComparisonContent(containerId) { return `<div id="${containerId}"></div>`; },
+            renderComparisonSliders(type, elements, parent, containerId) {
+                const app = ANPSolverApp;
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                container.innerHTML = '';
+
+                const judgmentsSource = type === 'judge-relevance' ? app.state.allJudgments['group-relevance'] : app.state.currentJudgments;
+                const pairs = app.math.getComparisonPairs(elements);
+                pairs.forEach(pair => {
+                    const pairId = `${type}-${parent ? parent.replace(/[^a-zA-Z0-9]/g, '') + '-' : ''}${pair[0].replace(/[^a-zA-Z0-9]/g, '')}-${pair[1].replace(/[^a-zA-Z0-9]/g, '')}`;
+                    const sliderElement = this.createComparisonSlider(pairId, pair[0], pair[1], type, parent, judgmentsSource);
+                    container.appendChild(sliderElement);
+                });
+                this.updateLocalWeightsDisplay(type, parent, elements, judgmentsSource);
+            },
+            renderGroupedComparisonSliders(type, groups, elementsToCompare) {
+                const app = ANPSolverApp;
+                const container = app.cache.form.querySelector('div[id^="comparisons-"]');
+                if (!container) return;
+                container.innerHTML = '';
+
+                groups.forEach(group => {
+                    const groupHeader = document.createElement('h4');
+                    groupHeader.className = 'font-semibold text-md mt-6 mb-2 text-gray-700';
+                    groupHeader.textContent = `Em relação a: ${group}`;
+                    container.appendChild(groupHeader);
+                    
+                    const subContainerId = `comparisons-for-${group.replace(/\s/g, '')}`;
+                    const subContainer = document.createElement('div');
+                    subContainer.id = subContainerId;
+                    container.appendChild(subContainer);
+                    
+                    this.renderComparisonSliders(type, elementsToCompare, group, subContainerId);
+                    
+                    const weightsDisplay = document.createElement('div');
+                    weightsDisplay.id = `localWeightsDisplay-${type}-${group.replace(/\s/g, '')}`;
+                    weightsDisplay.className = 'mt-6 p-4 bg-gray-50 rounded-md text-sm';
+                    container.appendChild(weightsDisplay);
+                    this.updateLocalWeightsDisplay(type, group, elementsToCompare, app.state.currentJudgments);
+                });
+            },
+            createComparisonSlider(pairId, elem1, elem2, type, parent, judgmentsSource) {
+                const app = ANPSolverApp;
+                const comparisonDiv = document.createElement('div');
+                comparisonDiv.className = 'comparison-item';
+                comparisonDiv.innerHTML = `
+                    <span class="w-1/3 md:w-1/4 flex-shrink-0 text-gray-700">${elem1} vs ${elem2}</span>
+                    <div class="flex-grow mx-4 relative slider-wrapper">
+                        <div class="slider-track-background"></div>
+                        <div class="consistent-range-indicator" id="range-${pairId}"></div>
+                        <input type="range" min="0" max="${app.SAATY_SCALE_VALUES.length - 1}" class="w-full h-2 bg-transparent rounded-lg appearance-none cursor-pointer" id="slider-${pairId}" data-pair-id="${pairId}" data-type="${type}" ${parent ? `data-parent="${parent}"` : ''}>
+                    </div>
+                    <span class="w-12 text-center text-gray-800 font-semibold flex-shrink-0" id="value-${pairId}"></span>
+                `;
+
+                const slider = comparisonDiv.querySelector('input[type="range"]');
+                const valueDisplay = comparisonDiv.querySelector(`#value-${pairId}`);
+                
+                const savedValueIndex = judgmentsSource[pairId];
+                slider.value = savedValueIndex !== undefined ? savedValueIndex.toString() : app.SAATY_SCALE_VALUES.indexOf(1).toString();
+                valueDisplay.textContent = app.SAATY_SCALE_LABELS[slider.value];
+                if (judgmentsSource[pairId] === undefined) judgmentsSource[pairId] = parseInt(slider.value);
+
+                slider.oninput = () => {
+                    valueDisplay.textContent = app.SAATY_SCALE_LABELS[slider.value];
+                    judgmentsSource[pairId] = parseInt(slider.value);
+                    app.ui.updateLocalWeightsDisplay(type, parent, app.ui.getElementsForSliderContext(type, parent), judgmentsSource);
+                    app.checkAllConsistencyForCurrentStep();
+                    app.ui.updateAllConsistencyGuidesOnScreen();
+                };
+                return comparisonDiv;
+            },
+            updateAllConsistencyGuidesOnScreen() {
+                const app = ANPSolverApp;
+                const sliders = app.cache.form.querySelectorAll('input[type="range"]');
+                sliders.forEach(slider => {
+                    const pairId = slider.dataset.pairId;
+                    const type = slider.dataset.type;
+                    const parent = slider.dataset.parent || null;
+                    const judgmentsSource = type === 'judge-relevance' ? app.state.allJudgments['group-relevance'] : app.state.currentJudgments;
+                    const elements = this.getElementsForSliderContext(type, parent);
+                    
+                    if(elements.length <= 2) return;
+
+                    const range = app.math.calculateConsistentRangeForPair(pairId, elements, type, parent, judgmentsSource);
+                    const rangeIndicator = document.getElementById(`range-${pairId}`);
+                    if (range && rangeIndicator) {
+                        const totalValues = app.SAATY_SCALE_VALUES.length - 1;
+                        const leftPercent = (range.min / totalValues) * 100;
+                        const widthPercent = ((range.max - range.min) / totalValues) * 100;
+                        rangeIndicator.style.left = `${leftPercent}%`;
+                        rangeIndicator.style.width = `${widthPercent}%`;
+                    } else if (rangeIndicator) {
+                        rangeIndicator.style.width = '0%';
+                    }
+                });
+            },
+            getElementsForSliderContext(type, parent) {
+                const app = ANPSolverApp;
+                switch(type) {
+                    case 'cluster-criteria': return app.state.dynamicClusters["Criterios de Decisao"].elements;
+                    case 'sub-criterion': return app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map[parent] || [];
+                    case 'interdependence-main-crit': return app.state.dynamicClusters["Criterios de Decisao"].elements;
+                    case 'subcrit-interdependence': return Object.values(app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map).flat();
+                    case 'alt-to-subcrit-feedback': return Object.values(app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map).flat();
+                    case 'alt-by-crit': return app.state.dynamicClusters["Alternativas para alcane do Objetivo"].elements;
+                    case 'judge-relevance': return app.state.groupJudges.map(j => j.name);
+                    default: return [];
+                }
+            },
+            updateLocalWeightsDisplay(type, parent, elements, judgmentsSource) {
+                const app = ANPSolverApp;
+                let displayId = `localWeightsDisplay-${type}`;
+                if(parent) displayId += `-${parent.replace(/\s/g, '')}`;
+                
+                const container = document.getElementById(displayId);
+                if(!container) return;
+
+                if (elements.length > 1) {
+                    const localWeights = app.math.getLocalWeights(elements, judgmentsSource, type, parent);
+                    let weightsHtml = `<h5 class="font-semibold text-md mt-4 mb-2 text-gray-700">Pesos Locais:</h5><ul class="list-disc list-inside text-gray-700">`;
+                    elements.forEach((el, i) => {
+                        weightsHtml += `<li>${el}: ${localWeights[i].toFixed(4)}</li>`;
+                    });
+                    weightsHtml += `</ul>`;
+                    container.innerHTML = weightsHtml;
+                } else if (elements.length === 1) {
+                    container.innerHTML = `<h5 class="font-semibold text-md mt-4 mb-2 text-gray-700">Peso Local:</h5><p>${elements[0]}: 1.0000</p>`;
+                } else {
+                    container.innerHTML = '';
+                }
+            },
+			
+			buildResultsContent(isAggregated) {
+                const idSuffix = isAggregated ? '-aggregated' : '';
+                
+                // Define os botões que aparecerão no cabeçalho da seção JSON
+                let headerButtonsHTML = '';
+                if (isAggregated) {
+                    // Para o relatório agregado, não precisamos de botões aqui
+                    headerButtonsHTML = '';
+                } else {
+                    // Para o relatório individual, adicionamos o botão de Copiar E o novo de Gerar Relatório
+                    headerButtonsHTML = `
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" id="copy-json-btn" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm transition-colors">Copiar JSON para Importação</button>
+                            <button type="button" id="generate-individual-report-btn" class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 text-sm transition-colors">Gerar Relatório Individual</button>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <h4 class="text-lg font-bold mt-8 mb-4 text-gray-800">Prioridades Finais das Alternativas</h4>
+                    <div class="chart-container alternatives-chart-container"><canvas id="anpResultsChart${idSuffix}"></canvas></div>
+                    <h4 class="text-lg font-bold mt-8 mb-4 text-gray-800">Prioridades Globais dos Subcritérios</h4>
+                    <div class="chart-container subcriteria-chart-container"><canvas id="sensitivityAnalysisChart${idSuffix}"></canvas></div>
+                    <div id="matrix-tables${idSuffix}" class="mt-8"></div>
+                    <div class="flex items-center justify-between mt-8 mb-4">
+                        <h4 class="text-lg font-bold text-gray-800">Julgamentos Inseridos (JSON)</h4>
+                        ${headerButtonsHTML}
+                    </div>
+                    <pre id="json-results${idSuffix}" class="bg-gray-200 p-4 rounded-md text-sm overflow-auto max-h-96"></pre>
+                `;
+            },
+			
+			renderResults(results, isAggregated) {
+                const app = ANPSolverApp;
+                const idSuffix = isAggregated ? '-aggregated' : '';
+                
+                const createChart = (canvasId, priorities, label) => {
+                    // ... (o código da função createChart continua o mesmo, sem alterações)
+                    const canvas = document.getElementById(canvasId);
+                    if (!canvas) return;
+                    if (canvas.chartInstance) canvas.chartInstance.destroy();
+                    const sortedData = Object.entries(priorities).sort(([, a], [, b]) => b - a);
+                    const topItemName = sortedData.length > 0 ? sortedData[0][0] : '';
+                    canvas.chartInstance = new Chart(canvas.getContext('2d'), {
+                        type: 'bar', data: { labels: sortedData.map(item => item[0]), datasets: [{ label: label, data: sortedData.map(item => item[1]), backgroundColor: sortedData.map(item => item[0] === topItemName ? '#EF4444' : '#005A7A') }] },
+                        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true, title: { display: true, text: 'Prioridade' } } }, plugins: { legend: { display: false } } }
+                    });
+                };
+                
+                createChart(`anpResultsChart${idSuffix}`, results.alternativePriorities, 'Prioridade Final');
+                createChart(`sensitivityAnalysisChart${idSuffix}`, results.subcriteriaPriorities, 'Prioridade Global');
+
+                //const tablesContainer = document.getElementById(`matrix-tables${idSuffix}`);
+                //if (tablesContainer) {
+                //    tablesContainer.innerHTML = '';
+                //    this.renderMatrixTable(tablesContainer, 'Supermatriz Ponderada', results.weightedSupermatrix, results.allElementsList, results.allElementsList, true);
+                //    this.renderMatrixTable(tablesContainer, 'Supermatriz Limite', results.limitSupermatrix, results.allElementsList, results.allElementsList, true);
+                //}
+
+                const jsonDisplay = document.getElementById(`json-results${idSuffix}`);
+                if (jsonDisplay) {
+                    const metadata = isAggregated ? 
+                        { evaluationType: "Group", judgeRelevanceWeights: results.judgeRelevanceWeights } : 
+                        { judgeName: app.state.individualJudge.name, judgeRole: app.state.individualJudge.role };
+                    jsonDisplay.textContent = JSON.stringify({ metadata, judgments: results.judgments }, null, 2);
+                }
+
+                // --- ATIVAÇÃO DOS BOTÕES ---
+                if(!isAggregated) {
+                    // Ativa o botão de COPIAR JSON
+                    const copyBtn = document.getElementById('copy-json-btn');
+                    if (copyBtn) {
+                        copyBtn.addEventListener('click', () => {
+                            
+                            const jsonText = jsonDisplay.textContent;
+                            const textArea = document.createElement("textarea");
+                            textArea.value = jsonText;
+                            textArea.style.position = "fixed";
+                            textArea.style.top = 0;
+                            textArea.style.left = 0;
+                            document.body.appendChild(textArea);
+                            textArea.focus();
+                            textArea.select();
+                            try {
+                                const successful = document.execCommand('copy');
+                                if (successful) {
+                                    const groupStepIndex = app.getStepConfiguration().findIndex(s => s.title.startsWith("Registo"));
+                                    app.state.currentStep = groupStepIndex;
+                                    app.renderCurrentStep();
+                                    setTimeout(() => {
+                                        const jsonInput = document.getElementById('json-input');
+                                        if (jsonInput) jsonInput.value = jsonText;
+                                    }, 100);
+                                } else {
+                                     app.ui.showConsistencyModal(true, ['Falha ao copiar JSON.']);
+                                }
+                            } catch (err) {
+                                console.error('Fallback: Oops, unable to copy', err);
+                                app.ui.showConsistencyModal(true, [`Erro ao copiar JSON: ${err.message}`]);
+                            }
+                            document.body.removeChild(textArea);
+                        });
+                    }
+
+                    // Ativa o NOVO botão de GERAR RELATÓRIO INDIVIDUAL
+                    const individualReportBtn = document.getElementById('generate-individual-report-btn');
+                    if(individualReportBtn) {
+                        individualReportBtn.addEventListener('click', () => app.report.generate());
+                    }
+                }
+            },
+			
+			
+            renderMatrixTable(container, title, matrix, rowLabels, colLabels, isWide = false) {
+                const titleEl = document.createElement('h4');
+                titleEl.className = 'text-lg font-bold mt-8 mb-4 text-gray-800';
+                titleEl.textContent = title;
+                container.appendChild(titleEl);
+
+                const table = document.createElement('table');
+                table.className = `matrix-table ${isWide ? 'wide-table' : ''}`;
+                
+                const thead = table.createTHead();
+                const headerRow = thead.insertRow();
+                headerRow.insertCell().textContent = '';
+                colLabels.forEach(label => {
+                    const th = document.createElement('th');
+                    th.innerHTML = `<div><span>${label}</span></div>`;
+                    headerRow.appendChild(th);
+                });
+
+                const tbody = table.createTBody();
+                matrix.forEach((row, i) => {
+                    const tr = tbody.insertRow();
+                    const th = document.createElement('th');
+                    th.textContent = rowLabels[i];
+                    tr.appendChild(th);
+                    row.forEach(val => {
+                        const td = tr.insertCell();
+                        td.textContent = typeof val === 'number' ? val.toFixed(4) : String(val);
+                    });
+                });
+                container.appendChild(table);
+            },
+            buildGroupImportContent() { return `
+                 <p class="text-gray-600 mb-6">Cole o JSON completo de cada avaliação individual. O sistema identificará o juiz automaticamente.</p>
+                 <textarea id="json-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 h-64" placeholder='Cole o JSON dos julgamentos do juiz aqui...'></textarea>
+                 <button type="button" id="add-json-btn" class="mt-4 px-6 py-3 rounded-lg btn-primary transition-colors">Adicionar Julgamentos</button>
+                 <div id="imported-judgments-summary" class="mt-6 p-4 bg-gray-50 rounded-md text-sm"></div>
+            `; },
+            renderImportedJudgmentsSummary() {
+                const container = document.getElementById('imported-judgments-summary');
+                if (!container) return;
+                let summaryHtml = `<h4 class="font-semibold text-base mb-3 text-gray-700">Resumo dos Julgamentos Importados:</h4>`;
+                const judgeNames = Object.keys(ANPSolverApp.state.allJudgments).filter(key => key !== 'group-relevance');
+                if (judgeNames.length > 0) {
+                    summaryHtml += `<ul class="list-disc list-inside text-gray-700">`;
+                    judgeNames.forEach(name => {
+                        const judgeData = ANPSolverApp.state.allJudgments[name].metadata;
+                        summaryHtml += `<li>${judgeData.judgeName} (${judgeData.judgeRole || 'N/A'})</li>`;
+                    });
+                    summaryHtml += `</ul>`;
+                } else {
+                    summaryHtml += `<p class="text-gray-500">Nenhum julgamento importado ainda.</p>`;
+                }
+                container.innerHTML = summaryHtml;
+            },
+            renderNavMenu(stepConfig) {
+                const app = ANPSolverApp;
+                const navList = app.cache.navList;
+                navList.innerHTML = '';
+                stepConfig.forEach((step, index) => {
+                    const li = document.createElement('li');
+                    const button = document.createElement('button');
+                    button.className = 'nav-step block w-full text-left py-2 px-3 rounded-lg text-gray-700 hover:bg-gray-100 font-medium';
+                    button.dataset.step = index;
+                    button.textContent = step.title;
+                    if(index === app.state.currentStep) button.classList.add('active-step');
+                    li.appendChild(button);
+                    navList.appendChild(li);
+                });
+            },
+            
+			updateNavButtonsVisibility() {
+                const app = ANPSolverApp;
+                const { prevBtn, nextBtn, calcBtn, reportBtn } = app.cache;
+                const isFirstStep = app.state.currentStep === 0;
+                const isLastStep = app.state.currentStep === app.state.totalSteps - 1;
+                const currentConfig = app.getStepConfiguration()[app.state.currentStep];
+                
+                if (!currentConfig) return; // Adiciona uma verificação de segurança
+                const currentTitle = currentConfig.title;
+                
+                const isGroupReportStep = currentTitle.startsWith("Relatório Final Agregado");
+                const isLastIndividualInputStep = currentTitle === "Comparando Linhas de Negócio por Critério";
+                const isJudgeRelevanceStep = currentTitle.startsWith("Relevância");
+
+                prevBtn.classList.toggle('hidden', isFirstStep);
+                nextBtn.classList.toggle('hidden', isLastIndividualInputStep || isJudgeRelevanceStep || isLastStep || currentTitle.startsWith("Resultados"));
+                calcBtn.classList.toggle('hidden', !(isLastIndividualInputStep || isJudgeRelevanceStep));
+                
+                // AQUI ESTÁ A MUDANÇA: O botão principal de relatório só aparece na tela de relatório de grupo.
+                reportBtn.classList.toggle('hidden', !isGroupReportStep);
+
+                if(isJudgeRelevanceStep) calcBtn.textContent = "Calcular ANP do Grupo";
+                else calcBtn.textContent = "Calcular ANP";
+            },
+			
+            toggleSpinner(show) { ANPSolverApp.cache.spinner.classList.toggle('hidden', !show); },
+            showConsistencyModal(show, warnings = []) {
+                const { consistencyModal, warningsList } = ANPSolverApp.cache;
+                if (show) {
+                    warningsList.innerHTML = '';
+                    warnings.forEach(warning => {
+                        const li = document.createElement('li');
+                        li.textContent = warning;
+                        warningsList.appendChild(li);
+                    });
+                    consistencyModal.classList.remove('hidden');
+                } else {
+                    consistencyModal.classList.add('hidden');
+                }
+            }
+        });
+
+        Object.assign(ANPSolverApp.math, {
+            getComparisonPairs(elements) {
+                const pairs = [];
+                for (let i = 0; i < elements.length; i++) {
+                    for (let j = i + 1; j < elements.length; j++) {
+                        pairs.push([elements[i], elements[j]]);
+                    }
+                }
+                return pairs;
+            },
+            matrixMultiply(A, B) {
+                const rowsA = A.length, colsA = A[0].length, rowsB = B.length;
+                if (colsA !== rowsB) return null;
+                const C = Array(rowsA).fill(0).map(() => Array(B[0].length).fill(0));
+                for (let i = 0; i < rowsA; i++) {
+                    for (let j = 0; j < B[0].length; j++) {
+                        for (let k = 0; k < colsA; k++) {
+                            C[i][j] += A[i][k] * B[k][j];
+                        }
+                    }
+                }
+                return C;
+            },
+            matrixPower(W) {
+                const app = ANPSolverApp;
+                let prev = W.map(row => [...row]);
+                let curr = this.matrixMultiply(prev, W);
+                for (let iter = 0; iter < app.MAX_ITERATIONS; iter++) {
+                    let diff = 0;
+                    for (let i = 0; i < W.length; i++) {
+                        for (let j = 0; j < W[0].length; j++) {
+                            diff += Math.abs(curr[i][j] - prev[i][j]);
+                        }
+                    }
+                    if (diff < app.TOLERANCE) break;
+                    prev = curr.map(row => [...row]);
+                    curr = this.matrixMultiply(curr, W);
+                }
+                return curr;
+            },
+            calculatePrincipalEigenvector(matrix) {
+                const n = matrix.length;
+                if (n === 0) return [];
+                if (n === 1) return [1];
+                let eigenvector = Array(n).fill(1 / n);
+                for (let iter = 0; iter < 100; iter++) {
+                    const prevEigenvector = [...eigenvector];
+                    let newEigenvector = Array(n).fill(0);
+                    for (let i = 0; i < n; i++) {
+                        for (let j = 0; j < n; j++) {
+                            newEigenvector[i] += matrix[i][j] * prevEigenvector[j];
+                        }
+                    }
+                    const sum = newEigenvector.reduce((a, b) => a + b, 0);
+                    eigenvector = newEigenvector.map(val => val / sum);
+                    let diff = 0;
+                    for (let i = 0; i < n; i++) { diff += Math.abs(eigenvector[i] - prevEigenvector[i]); }
+                    if (diff < 1e-10) break;
+                }
+                return eigenvector;
+            },
+            createPairwiseMatrix(elements, judgmentsSource, type, parent = null) {
+                const app = ANPSolverApp;
+                const n = elements.length;
+                const matrix = Array(n).fill(0).map(() => Array(n).fill(0));
+                for (let i = 0; i < n; i++) {
+                    for (let j = 0; j < n; j++) {
+                        if (i === j) {
+                            matrix[i][j] = 1;
+                        } else if (i < j) {
+                            const pairId = `${type}-${parent ? parent.replace(/[^a-zA-Z0-9]/g, '') + '-' : ''}${elements[i].replace(/[^a-zA-Z0-9]/g, '')}-${elements[j].replace(/[^a-zA-Z0-9]/g, '')}`;
+                            const sliderIndex = judgmentsSource[pairId] !== undefined ? judgmentsSource[pairId] : app.SAATY_SCALE_VALUES.indexOf(1);
+                            matrix[i][j] = app.SAATY_SCALE_VALUES[sliderIndex];
+                            matrix[j][i] = 1 / matrix[i][j];
+                        }
+                    }
+                }
+                return matrix;
+            },
+            getLocalWeights(elements, judgmentsSource, type, parent = null) {
+                if (!elements || elements.length === 0) return [];
+                if (elements.length === 1) return [1];
+                const matrix = this.createPairwiseMatrix(elements, judgmentsSource, type, parent);
+                return this.calculatePrincipalEigenvector(matrix);
+            },
+            calculateConsistency(matrix, weights) {
+                const n = matrix.length;
+                if (n <= 2) return { CI: 0, CR: 0 };
+                const Aw = this.matrixMultiply(matrix, weights.map(w => [w]));
+                let lambdaMax = 0;
+                for (let i = 0; i < n; i++) {
+                    if(weights[i] > 0) lambdaMax += Aw[i][0] / weights[i];
+                }
+                lambdaMax /= n;
+                const CI = (lambdaMax - n) / (n - 1);
+                const CR = (ANPSolverApp.RI_TABLE[n] ? CI / ANPSolverApp.RI_TABLE[n] : 0);
+                return { CI, CR };
+            },
+            calculateConsistentRangeForPair(targetPairId, elements, type, parent, judgmentsSource) {
+                const app = ANPSolverApp;
+                const tempJudgments = { ...judgmentsSource };
+                let consistentIndices = [];
+                for (let i = 0; i < app.SAATY_SCALE_VALUES.length; i++) {
+                    tempJudgments[targetPairId] = i;
+                    const matrix = this.createPairwiseMatrix(elements, tempJudgments, type, parent);
+                    const weights = this.getLocalWeights(elements, tempJudgments, type, parent);
+                    const { CR } = this.calculateConsistency(matrix, weights);
+                    if (CR <= 0.101) consistentIndices.push(i);
+                }
+                return consistentIndices.length > 0 ? { min: Math.min(...consistentIndices), max: Math.max(...consistentIndices) } : null;
+            }
+        });
+
+        Object.assign(ANPSolverApp.file, {
+            saveJudgmentsToFile() {
+                const app = ANPSolverApp;
+                app.ui.updateModelFromUI();
+                const data = {
+                    metadata: { judgeName: app.state.individualJudge.name, judgeRole: app.state.individualJudge.role, savedAt: new Date().toISOString() },
+                    dynamicClusters: app.state.dynamicClusters,
+                    judgments: app.state.currentJudgments
+                };
+                const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `rascunho-anp-solver-${new Date().toISOString().slice(0,10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                app.ui.showConsistencyModal(true, ['Rascunho salvo com sucesso!']);
+            },
+            loadJudgmentsFromFile() {
+                const app = ANPSolverApp;
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = e => {
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+                    reader.onload = readerEvent => {
+                        try {
+                            const data = JSON.parse(readerEvent.target.result);
+                            if (!data.dynamicClusters || !data.judgments) throw new Error("Ficheiro inválido.");
+                            app.state.dynamicClusters = data.dynamicClusters;
+                            Object.keys(app.state.currentJudgments).forEach(key => delete app.state.currentJudgments[key]);
+                            Object.assign(app.state.currentJudgments, data.judgments);
+                            if(data.metadata) app.state.individualJudge = { name: data.metadata.judgeName, role: data.metadata.judgeRole };
+                            app.state.currentStep = 0;
+                            app.renderCurrentStep();
+                        } catch (err) {
+                            app.ui.showConsistencyModal(true, [`Erro ao carregar ficheiro: ${err.message}`]);
+                        }
+                    };
+                    reader.readAsText(file);
+                };
+                input.click();
+            }
+        });
+
+        Object.assign(ANPSolverApp.group, {
+            importJudgeJson() {
+                const app = ANPSolverApp;
+                const jsonInput = document.getElementById('json-input')?.value.trim();
+                if (!jsonInput) return;
+                try {
+                    const data = JSON.parse(jsonInput);
+                    if (!data.metadata || !data.judgments || !data.metadata.judgeName) throw new Error("JSON inválido.");
+                    const { judgeName, judgeRole } = data.metadata;
+                    if (!app.state.groupJudges.some(j => j.name === judgeName)) {
+                        app.state.groupJudges.push({ name: judgeName, role: judgeRole || 'N/A', relevanceWeight: 0 });
+                    }
+                    app.state.allJudgments[judgeName] = data;
+                    app.ui.renderImportedJudgmentsSummary();
+                    document.getElementById('json-input').value = '';
+                } catch (err) {
+                    app.ui.showConsistencyModal(true, [`Erro no JSON: ${err.message}`]);
+                }
+            },
+            renderRelevanceComparisons() {
+                const app = ANPSolverApp;
+                const judgesToCompare = app.state.groupJudges.filter(j => app.state.allJudgments[j.name]);
+                if (judgesToCompare.length >= 2) {
+                    app.ui.renderComparisonSliders('judge-relevance', judgesToCompare.map(j => j.name), null, 'judge-relevance-comparisons');
+                } else {
+                    document.getElementById('judge-relevance-comparisons').innerHTML = '<p class="text-gray-500">Importe pelo menos 2 julgamentos para comparar a relevância.</p>';
+                }
+            },
+            aggregateJudgmentsByWeightedGeometricMean() {
+                const app = ANPSolverApp;
+                const validJudges = app.state.groupJudges.filter(j => app.state.allJudgments[j.name] && j.relevanceWeight > 0);
+                if (validJudges.length === 0) return {};
+                
+                const aggregated = {};
+                const allPairIds = new Set(validJudges.flatMap(j => Object.keys(app.state.allJudgments[j.name].judgments)));
+
+                allPairIds.forEach(pairId => {
+                    let product = 1;
+                    let weightSum = 0;
+                    validJudges.forEach(judge => {
+                        const judgment = app.state.allJudgments[judge.name].judgments[pairId];
+                        if(judgment !== undefined) {
+                            product *= Math.pow(app.SAATY_SCALE_VALUES[judgment], judge.relevanceWeight);
+                            weightSum += judge.relevanceWeight;
+                        }
+                    });
+
+                    if(weightSum > 0){
+                        const geoMean = Math.pow(product, 1 / weightSum);
+                        const closestIndex = app.SAATY_SCALE_VALUES.reduce((prev, curr, idx) => 
+                            (Math.abs(curr - geoMean) < Math.abs(app.SAATY_SCALE_VALUES[prev] - geoMean) ? idx : prev), 0);
+                        aggregated[pairId] = closestIndex;
+                    }
+                });
+                return aggregated;
+            },
+            async calculateAggregatedANP() {
+                const app = ANPSolverApp;
+                const judgesToCompare = app.state.groupJudges.filter(j => app.state.allJudgments[j.name]);
+                if (judgesToCompare.length === 0) return null;
+                
+                if (judgesToCompare.length > 1) {
+                    const judgeNames = judgesToCompare.map(j => j.name);
+                    const relevanceWeights = app.math.getLocalWeights(judgeNames, app.state.allJudgments['group-relevance'], 'judge-relevance');
+                    judgesToCompare.forEach((judge, i) => judge.relevanceWeight = relevanceWeights[i]);
+                } else {
+                    judgesToCompare[0].relevanceWeight = 1;
+                }
+
+                const aggregatedJudgments = this.aggregateJudgmentsByWeightedGeometricMean();
+                const judgeRelevanceWeights = judgesToCompare.reduce((acc, j) => ({...acc, [j.name]: j.relevanceWeight}), {});
+                
+                return app.calculateANP(aggregatedJudgments, true, judgeRelevanceWeights);
+            }
+        });
+
+        Object.assign(ANPSolverApp.tests, {
+            runAll() {
+                const app = ANPSolverApp;
+                app.state.integrityTestResults = [];
+                this.runTest('Multiplicação de Matrizes', 'Verifica a multiplicação 2x2.', this.testMatrixMultiply);
+                this.runTest('Potenciação de Matriz', 'Verifica a convergência da potenciação.', this.testMatrixPower);
+                this.runTest('Autovetor Principal', 'Verifica o cálculo do autovetor principal.', this.testCalculatePrincipalEigenvector);
+                this.runTest('Criação de Matriz Par a Par', 'Verifica a criação de matriz a partir de julgamentos.', this.testCreatePairwiseMatrix);
+                this.runTest('Cálculo de Pesos Locais', 'Verifica o cálculo de pesos locais.', this.testGetLocalWeights);
+                this.runTest('Cálculo de Consistência', 'Verifica o cálculo de CR.', this.testCalculateConsistency);
+                app.ui.displayTestResults(app.state.integrityTestResults);
+            },
+            runTest(name, description, testFn) {
+                const result = { name, description, passed: false, error: null };
+                try {
+                    testFn.bind(this)();
+                    result.passed = true;
+                } catch (e) {
+                    result.error = e.message;
+                }
+                ANPSolverApp.state.integrityTestResults.push(result);
+            },
+            testMatrixMultiply(){
+                const res = ANPSolverApp.math.matrixMultiply([[1, 2], [3, 4]], [[5, 6], [7, 8]]);
+                if (JSON.stringify(res) !== JSON.stringify([[19, 22], [43, 50]])) throw new Error("Resultado incorreto.");
+            },
+            testMatrixPower(){
+                const res = ANPSolverApp.math.matrixPower([[0.5, 0.5, 0], [0.5, 0.5, 0], [0, 0, 1]]);
+                if (Math.abs(res[0][0] - 0.5) > 1e-6) throw new Error("Convergência incorreta.");
+            },
+            testCalculatePrincipalEigenvector(){
+                const res = ANPSolverApp.math.calculatePrincipalEigenvector([[1, 2, 4], [0.5, 1, 2], [0.25, 0.5, 1]]);
+                if (Math.abs(res[0] - 0.5714) > 1e-4) throw new Error("Autovetor incorreto.");
+            },
+            testCreatePairwiseMatrix(){
+                const app = ANPSolverApp;
+                const judgments = { 'type-A-B': app.SAATY_SCALE_VALUES.indexOf(2) };
+                const res = app.math.createPairwiseMatrix(['A', 'B'], judgments, 'type');
+                if(res[0][1] !== 2) throw new Error("Criação de matriz incorreta.");
+            },
+            testGetLocalWeights(){
+                const app = ANPSolverApp;
+                const judgments = { 'type-A-B': app.SAATY_SCALE_VALUES.indexOf(3) };
+                const res = app.math.getLocalWeights(['A', 'B'], judgments, 'type');
+                if (Math.abs(res[0] - 0.75) > 1e-9) throw new Error("Pesos locais incorretos.");
+            },
+            testCalculateConsistency(){
+                const res = ANPSolverApp.math.calculateConsistency([[1, 9], [1/9, 1]], [0.9, 0.1]);
+                if (Math.abs(res.CR) > 1e-9) throw new Error("Cálculo de CR incorreto para matriz consistente.");
+            },
+        });
+
+        Object.assign(ANPSolverApp.report, {
+          generate() {
+                const app = ANPSolverApp;
+                app.ui.toggleSpinner(true);
+
+                setTimeout(async () => {
+                    const reportContainer = app.cache.reportPrintContent;
+
+                    //  Prepara o container para ser renderizado fora da tela
+                    reportContainer.classList.add('print-prepare');
+                    reportContainer.classList.remove('hidden');
+
+                    //  Calcula os dados e popula o conteúdo (isso irá gerar os gráficos e as imagens)
+                    const isAggregated = app.getStepConfiguration()[app.state.currentStep].title.startsWith("Relatório");
+                    const data = isAggregated ? await app.group.calculateAggregatedANP() : app.calculateANP(app.state.currentJudgments);
+                    await this.populateReportContent(data);
+					
+					//  Tabelas automáticas
+					this.applyAdaptiveTableLayout();
+
+                    //  Oculta o spinner
+                    app.ui.toggleSpinner(false);
+                    
+                    // Chama a impressão
+                    window.print();
+
+                    //  Limpa os estilos após a impressão
+                    reportContainer.classList.remove('print-prepare');
+                    reportContainer.classList.add('hidden');
+
+                }, 500);
+            },
+			
+			applyAdaptiveTableLayout() {
+                const appendixContainer = document.getElementById('appendixAContent');
+                if (!appendixContainer) return;
+
+                const availableWidth = appendixContainer.offsetWidth;
+                const tables = appendixContainer.querySelectorAll('.matrix-table');
+
+                tables.forEach(table => {
+                    // Compara a largura natural da tabela com a largura disponível
+                    if (table.offsetWidth > availableWidth) {
+                        table.classList.add('table-larga');
+                    }
+                });
+            },
+					
+            async populateReportContent(data) {
+                const app = ANPSolverApp;
+                const container = app.cache.reportPrintContent;
+
+                // --- ETAPA 1: PREPARAR TODOS OS BLOCOS DE CONTEÚDO DINÂMICO ---
+
+                // Bloco condicional para o cabeçalho
+                let evaluationHeaderHTML = '';
+                if (data.isAggregated) {
+                    const judgesList = Object.entries(data.judgeRelevanceWeights)
+                        .map(([name, weight]) => `<li class="ml-4">${name}: <strong>${(weight * 100).toFixed(2)}% de relevância</strong></li>`)
+                        .join('');
+                    evaluationHeaderHTML = `
+                        <h3 class="text-md font-semibold mt-6 mb-2 text-gray-800">1.1. Tipo de Avaliação: Análise de Grupo</h3>
+                        <p>Este relatório consolida os julgamentos de múltiplos avaliadores...</p>
+                        <ul class="list-disc list-inside my-2">${judgesList}</ul>`;
+                } else {
+                    const judgeName = data.judgments.metadata?.judgeName || 'Avaliador';
+                    const judgeRole = data.judgments.metadata?.judgeRole || 'N/A';
+                    evaluationHeaderHTML = `
+                        <h3 class="text-md font-semibold mt-6 mb-2 text-gray-800">1.1. Tipo de Avaliação: Análise Individual</h3>
+                        <p>Este relatório apresenta os resultados baseados exclusivamente nos julgamentos do avaliador:</p>
+                        <ul class="list-disc list-inside my-2"><li class="ml-4"><strong>${judgeName}</strong> (${judgeRole})</li></ul>`;
+                }
+
+                // Bloco que gera o HTML completo do Apêndice A
+                const appendixAHtml = this.buildJudgmentsAppendix(data.judgments, app);
+				
+				// Bloco HTML para o novo Apêndice D
+				const fullModelJson = this.buildFullModelJson(data, app);
+				
+    const appendixDHtml = `
+        <div class="report-section-break">
+            <h2 class="text-lg font-bold mb-4 text-gray-800">Apêndice D: Dados Completos do Modelo para Replicabilidade (Formato JSON)</h2>
+            <p>A seção a seguir contém a estrutura completa e todos os julgamentos...</p>
+            <h3 class="text-md font-semibold mt-4 mb-2">Instruções para Utilização:</h3>
+            <ol class="list-decimal list-inside text-sm space-y-1">
+                <li><strong>Selecione</strong> todo o texto contido na caixa de código abaixo...</li>
+                <li><strong>Copie</strong> o texto selecionado (Ctrl+C ou Cmd+C).</li>
+                <li><strong>Cole</strong> o conteúdo em um editor de texto simples...</li>
+                <li><strong>Salve</strong> o arquivo com a extensão <code>.json</code>...</li>
+            </ol>
+            <pre class="bg-gray-200 p-4 rounded-md text-xs overflow-auto mt-4"><code>${fullModelJson}</code></pre>
+        </div>
+    `;
+
+                // --- ETAPA 2: MONTAR O HTML COMPLETO DO RELATÓRIO DE UMA SÓ VEZ ---
+
+                container.innerHTML = `
+                    <div class="cover-page">
+                        <h1>Relatório de Avaliação ANP</h1>
+                        <p><strong>Objetivo:</strong> ${app.state.dynamicClusters.ObjetivoPrincipal}</p>
+                        <p><strong>Gerado em:</strong> ${new Date().toLocaleString('pt-BR')}</p>
+                    </div>
+                    <div class="report-section-break">
+                        <h2 class="text-lg font-bold mb-4 text-gray-800">1. Resumo Executivo</h2>
+                        
+                        ${evaluationHeaderHTML}
+
+						<h3 class="text-md font-semibold mt-4 mb-2">1.2. O Método ANP (Processo de Rede Analítica)</h3>
+						  <p>O Processo de Rede Analítica (ANP) é uma metodologia avançada de tomada de decisão multicritério que permite uma análise sistêmica de problemas complexos. Diferente de abordagens puramente hierárquicas, o ANP modela interdependências e feedbacks entre os elementos de decisão (critérios e alternativas), refletindo com maior fidelidade a realidade dos cenários de negócio. A análise apresentada neste relatório foi estruturada para capturar essas influências, resultando em uma priorização robusta e contextualizada das alternativas.</p>
+						<h3 class="text-md font-semibold mt-4 mb-2">1.3. Resultados Consolidados</h3>
+						  <p>Os gráficos a seguir apresentam as prioridades finais calculadas para as linhas de negócio e para os subcritérios, indicando a recomendação principal do modelo e os fatores de maior impacto na decisão.</p>
+						<h4 class="text-base font-semibold mt-4 mb-2">Prioridades Finais das Alternativas</h4>
+					<div class="chart-container alternatives-chart-container-print">
+					   <canvas id="reportAnpResultsChart"></canvas>
+					</div>
+						<h4 class="text-base font-semibold mt-4 mb-2">Prioridades Globais dos Subcritérios (Apoio à Análise de Sensibilidade)</h4>
+                    <div class="chart-container subcriteria-chart-container-print">
+						<canvas id="reportSensitivityAnalysisChart"></canvas>
+					</div>
+					<div class="report-section-break">
+						<h2 class="text-lg font-bold mb-4 text-gray-800">2. Memória de Cálculo</h2>
+						<p>Esta seção apresenta a estrutura matemática do modelo. Os julgamentos inseridos foram processados para calcular os pesos locais de cada comparação. Esses pesos, por sua vez, são agregados em uma supermatriz para derivar as prioridades globais, conforme detalhado nos apêndices.</p>
+						<h3 class="text-md font-semibold mt-4 mb-2">2.1. Detalhamento dos Cálculos</h3>
+						<p>Esta seção detalha o processo técnico utilizado para derivar as prioridades finais a partir dos julgamentos realizados.</p>
+						<h3 class="text-md font-semibold mt-4 mb-2">2.2. Cálculo dos Pesos Locais (Método do Autovetor Principal)</h3>
+						<p>A partir das matrizes de comparação par a par, os vetores de prioridade local (pesos) são calculados utilizando o método do autovetor principal. Este método encontra o autovetor $w$ associado ao autovalor máximo $\\lambda_{max}$ da matriz de comparação $A$, conforme a equação:
+						 $$ (A - \\lambda_{max} I)w = 0 $$
+						 A consistência de cada julgamento é verificada através da Razão de Consistência (CR), que deve ser, idealmente, inferior a 0.10 (10%).</p>
+						<h3 class="text-md font-semibold mt-4 mb-2">2.3. Construção e Convergência da Supermatriz</h3>
+						<p>Todos os pesos locais são organizados em uma supermatriz, que representa a influência de cada elemento sobre todos os outros na rede. Esta matriz é então ponderada pelos pesos dos clusters (Supermatriz Ponderada, $W$). O resultado final é obtido calculando-se a Supermatriz Limite $(\\bar{W})$, que representa o estado de equilíbrio das influências em toda a rede. Ela é calculada elevando-se a matriz $W$ a potências sucessivas até a convergência:
+						 $$ \\bar{W} = \\lim_{k \\to \\infty} W^k $$
+						 As colunas da Supermatriz Limite contêm as prioridades globais de cada elemento. As matrizes completas encontram-se nos apêndices.</p>
+                    </div>
+					<div class="report-section-break">
+                        <div id="appendixAContent">${appendixAHtml}</div>
+					</div>
+                    <div class="report-section-break landscape-page">
+                        <div class="keep-together"> <h2>Apêndice B: Supermatriz Ponderada</h2>
+                        <div id="report-weighted-supermatrix"></div>
+						</div>
+                    </div>
+                    <div class="report-section-break landscape-page">
+                        <div class="keep-together"> <h2>Apêndice C: Supermatriz Limite</h2>
+                        <div id="report-limit-supermatrix"></div>
+						</div>
+                    </div>
+					${appendixDHtml}
+					`;
+                   
+					
+                // --- ETAPA 3: PROCESSAR O CONTEÚDO GERADO (MathJax, Gráficos, etc.) ---
+                
+                if (window.MathJax) {
+                    await window.MathJax.typesetPromise([container]);
+                }
+                
+                await this.renderReportChart('reportAnpResultsChart', data.alternativePriorities, 'Prioridade');
+                await this.renderReportChart('reportSensitivityAnalysisChart', data.subcriteriaPriorities, 'Prioridade');
+                
+                app.ui.renderMatrixTable(document.getElementById('report-weighted-supermatrix'), '', data.weightedSupermatrix, data.allElementsList, data.allElementsList, true);
+                app.ui.renderMatrixTable(document.getElementById('report-limit-supermatrix'), '', data.limitSupermatrix, data.allElementsList, data.allElementsList, true);
+            },
+			
+           async renderReportChart(canvasId, priorities, label) {
+                return new Promise(resolve => {
+                    const canvas = document.getElementById(canvasId);
+                    if (!canvas) return resolve();
+
+                    // Garante que o container do canvas está visível para que o Chart.js possa medir as dimensões
+                    const container = canvas.parentElement;
+                    container.style.display = 'block';
+                    container.style.visibility = 'visible';
+                    container.style.height = canvasId.includes('Alternatives') ? '8cm' : '12cm'; // Ajusta a altura explicitamente
+
+                    // Destruir qualquer instância de gráfico anterior no canvas
+                    if(canvas.chartInstance) {
+                        canvas.chartInstance.destroy();
+                    }
+
+                    const sortedData = Object.entries(priorities).sort(([, a], [, b]) => b - a);
+
+                    canvas.chartInstance = new Chart(canvas.getContext('2d'), {
+                        type: 'bar', 
+                        data: { 
+                            labels: sortedData.map(item => item[0]), 
+                            datasets: [{ 
+                                label: label, 
+                                data: sortedData.map(item => item[1]), 
+                                backgroundColor: '#005A7A' 
+                            }] 
+                        },
+                        options: { 
+                            indexAxis: 'y', 
+                            responsive: true, 
+                            maintainAspectRatio: false, 
+                            animation: { 
+                                // A animação ocorre uma vez para desenhar o gráfico
+                                duration: 500, // Damos um tempo mínimo para o desenho
+                                onComplete: () => {
+                                    // 1. Converte o canvas para uma imagem Base64
+                                    const imageURL = canvas.toDataURL('image/png');
+                                    
+                                    // 2. Cria um novo elemento <img>
+                                    const img = new Image();
+                                    img.src = imageURL;
+                                    img.style.width = '100%';
+                                    img.style.height = '100%';
+
+                                    // 3. Substitui o <canvas> pela <img> no DOM
+                                    // É importante fazer isso para que o navegador imprima uma imagem estática
+                                    if (canvas.parentNode) {
+                                        canvas.parentNode.replaceChild(img, canvas);
+                                    }
+                                    
+                                    // 4. Resolve a Promise para sinalizar que o processo terminou
+                                    resolve();
+                                } 
+                            }, 
+                            plugins: { 
+                                legend: { display: false } 
+                            } 
+                        }
+                    });
+                });
+            },
+			
+			// NOVA FUNÇÃO para criar a string JSON
+buildFullModelJson(data, app) {
+    const modelData = {
+        gerado_em: new Date().toLocaleString('pt-BR'),
+        objetivo: app.state.dynamicClusters.ObjetivoPrincipal,
+        avaliadores: data.isAggregated ? 
+            Object.entries(data.judgeRelevanceWeights).map(([name, weight]) => ({ nome: name, relevancia: weight })) :
+            [{ nome: app.state.individualJudge.name, cargo: app.state.individualJudge.role }],
+        alternativas: app.state.dynamicClusters["Alternativas para alcane do Objetivo"].elements,
+        estrutura: {
+            clusters: app.state.dynamicClusters["Criterios de Decisao"].elements,
+            subcriterios: app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map
+        },
+        julgamentos: data.judgments 
+    };
+    // O '2' no final formata o JSON com indentação para melhor leitura
+    return JSON.stringify(modelData, null, 2); 
+},
+			// ==================================================================
+            // === ADICIONE ESTA NOVA FUNÇÃO PARA CONSTRUIR O APÊNDICE A ===
+            // ==================================================================
+            buildJudgmentsAppendix(judgmentsData, app) {
+                if (!judgmentsData || Object.keys(judgmentsData).length === 0) {
+                    return '<p>Nenhum julgamento individual foi registado.</p>';
+                }
+
+                // 1. Agrupar todos os julgamentos pelo seu contexto (ex: 'cluster-criteria', 'sub-criterion-Beneficios Potenciais', etc.)
+                const groupedJudgments = {};
+                for (const key in judgmentsData) {
+                    const parts = key.split('-');
+                    const type = parts[0];
+                    // Para subcritérios e feedback, o "pai" faz parte do grupo
+                    const parent = ['sub-criterion', 'interdependence-main-crit', 'subcrit-interdependence', 'alt-to-subcrit-feedback', 'alt-by-crit'].includes(type) ? parts[1] : null;
+                    const groupKey = parent ? `${type}-${parent}` : type;
+
+                    if (!groupedJudgments[groupKey]) {
+                        groupedJudgments[groupKey] = [];
+                    }
+                    groupedJudgments[groupKey].push({ key, value: judgmentsData[key] });
+                }
+
+                let appendixHtml = '<h1>Apêndice A: Detalhamento dos Julgamentos</h1>';
+
+                // 2. Iterar sobre cada grupo para criar a sua matriz e tabela
+                for (const groupKey in groupedJudgments) {
+                    const groupData = groupedJudgments[groupKey];
+                    const firstKeyParts = groupData[0].key.split('-');
+                    const type = firstKeyParts[0];
+                    const parent = firstKeyParts.length > 3 ? firstKeyParts[1] : null;
+                    
+                    // Extrai todos os elementos únicos comparados neste grupo
+                    const elements = [...new Set(groupData.flatMap(item => {
+                        const parts = item.key.split('-');
+                        return [parts[parts.length - 2], parts[parts.length - 1]];
+                    }))];
+
+                    if (elements.length < 2) continue; // Pula se não houver pares
+
+                    // Monta a Matriz de Comparação Par a Par
+                    const matrix = app.math.createPairwiseMatrix(elements, judgmentsData, type, parent);
+                    
+                    // Calcula a Razão de Consistência (CR)
+                    const localWeights = app.math.calculatePrincipalEigenvector(matrix);
+                    const { CR } = app.math.calculateConsistency(matrix, localWeights);
+                    const crStatus = CR <= 0.10 ? `(Consistente)` : `(Inconsistente)`;
+                    const crColor = CR <= 0.10 ? 'text-green-600' : 'text-red-600';
+                    
+                    // Cria o título da secção
+                    const titleParts = groupKey.replace(/-/g, ' ').split(' ');
+                    const formattedTitle = titleParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+                    appendixHtml += `<h3 class="text-md font-semibold mt-6 mb-2 text-gray-800">Comparação: ${formattedTitle}</h3>`;
+                    appendixHtml += `<p class="text-sm">Razão de Consistência (CR): <strong class="${crColor}">${CR.toFixed(4)} ${crStatus}</strong></p>`;
+                    
+                    // Renderiza a matriz como uma tabela HTML
+                    let tableHtml = '<table class="matrix-table text-xs"><thead><tr><th></th>';
+                    elements.forEach(el => tableHtml += `<th>${el}</th>`);
+                    tableHtml += '</tr></thead><tbody>';
+                    matrix.forEach((row, i) => {
+                        tableHtml += `<tr><th>${elements[i]}</th>`;
+                        row.forEach(val => tableHtml += `<td>${val.toFixed(3)}</td>`);
+                        tableHtml += '</tr>';
+                    });
+                    tableHtml += '</tbody></table>';
+                    
+                    appendixHtml += tableHtml;
+                }
+
+                return appendixHtml;
+            },
+			
+		});
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peixe Voador - CATWOE Linear</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #ffffff;
+            color: #0f172a;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #cbd5e1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #64748b; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        .modal-backdrop { animation: fadeIn 0.2s ease-out forwards; }
+        .modal-content { animation: scaleIn 0.2s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .label-bg {
+            background-color: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(2px);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+    
+    <header class="bg-slate-900 text-white p-3 flex flex-col md:flex-row justify-between items-center shadow-md z-50 flex-shrink-0">
+        <div class="flex items-center gap-4">
+            <h1 class="text-xl font-bold tracking-tight">PEIXE VOADOR <span class="text-cyan-400 font-normal text-sm">| Linear Mode</span></h1>
+            <div class="hidden md:flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+                <span class="text-xs text-slate-400">Zoom</span>
+                <input type="range" id="zoom-slider" min="0.5" max="1.5" step="0.1" value="0.9" class="w-24 accent-cyan-500 cursor-pointer">
+                <span id="zoom-value" class="text-xs font-mono w-8">90%</span>
+            </div>
+        </div>
+        
+        <div class="flex gap-2 mt-2 md:mt-0">
+		     <button onclick="openWizard()" class="bg-violet-600 hover:bg-violet-500 px-3 py-1.5 rounded text-xs font-bold text-white transition flex items-center gap-1 shadow border border-violet-400">
+    	        🧙‍♂️ Assistente
+    	    </button>
+            <button id="export-btn" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-1 shadow">
+                📷 Imagem HD
+            </button>
+            <button onclick="checkBiasAndSave()" class="bg-cyan-700 hover:bg-cyan-600 px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-1 shadow">
+                💾 Salvar JSON
+            </button>
+            <button id="load-json-btn" class="bg-emerald-700 hover:bg-emerald-600 px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-1 shadow">
+                📂 Abrir JSON
+            </button>
+            <input type="file" id="load-file-input" class="hidden" accept=".json">
+        </div>
+    </header>
+
+    <main class="flex flex-1 overflow-hidden">
+        
+        <div id="control-panel" class="w-80 bg-slate-800 flex flex-col border-r border-slate-700 shadow-xl z-40 flex-shrink-0">
+            <div class="p-4 overflow-y-auto custom-scrollbar flex-1 flex flex-col gap-4">
+                
+                <div class="bg-slate-900 p-3 rounded border border-slate-700 shadow-inner">
+                    <label class="text-[10px] uppercase font-bold text-cyan-400 block mb-1">Problema Central</label>
+                    <textarea id="effect-input" rows="2" class="w-full bg-slate-800 text-white text-sm p-2 rounded border border-slate-600 focus:border-cyan-500 outline-none transition" placeholder="Descreva o efeito..."></textarea>
+                </div>
+
+                <div id="bias-panel" class="bg-slate-700/50 p-3 rounded border border-slate-600">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-[10px] uppercase font-bold text-slate-300">Equilíbrio Sistêmico</span>
+                        <span id="bias-score" class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-600 text-white">--</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 mb-2 italic">
+                        * Itens iniciados com " * " (soluções) não contam para o cálculo.
+                    </div>
+                    <div class="space-y-1.5">
+                        <div class="flex items-center gap-2 text-[10px] text-slate-300">
+                            <span class="w-8">Hard</span>
+                            <div class="flex-1 h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                                <div id="bias-bar-hard" class="h-full bg-cyan-500 transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                            <span id="bias-hard-val" class="w-6 text-right">0%</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-[10px] text-slate-300">
+                            <span class="w-8">Soft</span>
+                            <div class="flex-1 h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                                <div id="bias-bar-soft" class="h-full bg-amber-500 transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                            <span id="bias-soft-val" class="w-6 text-right">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cause-inputs" class="flex flex-col gap-2"></div>
+            </div>
+        </div>
+
+        <div class="flex-1 bg-[#ffffff] relative overflow-hidden flex flex-col">
+            <div id="diagram-scroll-area" class="w-full h-full overflow-auto custom-scrollbar p-10 cursor-grab active:cursor-grabbing">
+                <div id="zoom-wrapper" class="origin-top-left transition-transform duration-200 ease-out">
+                    <div id="diagram-container" class="relative bg-[#ffffff]" style="min-width: 1600px; min-height: 900px;">
+                        <div id="fishbone-diagram" class="w-full h-full relative"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="bias-modal" class="fixed inset-0 z-[60] flex items-center justify-center hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm modal-backdrop" onclick="closeModal()"></div>
+        <div class="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full relative z-10 modal-content border-l-4 border-amber-500">
+            <h3 class="text-lg font-bold text-slate-800 mb-2">Análise Desbalanceada</h3>
+            <p id="modal-msg" class="text-slate-600 text-sm mb-4">...</p>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeModal()" class="text-slate-500 hover:text-slate-800 text-sm font-medium">Voltar</button>
+                <button onclick="confirmSave()" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded text-sm font-bold shadow">Salvar Mesmo Assim</button>
+            </div>
+        </div>
+    </div>
+<div id="wizard-modal" class="fixed inset-0 z-[100] bg-slate-100 hidden flex flex-col font-sans">
+    
+    <div class="bg-slate-900 text-white p-4 flex justify-between items-center shadow-md shrink-0">
+        <div class="flex items-center gap-3">
+            <span class="text-2xl">🧙‍♂️</span>
+            <div>
+                <h2 class="text-lg font-bold leading-none">Assistente de Investigação</h2>
+                <p class="text-[10px] text-slate-400">Responda às perguntas para gerar o diagrama automaticamente.</p>
+            </div>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="closeWizard()" class="text-slate-400 hover:text-white text-sm">Cancelar</button>
+            <button onclick="finishWizard()" class="bg-emerald-600 hover:bg-emerald-500 px-6 py-2 rounded font-bold shadow text-white flex items-center gap-2">
+                <span>💾 Salvar e Ver Diagrama</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="flex flex-1 overflow-hidden">
+        
+        <aside class="w-80 bg-slate-800 text-slate-300 flex flex-col overflow-y-auto border-r border-slate-700 shrink-0">
+            <nav class="flex-1 p-2 space-y-1" id="wizard-menu">
+                </nav>
+        </aside>
+
+        <main class="flex-1 overflow-y-auto p-8 bg-slate-50 relative">
+            
+            <div class="max-w-3xl mx-auto">
+                
+                <div class="mb-8">
+                    <span id="wizard-step-tag" class="text-[10px] font-bold uppercase tracking-widest bg-slate-200 px-2 py-1 rounded text-slate-600">ETAPA 1/7</span>
+                    <h1 id="wizard-step-title" class="text-3xl font-bold text-slate-800 mt-2">...</h1>
+                    <p id="wizard-step-desc" class="text-slate-500 mt-2 text-lg italic border-l-4 border-violet-400 pl-4 bg-violet-50 p-2 rounded-r">...</p>
+                </div>
+
+                <div id="wizard-form-problem" class="hidden bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <label class="block text-sm font-bold text-slate-700 mb-2">Qual é o problema central?</label>
+                    <textarea id="wiz-problem-input" rows="3" class="w-full bg-slate-50 border border-slate-300 rounded p-3 text-lg focus:ring-2 focus:ring-violet-500 outline-none" placeholder="Ex: Baixa adesão ao novo portal do aluno..."></textarea>
+					<div class="mt-5 pt-4 border-t border-slate-100">
+    <label class="block text-sm font-bold text-slate-700 mb-2">Qual o Grupo Econômico relacionado?</label>
+    <div class="relative">
+        <select id="wiz-sector-select" class="w-full bg-slate-50 border border-slate-300 rounded p-3 text-sm appearance-none focus:border-violet-500 outline-none cursor-pointer">
+            <option value="generic">Não especificado / Outro</option>
+            <option value="N">Grupo N: Atividades profissionais, científicas e técnicas</option>
+            <option value="P">Grupo P: Administração pública e defesa</option>
+            <option value="C">Grupo C: Indústrias de Transformação (Manufatura)</option>
+            <option value="Q">Grupo Q: Educação</option>
+            <option value="H">Grupo H: Transporte e armazenagem</option>
+        </select>
+        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+            <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+        </div>
+    </div>
+    <p class="text-[10px] text-slate-400 mt-2">
+        <span class="font-bold">Nota:</span> A escolha do setor ajuda o sistema a calibrar a análise de equilíbrio (Hard vs. Soft) ideal para o seu contexto.
+    </p>
+</div>
+                </div>
+
+                <div id="wizard-form-cause" class="hidden space-y-6">
+                    
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-violet-500"></div>
+                        
+                        <div class="mb-4">
+                            <label id="wiz-q1-label" class="block text-sm font-bold text-slate-800 mb-1">Pergunta 1</label>
+                            <input type="text" id="wiz-input-q1" class="w-full border-b-2 border-slate-200 bg-transparent py-2 text-slate-700 focus:border-violet-500 outline-none transition" placeholder="...">
+                        </div>
+
+                        <div class="mb-6">
+                            <label id="wiz-q2-label" class="block text-sm font-bold text-slate-800 mb-1">Pergunta 2</label>
+                            <input type="text" id="wiz-input-q2" class="w-full border-b-2 border-slate-200 bg-transparent py-2 text-slate-700 focus:border-violet-500 outline-none transition" placeholder="...">
+                        </div>
+
+                        <div class="bg-slate-100 p-3 rounded text-xs text-slate-500 mb-4 flex gap-2 items-center">
+                            <span class="font-bold uppercase text-[10px]">Como vai ficar:</span>
+                            <span id="wiz-preview" class="text-slate-800 italic font-medium">...</span>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-100">
+                            <label class="flex items-center gap-2 text-sm font-bold text-emerald-700 mb-2 cursor-pointer" onclick="document.getElementById('wiz-solution-area').classList.toggle('hidden')">
+                                <span>💡 (Opcional) Você já tem uma ideia de como resolver?</span>
+                                <span class="text-[10px] bg-emerald-100 px-2 rounded-full text-emerald-800">Clique para abrir</span>
+                            </label>
+                            <div id="wiz-solution-area" class="hidden mt-2 animate-fadeIn">
+                                <input type="text" id="wiz-input-q3" class="w-full bg-emerald-50 border border-emerald-200 rounded p-2 text-sm text-emerald-800 placeholder-emerald-800/50 focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Descreva a solução proposta...">
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex justify-end">
+                            <button onclick="addWizardItem()" class="bg-slate-800 hover:bg-violet-600 text-white px-6 py-2 rounded-lg font-bold shadow transition flex items-center gap-2">
+                                <span>Adicionar ao Diagrama</span>
+                                <span class="text-lg">➔</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mt-8">
+                        <h3 class="text-xs font-bold uppercase text-slate-400 mb-3">Itens identificados nesta categoria</h3>
+                        <div id="wiz-items-list" class="grid gap-2"></div>
+                    </div>
+
+                </div>
+
+            </div>
+        </main>
+    </div>
+</div>
+    <script>
+        // --- 1. DADOS & CONFIGURAÇÃO VISUAL ---
+        
+        const categories = {
+            // TOP
+            customers: { label: 'C - Clientes', position: 'top', color: 'text-purple-800', line: 'bg-purple-700', border: 'border-purple-600', size: 1.0 },
+            actors: { label: 'A - Atores', position: 'top', color: 'text-blue-800', line: 'bg-blue-700', border: 'border-blue-600', size: 0.80 },
+            transformation: { label: 'T - Transformação', position: 'top', color: 'text-green-800', line: 'bg-green-700', border: 'border-green-600', size: 0.60 },
+            
+            // BOTTOM
+            worldview: { label: 'W - Visão de Mundo', position: 'bottom', color: 'text-orange-700', line: 'bg-orange-600', border: 'border-orange-500', size: 1.0 },
+            owners: { label: 'O - Donos', position: 'bottom', color: 'text-slate-700', line: 'bg-slate-600', border: 'border-slate-500', size: 0.80 },
+            environment: { label: 'E - Ambiente', position: 'bottom', color: 'text-amber-700', line: 'bg-amber-500', border: 'border-amber-500', size: 0.60 },
+        };
+
+        // Estrutura simplificada: Array plano de objetos { text: "..." }
+        let diagramData = { 
+         effect: '', 
+         sector: 'generic', // <--- Novo campo inicializado
+         causes: { customers: [], actors: [], transformation: [], worldview: [], owners: [], environment: [] } 
+     };
+        
+        // Estado de edição: insertIndex é usado para saber onde inserir "no meio"
+        let editingState = { category: null, index: null, mode: null }; // mode: 'edit' or 'insert'
+
+        // --- 2. RENDERIZAÇÃO DO DIAGRAMA ---
+
+        function renderDiagram() {
+    const container = document.getElementById('fishbone-diagram');
+    const containerDiv = document.getElementById('diagram-container'); // Referência ao container pai
+    container.innerHTML = '';
+
+    // 1. CÁLCULO DINÂMICO DA LARGURA
+    const spacing = 50; // O mesmo espaçamento usado no renderCategoryBones
+    const minGap = 10; // Espaço mínimo garantido entre categorias (C e A, ou A e T)
+    const headSpace = 300; // Espaço reservado para a cabeça do peixe
+    const tailSpace = 200; // Espaço reservado para a cauda
+
+    // Função auxiliar para calcular largura de um bloco específico
+    const getCatWidth = (key) => {
+        const list = diagramData.causes[key] || [];
+        // Spacing inicial + Spacing final + (Qtd * Spacing)
+        return (spacing * 2) + (list.length * spacing);
+    };
+
+    // Calcula largura total necessária para a linha de CIMA
+    const topWidth = headSpace 
+        + getCatWidth('customers') 
+        + minGap 
+        + getCatWidth('actors') 
+        + minGap 
+        + getCatWidth('transformation') 
+        + tailSpace;
+
+    // Calcula largura total necessária para a linha de BAIXO
+    const bottomWidth = headSpace 
+        + getCatWidth('worldview') 
+        + minGap 
+        + getCatWidth('owners') 
+        + minGap 
+        + getCatWidth('environment') 
+        + tailSpace;
+
+    // A largura final será a maior entre: Topo, Baixo ou um Mínimo de 1000px
+    const diagramWidth = Math.max(topWidth, bottomWidth, 1000);
+
+    // ATUALIZA O CONTAINER PAI PARA PERMITIR SCROLL
+    containerDiv.style.minWidth = `${diagramWidth + 150}px`; // +150px de margem de segurança
+
+    // Configurações de desenho (agora baseadas na largura dinâmica)
+    const startX = 250;
+    const endX = diagramWidth - 150;
+    const centerY = 450;
+
+            // Espinha Central
+            const spine = document.createElement('div');
+            spine.className = 'absolute z-10 shadow-sm';
+            spine.style.backgroundColor = '#0f4c75';
+            spine.style.left = `${startX - 10}px`;
+            spine.style.width = `${endX - startX + 60}px`;
+            spine.style.top = `${centerY - 4}px`;
+            spine.style.height = '8px';
+            spine.style.borderTop = '1px solid #1e3a8a';
+            spine.style.borderBottom = '1px solid #0f4c75';
+            container.appendChild(spine);
+
+           // --- LÓGICA DO SETOR (Contexto) ---
+            const sectorMap = {
+                'N': 'N - TÉCNICO/CIENTÍFICO',
+                'P': 'P - PÚBLICO/DEFESA',
+                'C': 'C - INDÚSTRIA',
+                'Q': 'Q - EDUCAÇÃO',
+                'H': 'H - TRANSPORTE',
+                'generic': ''
+            };
+            const sectorLabel = sectorMap[diagramData.sector] || '';
+
+            // Se houver setor, desenha a "Etiqueta" acima da cabeça
+            if (sectorLabel) {
+                const badge = document.createElement('div');
+                
+                // 1. CLASSES DE ESTRUTURA (Removemos as cores daqui)
+                badge.className = 'absolute px-4 py-1 rounded-t-lg font-bold tracking-widest uppercase border-t border-l border-r shadow-sm z-10';
+                
+                // 2. APLICAÇÃO DAS CORES EXATAS
+                badge.style.backgroundColor = '#ffffff'; // Fundo Branco
+                badge.style.color = '#0f4c75';           // Texto Azul (#0f4c75)
+                badge.style.borderColor = '#ffffff';     // Borda Azul (para combinar com a cabeça)
+
+                // 3. POSICIONAMENTO
+                badge.style.left = '70px'; 
+                badge.style.top = `${centerY - 60 - 80}px`; // Pequeno ajuste de -2px para compensar a borda
+                badge.textContent = sectorLabel;
+                
+                container.appendChild(badge);
+            }
+
+            // --- CABEÇA DO PEIXE (Limpa) ---
+            const head = document.createElement('div');
+            // Voltamos ao flex simples, sem flex-col, pois só tem o texto agora
+            head.className = 'absolute flex items-center justify-center text-center p-4 rounded-3xl shadow-xl z-20 border-2 border-slate-900 export-head';
+            head.style.backgroundColor = '#0f4c75';
+            head.style.left = '50px';
+            head.style.top = `${centerY - 60}px`;
+            head.style.width = '220px';
+            head.style.height = '120px';
+            
+            // Conteúdo limpo (apenas o problema)
+            head.innerHTML = `<span class="font-bold text-white text-lg leading-tight drop-shadow-md">${diagramData.effect || 'DEFINA O PROBLEMA'}</span>`;
+            
+            container.appendChild(head);
+
+            // Cauda
+            const tail = document.createElement('div');
+            tail.className = 'absolute z-0';
+            tail.style.left = `${endX + 40}px`;
+            tail.style.top = `${centerY - 40}px`;
+            tail.style.width = '0';
+            tail.style.height = '0';
+            tail.style.borderTop = '40px solid transparent';
+            tail.style.borderBottom = '40px solid transparent';
+            tail.style.borderRight = '60px solid #0f4c75';
+            container.appendChild(tail);
+
+            renderCategoryBones(container, startX, endX, centerY);
+            updateBiasAnalysis();
+            renderInputPanels();
+        }
+
+        function renderCategoryBones(container, spineStart, spineEnd, spineY) {
+            const spacing = 50; // Espaço fixo por elemento (seja causa ou solução)
+            
+            // Calcula larguras baseadas na quantidade total de itens (causas + soluções)
+            const getBlockWidth = (key) => {
+                const list = diagramData.causes[key] || [];
+                // Spacing para Main + Spacing para Close + (Count * Spacing)
+                return (spacing * 2) + (list.length * spacing);
+            };
+
+            const blocks = {};
+            Object.keys(categories).forEach(k => blocks[k] = getBlockWidth(k));
+
+            // Posições X
+            const positions = {};
+            positions['customers'] = spineStart + 20; 
+            positions['transformation'] = spineEnd - blocks['transformation']; 
+            const endOfC = positions['customers'] + blocks['customers'];
+            const startOfT = positions['transformation'];
+            positions['actors'] = endOfC + ((startOfT - endOfC) / 2) - (blocks['actors'] / 2);
+
+            positions['worldview'] = spineStart + 20;
+            positions['environment'] = spineEnd - blocks['environment'];
+            const endOfW = positions['worldview'] + blocks['worldview'];
+            const startOfE = positions['environment'];
+            positions['owners'] = endOfW + ((startOfE - endOfW) / 2) - (blocks['owners'] / 2);
+
+            // Loop de Renderização
+            Object.keys(categories).forEach(key => {
+                const catData = categories[key];
+                const items = diagramData.causes[key] || [];
+                const isTop = catData.position === 'top';
+                const angle = isTop ? -45 : 45; 
+                const baseX = positions[key]; 
+
+                // Função de desenho unificada
+                const drawLine = (offsetX, text, type, idx) => {
+                    const line = document.createElement('div');
+                    
+                    // Verifica se é Solução (começa com *)
+                    const isSolution = text && text.trim().startsWith('*');
+                    const cleanText = isSolution ? text.trim() : text;
+
+                    // Configuração da Linha
+                    line.className = 'absolute h-0.5 origin-bottom-left transition-all';
+                    
+                    if (type === 'main' || type === 'close') {
+                        line.className += ` ${catData.line} opacity-90 shadow-sm`;
+                    } else if (isSolution) {
+                        // REGRA: Linha não é plotada para solução
+                        line.className += ` bg-transparent border-none`; 
+                    } else {
+                        // É uma causa normal
+                        line.className += ` ${catData.line} opacity-90 shadow-sm`;
+                    }
+
+                    // Comprimento e Posição
+                    const length = (type === 'main' || type === 'close') ? 600 * catData.size : 40;
+                    line.style.width = `${length}px`;
+                    line.style.left = `${baseX + offsetX}px`;
+                    line.style.top = `${spineY}px`;
+                    line.style.transform = `rotate(${angle}deg)`;
+
+                    if (cleanText !== null) {
+                        const labelContainer = document.createElement('div');
+                        labelContainer.className = 'absolute z-10 whitespace-nowrap';
+                        
+                        // Posição do texto na linha
+                        if (type === 'item') {
+                            labelContainer.style.left = '45px';
+                            labelContainer.style.bottom = '-7px';
+                        } else {
+                            labelContainer.style.left = '50px';
+                            labelContainer.style.bottom = '4px';
+                        }
+
+                        const label = document.createElement('span');
+                        if (type === 'main') {
+                         // 1. AJUSTE DE POSIÇÃO
+                            labelContainer.style.left = '0px';
+                            // Ajuste fino vertical para centralizar a barra na linha
+                            labelContainer.style.bottom = isTop ? '-13px' : '-13px'; 
+
+                            // 2. CÁLCULO DO SKEW (INCLINAÇÃO)
+                            // Se a linha sobe (-45°), inclinamos o box 45° para a borda ficar vertical.
+                            // Se a linha desce (45°), inclinamos -45°.
+                            const skewDeg = isTop ? 45 : -45;
+    
+                            // 3. ESTILIZAÇÃO DO CONTAINER (A FORMA GEOMÉTRICA)
+                            // Removemos 'rounded' total e usamos 'rounded-r-md' para arredondar só a ponta externa
+                            // Adicionamos 'origin-left' para garantir que a transformação parta do encontro com a espinha
+                            label.className = `${catData.line} text-white font-extrabold text-sm uppercase tracking-wider border border-white/20 shadow-sm flex items-center justify-center rounded-r-md origin-left export-cat-title`;
+
+                            // 4. APLICAÇÃO DA GEOMETRIA
+                            label.style.width = `${length}px`; 
+                            label.style.height = '26px';
+                            // Aplica o Skew no formato do fundo
+                            label.style.transform = `skewX(${skewDeg}deg)`;
+                        
+                            // 5. CORREÇÃO DO TEXTO
+                            // Se inclinarmos o fundo, o texto entorta junto. 
+                            // Criamos um span interno com o skew INVERSO para o texto ficar legível novamente.
+                            const textSpan = document.createElement('span');
+                            textSpan.textContent = cleanText;
+                            textSpan.style.transform = `skewX(${-skewDeg}deg)`; // O "anti-skew"
+                            textSpan.style.display = 'inline-block';
+    
+                            label.textContent = ''; // Limpa texto antigo
+                            label.appendChild(textSpan);
+                        }
+                         else if (cleanText) {
+                            // Estilo do Label
+                            let textColorClass = 'text-slate-800';
+                            let borderClass = 'border-transparent';
+                            
+                            if (isSolution) {
+                                textColorClass = 'text-emerald-700 font-bold italic'; // Destaque visual para solução
+                                borderClass = 'border-emerald-100 bg-emerald-50';
+                            }
+
+                            // Define tamanho: se for solução usa text-sm, se for causa usa text-xs
+							const sizeClass = isSolution ? 'text-xs' : 'text-sm'; 
+							
+							label.className = `label-bg font-medium ${sizeClass} ${textColorClass} border ${borderClass} hover:border-slate-400 hover:bg-white cursor-pointer transition-colors`;
+                            label.textContent = cleanText;
+                            
+                            // Ações
+                            label.ondblclick = (e) => { e.stopPropagation(); prepareEdit(key, idx); };
+
+                            // Botão Remover (x)
+                            const btnRemove = document.createElement('span');
+                            btnRemove.innerHTML = ' ×';
+                            btnRemove.className = 'text-red-400 font-bold ml-1 opacity-50 hover:opacity-100 cursor-pointer';
+                            btnRemove.onclick = (e) => { e.stopPropagation(); removeItem(key, idx); };
+                            label.appendChild(btnRemove);
+                        
+                            // Botão Inserir (+) -> Nova Lógica
+                            const btnInsert = document.createElement('span');
+                            btnInsert.innerHTML = ' +';
+                            btnInsert.className = 'text-blue-500 font-bold ml-1 opacity-50 hover:opacity-100 cursor-pointer';
+                            btnInsert.title = "Inserir item após este";
+                            btnInsert.onclick = (e) => { e.stopPropagation(); prepareInsertAfter(key, idx); };
+                            label.appendChild(btnInsert);
+                        }
+                        
+                        labelContainer.appendChild(label);
+                        line.appendChild(labelContainer);
+                    }
+                    container.appendChild(line);
+                };
+
+                // Lógica de Renderização Sequencial
+                let currentOffset = 0;
+
+                if (key === 'customers' || key === 'actors' || key === 'transformation') {
+                    // Sequência Normal (Top)
+                    drawLine(currentOffset, catData.label, 'main');
+                    currentOffset += spacing;
+
+                    items.forEach((item, i) => {
+                        drawLine(currentOffset, item.text, 'item', i);
+                        currentOffset += spacing;
+                    });
+                    
+                    drawLine(currentOffset, null, 'close');
+                } else {
+                    // Sequência Invertida (Bottom - W, O e E)
+                    // Agora TODAS as categorias de baixo seguem a mesma lógica:
+                    // Close -> Item N ... Item 1 -> Main
+                    
+                    drawLine(currentOffset, null, 'close');
+                    currentOffset += spacing;
+
+                    // O .reverse() garante que o Item 1 seja desenhado por último,
+                    // ficando vizinho ao "Main"
+                    [...items].reverse().forEach((item) => {
+                        // Precisamos encontrar o índice real no array original para a edição funcionar
+                        const originalIndex = items.indexOf(item); 
+                        drawLine(currentOffset, item.text, 'item', originalIndex);
+                        currentOffset += spacing;
+                    });
+                    
+                    drawLine(currentOffset, catData.label, 'main');
+                }
+            }); // Fim do forEach das categorias
+        }
+           
+
+        // --- 3. INPUTS E INTERAÇÃO ---
+
+        function renderInputPanels() {
+            const container = document.getElementById('cause-inputs');
+            container.innerHTML = '';
+            
+            Object.keys(categories).forEach(key => {
+                const cat = categories[key];
+                // Contar apenas causas reais para o label do painel (opcional, ou contar tudo)
+                const totalCount = (diagramData.causes[key] || []).length;
+                const causeCount = (diagramData.causes[key] || []).filter(i => !i.text.startsWith('*')).length;
+                
+                const div = document.createElement('div');
+                div.className = `bg-slate-700 p-2 rounded border-l-4 ${cat.border} mb-2 shadow-sm transition-all`;
+                div.id = `panel-${key}`;
+                
+                // Indicador visual se estiver editando esta categoria
+                if (editingState.category === key) {
+                    div.classList.add('ring-2', 'ring-cyan-400');
+                }
+
+                div.innerHTML = `
+                    <div class="flex justify-between text-xs text-slate-300 font-bold mb-1">
+                        <span>${cat.label}</span>
+                        <span class="bg-slate-800 px-1.5 py-0.5 rounded text-[10px]" title="Causas: ${causeCount} | Total: ${totalCount}">${causeCount}</span>
+                    </div>
+                    <div class="flex gap-1">
+                        <input type="text" id="in-${key}" 
+                            class="w-full bg-slate-900 text-white text-xs p-1.5 rounded border border-slate-600 outline-none focus:border-cyan-500 placeholder-slate-500 transition-colors" 
+                            placeholder="Adicionar ao fim..." 
+                            onkeydown="if(event.key==='Enter') commitAction('${key}')">
+                        <button onclick="commitAction('${key}')" class="bg-slate-600 text-white px-2 rounded hover:bg-cyan-600 font-bold text-xs shadow">OK</button>
+                        <button onclick="cancelAction()" class="bg-red-900 text-white px-2 rounded hover:bg-red-700 font-bold text-xs shadow ${editingState.category === key ? '' : 'hidden'}">X</button>
+                    </div>
+                    <div id="msg-${key}" class="text-[10px] text-amber-400 mt-1 hidden"></div>
+                `;
+                container.appendChild(div);
+            });
+
+            // Se estiver em modo de edição/inserção, focar e atualizar placeholder
+            if (editingState.category) {
+                const input = document.getElementById(`in-${editingState.category}`);
+                const msg = document.getElementById(`msg-${editingState.category}`);
+                
+                input.focus();
+                
+                if (editingState.mode === 'edit') {
+                    input.classList.add('border-amber-500');
+                    msg.textContent = `Editando item #${editingState.index + 1}`;
+                    msg.classList.remove('hidden');
+                } else if (editingState.mode === 'insert') {
+                    input.classList.add('border-blue-500');
+                    input.placeholder = "Inserir novo item aqui (Use * para solução)...";
+                    msg.textContent = `Inserindo após item #${editingState.index + 1}`;
+                    msg.classList.remove('hidden');
+                }
+            }
+        }
+
+        // Ação Centralizada (Add / Edit / Insert)
+        function commitAction(key) {
+            const input = document.getElementById(`in-${key}`);
+            const text = input.value.trim();
+            
+            if (!text) {
+                cancelAction();
+                return;
+            }
+
+            if (editingState.category === key && editingState.mode === 'edit') {
+                // Editar existente
+                diagramData.causes[key][editingState.index].text = text;
+            } 
+            else if (editingState.category === key && editingState.mode === 'insert') {
+                // Inserir APÓS o índice atual (splice)
+                // index + 1
+                diagramData.causes[key].splice(editingState.index + 1, 0, { text: text });
+            } 
+            else {
+                // Adicionar ao final (padrão)
+                diagramData.causes[key].push({ text: text });
+            }
+
+            cancelAction(); // Reseta estado
+            renderDiagram(); // Redesenha
+        }
+
+        function cancelAction() {
+            editingState = { category: null, index: null, mode: null };
+            renderDiagram(); // Apenas para limpar estilos dos inputs
+        }
+
+        // Prepara Edição
+        function prepareEdit(key, idx) {
+            const item = diagramData.causes[key][idx];
+            editingState = { category: key, index: idx, mode: 'edit' };
+            renderInputPanels(); // Re-renderiza para mostrar estado ativo
+            document.getElementById(`in-${key}`).value = item.text;
+        }
+
+        // Prepara Inserção
+        function prepareInsertAfter(key, idx) {
+            editingState = { category: key, index: idx, mode: 'insert' };
+            renderInputPanels();
+        }
+
+        // Remover Item
+        function removeItem(key, idx) {
+            if(confirm('Remover este item?')) {
+                diagramData.causes[key].splice(idx, 1);
+                renderDiagram();
+            }
+        }
+
+        // Zoom Logic
+        const zoomSlider = document.getElementById('zoom-slider');
+        const zoomValue = document.getElementById('zoom-value');
+        const zoomWrapper = document.getElementById('zoom-wrapper');
+
+        zoomSlider.addEventListener('input', (e) => {
+            const val = e.target.value;
+            zoomValue.textContent = Math.round(val * 100) + '%';
+            zoomWrapper.style.transform = `scale(${val})`;
+        });
+
+        // --- 4. VIÉS & EXPORTAÇÃO ---
+
+        function updateBiasAnalysis() {
+            let soft = 0, hard = 0;
+            
+            // Função auxiliar para contar apenas o que NÃO começa com *
+            const countCauses = (list) => list.filter(i => !i.text.trim().startsWith('*')).length;
+
+            ['customers','actors','worldview','owners'].forEach(k => soft += countCauses(diagramData.causes[k]));
+            ['transformation','environment'].forEach(k => hard += countCauses(diagramData.causes[k]));
+            
+            const total = soft + hard;
+            
+            const sPerc = total ? Math.round((soft/total)*100) : 0;
+            const hPerc = total ? Math.round((hard/total)*100) : 0;
+            
+            document.getElementById('bias-bar-soft').style.width = sPerc + '%';
+            document.getElementById('bias-soft-val').textContent = sPerc + '%';
+            document.getElementById('bias-bar-hard').style.width = hPerc + '%';
+            document.getElementById('bias-hard-val').textContent = hPerc + '%';
+            
+            const score = document.getElementById('bias-score');
+            if(Math.abs(sPerc - hPerc) > 40 && total > 4) {
+                score.textContent = '⚠️ Desequilibrado';
+                score.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500 text-white';
+            } else {
+                score.textContent = '✅ Equilibrado';
+                score.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500 text-white';
+            }
+            return { sPerc, hPerc, total };
+        }
+
+        function checkBiasAndSave() {
+            const stats = updateBiasAnalysis();
+            if (stats.total > 3 && (stats.sPerc < 20 || stats.hPerc < 20)) {
+                const msg = document.getElementById('modal-msg');
+                msg.textContent = stats.sPerc < 20 
+                    ? "Foco excessivo em Processos (Hard). O sistema pode falhar por rejeição cultural." 
+                    : "Foco excessivo em Pessoas (Soft). O sistema pode falhar por falta de estrutura técnica.";
+                document.getElementById('bias-modal').classList.remove('hidden');
+            } else {
+                confirmSave();
+            }
+        }
+        
+        function closeModal() { document.getElementById('bias-modal').classList.add('hidden'); }
+        
+        function confirmSave() {
+            closeModal();
+            const blob = new Blob([JSON.stringify(diagramData, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `Peixe-Voador-${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+        }
+
+       document.getElementById('export-btn').addEventListener('click', () => {
+    const el = document.getElementById('diagram-container');
+    const oldTransform = zoomWrapper.style.transform;
+    zoomWrapper.style.transform = 'scale(1)'; 
+    
+    // --- PAINEL DE CALIBRAÇÃO (EXPORTAÇÃO) ---
+    // Use valores positivos (px) para DESCER
+    // Use valores negativos (-px) para SUBIR
+    
+    const ajusteCausasY = '-5px';    // Texto pequeno das espinhas
+    const ajusteTituloY = '-10px';    // Barras coloridas (C, A, T...)
+    const ajusteHeadY   = '-10px';    // Texto do Problema Central
+    // -----------------------------------------
+
+    html2canvas(el, { 
+        scale: 3, 
+        backgroundColor: '#e2e8f0',
+        
+        onclone: (clonedDoc) => {
+            // 1. AJUSTE DAS CAUSAS (Pequenas)
+            const causes = clonedDoc.querySelectorAll('.label-bg');
+            causes.forEach(lbl => {
+                // Habilita posicionamento relativo para aceitar 'top'
+                lbl.style.position = 'relative';
+                lbl.style.top = ajusteCausasY; 
+                
+                // Garante que não quebre linha
+                lbl.style.whiteSpace = 'nowrap';
+            });
+
+            // 2. AJUSTE DOS TÍTULOS (Barras Coloridas)
+            const titles = clonedDoc.querySelectorAll('.export-cat-title');
+            titles.forEach(titleContainer => {
+                const textSpan = titleContainer.querySelector('span');
+                if (textSpan) {
+                    // Desliga o alinhamento automático do container
+                    titleContainer.style.alignItems = 'flex-start'; 
+                    
+                    // Move o texto manualmente
+                    textSpan.style.position = 'relative';
+                    // 5px é a base para compensar o 'flex-start' que joga pro topo
+                    textSpan.style.top = `calc(5px + ${ajusteTituloY})`; 
+                }
+            });
+
+            // 3. AJUSTE DA CABEÇA DO PEIXE
+            const head = clonedDoc.querySelector('.export-head');
+            if(head) {
+                // Desliga centralização vertical automática
+                head.style.alignItems = 'flex-start';
+                
+                // Pega o texto dentro da cabeça
+                const headSpan = head.querySelector('span');
+                if(headSpan) {
+                    headSpan.style.position = 'relative';
+                    // A cabeça é grande, então o ajuste base precisa ser maior (ex: 0)
+                    // Somamos com o valor calibrado
+                    headSpan.style.top = ajusteHeadY;
+                }
+            }
+        }
+    }).then(canvas => {
+        const a = document.createElement('a');
+        a.download = `CATWOE-Diagrama-${new Date().toISOString().slice(0,10)}.png`;
+        a.href = canvas.toDataURL();
+        a.click();
+        zoomWrapper.style.transform = oldTransform;
+    });
+});
+				
+        
+        const fileIn = document.getElementById('load-file-input');
+        document.getElementById('load-json-btn').addEventListener('click', () => fileIn.click());
+        fileIn.addEventListener('change', e => {
+            const r = new FileReader();
+            r.onload = ev => {
+                try {
+                    const d = JSON.parse(ev.target.result);
+                    // Migração de dados antigos para nova estrutura plana, se necessário
+                    let newData = d.data || d;
+                    
+                    // Se estiver no formato antigo com "solutions" array
+                    Object.keys(newData.causes).forEach(k => {
+                        const list = newData.causes[k];
+                        if (list.length > 0 && list[0].solutions !== undefined) {
+                            // Converter formato antigo para novo
+                            const flatList = [];
+                            list.forEach(item => {
+                                flatList.push({ text: item.text });
+                                if (item.solutions && item.solutions.length) {
+                                    item.solutions.forEach(sol => flatList.push({ text: '* ' + sol }));
+                                }
+                            });
+                            newData.causes[k] = flatList;
+                        }
+                    });
+
+                    diagramData = newData;
+                    document.getElementById('effect-input').value = diagramData.effect || '';
+                    renderDiagram(); 
+                } catch(err) { alert('JSON Inválido'); console.error(err); }
+            };
+            r.readAsText(e.target.files[0]);
+            e.target.value = '';
+        });
+
+        document.getElementById('effect-input').addEventListener('input', e => {
+            diagramData.effect = e.target.value; renderDiagram();
+        });
+        
+        // Inicialização
+        renderInputPanels();
+        renderDiagram();
+// --- LÓGICA DO ASSISTENTE (WIZARD) ---
+
+// Configuração do Roteiro
+const wizardSteps = [
+    {
+        id: 'problem', icon: '🎯', label: 'Problema',
+        title: 'Definição do Problema',
+        desc: 'Qual é o sintoma principal, a dor ou o resultado negativo que o grupo precisa resolver?',
+        type: 'problem'
+    },
+    {
+        id: 'customers', icon: '👤', label: 'C - Clientes',
+        title: 'Clientes e Beneficiários',
+        desc: 'Causas relacionadas ao impacto da transformação sobre as pessoas. O foco é onde o sistema falha em entregar valor.',
+        // MUDANÇA: Foco na necessidade não atendida, não apenas na reclamação
+        q1: 'Quem é o grupo prejudicado ou negligenciado?', ph1: 'Ex: O Aluno, O Paciente...',
+        q2: 'Qual expectativa ou requisito essencial deles não está sendo atendido?', ph2: 'Ex: não recebe feedback personalizado, enfrenta barreira de acesso...'
+    },
+    {
+        id: 'actors', icon: '🎭', label: 'A - Atores',
+        title: 'Atores e Executores',
+        desc: 'Causas ligadas à competência e execução. O problema não é a pessoa, mas o que falta para ela performar.',
+        // MUDANÇA: Foco na falta de capacidade/recurso 
+        q1: 'Quem executa (ou deveria executar) essa tarefa?', ph1: 'Ex: A Secretaria, O Técnico...',
+        q2: 'O que falta para eles realizarem o trabalho corretamente (Treino, Perfil, Ferramenta)?', ph2: 'Ex: não possui treinamento na nova ferramenta, está sobrecarregado...'
+    },
+    {
+        id: 'transformation', icon: '⚙️', label: 'T - Transformação',
+        title: 'Transformação (Processos)',
+        desc: 'Causas ligadas ao desenho do processo. Foque na falha do método, não na pessoa.',
+        // MUDANÇA: Foco na estrutura do processo de conversão 
+        q1: 'Qual etapa ou atividade específica do processo apresenta falha?', ph1: 'Ex: A validação do cadastro...',
+        q2: 'Qual é a falha no desenho ou método desta etapa?', ph2: 'Ex: é excessivamente manual, não possui critérios claros de aceitação...'
+    },
+    {
+        id: 'worldview', icon: '🌍', label: 'W - Visão de Mundo',
+        title: 'Visão de Mundo (Cultura)',
+        desc: 'Causas ligadas a crenças e resistências. O que torna o sistema sem sentido para as pessoas?',
+        // MUDANÇA: Foco na suposição conflitante 
+        q1: 'Qual grupo possui uma visão ou crença contrária ao projeto?', ph1: 'Ex: Os professores antigos, A cultura da empresa...',
+        q2: 'Qual suposição ou valor cultural deles gera resistência à mudança?', ph2: 'Ex: acredita que o sistema tira sua autonomia, valoriza a tradição sobre a agilidade...'
+    },
+    {
+        id: 'owners', icon: '👑', label: 'O - Donos',
+        title: 'Donos e Liderança',
+        desc: 'Causas ligadas à governança e poder. O que a liderança deixou de fazer ou prover?',
+        // MUDANÇA: Foco na responsabilidade e recursos [cite: 21, 24]
+        q1: 'Qual nível de liderança ou área tem poder de decisão aqui?', ph1: 'Ex: A Diretoria Financeira, A Reitoria...',
+        q2: 'Qual recurso, decisão ou prioridade eles deixaram de fornecer?', ph2: 'Ex: não priorizou o orçamento necessário, não definiu a política clara...'
+    },
+    {
+        id: 'environment', icon: '🚧', label: 'E - Ambiente',
+        title: 'Ambiente Externo',
+        desc: 'Causas impostas de fora (Leis, Mercado, Natureza). O que nos limita rigidamente?',
+        // MUDANÇA: Foco na restrição determinativa ou normativa [cite: 26, 27]
+        q1: 'Qual fator externo ou regulatório impõe limites ao sistema?', ph1: 'Ex: A Lei Geral de Proteção de Dados, A flutuação do Dólar...',
+        q2: 'Qual restrição específica este fator impõe que impede a solução ideal?', ph2: 'Ex: proíbe o armazenamento de dados locais, encarece os insumos...'
+    }
+];
+
+let currentWizardStepIdx = 0;
+
+function openWizard() {
+    document.getElementById('wizard-modal').classList.remove('hidden');
+    renderWizardMenu();
+    goToWizardStep(0);
+}
+
+function closeWizard() {
+    if(confirm('Sair do assistente? Os dados não salvos no botão "Adicionar" serão perdidos.')) {
+        document.getElementById('wizard-modal').classList.add('hidden');
+    }
+}
+
+function finishWizard() {
+    document.getElementById('wizard-modal').classList.add('hidden');
+    renderDiagram(); // Atualiza o diagrama principal
+    renderInputPanels();
+    updateBiasAnalysis();
+}
+
+function renderWizardMenu() {
+    const menu = document.getElementById('wizard-menu');
+    menu.innerHTML = wizardSteps.map((step, idx) => `
+        <button onclick="goToWizardStep(${idx})" 
+            class="w-full text-left px-3 py-3 rounded flex items-center gap-3 transition ${currentWizardStepIdx === idx ? 'bg-slate-700 text-white font-bold shadow' : 'hover:bg-slate-700/50 text-slate-400'}">
+            <span class="text-xl">${step.icon}</span>
+            <span class="text-sm">${step.label}</span>
+        </button>
+    `).join('');
+}
+
+function goToWizardStep(idx) {
+    currentWizardStepIdx = idx;
+    const step = wizardSteps[idx];
+    
+    // Atualiza UI Fixa
+    renderWizardMenu();
+    document.getElementById('wizard-step-tag').textContent = `ETAPA ${idx + 1}/${wizardSteps.length}`;
+    document.getElementById('wizard-step-title').textContent = step.title;
+    document.getElementById('wizard-step-desc').textContent = step.desc;
+
+    // Reseta inputs
+    document.getElementById('wiz-input-q1').value = '';
+    document.getElementById('wiz-input-q2').value = '';
+    document.getElementById('wiz-input-q3').value = '';
+    document.getElementById('wiz-solution-area').classList.add('hidden');
+    document.getElementById('wiz-preview').textContent = 'Preencha os campos acima...';
+
+    // Alterna entre formulário de problema e de causas
+    if (step.type === 'problem') {
+        document.getElementById('wizard-form-problem').classList.remove('hidden');
+        document.getElementById('wizard-form-cause').classList.add('hidden');
+        
+        // Carrega valores salvos
+        document.getElementById('wiz-problem-input').value = diagramData.effect || '';
+        document.getElementById('wiz-sector-select').value = diagramData.sector || 'generic'; // <--- Carrega setor
+        
+        // Auto-save do problema
+        document.getElementById('wiz-problem-input').oninput = (e) => {
+            diagramData.effect = e.target.value;
+        };
+
+        // Auto-save do SETOR (Novo)
+        document.getElementById('wiz-sector-select').onchange = (e) => {
+            diagramData.sector = e.target.value;
+            console.log("Setor atualizado para:", diagramData.sector); // Para debug
+        };
+    } else {
+        document.getElementById('wizard-form-problem').classList.add('hidden');
+        document.getElementById('wizard-form-cause').classList.remove('hidden');
+        
+        // Atualiza Labels e Placeholders
+        document.getElementById('wiz-q1-label').textContent = step.q1;
+        document.getElementById('wiz-input-q1').placeholder = step.ph1;
+        
+        document.getElementById('wiz-q2-label').textContent = step.q2;
+        document.getElementById('wiz-input-q2').placeholder = step.ph2;
+
+        renderWizardList(step.id);
+    }
+}
+
+// Atualiza o preview em tempo real
+['wiz-input-q1', 'wiz-input-q2'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateWizardPreview);
+});
+
+function updateWizardPreview() {
+    const v1 = document.getElementById('wiz-input-q1').value.trim();
+    const v2 = document.getElementById('wiz-input-q2').value.trim();
+    const preview = document.getElementById('wiz-preview');
+    
+    if(!v1 && !v2) {
+        preview.textContent = 'Preencha os campos acima...';
+    } else {
+        // Lógica simples de concatenação
+        preview.textContent = `${v1} ${v2}`;
+    }
+}
+
+function addWizardItem() {
+    const step = wizardSteps[currentWizardStepIdx];
+    const v1 = document.getElementById('wiz-input-q1').value.trim();
+    const v2 = document.getElementById('wiz-input-q2').value.trim();
+    const v3 = document.getElementById('wiz-input-q3').value.trim(); // Solução
+
+    if (!v1 || !v2) {
+        alert('Por favor, responda as duas perguntas principais.');
+        return;
+    }
+
+    const finalCause = `${v1} ${v2}`;
+
+    // 1. Adiciona a Causa
+    if (!diagramData.causes[step.id]) diagramData.causes[step.id] = [];
+    diagramData.causes[step.id].push({ text: finalCause });
+
+    // 2. Adiciona a Solução (se houver)
+    if (v3) {
+        diagramData.causes[step.id].push({ text: `* ${v3}` });
+    }
+
+    // Feedback Visual
+    const btn = document.querySelector('#wizard-form-cause button');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<span class="text-emerald-300">✓ Adicionado!</span>`;
+    setTimeout(() => btn.innerHTML = originalText, 1000);
+
+    // Limpa
+    document.getElementById('wiz-input-q1').value = '';
+    document.getElementById('wiz-input-q2').value = '';
+    document.getElementById('wiz-input-q3').value = '';
+    document.getElementById('wiz-solution-area').classList.add('hidden');
+    updateWizardPreview();
+    document.getElementById('wiz-input-q1').focus();
+
+    // Atualiza Lista
+    renderWizardList(step.id);
+}
+
+function renderWizardList(key) {
+    const list = document.getElementById('wiz-items-list');
+    const items = diagramData.causes[key] || [];
+    
+    if (items.length === 0) {
+        list.innerHTML = `<div class="text-center text-slate-400 py-4 border-2 border-dashed border-slate-200 rounded">Nenhum item adicionado nesta categoria ainda.</div>`;
+        return;
+    }
+
+    list.innerHTML = items.map((item, idx) => {
+        const isSolution = item.text.startsWith('*');
+        return `
+        <div class="flex justify-between items-center bg-white p-3 rounded border border-slate-200 shadow-sm ${isSolution ? 'border-l-4 border-l-emerald-400 bg-emerald-50/30' : ''}">
+            <div class="text-sm text-slate-700 ${isSolution ? 'text-emerald-800 italic' : ''}">
+                ${item.text}
+            </div>
+            <button onclick="removeWizardItem('${key}', ${idx})" class="text-slate-400 hover:text-red-500 font-bold px-2">×</button>
+        </div>
+    `}).join('');
+}
+
+function removeWizardItem(key, idx) {
+    diagramData.causes[key].splice(idx, 1);
+    renderWizardList(key);
+}
+    </script>
+</body>
+</html>
