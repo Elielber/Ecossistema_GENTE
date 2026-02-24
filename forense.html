@@ -355,6 +355,25 @@
                 loader.classList.add('hidden');
             }
         }
+		function isolarNúcleoDiscursivo(textoBase) {
+    let textoLimpo = textoBase.replace(/\s+/g, " ");
+
+    // 1. Tenta encontrar o marco decisório (típico do Documento Oficial)
+    const marcoDecisao = textoLimpo.match(/(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\s*[:-]?\s*(.*)/i);
+    
+    if (marcoDecisao && marcoDecisao[1].length > 50) {
+        // Se encontrou, descarta tudo o que está para trás (Ementa e Considerandos)
+        return marcoDecisao[1].trim();
+    }
+
+    // 2. Fallback para o Documento de Contraponto (Manifestos/Notas de Repúdio)
+    // Como os sindicatos não usam "RESOLVE", precisamos de uma limpeza cirúrgica.
+    // Esta RegEx remove qualquer parágrafo que comece com "Considerando" até ao próximo ponto final.
+    const regexConsiderandos = /Considerando[\s\S]+?(?:\.|\;)/gi;
+    let textoSemConsiderandos = textoLimpo.replace(regexConsiderandos, "");
+
+    return textoSemConsiderandos.trim();
+}
 
         // =====================================================================
         // LEITOR DE PDF E ARQUIVOS
@@ -1014,6 +1033,7 @@
 </body>
 
 </html>
+
 
 
 
