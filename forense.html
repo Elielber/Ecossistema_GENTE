@@ -835,6 +835,9 @@
             URL.revokeObjectURL(url);
         }
 
+       // =====================================================================
+        // EXPORTAÇÕES (JSON) COM REDIRECIONAMENTO INTELIGENTE
+        // =====================================================================
         function exportarANP() {
             if(!dadosAuditoria.alternativas.length) return alert("Execute a análise técnica primeiro.");
             const anpData = {
@@ -846,6 +849,11 @@
                 }
             };
             downloadJSON(anpData, 'Auditoria_Estrutura_ANP.json');
+            
+            // Abre o ANP Solver na mesma pasta do GitHub Pages
+            setTimeout(() => {
+                window.open('anp-solver.html', '_blank');
+            }, 1000); // Pequeno atraso para garantir o download primeiro
         }
 
         function exportarPeixe() {
@@ -859,14 +867,17 @@
                 }
             };
             downloadJSON(peixeData, 'Auditoria_Mapeamento_CATWOE.json');
+            
+            // Abre o Peixe Voador na mesma pasta do GitHub Pages
+            setTimeout(() => {
+                window.open('peixe-voador.html', '_blank');
+            }, 1000);
         }
 
-        
-		function exportarPLAYS() {
+        function exportarPLAYS() {
             if(!dadosAuditoria.alternativas.length) return alert("Execute a análise técnica primeiro.");
             
-            // Verifica se houve contraponto (Manifesto vs Decisão)
-            const temConflito = dadosAuditoria.alertas.some(a => a.includes("Disputa") || a.includes("Viés"));
+            const temConflito = dadosAuditoria.alertas.some(a => a.includes("Disputa") || a.includes("Viés") || a.includes("Hostilidade") || a.includes("Autoritária") || a.includes("Isolação"));
             
             const playsData = {
               "projectMeta": {
@@ -875,40 +886,11 @@
                 "objective": "Mapear o Equilíbrio de Nash do conflito documental."
               },
               "nodes": [
-                {
-                  "id": "decisao_oficial",
-                  "label": "A Decisão:\n" + dadosAuditoria.alternativas[0],
-                  "group": "project",
-                  "title": "Ato imposto pelo documento oficial"
-                },
-                {
-                  "id": "jogador_A",
-                  "label": "Gestão (DIREX)\n(Autor do Voto)",
-                  "group": "actor",
-                  "interest": 8, // Interesse alto extraído pelo peso de Bardin
-                  "title": "Objetivo: " + (dadosAuditoria.criteriosDirex[0]?.nome || "Conformidade")
-                },
-                {
-                  "id": "jogador_B",
-                  "label": "Corpo Funcional\n(Autores do Manifesto)",
-                  "group": "actor",
-                  "interest": temConflito ? -7 : 2, // Se houver contraponto, o interesse é negativo (rejeição)
-                  "title": "Objetivo: Manutenção de benefícios / Flexibilidade"
-                },
-                {
-                  "id": "estrat_DD",
-                  "label": "Cenário DD:\nImposição x Resistência",
-                  "group": "strategy",
-                  "color": "#ef4444",
-                  "title": "Queda de moral, judicialização e perda de produtividade oculta."
-                },
-                {
-                  "id": "estrat_CC",
-                  "label": "Cenário CC:\nAlinhamento Tático",
-                  "group": "strategy",
-                  "color": "#10b981",
-                  "title": "Gestão mantém regra, mas oferece contrapartida operacional."
-                }
+                { "id": "decisao_oficial", "label": "A Decisão:\n" + dadosAuditoria.alternativas[0], "group": "project", "title": "Ato imposto pelo documento oficial" },
+                { "id": "jogador_A", "label": "Gestão (DIREX)\n(Autor do Voto)", "group": "actor", "interest": 8, "title": "Objetivo: " + (dadosAuditoria.criteriosDirex[0]?.nome || "Conformidade") },
+                { "id": "jogador_B", "label": "Corpo Funcional\n(Autores do Manifesto)", "group": "actor", "interest": temConflito ? -7 : 2, "title": "Objetivo: Manutenção de benefícios / Flexibilidade" },
+                { "id": "estrat_DD", "label": "Cenário DD:\nImposição x Resistência", "group": "strategy", "color": "#ef4444", "title": "Queda de moral, judicialização e perda de produtividade oculta." },
+                { "id": "estrat_CC", "label": "Cenário CC:\nAlinhamento Tático", "group": "strategy", "color": "#10b981", "title": "Gestão mantém regra, mas oferece contrapartida operacional." }
               ],
               "edges": [
                 { "from": "jogador_A", "to": "decisao_oficial", "label": "Impõe", "arrows": "to" },
@@ -929,6 +911,11 @@
             };
             
             downloadJSON(playsData, 'Auditoria_Projecao_PLAYS.json');
+            
+            // Abre o PLAYS na mesma pasta do GitHub Pages
+            setTimeout(() => {
+                window.open('plays.html', '_blank');
+            }, 1000);
         }
 		// =====================================================================
         // MOTOR DE PROJEÇÃO (Teoria dos Jogos / PLAYS Embutido)
@@ -994,5 +981,6 @@
 </body>
 
 </html>
+
 
 
