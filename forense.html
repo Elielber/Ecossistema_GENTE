@@ -428,46 +428,69 @@
                 .replace(/[^a-z0-9\s]/g, ' ')
                 .replace(/\s{2,}/g, ' ').trim();
         }
+function isolarNúcleoDiscursivo(textoBase) {
+    let textoLimpo = textoBase.replace(/\s+/g, " ");
 
+    // 1. Tenta encontrar o marco decisório (típico do Documento Oficial)
+    const marcoDecisao = textoLimpo.match(/(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\s*[:-]?\s*(.*)/i);
+    
+    if (marcoDecisao && marcoDecisao[1].length > 50) {
+        // Se encontrou, descarta tudo o que está para trás (Ementa e Considerandos)
+        return marcoDecisao[1].trim();
+    }
+
+    // 2. Fallback para o Documento de Contraponto (Manifestos/Notas de Repúdio)
+    // Como os sindicatos não usam "RESOLVE", precisamos de uma limpeza cirúrgica.
+    // Esta RegEx remove qualquer parágrafo que comece com "Considerando" até ao próximo ponto final.
+    const regexConsiderandos = /Considerando[\s\S]+?(?:\.|\;)/gi;
+    let textoSemConsiderandos = textoLimpo.replace(regexConsiderandos, "");
+
+    return textoSemConsiderandos.trim();
+}
         // =====================================================================
         // MOTORES METODOLÓGICOS (Inteligência Dinâmica e Global)
         // =====================================================================
         // 1. TOULMIN ROBUSTO (Com captação de excertos)
-        function extratorToulmin(textoBase) {
-    let textoLimpo = textoBase.replace(/\s+/g, " "); // Limpa quebras de linha sujas do PDF
+       function extratorToulmin(textoBase) {
+    // 1. LIMPEZA PESADA DE PDF (Sanitização)
+    let textoLimpo = textoBase.replace(/\s+/g, " ");
+    
+    // Corrige o bug de ligaduras comuns em PDFs (fi, fl) que quebram palavras
+    textoLimpo = textoLimpo.replace(/f\s+i\s+c/gi, "fic")
+                           .replace(/f\s+i\s+n/gi, "fin")
+                           .replace(/e\s+s\s+p\s+e\s+c\s+í\s+f\s+i\s+c\s+a/gi, "específica");
 
-    // 1. ISOLA O DISPOSITIVO (Ignora Ementa e Considerandos)
+    // 2. ISOLA O DISPOSITIVO (Ignora Ementa e Considerandos)
     let nucleoDecisorio = textoLimpo;
-    // Procura por RESOLVE, DECRETA, DETERMINA, PROMULGA e captura apenas o texto subsequente
     const marcoDecisao = textoLimpo.match(/(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\s*[:-]?\s*(.*)/i);
     
     if (marcoDecisao && marcoDecisao[1].length > 50) {
         nucleoDecisorio = marcoDecisao[1];
         
-        // 2. CAPTURA DE ARTIGOS NORMATIVOS
-        // Esta Regex captura "Art. 1º texto..." até encontrar o próximo "Art." ou o fim.
-        const regexArtigos = /Art\.\s*\d+(?:º|o|.)?\s*(.*?)(?=(?:Art\.\s*\d+)|$)/gi;
+        // 3. CORTA ASSINATURAS E RODAPÉS
+        // Para a leitura ao encontrar nomes de cidades com datas, "Prefeito", "Publique-se", etc.
+        nucleoDecisorio = nucleoDecisorio.split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se|Nota: Este texto)/i)[0];
+        
+        // 4. CAPTURA DE ARTIGOS NORMATIVOS (Agora aceita "Art. 4º-A" e "Art. 4º.-D")
+        const regexArtigos = /Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?\s*(.*?)(?=(?:Art\.\s*\d+)|$)/gi;
         let artigos = [];
         let matchArt;
         
         while ((matchArt = regexArtigos.exec(nucleoDecisorio)) !== null) {
             let textoArtigo = matchArt[1].trim();
-            // Limpa o final se bater na assinatura (ex: "Ministra ROSA WEBER")
-            textoArtigo = textoArtigo.replace(/Ministr[a-z\s]+.*/i, "").trim();
-            
             if (textoArtigo.length > 15) {
-                // Formata lindamente para o Dossiê, limitando a 200 caracteres para clareza
-                artigos.push("Art. " + matchArt[0].match(/\d+/)[0] + "º: " + textoArtigo.substring(0, 200) + (textoArtigo.length > 200 ? "..." : ""));
+                // Captura o rótulo exato (ex: Art. 4º-A) para ficar bonito no PDF
+                let rotulo = matchArt[0].match(/Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?/i)[0];
+                artigos.push(rotulo + ": " + textoArtigo.substring(0, 200) + (textoArtigo.length > 200 ? "..." : ""));
             }
         }
         
-        // Se encontrou Artigos, o trabalho está feito!
         if (artigos.length > 0) {
             return artigos; 
         }
     }
 
-    // 3. FALLBACK: TEXTOS SEM ARTIGOS (Usa motor de verbos corrigido)
+    // 5. FALLBACK: TEXTOS SEM ARTIGOS (Motor de Verbos)
     const atos = [
         "determina(?:r|do|da|m)?", "resolve(?:r|m)?", "delibera(?:r|do|da|m)?",
         "institui(?:r|do|da|m)?", "revoga(?:r|do|da|m)?", "prorroga(?:r|do|da|m)?",
@@ -476,7 +499,6 @@
         "encaminha(?:r|do|da|m)?", "decide(?:u|r|m)?"
     ];
     
-    // O \b foi removido e substituído por \s para evitar o bug de caracteres acentuados
     const re = new RegExp(`(?:^|\\s)(?:se\\s)?(?:${atos.join("|")})\\s[\\s\\S]{10,250}?(?:\\.|;|$)`, "gi");
     const matches = nucleoDecisorio.match(re) || [];
     
@@ -540,63 +562,88 @@
             return criteriosExtraidos.sort((a, b) => b.frequencia - a.frequencia);
         }
 
-        function extratorFairclough(textoDir, textoCrit) {
-            let alertas = [];
-            const dirLower = textoDir.toLowerCase();
-            
-            // =========================================================
-            // NÍVEL 1: MODALIZAÇÃO E TOM DA DECISÃO (Autoridade)
-            // =========================================================
-            const deonticos = (dirLower.match(/(deve|determina|proibi|veda|obriga|impost|compulsori|imprescindivel|terminantemente)/gi) || []).length;
-            const propositivos = (dirLower.match(/(sugere|recomenda|orienta|faculta|opcional|alternativa|dialogo|consenso)/gi) || []).length;
-            const legitimacao = (dirLower.match(/(conforme lei|decreto|tcu|cgu|constituicao|clt|jurisprudencia|acordao|norma|estatuto|legal)/gi) || []).length;
+       function extratorFairclough(textoDir, textoCrit) {
+    let alertas = [];
 
-            if (deonticos > propositivos * 2 && deonticos >= 2) {
-                alertas.push(`<strong>Modalização Autoritária (Força Deôntica):</strong> O texto oficial utiliza tom altamente impositivo (${deonticos} marcadores de obrigação). Este formato "Top-Down" reduz a margem de ambiguidade, mas eleva drasticamente o risco de atrito e resistência passiva se não houver forte legitimação.`);
-            } else if (propositivos > deonticos && propositivos >= 2) {
-                alertas.push(`<strong>Modalização Propositiva (Soft Power):</strong> A diretriz adota um tom flexível ou recomendatório. Cuidado: Textos excessivamente brandos em decisões estruturais podem gerar vácuos de execução e dupla interpretação na base operacional.`);
-            }
+    // =========================================================
+    // BLINDAGEM PRELIMINAR: ISOLAMENTO DO NÚCLEO DISCURSIVO
+    // =========================================================
+    function isolarNucleo(texto) {
+        if (!texto) return "";
+        let textoLimpo = texto.replace(/\s+/g, " ");
+        
+        // 1. Tenta encontrar o marco decisório (típico do Documento Oficial)
+        const marcoDecisao = textoLimpo.match(/(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\s*[:-]?\s*(.*)/i);
+        if (marcoDecisao && marcoDecisao[1].length > 50) {
+            return marcoDecisao[1].trim();
+        }
+        
+        // 2. Fallback para o Contraponto (Remove parágrafos de "Considerando")
+        const regexConsiderandos = /Considerando[\s\S]+?(?:\.|\;)/gi;
+        let textoSemConsiderandos = textoLimpo.replace(regexConsiderandos, "");
+        
+        return textoSemConsiderandos.trim();
+    }
 
-            if (legitimacao >= 3) {
-                alertas.push(`<strong>Estratégia de Legitimação Externa:</strong> A decisão ancora-se fortemente em autoridades externas ou arcabouço legal (${legitimacao} menções). Tática eficaz para blindar o decisor, transferindo o "ónus" da mudança para o cumprimento de regras superiores.`);
-            }
+    // Aplica a blindagem ao texto oficial antes de qualquer contagem
+    const dirBlindado = isolarNucleo(textoDir);
+    const dirLower = dirBlindado.toLowerCase();
+    
+    // =========================================================
+    // NÍVEL 1: MODALIZAÇÃO E TOM DA DECISÃO (Autoridade)
+    // =========================================================
+    const deonticos = (dirLower.match(/(deve|determina|proibi|veda|obriga|impost|compulsori|imprescindivel|terminantemente)/gi) || []).length;
+    const propositivos = (dirLower.match(/(sugere|recomenda|orienta|faculta|opcional|alternativa|dialogo|consenso)/gi) || []).length;
+    const legitimacao = (dirLower.match(/(conforme lei|decreto|tcu|cgu|constituicao|clt|jurisprudencia|acordao|norma|estatuto|legal)/gi) || []).length;
 
-            // =========================================================
-            // NÍVEL 2: CRUZAMENTO COM O CONTRAPONTO (Conflito)
-            // =========================================================
-            if (textoCrit && textoCrit.trim().length > 10) {
-                const critLower = textoCrit.toLowerCase();
-                
-                // Termômetro de Hostilidade
-                const resistencia = (critLower.match(/(inviavel|ilegal|abusiv|precariza|retrocesso|inaceitavel|repudia|imposicao|arbitrari|desgaste|prejuizo|assedio)/gi) || []).length;
+    if (deonticos > propositivos * 2 && deonticos >= 2) {
+        alertas.push(`<strong>Modalização Autoritária (Força Deôntica):</strong> O texto oficial utiliza tom altamente impositivo (${deonticos} marcadores de obrigação). Este formato "Top-Down" reduz a margem de ambiguidade, mas eleva drasticamente o risco de atrito e resistência passiva se não houver forte legitimação.`);
+    } else if (propositivos > deonticos && propositivos >= 2) {
+        alertas.push(`<strong>Modalização Propositiva (Soft Power):</strong> A diretriz adota um tom flexível ou recomendatório. Cuidado: Textos excessivamente brandos em decisões estruturais podem gerar vácuos de execução e dupla interpretação na base operacional.`);
+    }
 
-                if (resistencia >= 3) {
-                    alertas.push(`<strong>Termómetro de Hostilidade Elevado:</strong> O documento opositor utiliza linguagem de confronto direto ou alerta de dano severo (${resistencia} marcadores agressivos detetados). O risco de judicialização ou paralisação sindical é iminente.`);
-                }
+    if (legitimacao >= 3) {
+        alertas.push(`<strong>Estratégia de Legitimação Externa:</strong> A decisão ancora-se fortemente em autoridades externas ou arcabouço legal (${legitimacao} menções). Tática eficaz para blindar o decisor, transferindo o "ónus" da mudança para o cumprimento de regras superiores.`);
+    }
 
-                // Extração Semântica Cruzada (Bardin Integrado)
-                const criteriosOficial = extratorBardin(textoDir);
-                const criteriosCritica = extratorBardin(textoCrit);
-                const nomesOficial = criteriosOficial.map(c => c.nome);
-                
-                criteriosCritica.forEach(c => {
-                    // Viés de Enquadramento
-                    if (c.frequencia >= 2 && !nomesOficial.includes(c.nome)) {
-                        alertas.push(`<strong>Viés de Enquadramento Estratégico:</strong> A oposição concentra a argumentação no eixo '<strong>${c.nome}</strong>'. A omissão total deste tema na diretriz principal configura um ponto cego tático (risco de governança em auditorias externas).`);
-                    }
-                    // Ruptura de Signos
-                    if (c.frequencia >= 2 && nomesOficial.includes(c.nome)) {
-                        alertas.push(`<strong>Ruptura de Signos (Disputa Semântica):</strong> Divergência aguda no critério '<strong>${c.nome}</strong>'. As partes utilizam o mesmo fundamento conceptual para defender cenários práticos opostos. Requer blindagem métrica ou quantitativa imediata.`);
-                    }
-                });
-                
-            } else {
-                alertas.push("<strong>Isolação Decisória (Groupthink):</strong> A decisão foi estruturada e analisada sem evidência de contraponto documentado. O viés de isolação institucional é alto. Recomenda-se submeter manifestações do público-alvo para mapeamento preventivo de conflitos laborais.");
-            }
-            
-            return alertas;
+    // =========================================================
+    // NÍVEL 2: CRUZAMENTO COM O CONTRAPONTO (Conflito)
+    // =========================================================
+    if (textoCrit && textoCrit.trim().length > 10) {
+        // Aplica a blindagem ao manifesto da oposição
+        const critBlindado = isolarNucleo(textoCrit);
+        const critLower = critBlindado.toLowerCase();
+        
+        // Termómetro de Hostilidade
+        const resistencia = (critLower.match(/(inviavel|ilegal|abusiv|precariza|retrocesso|inaceitavel|repudia|imposicao|arbitrari|desgaste|prejuizo|assedio)/gi) || []).length;
+
+        if (resistencia >= 3) {
+            alertas.push(`<strong>Termómetro de Hostilidade Elevado:</strong> O documento opositor utiliza linguagem de confronto direto ou alerta de dano severo (${resistencia} marcadores agressivos detetados). O risco de judicialização ou paralisação sindical é iminente.`);
         }
 
+        // Extração Semântica Cruzada (Bardin Integrado)
+        // Usamos as variáveis blindadas para que o Bardin também seja preciso!
+        const criteriosOficial = extratorBardin(dirBlindado);
+        const criteriosCritica = extratorBardin(critBlindado);
+        const nomesOficial = criteriosOficial.map(c => c.nome);
+        
+        criteriosCritica.forEach(c => {
+            // Viés de Enquadramento
+            if (c.frequencia >= 2 && !nomesOficial.includes(c.nome)) {
+                alertas.push(`<strong>Viés de Enquadramento Estratégico:</strong> A oposição concentra a argumentação no eixo '<strong>${c.nome}</strong>'. A omissão total deste tema na diretriz principal configura um ponto cego tático (risco de governança em auditorias externas).`);
+            }
+            // Ruptura de Signos
+            if (c.frequencia >= 2 && nomesOficial.includes(c.nome)) {
+                alertas.push(`<strong>Ruptura de Signos (Disputa Semântica):</strong> Divergência aguda no critério '<strong>${c.nome}</strong>'. As partes utilizam o mesmo fundamento conceptual para defender cenários práticos opostos. Requer blindagem métrica ou quantitativa imediata.`);
+            }
+        });
+        
+    } else {
+        alertas.push("<strong>Isolação Decisória (Groupthink):</strong> A decisão foi estruturada e analisada sem evidência de contraponto documentado. O viés de isolação institucional é alto. Recomenda-se submeter manifestações do público-alvo para mapeamento preventivo de conflitos laborais.");
+    }
+    
+    return alertas;
+}
         // =====================================================================
         // MOTOR PRINCIPAL (Com validação de Governança de Contraponto)
         // =====================================================================
@@ -1033,6 +1080,7 @@
 </body>
 
 </html>
+
 
 
 
