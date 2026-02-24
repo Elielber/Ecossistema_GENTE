@@ -300,79 +300,78 @@
         // =====================================================================
         // FUNÇÃO PRINCIPAL DE PROCESSAMENTO (Substitui a anterior)
         // =====================================================================
-        async function processarDossie() {
-            const btn = document.getElementById('btn-processar');
-            const loader = document.getElementById('loading-indicator');
-            
-            // Validação de Governança: Exige pelo menos um documento oficial
-            const temOficial = dossieDocumentos.some(doc => doc.tipo.startsWith('oficial_'));
-            if (!temOficial) {
-                alert("Para fins de auditoria, adicione pelo menos um Documento Oficial (Voto, Memorando ou Ofício).");
-                return;
-            }
-
-            btn.classList.add('hidden');
-            loader.classList.remove('hidden');
-
-            try {
-                let textoOficialAcumulado = "";
-                let textoCriticaAcumulado = "";
-
-                // Lê todos os arquivos carregados na memória de forma assíncrona
-                for (const doc of dossieDocumentos) {
-                    // ATENÇÃO: Mantém a sua função lerArquivoTextoOPDF com a Blob URL intacta!
-                    const textoExtraido = await lerArquivoTextoOPDF({ files: [doc.file] }); 
-                    
-                    // Agrupa os textos conforme a taxonomia
-                    if (doc.tipo.startsWith('oficial_')) {
-                        textoOficialAcumulado += textoExtraido + " \n\n ";
-                    } else if (doc.tipo.startsWith('critica_')) {
-                        textoCriticaAcumulado += textoExtraido + " \n\n ";
-                    }
-                }
-                
-                dadosAuditoria.rawTextDirex = textoOficialAcumulado;
-                dadosAuditoria.rawTextCritica = textoCriticaAcumulado;
-                
-                // === APLICAÇÃO DOS MOTORES ANALÍTICOS (Sem alterar os motores originais) ===
-                dadosAuditoria.alternativas = extratorToulmin(textoOficialAcumulado);
-                dadosAuditoria.criteriosDirex = extratorBardin(textoOficialAcumulado);
-                dadosAuditoria.alertas = extratorFairclough(textoOficialAcumulado, textoCriticaAcumulado);
-
-               setTimeout(() => {
-                    renderizarRelatorio();
-                    renderizarProjecaoPlays(); 
-					gerarResumoExecutivo();
-                    btn.classList.remove('hidden');
-                    loader.classList.add('hidden');
-                    switchTab('relatorio');
-                }, 1200);
-
-            } catch (error) {
-                alert("Falha técnica na extração. Verifique os arquivos.");
-                console.error(error);
-                btn.classList.remove('hidden');
-                loader.classList.add('hidden');
-            }
-        }
-		function isolarNúcleoDiscursivo(textoBase) {
-    let textoLimpo = textoBase.replace(/\s+/g, " ");
-
-    // 1. Tenta encontrar o marco decisório (típico do Documento Oficial)
-    const marcoDecisao = textoLimpo.match(/(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\s*[:-]?\s*(.*)/i);
+  
+async function processarDossie() {
+    const btn = document.getElementById('btn-processar');
+    const loader = document.getElementById('loading-indicator');
     
-    if (marcoDecisao && marcoDecisao[1].length > 50) {
-        // Se encontrou, descarta tudo o que está para trás (Ementa e Considerandos)
-        return marcoDecisao[1].trim();
+    const temOficial = dossieDocumentos.some(doc => doc.tipo.startsWith('oficial_'));
+    const temCritica = dossieDocumentos.some(doc => doc.tipo.startsWith('critica_'));
+    
+    // Lê o Checkbox de Governança
+    const elContraponto = document.getElementById('ha-contraponto');
+    const exigeContraponto = elContraponto ? elContraponto.checked : false;
+
+    if (!temOficial) {
+        alert("Para garantir a validade da auditoria, adicione pelo menos um Documento Oficial (Tese).");
+        return;
+    }
+    if (exigeContraponto && !temCritica) {
+        alert("Alerta de Governança: Assinalou a existência de contraponto. Adicione ao menos um documento classificado como 'Contraponto/Contexto'.");
+        return;
     }
 
-    // 2. Fallback para o Documento de Contraponto (Manifestos/Notas de Repúdio)
-    // Como os sindicatos não usam "RESOLVE", precisamos de uma limpeza cirúrgica.
-    // Esta RegEx remove qualquer parágrafo que comece com "Considerando" até ao próximo ponto final.
-    const regexConsiderandos = /Considerando[\s\S]+?(?:\.|\;)/gi;
-    let textoSemConsiderandos = textoLimpo.replace(regexConsiderandos, "");
+    btn.classList.add('hidden');
+    loader.classList.remove('hidden');
 
-    return textoSemConsiderandos.trim();
+    try {
+        let textoOficialAcumulado = "";
+        let textoCriticaAcumulado = "";
+
+        for (const doc of dossieDocumentos) {
+            const textoExtraido = await lerArquivoTextoOPDF(doc); 
+            if (doc.tipo.startsWith('oficial_')) {
+                textoOficialAcumulado += textoExtraido + " \n\n ";
+            } else if (doc.tipo.startsWith('critica_')) {
+                textoCriticaAcumulado += textoExtraido + " \n\n ";
+            }
+        }
+        
+        // 1. PRÉ-PROCESSAMENTO BASE
+        textoOficialAcumulado = preprocessarTexto(textoOficialAcumulado);
+        textoCriticaAcumulado = preprocessarTexto(textoCriticaAcumulado);
+        
+        dadosAuditoria.rawTextDirex = textoOficialAcumulado;
+        dadosAuditoria.rawTextCritica = textoCriticaAcumulado;
+        
+        // 2. ISOLAMENTO DO NÚCLEO PARA O GRÁFICO PRINCIPAL DE BARDIN
+        // Esta Regex remove a Ementa e os Considerandos para que o gráfico da interface não conte palavras do passado
+        let textoOficialParaBardin = textoOficialAcumulado;
+        const marcoDecisao = textoOficialAcumulado.match(/(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\s*[:-]?\s*(.*)/i);
+        if (marcoDecisao && marcoDecisao[1].length > 50) {
+            textoOficialParaBardin = marcoDecisao[1].trim();
+        }
+
+        // 3. EXECUÇÃO METODOLÓGICA
+        dadosAuditoria.alternativas = extratorToulmin(textoOficialAcumulado); // Toulmin tem sua própria blindagem interna
+        dadosAuditoria.criteriosDirex = extratorBardin(textoOficialParaBardin); // Bardin agora recebe só a decisão estrita!
+        dadosAuditoria.alertas = extratorFairclough(textoOficialAcumulado, textoCriticaAcumulado); // Fairclough blinda internamente
+
+        setTimeout(() => {
+            renderizarRelatorio();
+            renderizarProjecaoPlays();
+            gerarResumoExecutivo();
+            btn.classList.remove('hidden');
+            loader.classList.add('hidden');
+            switchTab('relatorio');
+        }, 1000);
+
+    } catch (error) {
+        alert("Falha técnica na extração e indexação de dados. Verifique a integridade dos ficheiros PDF.");
+        console.error(error);
+        btn.classList.remove('hidden');
+        loader.classList.add('hidden');
+    }
 }
 
         // =====================================================================
@@ -428,25 +427,7 @@
                 .replace(/[^a-z0-9\s]/g, ' ')
                 .replace(/\s{2,}/g, ' ').trim();
         }
-function isolarNúcleoDiscursivo(textoBase) {
-    let textoLimpo = textoBase.replace(/\s+/g, " ");
 
-    // 1. Tenta encontrar o marco decisório (típico do Documento Oficial)
-    const marcoDecisao = textoLimpo.match(/(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\s*[:-]?\s*(.*)/i);
-    
-    if (marcoDecisao && marcoDecisao[1].length > 50) {
-        // Se encontrou, descarta tudo o que está para trás (Ementa e Considerandos)
-        return marcoDecisao[1].trim();
-    }
-
-    // 2. Fallback para o Documento de Contraponto (Manifestos/Notas de Repúdio)
-    // Como os sindicatos não usam "RESOLVE", precisamos de uma limpeza cirúrgica.
-    // Esta RegEx remove qualquer parágrafo que comece com "Considerando" até ao próximo ponto final.
-    const regexConsiderandos = /Considerando[\s\S]+?(?:\.|\;)/gi;
-    let textoSemConsiderandos = textoLimpo.replace(regexConsiderandos, "");
-
-    return textoSemConsiderandos.trim();
-}
         // =====================================================================
         // MOTORES METODOLÓGICOS (Inteligência Dinâmica e Global)
         // =====================================================================
@@ -1085,6 +1066,7 @@ function isolarNúcleoDiscursivo(textoBase) {
 </body>
 
 </html>
+
 
 
 
