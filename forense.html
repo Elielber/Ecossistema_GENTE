@@ -415,26 +415,28 @@
         // =====================================================================
         // 1. TOULMIN ROBUSTO (Com captação de excertos)
         function extratorToulmin(textoBase) {
-            const atos = [
-                "determina(?:-se)?", "resolve(?:-se)?", "delibera(?:-se)?",
-                "institui(?:-se)?", "revoga(?:-se)?", "prorroga(?:-se)?",
-                "aprova(?:-se|r|da|do|m)?", "homologa(?:-se)?", "ratifica(?:-se)?",
-                "defere(?:-se)?", "indefere(?:-se)?", "estabelece(?:-se)?",
-                "encaminha(?:-se)?", "decide(?:-se|u|r)?"
-            ];
-            
-            // Procura o verbo e apanha até 150 caracteres para dar contexto
-            const re = new RegExp(`\\b(?:${atos.join("|")})\\b[\\s\\S]{0,150}?(?:\\.|;|\\n)`, "gi");
-            const matches = textoBase.match(re) || [];
-            
-            const alternativasEncontradas = matches
-                .map(m => m.replace(/\s+/g, " ").trim())
-                .filter(m => m.length >= 15 && m.length <= 250); // Filtra ruído e parágrafos inteiros
-            
-            let unicas = [...new Set(alternativasEncontradas)].map(t => t.charAt(0).toUpperCase() + t.slice(1));
-            
-            return unicas.length > 0 ? unicas : ["Ato impositivo implícito. Requer revisão manual do escopo decisório."];
-        }
+    // 1. Array expandido para capturar infinitivo, particípio e plural
+    const atos = [
+        "determina(?:-se|r|do|da|m)?", "resolve(?:-se|r|m)?", "delibera(?:-se|r|do|da|m)?",
+        "institui(?:-se|r|do|da|m)?", "revoga(?:-se|r|do|da|m)?", "prorroga(?:-se|r|do|da|m)?",
+        "aprova(?:-se|r|da|do|m)?", "homologa(?:-se|r|do|da|m)?", "ratifica(?:-se|r|do|da|m)?",
+        "defere(?:-se|r|do|da|m)?", "indefere(?:-se|r|do|da|m)?", "estabelece(?:-se|r|m)?",
+        "encaminha(?:-se|r|do|da|m)?", "decide(?:-se|u|r|m)?"
+    ];
+    
+    // 2. Remoção do \n como ponto de paragem. Agora pára no ponto final, ponto e vírgula ou final da string ($)
+    // Aumentado ligeiramente o limite de pesquisa para 300 caracteres para garantir que apanha o parágrafo
+    const re = new RegExp(`\\b(?:${atos.join("|")})\\b[\\s\\S]{0,300}?(?:\\.|;|$)`, "gi");
+    const matches = textoBase.match(re) || [];
+    
+    const alternativasEncontradas = matches
+        .map(m => m.replace(/\s+/g, " ").trim()) // Limpa excesso de espaços e quebras de linha internas
+        .filter(m => m.length >= 15 && m.length <= 250); // Mantém o filtro de ruído e tamanho
+    
+    let unicas = [...new Set(alternativasEncontradas)].map(t => t.charAt(0).toUpperCase() + t.slice(1));
+    
+    return unicas.length > 0 ? unicas : ["Ato impositivo implícito. Requer revisão manual do escopo decisório."];
+}
         function extratorBardin(textoBase) {
             const textoNorm = normalizarParaContagem(textoBase);
             const totalTokens = Math.max(1, textoNorm.split(/\s+/).length); 
@@ -981,6 +983,7 @@
 </body>
 
 </html>
+
 
 
 
