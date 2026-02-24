@@ -450,64 +450,69 @@ function isolarNúcleoDiscursivo(textoBase) {
         // =====================================================================
         // MOTORES METODOLÓGICOS (Inteligência Dinâmica e Global)
         // =====================================================================
-        // 1. TOULMIN ROBUSTO (Com captação de excertos)
-       function extratorToulmin(textoBase) {
-    // 1. LIMPEZA PESADA DE PDF (Sanitização)
-    let textoLimpo = textoBase.replace(/\s+/g, " ");
-    
-    // Corrige o bug de ligaduras comuns em PDFs (fi, fl) que quebram palavras
-    textoLimpo = textoLimpo.replace(/f\s+i\s+c/gi, "fic")
-                           .replace(/f\s+i\s+n/gi, "fin")
-                           .replace(/e\s+s\s+p\s+e\s+c\s+í\s+f\s+i\s+c\s+a/gi, "específica");
+        
+      function extratorToulmin(textoBase) {
+    // 1. SANITIZAÇÃO E LIMPEZA DE PDF
+    let textoLimpo = textoBase.replace(/\s+/g, " ")
+                              .replace(/f\s+i\s+c/gi, "fic")
+                              .replace(/f\s+i\s+n/gi, "fin")
+                              .replace(/e\s+s\s+p\s+e\s+c\s+í\s+f\s+i\s+c\s+a/gi, "específica");
 
-    // 2. ISOLA O DISPOSITIVO (Ignora Ementa e Considerandos)
     let nucleoDecisorio = textoLimpo;
     const marcoDecisao = textoLimpo.match(/(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\s*[:-]?\s*(.*)/i);
     
     if (marcoDecisao && marcoDecisao[1].length > 50) {
-        nucleoDecisorio = marcoDecisao[1];
-        
-        // 3. CORTA ASSINATURAS E RODAPÉS
-        // Para a leitura ao encontrar nomes de cidades com datas, "Prefeito", "Publique-se", etc.
-        nucleoDecisorio = nucleoDecisorio.split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se|Nota: Este texto)/i)[0];
-        
-        // 4. CAPTURA DE ARTIGOS NORMATIVOS (Agora aceita "Art. 4º-A" e "Art. 4º.-D")
-        const regexArtigos = /Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?\s*(.*?)(?=(?:Art\.\s*\d+)|$)/gi;
-        let artigos = [];
-        let matchArt;
-        
-        while ((matchArt = regexArtigos.exec(nucleoDecisorio)) !== null) {
-            let textoArtigo = matchArt[1].trim();
-            if (textoArtigo.length > 15) {
-                // Captura o rótulo exato (ex: Art. 4º-A) para ficar bonito no PDF
-                let rotulo = matchArt[0].match(/Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?/i)[0];
-                artigos.push(rotulo + ": " + textoArtigo.substring(0, 200) + (textoArtigo.length > 200 ? "..." : ""));
-            }
-        }
-        
-        if (artigos.length > 0) {
-            return artigos; 
-        }
+        nucleoDecisorio = marcoDecisao[1].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
     }
 
-    // 5. FALLBACK: TEXTOS SEM ARTIGOS (Motor de Verbos)
-    const atos = [
-        "determina(?:r|do|da|m)?", "resolve(?:r|m)?", "delibera(?:r|do|da|m)?",
-        "institui(?:r|do|da|m)?", "revoga(?:r|do|da|m)?", "prorroga(?:r|do|da|m)?",
-        "aprova(?:r|da|do|m)?", "homologa(?:r|do|da|m)?", "ratifica(?:r|do|da|m)?",
-        "defere(?:r|do|da|m)?", "indefere(?:r|do|da|m)?", "estabelece(?:r|m)?",
-        "encaminha(?:r|do|da|m)?", "decide(?:u|r|m)?"
+    // 2. FILTRO DE DESCARTE PROCEDIMENTAL (Anti-Ruído)
+    const clichesAdministrativos = /entra em vigor|disposições em contrário|casos omissos|revogam-se|publique-se|cumpra-se|data de (sua )?publicação/i;
+
+    // 3. CAPTURA DE ARTIGOS NORMATIVOS (Foco no Setor Público)
+    const regexArtigos = /Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?\s*(.*?)(?=(?:Art\.\s*\d+)|$)/gi;
+    let artigosValidos = [];
+    let matchArt;
+    
+    while ((matchArt = regexArtigos.exec(nucleoDecisorio)) !== null) {
+        let textoArtigo = matchArt[1].trim();
+        if (textoArtigo.length > 20 && !clichesAdministrativos.test(textoArtigo)) {
+            let rotulo = matchArt[0].match(/Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?/i)[0];
+            artigosValidos.push(`<strong>${rotulo} (Alegação Central):</strong> ` + textoArtigo.substring(0, 250) + (textoArtigo.length > 250 ? "..." : ""));
+        }
+    }
+    
+    if (artigosValidos.length > 0) {
+        return artigosValidos.slice(0, 2); // Hierarquia: Retorna apenas os primeiros artigos
+    }
+
+    // =========================================================
+    // NOVIDADE: MOTOR CORPORATIVO (Narrativa e 1ª Pessoa)
+    // =========================================================
+    // Expansão do dicionário para englobar a comunicação de CEOs, RH e Press Releases
+    const atosCorporativos = [
+        "determina(?:r|do|da|m|mos)?", "resolve(?:r|m|mos)?", "delibera(?:r|do|da|m|mos)?",
+        "institui(?:r|do|da|m|mos)?", "revoga(?:r|do|da|m|mos)?", "prorroga(?:r|do|da|m|mos)?",
+        "aprova(?:r|da|do|m|mos)?", "estabelece(?:r|m|mos)?", "decide(?:u|r|m)?", 
+        "decidimos", "anuncia(?:mos)?", "comunica(?:mos)?", "informa(?:mos)?", 
+        "passará a", "passaremos a", "irá implementar", "irão implementar"
     ];
     
-    const re = new RegExp(`(?:^|\\s)(?:se\\s)?(?:${atos.join("|")})\\s[\\s\\S]{10,250}?(?:\\.|;|$)`, "gi");
+    // RegEx avançada: Captura a frase inteira (do início/ponto anterior até ao próximo ponto) que contenha o verbo
+    const re = new RegExp(`(?:^|\\.\\s|\\n)([^\\.\\n]*?\\b(?:${atosCorporativos.join("|")})\\b[^\\.\\n]{15,250}?(?:\\.|;|$))`, "gi");
     const matches = nucleoDecisorio.match(re) || [];
     
-    const alternativasEncontradas = matches
-        .map(m => m.trim().replace(/\s+/g, " "))
-        .filter(m => m.length >= 15 && !m.toLowerCase().includes("considerando"));
+    const alegaçõesVerbo = matches
+        .map(m => m.trim().replace(/\s+/g, " ").replace(/^\.\s*/, "")) // Limpa pontos isolados no início
+        .filter(m => m.length >= 20 && !clichesAdministrativos.test(m) && !m.toLowerCase().includes("considerando"));
         
-    let unicas = [...new Set(alternativasEncontradas)].map(t => t.charAt(0).toUpperCase() + t.slice(1));
-    return unicas.length > 0 ? unicas : ["Ato impositivo implícito. Requer revisão manual do escopo decisório."];
+    let unicas = [...new Set(alegaçõesVerbo)].map(t => t.charAt(0).toUpperCase() + t.slice(1));
+    
+    if (unicas.length > 0) {
+        // Retorna a primeira sentença narrativa encontrada que decreta a ação
+        return [ `<strong>Alegação Central (Extração Narrativa):</strong> ${unicas[0]}` ];
+    }
+    
+    return ["Ato impositivo implícito. Requer revisão manual do escopo decisório."];
 }
         function extratorBardin(textoBase) {
             const textoNorm = normalizarParaContagem(textoBase);
@@ -1080,6 +1085,7 @@ function isolarNúcleoDiscursivo(textoBase) {
 </body>
 
 </html>
+
 
 
 
