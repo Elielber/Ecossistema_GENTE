@@ -347,7 +347,7 @@ async function processarDossie() {
         // 2. ISOLAMENTO DO NÚCLEO PARA O GRÁFICO PRINCIPAL DE BARDIN
         // Esta Regex remove a Ementa e os Considerandos para que o gráfico da interface não conte palavras do passado
         let textoOficialParaBardin = textoOficialAcumulado;
-        const marcoDecisao = textoOficialAcumulado.match(/(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\s*[:-]?\s*(.*)/i);
+       const marcoDecisao = textoOficialAcumulado.match(/\b(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\b\s*[:-]?\s*(.*)/i);
         if (marcoDecisao && marcoDecisao[1].length > 50) {
             textoOficialParaBardin = marcoDecisao[1].trim();
         }
@@ -432,24 +432,25 @@ async function processarDossie() {
         // MOTORES METODOLÓGICOS (Inteligência Dinâmica e Global)
         // =====================================================================
         
-      function extratorToulmin(textoBase) {
-    // 1. SANITIZAÇÃO E LIMPEZA DE PDF
+     function extratorToulmin(textoBase) {
+    // 1. SANITIZAÇÃO
     let textoLimpo = textoBase.replace(/\s+/g, " ")
                               .replace(/f\s+i\s+c/gi, "fic")
                               .replace(/f\s+i\s+n/gi, "fin")
                               .replace(/e\s+s\s+p\s+e\s+c\s+í\s+f\s+i\s+c\s+a/gi, "específica");
 
+    // 2. ISOLA O DISPOSITIVO (Com \b para evitar falsos positivos como "determinados")
     let nucleoDecisorio = textoLimpo;
-    const marcoDecisao = textoLimpo.match(/(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\s*[:-]?\s*(.*)/i);
+    const marcoDecisao = textoLimpo.match(/\b(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\b\s*[:-]?\s*(.*)/i);
     
     if (marcoDecisao && marcoDecisao[1].length > 50) {
         nucleoDecisorio = marcoDecisao[1].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
     }
 
-    // 2. FILTRO DE DESCARTE PROCEDIMENTAL (Anti-Ruído)
+    // 3. FILTRO PROCEDIMENTAL
     const clichesAdministrativos = /entra em vigor|disposições em contrário|casos omissos|revogam-se|publique-se|cumpra-se|data de (sua )?publicação/i;
 
-    // 3. CAPTURA DE ARTIGOS NORMATIVOS (Foco no Setor Público)
+    // 4. CAPTURA DE ARTIGOS NORMATIVOS (Setor Público)
     const regexArtigos = /Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?\s*(.*?)(?=(?:Art\.\s*\d+)|$)/gi;
     let artigosValidos = [];
     let matchArt;
@@ -462,14 +463,9 @@ async function processarDossie() {
         }
     }
     
-    if (artigosValidos.length > 0) {
-        return artigosValidos.slice(0, 2); // Hierarquia: Retorna apenas os primeiros artigos
-    }
+    if (artigosValidos.length > 0) return artigosValidos.slice(0, 2); 
 
-    // =========================================================
-    // NOVIDADE: MOTOR CORPORATIVO (Narrativa e 1ª Pessoa)
-    // =========================================================
-    // Expansão do dicionário para englobar a comunicação de CEOs, RH e Press Releases
+    // 5. MOTOR CORPORATIVO (Análise de Sentenças)
     const atosCorporativos = [
         "determina(?:r|do|da|m|mos)?", "resolve(?:r|m|mos)?", "delibera(?:r|do|da|m|mos)?",
         "institui(?:r|do|da|m|mos)?", "revoga(?:r|do|da|m|mos)?", "prorroga(?:r|do|da|m|mos)?",
@@ -478,23 +474,43 @@ async function processarDossie() {
         "passará a", "passaremos a", "irá implementar", "irão implementar"
     ];
     
-    // RegEx avançada: Captura a frase inteira (do início/ponto anterior até ao próximo ponto) que contenha o verbo
-    const re = new RegExp(`(?:^|\\.\\s|\\n)([^\\.\\n]*?\\b(?:${atosCorporativos.join("|")})\\b[^\\.\\n]{15,250}?(?:\\.|;|$))`, "gi");
-    const matches = nucleoDecisorio.match(re) || [];
+    // Divide o texto em sentenças completas baseadas na pontuação
+    const sentencas = nucleoDecisorio.split(/(?<=[.;:!])\s+/);
+    let alegacoesValidas = [];
+    const regexVerbos = new RegExp(`\\b(?:${atosCorporativos.join("|")})\\b`, "i");
+
+    for (let sentenca of sentencas) {
+        sentenca = sentenca.trim();
+        // Ignora frases curtas, clichês ou cabeçalhos de e-mail (ruído da CMB)
+        if (sentenca.length < 20 || clichesAdministrativos.test(sentenca) || sentenca.toLowerCase().includes("considerando")) continue;
+        if (sentenca.includes("@") || sentenca.toLowerCase().includes("de:") || sentenca.toLowerCase().includes("para:")) continue;
+
+        if (regexVerbos.test(sentenca)) {
+            sentenca = sentenca.replace(/^[-•*|]\s*/, ""); // Limpa marcadores
+            sentenca = sentenca.charAt(0).toUpperCase() + sentenca.slice(1);
+            alegacoesValidas.push(sentenca);
+        }
+    }
     
-    const alegaçõesVerbo = matches
-        .map(m => m.trim().replace(/\s+/g, " ").replace(/^\.\s*/, "")) // Limpa pontos isolados no início
-        .filter(m => m.length >= 20 && !clichesAdministrativos.test(m) && !m.toLowerCase().includes("considerando"));
+    if (alegacoesValidas.length > 0) {
+        // Heurística de Foco: Prioriza sentenças que falem do "trabalho" e não sejam gigantescas
+        const palavrasChave = /trabalho|presencial|remoto|híbrido|modelo|regime|jornada/i;
+        let melhorAlegação = alegacoesValidas[0]; 
         
-    let unicas = [...new Set(alegaçõesVerbo)].map(t => t.charAt(0).toUpperCase() + t.slice(1));
-    
-    if (unicas.length > 0) {
-        // Retorna a primeira sentença narrativa encontrada que decreta a ação
-        return [ `<strong>Alegação Central (Extração Narrativa):</strong> ${unicas[0]}` ];
+        for (let a of alegacoesValidas) {
+            if (palavrasChave.test(a) && a.length < 350) {
+                melhorAlegação = a;
+                break;
+            }
+        }
+        
+        let textoFormatado = melhorAlegação.substring(0, 300) + (melhorAlegação.length > 300 ? "..." : "");
+        return [ `<strong>Alegação Central (Extração Narrativa):</strong> ${textoFormatado}` ];
     }
     
     return ["Ato impositivo implícito. Requer revisão manual do escopo decisório."];
 }
+		
         function extratorBardin(textoBase) {
             const textoNorm = normalizarParaContagem(textoBase);
             const totalTokens = Math.max(1, textoNorm.split(/\s+/).length); 
@@ -559,7 +575,7 @@ async function processarDossie() {
         let textoLimpo = texto.replace(/\s+/g, " ");
         
         // 1. Tenta encontrar o marco decisório (típico do Documento Oficial)
-        const marcoDecisao = textoLimpo.match(/(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\s*[:-]?\s*(.*)/i);
+        const marcoDecisao = textoLimpo.match(/\b(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\b\s*[:-]?\s*(.*)/i);
         if (marcoDecisao && marcoDecisao[1].length > 50) {
             return marcoDecisao[1].trim();
         }
@@ -1066,6 +1082,7 @@ async function processarDossie() {
 </body>
 
 </html>
+
 
 
 
