@@ -291,10 +291,9 @@
             `).join('');
         }
 
-        // =====================================================================
-        // FUNÇÃO PRINCIPAL DE PROCESSAMENTO (Substitui a anterior)
-        // =====================================================================
-  
+// =====================================================================
+// MOTOR PRINCIPAL (Com RAG Determinístico e Radar Dinâmico)
+// =====================================================================
 async function processarDossie() {
     const btn = document.getElementById('btn-processar');
     const loader = document.getElementById('loading-indicator');
@@ -319,7 +318,7 @@ async function processarDossie() {
     loader.classList.remove('hidden');
 
     try {
-                let textoOficialAcumulado = "";
+        let textoOficialAcumulado = "";
         let textoCriticaAcumulado = "";
 
         // 1. Apenas junta os textos nos seus devidos potes
@@ -331,33 +330,28 @@ async function processarDossie() {
                 textoCriticaAcumulado += textoExtraido + " \n\n ";
             }
         }
-
-        // 2. O MOMENTO MÁGICO: Gera o radar lendo o contraponto!
-        const radarDinamico = gerarRadarDinamico(textoCriticaAcumulado);
-
-        // 3. Dispara o extrator passando a Decisão e o Radar Teleguiado
-        dadosAuditoria.alternativas = extratorToulmin(textoOficialAcumulado, radarDinamico);
-
         
-        // 1. PRÉ-PROCESSAMENTO BASE
+        // 2. PRÉ-PROCESSAMENTO BASE (Limpa OCR antes de enviar para os motores)
         textoOficialAcumulado = preprocessarTexto(textoOficialAcumulado);
         textoCriticaAcumulado = preprocessarTexto(textoCriticaAcumulado);
         
         dadosAuditoria.rawTextDirex = textoOficialAcumulado;
         dadosAuditoria.rawTextCritica = textoCriticaAcumulado;
         
-        // 2. ISOLAMENTO DO NÚCLEO PARA O GRÁFICO PRINCIPAL DE BARDIN
-        // Esta Regex remove a Ementa e os Considerandos para que o gráfico da interface não conte palavras do passado
+        // 3. ISOLAMENTO DO NÚCLEO (Para o gráfico de Bardin não ler os Considerandos)
         let textoOficialParaBardin = textoOficialAcumulado;
-       const marcoDecisao = textoOficialAcumulado.match(/\b(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\b\s*[:-]?\s*(.*)/i);
+        const marcoDecisao = textoOficialAcumulado.match(/\b(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\b\s*[:-]?\s*(.*)/i);
         if (marcoDecisao && marcoDecisao[1].length > 50) {
             textoOficialParaBardin = marcoDecisao[1].trim();
         }
 
-        // 3. EXECUÇÃO METODOLÓGICA
-       dadosAuditoria.alternativas = extratorToulmin(textoOficialAcumulado); // Toulmin tem sua própria blindagem interna
-        dadosAuditoria.criteriosDirex = extratorBardin(textoOficialParaBardin); // Bardin agora recebe só a decisão estrita!
-        dadosAuditoria.alertas = extratorFairclough(textoOficialAcumulado, textoCriticaAcumulado); // Fairclough blinda internamente
+        // 4. A MAGIA: Gera o radar dinâmico com base na dor da queixa
+        const radarDinamico = gerarRadarDinamico(textoCriticaAcumulado);
+
+        // 5. EXECUÇÃO METODOLÓGICA (Toulmin agora é Teleguiado)
+        dadosAuditoria.alternativas = extratorToulmin(textoOficialAcumulado, radarDinamico); 
+        dadosAuditoria.criteriosDirex = extratorBardin(textoOficialParaBardin); 
+        dadosAuditoria.alertas = extratorFairclough(textoOficialAcumulado, textoCriticaAcumulado); 
 
         setTimeout(() => {
             renderizarRelatorio();
@@ -375,6 +369,7 @@ async function processarDossie() {
         loader.classList.add('hidden');
     }
 }
+
 
         // =====================================================================
         // LEITOR DE PDF E ARQUIVOS
@@ -1200,6 +1195,7 @@ function extratorToulmin(textoBase, radarDinamico) {
 </body>
 
 </html>
+
 
 
 
