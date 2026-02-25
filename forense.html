@@ -428,82 +428,86 @@ async function processarDossie() {
         // =====================================================================
         
     function extratorToulmin(textoBase) {
-    // 1. SANITIZAÇÃO COMUM
+    // =========================================================
+    // 1. SANITIZAÇÃO UNIVERSAL (Limpeza de OCR e PDF)
+    // =========================================================
     let textoLimpo = textoBase.replace(/\s+/g, " ")
                               .replace(/f\s+i\s+c/gi, "fic")
                               .replace(/f\s+i\s+n/gi, "fin")
                               .replace(/e\s+s\s+p\s+e\s+c\s+í\s+f\s+i\s+c\s+a/gi, "específica");
 
-    // Super Filtro Anti-Ruído: Agora destrói também os avisos legais e rodapés de e-mail corporativo!
-    const clichesAdministrativos = /entra em vigor|disposições em contrário|casos omissos|revogam-se|publique-se|cumpra-se|data de (sua )?publicação|destinatário e pode conter|informações confidenciais|protegid[ao]s por sigilo/i;
+    // Filtro Universal Anti-Ruído (Rodapés, Jargões Jurídicos Vazios, Avisos de E-mail)
+    const clichesAdministrativos = /entra em vigor na data|disposições em contrário|casos omissos|revogam-se|publique-se|cumpra-se|data de (sua )?publicação|destinatário e pode conter|informações confidenciais|protegid[ao]s por sigilo/i;
 
     // =========================================================
-    // TENTATIVA 1: MOTOR NORMATIVO (Decretos, Portarias, Resoluções)
+    // 2. A CADEIA DE RESPONSABILIDADE (Array de Motores)
     // =========================================================
-    // Substituímos o \b por (?:^|\s) para não ser enganado por acentos
-    const marcoDecisao = textoLimpo.match(/(?:^|\s)(RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)(?:\s*[:-]?\s*)(.*)/i);
-    
-    if (marcoDecisao) {
-        // Agora o resto do texto está no índice [2] devido ao agrupamento do verbo
-        let nucleoDecisorio = marcoDecisao[2].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
+    const motoresPLN = [
         
-        const regexArtigos = /Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?\s*(.*?)(?=(?:Art\.\s*\d+)|$)/gi;
-        let artigosValidos = [];
-        let matchArt;
-        
-        while ((matchArt = regexArtigos.exec(nucleoDecisorio)) !== null) {
-            let textoArtigo = matchArt[1].trim();
-            if (textoArtigo.length > 20 && !clichesAdministrativos.test(textoArtigo)) {
-                let rotulo = matchArt[0].match(/Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?/i)[0];
-                artigosValidos.push(`<strong>${rotulo} (Alegação Normativa):</strong> ` + textoArtigo.substring(0, 300) + (textoArtigo.length > 300 ? "..." : ""));
+        // ---------------------------------------------------------
+        // GRUPO 1: ATOS DE IMPÉRIO E NORMATIVOS (Decretos, Leis, Portarias)
+        // ---------------------------------------------------------
+        {
+            nome: "Motor Normativo",
+            // DETECTOR: O documento tem um verbo de imposição unilateral de Estado?
+            detector: (t) => t.match(/(?:^|\s)(RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)(?:\s*[:-]?\s*)(.*)/i),
+            
+            // EXTRATOR: Se sim, corta o lixo em volta e extrai os Artigos principais.
+            extrator: (t, match) => {
+                // match[2] contém tudo o que vem DEPOIS do "Resolve/Decreta"
+                // O split abaixo joga fora o rodapé (ex: data, local, nome do prefeito)
+                let nucleoDecisorio = match[2].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
+                
+                // Radar focado exclusivamente em Artigos e seus parágrafos/incisos associados
+                const regexArtigos = /Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?\s*(.*?)(?=(?:Art\.\s*\d+)|$)/gi;
+                let artigosValidos = [];
+                let m;
+                
+                while ((m = regexArtigos.exec(nucleoDecisorio)) !== null) {
+                    let textoArtigo = m[1].trim();
+                    // Só aceita o artigo se ele tiver substância (> 20 letras) e não for um clichê de encerramento
+                    if (textoArtigo.length > 20 && !clichesAdministrativos.test(textoArtigo)) {
+                        let rotulo = m[0].match(/Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?/i)[0];
+                        artigosValidos.push(`<strong>${rotulo} (Alegação Normativa):</strong> ` + textoArtigo.substring(0, 300) + (textoArtigo.length > 300 ? "..." : ""));
+                    }
+                }
+                // Se encontrou Artigos válidos, devolve os 2 primeiros (o núcleo da lei). Se não, devolve null.
+                return artigosValidos.length > 0 ? artigosValidos.slice(0, 2) : null;
             }
-        }
-        if (artigosValidos.length > 0) return artigosValidos.slice(0, 2); 
-    }
+        },
 
-    // =========================================================
-    // TENTATIVA 2: MOTOR CORPORATIVO (Se falhar a Tentativa 1)
-    // =========================================================
-    const atosCorporativos = [
-        "determina(?:r|do|da|m|mos)?", "resolve(?:r|m|mos)?", "delibera(?:r|do|da|m|mos)?",
-        "institui(?:r|do|da|m|mos)?", "revoga(?:r|do|da|m|mos)?", "prorroga(?:r|do|da|m|mos)?",
-        "aprova(?:r|da|do|m|mos|u)?", "estabelece(?:r|m|mos)?", "decide(?:u|r|m)?", 
-        "decidimos", "anuncia(?:mos)?", "comunica(?:mos)?", "informa(?:mos)?", 
-        "passará a", "passaremos a", "irá implementar", "irão implementar"
+        // ---------------------------------------------------------
+        // GRUPO 2: INSTRUMENTOS DE PACTUAÇÃO (Contratos) - [A CODIFICAR A SEGUIR]
+        // ---------------------------------------------------------
+        
+        // ---------------------------------------------------------
+        // GRUPO 3: DISCURSO DELIBERATIVO (Atas) - [A CODIFICAR A SEGUIR]
+        // ---------------------------------------------------------
+        
+        // ---------------------------------------------------------
+        // GRUPO 4: DISCURSO GERENCIALISTA (Corporativo) - [A CODIFICAR A SEGUIR]
+        // ---------------------------------------------------------
+
     ];
-    
-    // O pulo do gato: Obriga o verbo a terminar com espaço ou pontuação, impedindo falsos positivos!
-    const regexVerbos = new RegExp(`(?:^|\\s)(?:${atosCorporativos.join("|")})(?=\\s|[.,;:!?]|$)`, "i");
-    const sentencas = textoLimpo.split(/(?<=[.;:!])\s+/);
-    let alegacoesValidas = [];
 
-    for (let sentenca of sentencas) {
-        sentenca = sentenca.trim();
-        
-        if (sentenca.length < 20 || clichesAdministrativos.test(sentenca) || sentenca.toLowerCase().includes("considerando")) continue;
-        if (sentenca.includes("@") || sentenca.includes("|") || sentenca.match(/\bEdição n/i) || sentenca.match(/(?:^|\s)De:\s/i) || sentenca.match(/(?:^|\s)Para:\s/i)) continue;
-
-        if (regexVerbos.test(sentenca)) {
-            sentenca = sentenca.replace(/^[-•*|]\s*/, ""); 
-            sentenca = sentenca.charAt(0).toUpperCase() + sentenca.slice(1);
-            alegacoesValidas.push(sentenca);
-        }
-    }
-    
-    if (alegacoesValidas.length > 0) {
-        const palavrasChave = /trabalho|presencial|remoto|híbrido|modelo|regime|jornada/i;
-        let melhorAlegação = alegacoesValidas[0]; 
-        
-        for (let a of alegacoesValidas) {
-            if (palavrasChave.test(a) && a.length < 350) {
-                melhorAlegação = a;
-                break;
+    // =========================================================
+    // 3. EXECUÇÃO DA CADEIA (Pipeline)
+    // =========================================================
+    for (let motor of motoresPLN) {
+        let match = motor.detector(textoLimpo);
+        if (match) {
+            let resultado = motor.extrator(textoLimpo, match);
+            // Se o motor conseguiu extrair o argumento, devolve e encerra o algoritmo.
+            // Se falhou (retornou null), o laço continua para o próximo motor da esteira.
+            if (resultado && resultado.length > 0) {
+                return resultado;
             }
         }
-        let textoFormatado = melhorAlegação.substring(0, 300) + (melhorAlegação.length > 300 ? "..." : "");
-        return [ `<strong>Alegação Central (Narrativa Corporativa):</strong> ${textoFormatado}` ];
     }
 
+    // =========================================================
+    // 4. FALLBACK DE SEGURANÇA (Zero-Trust)
+    // =========================================================
     return ["Ato impositivo implícito. Requer revisão manual do escopo decisório."];
 }
 
@@ -1079,6 +1083,7 @@ async function processarDossie() {
 </body>
 
 </html>
+
 
 
 
