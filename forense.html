@@ -490,7 +490,7 @@ function extratorToulmin(textoBase, radarDinamico) {
         {
             nome: "Motor Normativo",
             detector: (t) => t.match(/(?:^|\s)(RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)(?:\s*[:-]?\s*)(.*)/i),
-            extrator: (t, match) => {
+            extrator: (t, match, radarDinamico) => {
                 let nucleo = match[2].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
                 
                 const regexDispositivos = /(Art\.\s*\d+[a-zºo\.\-]*|§\s*\d+[a-zºo\.\-]*|\b[IVXLCDM]+\s*[-–—])\s*(.*?)(?=(?:Art\.\s*\d+|§\s*\d+|\b[IVXLCDM]+\s*[-–—]|$))/gi;
@@ -540,7 +540,7 @@ function extratorToulmin(textoBase, radarDinamico) {
         {
             nome: "Motor Colegiado",
             detector: (t) => t.match(/\b(?:Ata da|Aos.*?dias do mês|Reunião Ordinária|Assembleia Geral|Sessão Plenária|Conselho de|Diretoria Executiva|DIREX)\b/i),
-            extrator: (t) => {
+            extrator: (t, match, radarDinamico) => {
                 const verbosConsenso = ["aprovou", "aprovaram", "deliberou", "deliberaram", "decidiu", "decidiram"];
                 const regexConsenso = new RegExp(`(?:^|\\s)(?:${verbosConsenso.join("|")})(?=\\s|[.,;:!?]|$)`, "i");
                 const sentencas = t.split(/(?<=[.;:!])\s+/);
@@ -569,7 +569,7 @@ function extratorToulmin(textoBase, radarDinamico) {
         {
             nome: "Motor Corporativo",
             detector: (t) => true,
-            extrator: (t) => {
+            extrator: (t, match, radarDinamico) => {
                 const atosCorporativos = [
                     "determina(?:r|do|da|m|mos)?", "determinou", "resolve(?:r|m|mos)?", "resolveu",
                     "institui(?:r|do|da|m|mos|u)?", "revoga(?:r|do|da|m|mos)?", "revogou",
@@ -604,13 +604,14 @@ function extratorToulmin(textoBase, radarDinamico) {
         }
     ];
 
-    // =========================================================
+   // =========================================================
     // 3. EXECUÇÃO DA CADEIA (Pipeline)
     // =========================================================
     for (let motor of motoresPLN) {
         let match = motor.detector(textoLimpo);
         if (match) {
-            let resultado = motor.extrator(textoLimpo, match);
+            // CHANGE THIS LINE: Pass the radar explicitly to the engine
+            let resultado = motor.extrator(textoLimpo, match, radarDinamico);
             if (resultado && resultado.length > 0) {
                 return resultado;
             }
@@ -1195,6 +1196,7 @@ function extratorToulmin(textoBase, radarDinamico) {
 </body>
 
 </html>
+
 
 
 
