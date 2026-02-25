@@ -319,10 +319,10 @@ async function processarDossie() {
     loader.classList.remove('hidden');
 
     try {
-        let textoOficialAcumulado = "";
+                let textoOficialAcumulado = "";
         let textoCriticaAcumulado = "";
-        let tipoDocumentoOficial = "Outro"; // Variável para guardar a chave
 
+        // 1. Apenas junta os textos nos seus devidos potes
         for (const doc of dossieDocumentos) {
             const textoExtraido = await lerArquivoTextoOPDF(doc); 
             if (doc.tipo.startsWith('oficial_')) {
@@ -331,6 +331,13 @@ async function processarDossie() {
                 textoCriticaAcumulado += textoExtraido + " \n\n ";
             }
         }
+
+        // 2. O MOMENTO MÁGICO: Gera o radar lendo o contraponto!
+        const radarDinamico = gerarRadarDinamico(textoCriticaAcumulado);
+
+        // 3. Dispara o extrator passando a Decisão e o Radar Teleguiado
+        dadosAuditoria.alternativas = extratorToulmin(textoOficialAcumulado, radarDinamico);
+
         
         // 1. PRÉ-PROCESSAMENTO BASE
         textoOficialAcumulado = preprocessarTexto(textoOficialAcumulado);
@@ -426,10 +433,49 @@ async function processarDossie() {
         // =====================================================================
         // MOTORES METODOLÓGICOS (Inteligência Dinâmica e Global)
         // =====================================================================
-        
+        function gerarRadarDinamico(textoCritica) {
+    // Se o auditor não enviou um documento de crítica, devolvemos o nosso Radar Universal
+    if (!textoCritica || textoCritica.trim().length === 0) {
+        return /obrig|ved|proib|instit|estabelec|garant|direit|dever|requisit|critéri|praz|valor|remunera|benefíci|acess|uso|norm|regr|alter|trabalho|jornada|híbrido|teletrabalho|presencial/i;
+    }
+
+    // 1. Dicionário de StopWords (Palavras a ignorar) e jargões inúteis
+    const stopWords = new Set([
+        "como", "para", "pelo", "pela", "sobre", "entre", "quando", "muito", "mais", "este", "esta", "isso", "esse", "essa", "aquele", "aquela", "mesmo", "mesma", "também", "ainda", "assim", "qual", "quais", "quem", "tudo", "nada", "cada", "qualquer", "onde", "aqui", "hoje", "ontem", "amanhã", "agora", "depois", "antes", "logo", "sempre", "nunca", "não", "sim", "porque", "pois", "então", "todavia", "contudo", "entretanto", "embora", "seja", "fosse", "sendo", "ter", "tem", "têm", "tinha", "terá", "terão", "ser", "são", "era", "será", "serão", "fazer", "faz", "fazem", "fez", "fará", "farão", "dizer", "diz", "dizem", "disse", "poder", "pode", "podem", "pôde", "dar", "dá", "dão", "deu", "ir", "vai", "vão", "foi",
+        "sindicato", "associação", "trabalhadores", "servidores", "ofício", "documento", "considerando", "artigo", "inciso", "parágrafo", "lei", "decreto", "resolução", "portaria"
+    ]);
+
+    // 2. Limpeza e Fatiamento da Crítica
+    let palavras = textoCritica.toLowerCase()
+        .replace(/[.,;:!?()\[\]{}"'“”‘’]/g, ' ')
+        .split(/\s+/)
+        .filter(p => p.length > 4 && !stopWords.has(p) && isNaN(p));
+
+    // 3. TF (Term Frequency) - Conta quantas vezes cada palavra foi dita
+    let frequencias = {};
+    for (let p of palavras) {
+        // Cortamos a última letra para agrupar plurais/singulares rudimentarmente (ex: "benefício" e "benefícios")
+        let raiz = p.substring(0, p.length - 1); 
+        frequencias[raiz] = (frequencias[raiz] || 0) + 1;
+    }
+
+    // 4. Elege o Top 12 das maiores "dores" da queixa
+    let topPalavras = Object.entries(frequencias)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 12)
+        .map(entry => entry[0]);
+
+    if (topPalavras.length === 0) {
+         return /obrig|ved|proib|instit|estabelec|garant|direit|dever|requisit|critéri|praz|valor|remunera|benefíci|acess|uso|norm|regr|alter/i;
+    }
+
+    // 5. Transforma as dores num Radar Dinâmico (ex: /teletrabalh|percentu|cort/i)
+    return new RegExp(topPalavras.join("|"), "i");
+}
+
     
         
-function extratorToulmin(textoBase) {
+function extratorToulmin(textoBase, radarDinamico) {
     // =========================================================
     // 1. SANITIZAÇÃO UNIVERSAL (Limpeza de OCR e PDF)
     // =========================================================
@@ -467,7 +513,7 @@ function extratorToulmin(textoBase) {
                 }
                 
                 if (validos.length > 0) {
-                    const radarImpacto = /obrig|ved|proib|instit|estabelec|garant|direit|dever|requisit|critéri|praz|valor|remunera|benefíci|acess|uso|norm|regr|alter|trabalho|jornada|híbrido|teletrabalho|presencial|limita|exced/i;
+                    const radarImpacto = radarDinamico; 
                     let dispositivosFocados = validos.filter(d => radarImpacto.test(d.texto));
                     let selecao = dispositivosFocados.length > 0 ? dispositivosFocados.slice(0, 3) : validos.slice(0, 3);
                     
@@ -516,7 +562,7 @@ function extratorToulmin(textoBase) {
                 
                 if (validos.length > 0) {
                     // ATUALIZADO: Radar Universal de Impacto
-                    const palavras = /obrig|ved|proib|instit|estabelec|garant|direit|dever|requisit|critéri|praz|valor|remunera|benefíci|acess|uso|norm|regr|alter|trabalho|jornada|híbrido/i;
+                    const palavras = radarDinamico;
                     let melhor = validos.find(d => palavras.test(d) && d.length < 350) || validos[0];
                     return [`<strong>Alegação Deliberativa (Decisão Colegiada):</strong> ${melhor.substring(0, 300)}...`];
                 }
@@ -554,7 +600,7 @@ function extratorToulmin(textoBase) {
                 
                 if (validos.length > 0) {
                     // ATUALIZADO: Radar Universal de Impacto
-                    const palavras = /obrig|ved|proib|instit|estabelec|garant|direit|dever|requisit|critéri|praz|valor|remunera|benefíci|acess|uso|norm|regr|alter|trabalho|jornada|híbrido/i;
+                    const palavras = radarDinamico;
                     let melhor = validos.find(a => palavras.test(a) && a.length < 350) || validos[0];
                     return [`<strong>Alegação Central (Narrativa Corporativa):</strong> ${melhor.substring(0, 300)}...`];
                 }
@@ -1154,6 +1200,7 @@ function extratorToulmin(textoBase) {
 </body>
 
 </html>
+
 
 
 
