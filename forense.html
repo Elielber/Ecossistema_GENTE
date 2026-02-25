@@ -585,109 +585,6 @@ async function processarDossie() {
                 const atosCorporativos = [
                     "determina(?:r|do|da|m|mos)?", "determinou", "resolve(?:r|m|mos)?", "resolveu",
                     "institui(?:r|do|da|m|mos|u)?", "revoga(?:r|do|da|m|mos)?", "revogou",
-function extratorToulmin(textoBase) {
-    // =========================================================
-    // 1. SANITIZAÇÃO UNIVERSAL (Limpeza de OCR e PDF)
-    // =========================================================
-    let textoLimpo = textoBase.replace(/\s+/g, " ")
-                              .replace(/f\s+i\s+c/gi, "fic")
-                              .replace(/f\s+i\s+n/gi, "fin")
-                              .replace(/e\s+s\s+p\s+e\s+c\s+í\s+f\s+i\s+c\s+a/gi, "específica");
-
-    const clichesAdministrativos = /entra em vigor na data|disposições em contrário|casos omissos|revogam-se|publique-se|cumpra-se|data de (sua )?publicação|destinatário e pode conter|informações confidenciais|protegid[ao]s por sigilo/i;
-
-    // =========================================================
-    // 2. A CADEIA DE RESPONSABILIDADE (Array de Motores)
-    // =========================================================
-    const motoresPLN = [
-        
-        // --- MOTOR 1: NORMATIVO (O Estado) - ALTA PRECISÃO ---
-        {
-            nome: "Motor Normativo",
-            detector: (t) => t.match(/(?:^|\s)(RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)(?:\s*[:-]?\s*)(.*)/i),
-            extrator: (t, match) => {
-                let nucleo = match[2].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
-                
-                const regexDispositivos = /(Art\.\s*\d+[a-zºo\.\-]*|§\s*\d+[a-zºo\.\-]*|\b[IVXLCDM]+\s*[-–—])\s*(.*?)(?=(?:Art\.\s*\d+|§\s*\d+|\b[IVXLCDM]+\s*[-–—]|$))/gi;
-                let validos = [];
-                let m;
-                
-                while ((m = regexDispositivos.exec(nucleo)) !== null) {
-                    let rotulo = m[1].trim(); 
-                    let textoDispositivo = m[2].trim();
-                    let ehCascaLegislativa = /passa(?:m)? a vigorar|acrescido ao referido|seguinte redação|seguinte alteração/i.test(textoDispositivo);
-                    
-                    if (textoDispositivo.length > 20 && !clichesAdministrativos.test(textoDispositivo) && !ehCascaLegislativa) {
-                        validos.push({ rotulo: rotulo, texto: textoDispositivo });
-                    }
-                }
-                
-                if (validos.length > 0) {
-                    const radarImpacto = /obrig|ved|proib|instit|estabelec|garant|direit|dever|requisit|critéri|praz|valor|remunera|benefíci|acess|uso|norm|regr|alter|trabalho|jornada|híbrido|teletrabalho|presencial|limita|exced/i;
-                    let dispositivosFocados = validos.filter(d => radarImpacto.test(d.texto));
-                    let selecao = dispositivosFocados.length > 0 ? dispositivosFocados.slice(0, 3) : validos.slice(0, 3);
-                    
-                    return selecao.map(d => `<strong>${d.rotulo} (Alegação Normativa):</strong> ` + d.texto.substring(0, 400) + (d.texto.length > 400 ? "..." : ""));
-                }
-                return null;
-            }
-        },
-
-        // --- MOTOR 2: CONTRATUAL E SINDICAL (O Pacto) ---
-        {
-            nome: "Motor Contratual",
-            detector: (t) => t.match(/\bCLÁUSULA\b/i) && t.match(/\b(?:ACORDO|CONVENÇÃO|CONTRATO|TERMO|PACTO)\b/i),
-            extrator: (t) => {
-                const regexClausulas = /Cláusula\s+(?:Primeira|Segunda|Terceira|Quarta|Quinta|Sexta|Sétima|Oitava|Nona|Décima|\d+)[a-zºo\.\-]*\s*[:-]?\s*(.*?)(?=(?:Cláusula\s+|$))/gi;
-                let validos = [];
-                let m;
-                while ((m = regexClausulas.exec(t)) !== null) {
-                    if (m[1].trim().length > 20 && !clichesAdministrativos.test(m[1])) {
-                        let rotulo = m[0].match(/Cláusula\s+[^\s:-]+/i)[0];
-                        validos.push(`<strong>${rotulo} (Alegação Contratual):</strong> ` + m[1].trim().substring(0, 300) + "...");
-                    }
-                }
-                return validos.length > 0 ? validos.slice(0, 2) : null;
-            }
-        },
-
-        // --- MOTOR 3: DELIBERATIVO E COLEGIADO (A Votação) ---
-        {
-            nome: "Motor Colegiado",
-            detector: (t) => t.match(/\b(?:Ata da|Aos.*?dias do mês|Reunião Ordinária|Assembleia Geral|Sessão Plenária|Conselho de|Diretoria Executiva|DIREX)\b/i),
-            extrator: (t) => {
-                const verbosConsenso = ["aprovou", "aprovaram", "deliberou", "deliberaram", "decidiu", "decidiram"];
-                const regexConsenso = new RegExp(`(?:^|\\s)(?:${verbosConsenso.join("|")})(?=\\s|[.,;:!?]|$)`, "i");
-                const sentencas = t.split(/(?<=[.;:!])\s+/);
-                let validos = [];
-
-                for (let s of sentencas) {
-                    s = s.trim();
-                    if (s.length < 20 || clichesAdministrativos.test(s) || s.toLowerCase().includes("considerando")) continue;
-                    if (s.includes("@") || s.includes("|") || s.match(/\bEdição n/i) || s.match(/(?:^|\s)De:\s/i) || s.match(/(?:^|\s)Para:\s/i)) continue;
-                    if (regexConsenso.test(s)) {
-                        validos.push(s.replace(/^[-•*|]\s*/, "").charAt(0).toUpperCase() + s.slice(1));
-                    }
-                }
-                
-                if (validos.length > 0) {
-                    // ATUALIZADO: Radar Universal de Impacto
-                    const palavras = /obrig|ved|proib|instit|estabelec|garant|direit|dever|requisit|critéri|praz|valor|remunera|benefíci|acess|uso|norm|regr|alter|trabalho|jornada|híbrido/i;
-                    let melhor = validos.find(d => palavras.test(d) && d.length < 350) || validos[0];
-                    return [`<strong>Alegação Deliberativa (Decisão Colegiada):</strong> ${melhor.substring(0, 300)}...`];
-                }
-                return null;
-            }
-        },
-
-        // --- MOTOR 4: GERENCIALISTA E CORPORATIVO (A Narrativa) ---
-        {
-            nome: "Motor Corporativo",
-            detector: (t) => true,
-            extrator: (t) => {
-                const atosCorporativos = [
-                    "determina(?:r|do|da|m|mos)?", "determinou", "resolve(?:r|m|mos)?", "resolveu",
-                    "institui(?:r|do|da|m|mos|u)?", "revoga(?:r|do|da|m|mos)?", "revogou",
                     "prorroga(?:r|do|da|m|mos)?", "prorrogou", "aprova(?:r|da|do|m|mos)?", "aprovou",
                     "estabelece(?:r|m|mos|u)?", "decid(?:e|iu|ir|em|imos)", "anuncia(?:r|m|mos|u)?",
                     "comunica(?:r|m|mos)?", "comunicou", "informa(?:r|m|mos)?", "informou",
@@ -709,8 +606,7 @@ function extratorToulmin(textoBase) {
                 }
                 
                 if (validos.length > 0) {
-                    // ATUALIZADO: Radar Universal de Impacto
-                    const palavras = /obrig|ved|proib|instit|estabelec|garant|direit|dever|requisit|critéri|praz|valor|remunera|benefíci|acess|uso|norm|regr|alter|trabalho|jornada|híbrido/i;
+                    const palavras = /trabalho|presencial|remoto|híbrido|modelo|regime|jornada/i;
                     let melhor = validos.find(a => palavras.test(a) && a.length < 350) || validos[0];
                     return [`<strong>Alegação Central (Narrativa Corporativa):</strong> ${melhor.substring(0, 300)}...`];
                 }
@@ -726,6 +622,8 @@ function extratorToulmin(textoBase) {
         let match = motor.detector(textoLimpo);
         if (match) {
             let resultado = motor.extrator(textoLimpo, match);
+            // Se o motor conseguiu extrair o argumento, devolve e encerra o algoritmo.
+            // Se falhou (retornou null), o laço continua para o próximo motor da esteira.
             if (resultado && resultado.length > 0) {
                 return resultado;
             }
@@ -1310,7 +1208,6 @@ function extratorToulmin(textoBase) {
 </body>
 
 </html>
-
 
 
 
