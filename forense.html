@@ -434,15 +434,18 @@ async function processarDossie() {
                               .replace(/f\s+i\s+n/gi, "fin")
                               .replace(/e\s+s\s+p\s+e\s+c\s+í\s+f\s+i\s+c\s+a/gi, "específica");
 
-    const clichesAdministrativos = /entra em vigor|disposições em contrário|casos omissos|revogam-se|publique-se|cumpra-se|data de (sua )?publicação/i;
+    // Super Filtro Anti-Ruído: Agora destrói também os avisos legais e rodapés de e-mail corporativo!
+    const clichesAdministrativos = /entra em vigor|disposições em contrário|casos omissos|revogam-se|publique-se|cumpra-se|data de (sua )?publicação|destinatário e pode conter|informações confidenciais|protegid[ao]s por sigilo/i;
 
     // =========================================================
     // TENTATIVA 1: MOTOR NORMATIVO (Decretos, Portarias, Resoluções)
     // =========================================================
-    const marcoDecisao = textoLimpo.match(/\b(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\b\s*[:-]?\s*(.*)/i);
+    // Substituímos o \b por (?:^|\s) para não ser enganado por acentos
+    const marcoDecisao = textoLimpo.match(/(?:^|\s)(RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)(?:\s*[:-]?\s*)(.*)/i);
     
     if (marcoDecisao) {
-        let nucleoDecisorio = marcoDecisao[1].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
+        // Agora o resto do texto está no índice [2] devido ao agrupamento do verbo
+        let nucleoDecisorio = marcoDecisao[2].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
         
         const regexArtigos = /Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?\s*(.*?)(?=(?:Art\.\s*\d+)|$)/gi;
         let artigosValidos = [];
@@ -455,7 +458,6 @@ async function processarDossie() {
                 artigosValidos.push(`<strong>${rotulo} (Alegação Normativa):</strong> ` + textoArtigo.substring(0, 300) + (textoArtigo.length > 300 ? "..." : ""));
             }
         }
-        // Se encontrou artigos de verdade, devolve e encerra o processo!
         if (artigosValidos.length > 0) return artigosValidos.slice(0, 2); 
     }
 
@@ -470,7 +472,8 @@ async function processarDossie() {
         "passará a", "passaremos a", "irá implementar", "irão implementar"
     ];
     
-    const regexVerbos = new RegExp(`\\b(?:${atosCorporativos.join("|")})\\b`, "i");
+    // O pulo do gato: Obriga o verbo a terminar com espaço ou pontuação, impedindo falsos positivos!
+    const regexVerbos = new RegExp(`(?:^|\\s)(?:${atosCorporativos.join("|")})(?=\\s|[.,;:!?]|$)`, "i");
     const sentencas = textoLimpo.split(/(?<=[.;:!])\s+/);
     let alegacoesValidas = [];
 
@@ -478,7 +481,7 @@ async function processarDossie() {
         sentenca = sentenca.trim();
         
         if (sentenca.length < 20 || clichesAdministrativos.test(sentenca) || sentenca.toLowerCase().includes("considerando")) continue;
-        if (sentenca.includes("@") || sentenca.includes("|") || sentenca.match(/\bEdição n/i) || sentenca.match(/\bDe:\s/i) || sentenca.match(/\bPara:\s/i)) continue;
+        if (sentenca.includes("@") || sentenca.includes("|") || sentenca.match(/\bEdição n/i) || sentenca.match(/(?:^|\s)De:\s/i) || sentenca.match(/(?:^|\s)Para:\s/i)) continue;
 
         if (regexVerbos.test(sentenca)) {
             sentenca = sentenca.replace(/^[-•*|]\s*/, ""); 
@@ -501,11 +504,9 @@ async function processarDossie() {
         return [ `<strong>Alegação Central (Narrativa Corporativa):</strong> ${textoFormatado}` ];
     }
 
-    // =========================================================
-    // FALLBACK FINAL (Ato Implícito)
-    // =========================================================
     return ["Ato impositivo implícito. Requer revisão manual do escopo decisório."];
 }
+
 		
         function extratorBardin(textoBase) {
             const textoNorm = normalizarParaContagem(textoBase);
@@ -1078,6 +1079,7 @@ async function processarDossie() {
 </body>
 
 </html>
+
 
 
 
