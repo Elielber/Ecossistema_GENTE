@@ -48,25 +48,6 @@
         </select>
     </div>
 
-    <div>
-        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Estrutura do Texto (Motor de Extração):</label>
-        <select id="doc-subtipo" class="w-full text-sm p-2 border border-slate-300 rounded-md bg-white text-slate-700 focus:outline-none focus:border-slate-500">
-            <optgroup label="Setor Público (Normativos)">
-                <option value="Decreto / Lei">Decreto / Lei (Foco em Artigos/Parágrafos)</option>
-                <option value="Portaria / Resolução">Portaria / Resolução (Foco em Artigos/Parágrafos)</option>
-            </optgroup>
-            <optgroup label="Setor Privado / Narrativo (Corporativos)">
-                <option value="Carta / Comunicado">Carta / Comunicado (Foco em Sentenças da Liderança)</option>
-                <option value="Ata / Memorando">Ata / Memorando (Foco em Sentenças e Ações)</option>
-            </optgroup>
-            <optgroup label="Geral">
-                <option value="Outro">Outro / Manifesto (Motor Flexível)</option>
-            </optgroup>
-        </select>
-        <p class="text-[9px] text-slate-400 mt-1">A estrutura define o algoritmo de Processamento de Linguagem (PLN) que será utilizado.</p>
-    </div>
-
-</div>
                     
                     <div class="mb-3">
                         <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Arquivo (PDF ou TXT):</label>
@@ -370,7 +351,7 @@ async function processarDossie() {
         }
 
         // 3. EXECUÇÃO METODOLÓGICA
-       dadosAuditoria.alternativas = extratorToulmin(textoOficialAcumulado, tipoDocumentoOficial); // Toulmin tem sua própria blindagem interna
+       dadosAuditoria.alternativas = extratorToulmin(textoOficialAcumulado); // Toulmin tem sua própria blindagem interna
         dadosAuditoria.criteriosDirex = extratorBardin(textoOficialParaBardin); // Bardin agora recebe só a decisão estrita!
         dadosAuditoria.alertas = extratorFairclough(textoOficialAcumulado, textoCriticaAcumulado); // Fairclough blinda internamente
 
@@ -449,8 +430,8 @@ async function processarDossie() {
         // MOTORES METODOLÓGICOS (Inteligência Dinâmica e Global)
         // =====================================================================
         
-    function extratorToulmin(textoBase, tipoDoc) {
-    // 1. SANITIZAÇÃO COMUM A TODOS
+    function extratorToulmin(textoBase) {
+    // 1. SANITIZAÇÃO COMUM
     let textoLimpo = textoBase.replace(/\s+/g, " ")
                               .replace(/f\s+i\s+c/gi, "fic")
                               .replace(/f\s+i\s+n/gi, "fin")
@@ -459,17 +440,13 @@ async function processarDossie() {
     const clichesAdministrativos = /entra em vigor|disposições em contrário|casos omissos|revogam-se|publique-se|cumpra-se|data de (sua )?publicação/i;
 
     // =========================================================
-    // ESTRATÉGIA A: DOCUMENTOS NORMATIVOS (Leis, Decretos, Portarias, Resoluções)
+    // TENTATIVA 1: MOTOR NORMATIVO (Decretos, Portarias, Resoluções)
     // =========================================================
-    if (tipoDoc === "Decreto / Lei" || tipoDoc === "Portaria / Resolução") {
-        let nucleoDecisorio = textoLimpo;
-        // Corta Ementa e Considerandos
-        const marcoDecisao = textoLimpo.match(/\b(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\b\s*[:-]?\s*(.*)/i);
-        if (marcoDecisao && marcoDecisao[1].length > 50) {
-            // Corta assinaturas e rodapés
-            nucleoDecisorio = marcoDecisao[1].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
-        }
-
+    const marcoDecisao = textoLimpo.match(/\b(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\b\s*[:-]?\s*(.*)/i);
+    
+    if (marcoDecisao) {
+        let nucleoDecisorio = marcoDecisao[1].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
+        
         const regexArtigos = /Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?\s*(.*?)(?=(?:Art\.\s*\d+)|$)/gi;
         let artigosValidos = [];
         let matchArt;
@@ -481,56 +458,55 @@ async function processarDossie() {
                 artigosValidos.push(`<strong>${rotulo} (Alegação Normativa):</strong> ` + textoArtigo.substring(0, 300) + (textoArtigo.length > 300 ? "..." : ""));
             }
         }
-        if (artigosValidos.length > 0) return artigosValidos.slice(0, 2); // Retorna os 2 primeiros artigos reais
+        // Se encontrou artigos de verdade, devolve e encerra o processo!
+        if (artigosValidos.length > 0) return artigosValidos.slice(0, 2); 
     }
 
     // =========================================================
-    // ESTRATÉGIA B: DOCUMENTOS CORPORATIVOS E NARRATIVOS (Cartas, Comunicados, Atas, Memorandos)
+    // TENTATIVA 2: MOTOR CORPORATIVO (Se falhar a Tentativa 1)
     // =========================================================
-    else if (tipoDoc === "Carta / Comunicado" || tipoDoc === "Ata / Memorando" || tipoDoc === "Outro" || !tipoDoc) {
-        
-        const atosCorporativos = [
-            "determina(?:r|do|da|m|mos)?", "resolve(?:r|m|mos)?", "delibera(?:r|do|da|m|mos)?",
-            "institui(?:r|do|da|m|mos)?", "revoga(?:r|do|da|m|mos)?", "prorroga(?:r|do|da|m|mos)?",
-            "aprova(?:r|da|do|m|mos|u)?", "estabelece(?:r|m|mos)?", "decide(?:u|r|m)?", 
-            "decidimos", "anuncia(?:mos)?", "comunica(?:mos)?", "informa(?:mos)?", 
-            "passará a", "passaremos a", "irá implementar", "irão implementar"
-        ];
-        
-        const regexVerbos = new RegExp(`\\b(?:${atosCorporativos.join("|")})\\b`, "i");
-        const sentencas = textoLimpo.split(/(?<=[.;:!])\s+/);
-        let alegacoesValidas = [];
+    const atosCorporativos = [
+        "determina(?:r|do|da|m|mos)?", "resolve(?:r|m|mos)?", "delibera(?:r|do|da|m|mos)?",
+        "institui(?:r|do|da|m|mos)?", "revoga(?:r|do|da|m|mos)?", "prorroga(?:r|do|da|m|mos)?",
+        "aprova(?:r|da|do|m|mos|u)?", "estabelece(?:r|m|mos)?", "decide(?:u|r|m)?", 
+        "decidimos", "anuncia(?:mos)?", "comunica(?:mos)?", "informa(?:mos)?", 
+        "passará a", "passaremos a", "irá implementar", "irão implementar"
+    ];
+    
+    const regexVerbos = new RegExp(`\\b(?:${atosCorporativos.join("|")})\\b`, "i");
+    const sentencas = textoLimpo.split(/(?<=[.;:!])\s+/);
+    let alegacoesValidas = [];
 
-        for (let sentenca of sentencas) {
-            sentenca = sentenca.trim();
-            // Limpa ruído de e-mail e clichês
-            if (sentenca.length < 20 || clichesAdministrativos.test(sentenca) || sentenca.toLowerCase().includes("considerando")) continue;
-            if (sentenca.includes("@") || sentenca.match(/\bDe:\s/i) || sentenca.match(/\bPara:\s/i)) continue;
-
-            if (regexVerbos.test(sentenca)) {
-                sentenca = sentenca.replace(/^[-•*|]\s*/, ""); 
-                sentenca = sentenca.charAt(0).toUpperCase() + sentenca.slice(1);
-                alegacoesValidas.push(sentenca);
-            }
-        }
+    for (let sentenca of sentencas) {
+        sentenca = sentenca.trim();
         
-        if (alegacoesValidas.length > 0) {
-            // Heurística de foco: Prioriza palavras de impacto (ex: trabalho, presencial, híbrido, aprova)
-            const palavrasChave = /trabalho|presencial|remoto|híbrido|modelo|regime|jornada/i;
-            let melhorAlegação = alegacoesValidas[0]; // Pega a primeira que achou
-            
-            for (let a of alegacoesValidas) {
-                if (palavrasChave.test(a) && a.length < 350) {
-                    melhorAlegação = a;
-                    break;
-                }
-            }
-            let textoFormatado = melhorAlegação.substring(0, 300) + (melhorAlegação.length > 300 ? "..." : "");
-            return [ `<strong>Alegação Central (Narrativa Corporativa):</strong> ${textoFormatado}` ];
+        if (sentenca.length < 20 || clichesAdministrativos.test(sentenca) || sentenca.toLowerCase().includes("considerando")) continue;
+        if (sentenca.includes("@") || sentenca.includes("|") || sentenca.match(/\bEdição n/i) || sentenca.match(/\bDe:\s/i) || sentenca.match(/\bPara:\s/i)) continue;
+
+        if (regexVerbos.test(sentenca)) {
+            sentenca = sentenca.replace(/^[-•*|]\s*/, ""); 
+            sentenca = sentenca.charAt(0).toUpperCase() + sentenca.slice(1);
+            alegacoesValidas.push(sentenca);
         }
     }
+    
+    if (alegacoesValidas.length > 0) {
+        const palavrasChave = /trabalho|presencial|remoto|híbrido|modelo|regime|jornada/i;
+        let melhorAlegação = alegacoesValidas[0]; 
+        
+        for (let a of alegacoesValidas) {
+            if (palavrasChave.test(a) && a.length < 350) {
+                melhorAlegação = a;
+                break;
+            }
+        }
+        let textoFormatado = melhorAlegação.substring(0, 300) + (melhorAlegação.length > 300 ? "..." : "");
+        return [ `<strong>Alegação Central (Narrativa Corporativa):</strong> ${textoFormatado}` ];
+    }
 
-    // Se falhar em ambas as estratégias (ou não encontrar nada válido)
+    // =========================================================
+    // FALLBACK FINAL (Ato Implícito)
+    // =========================================================
     return ["Ato impositivo implícito. Requer revisão manual do escopo decisório."];
 }
 		
@@ -1105,6 +1081,7 @@ async function processarDossie() {
 </body>
 
 </html>
+
 
 
 
