@@ -494,35 +494,45 @@ async function processarDossie() {
         // ---------------------------------------------------------
         // GRUPO 2: INSTRUMENTOS DE PACTUAÇÃO (Contratos, ACT, CCT, TAC)
         // ---------------------------------------------------------
-        {
-            nome: "Motor Contratual",
-            
-            // DETECTOR: Confirma se é um documento recíproco baseado em Cláusulas
-            detector: (t) => t.match(/\bCLÁUSULA\b/i) && t.match(/\b(?:ACORDO|CONVENÇÃO|CONTRATO|TERMO|PACTO)\b/i),
-            
-            // EXTRATOR: Isola as obrigações e concessões pactuadas
-            extrator: (t) => {
-                // Esta RegEx é inteligente: apanha "Cláusula 1", "Cláusula 1ª", e "Cláusula Primeira"
-                const regexClausulas = /Cláusula\s+(?:Primeira|Segunda|Terceira|Quarta|Quinta|Sexta|Sétima|Oitava|Nona|Décima|\d+)[a-zºo\.\-]*\s*[:-]?\s*(.*?)(?=(?:Cláusula\s+|$))/gi;
-                let clausulasValidas = [];
+                   {
+            nome: "Motor Normativo",
+            detector: (t) => t.match(/(?:^|\s)(RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)(?:\s*[:-]?\s*)(.*)/i),
+            extrator: (t, match) => {
+                let nucleo = match[2].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
+                
+                // 1. Fatiador Cirúrgico: Agora corta em Artigos (Art.), Parágrafos (§) E Incisos (I -, II -, III -)
+                const regexDispositivos = /(Art\.\s*\d+[a-zºo\.\-]*|§\s*\d+[a-zºo\.\-]*|\b[IVXLCDM]+\s*[-–—])\s*(.*?)(?=(?:Art\.\s*\d+|§\s*\d+|\b[IVXLCDM]+\s*[-–—]|$))/gi;
+                let validos = [];
                 let m;
                 
-                while ((m = regexClausulas.exec(t)) !== null) {
-                    let textoClausula = m[1].trim();
+                while ((m = regexDispositivos.exec(nucleo)) !== null) {
+                    let rotulo = m[1].trim(); // Pega o rótulo exato (ex: "Art. 5º", "III -")
+                    let textoDispositivo = m[2].trim();
                     
-                    // Valida se a cláusula tem substância e não é apenas um clichê de foro ou assinatura
-                    if (textoClausula.length > 20 && !clichesAdministrativos.test(textoClausula)) {
-                        // Extrai o nome exato (ex: "Cláusula Segunda") para o rótulo
-                        let rotulo = m[0].match(/Cláusula\s+[^\s:-]+/i)[0];
-                        
-                        clausulasValidas.push(`<strong>${rotulo} (Alegação Contratual):</strong> ` + textoClausula.substring(0, 300) + (textoClausula.length > 300 ? "..." : ""));
+                    // 2. Filtro de Casca Legislativa (Adicionado "seguinte alteração")
+                    let ehCascaLegislativa = /passa(?:m)? a vigorar|acrescido ao referido|seguinte redação|seguinte alteração/i.test(textoDispositivo);
+                    
+                    if (textoDispositivo.length > 20 && !clichesAdministrativos.test(textoDispositivo) && !ehCascaLegislativa) {
+                        validos.push({ rotulo: rotulo, texto: textoDispositivo });
                     }
                 }
                 
-                // Se encontrar obrigações válidas, devolve as duas primeiras
-                return clausulasValidas.length > 0 ? clausulasValidas.slice(0, 2) : null;
+                if (validos.length > 0) {
+                    // 3. RADAR DE IMPACTO UNIVERSAL (Aprimorado com termos de limitação e teletrabalho)
+                    const radarImpacto = /obrig|ved|proib|instit|estabelec|garant|direit|dever|requisit|critéri|praz|valor|remunera|benefíci|acess|uso|norm|regr|alter|trabalho|jornada|híbrido|teletrabalho|presencial|limita|exced/i;
+                    
+                    let dispositivosFocados = validos.filter(d => radarImpacto.test(d.texto));
+                    
+                    // Mostra até 3 dispositivos para garantir que capta as minúcias
+                    let selecao = dispositivosFocados.length > 0 ? dispositivosFocados.slice(0, 3) : validos.slice(0, 3);
+                    
+                    // Aumentamos o limite para 400 caracteres para não cortar a regra a meio
+                    return selecao.map(d => `<strong>${d.rotulo} (Alegação Normativa):</strong> ` + d.texto.substring(0, 400) + (d.texto.length > 400 ? "..." : ""));
+                }
+                return null;
             }
         },
+
         
         // ---------------------------------------------------------
         // GRUPO 3: DISCURSO DELIBERATIVO E COLEGIADO (Atas, Assembleias, Conselhos)
@@ -1210,6 +1220,7 @@ async function processarDossie() {
 </body>
 
 </html>
+
 
 
 
