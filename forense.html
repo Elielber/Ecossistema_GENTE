@@ -38,22 +38,35 @@
                     Classifique e carregue os documentos que compõem esta decisão. O Forense agrupará ofícios e votos como <strong>"Tese Oficial"</strong>, e artigos ou manifestos como <strong>"Contraponto/Contexto"</strong>.
                 </p>
                 
-                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-4">
-                    <div class="mb-3">
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Classificação do Documento:</label>
-                        <select id="doc-classificacao" class="w-full text-sm p-2 border border-slate-300 rounded-md bg-white text-slate-700 focus:outline-none focus:border-slate-500">
-                            <optgroup label="Documentos Oficiais (Tese)">
-                                <option value="oficial_voto">Voto de Diretoria</option>
-                                <option value="oficial_memorando">Memorando / Portaria</option>
-                                <option value="oficial_oficio">Ofício</option>
-                            </optgroup>
-                            <optgroup label="Contexto e Contraponto (Antítese)">
-                                <option value="critica_abaixoassinado">Abaixo-assinado / Manifesto</option>
-                                <option value="critica_artigo">Artigo Técnico / Estudo</option>
-                                <option value="critica_publicidade">Publicidade / Matéria</option>
-                            </optgroup>
-                        </select>
-                    </div>
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-4 space-y-4">
+    
+    <div>
+        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Papel na Auditoria (Posição):</label>
+        <select id="doc-classificacao" class="w-full text-sm p-2 border border-slate-300 rounded-md bg-white text-slate-700 focus:outline-none focus:border-slate-500">
+            <option value="oficial_">Documento Oficial (Tese / Decisão da Gestão)</option>
+            <option value="critica_">Documento de Contraponto (Antítese / Manifesto)</option>
+        </select>
+    </div>
+
+    <div>
+        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Estrutura do Texto (Motor de Extração):</label>
+        <select id="doc-subtipo" class="w-full text-sm p-2 border border-slate-300 rounded-md bg-white text-slate-700 focus:outline-none focus:border-slate-500">
+            <optgroup label="Setor Público (Normativos)">
+                <option value="Decreto / Lei">Decreto / Lei (Foco em Artigos/Parágrafos)</option>
+                <option value="Portaria / Resolução">Portaria / Resolução (Foco em Artigos/Parágrafos)</option>
+            </optgroup>
+            <optgroup label="Setor Privado / Narrativo (Corporativos)">
+                <option value="Carta / Comunicado">Carta / Comunicado (Foco em Sentenças da Liderança)</option>
+                <option value="Ata / Memorando">Ata / Memorando (Foco em Sentenças e Ações)</option>
+            </optgroup>
+            <optgroup label="Geral">
+                <option value="Outro">Outro / Manifesto (Motor Flexível)</option>
+            </optgroup>
+        </select>
+        <p class="text-[9px] text-slate-400 mt-1">A estrutura define o algoritmo de Processamento de Linguagem (PLN) que será utilizado.</p>
+    </div>
+
+</div>
                     
                     <div class="mb-3">
                         <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Arquivo (PDF ou TXT):</label>
@@ -253,6 +266,7 @@
         // =====================================================================
         function adicionarDocumento() {
             const inputClassificacao = document.getElementById('doc-classificacao');
+			const subtipo = document.getElementById('doc-subtipo').value;
             const inputArquivo = document.getElementById('doc-arquivo');
             const file = inputArquivo.files[0];
 
@@ -269,6 +283,7 @@
                 id: Date.now(),
                 file: file,
                 tipo: tipo,
+				subtipo: subtipo,
                 nomeAmigavel: nomeClassificacao,
                 nomeArquivo: file.name
             });
@@ -327,11 +342,13 @@ async function processarDossie() {
     try {
         let textoOficialAcumulado = "";
         let textoCriticaAcumulado = "";
+        let tipoDocumentoOficial = "Outro"; // Variável para guardar a chave
 
         for (const doc of dossieDocumentos) {
             const textoExtraido = await lerArquivoTextoOPDF(doc); 
             if (doc.tipo.startsWith('oficial_')) {
                 textoOficialAcumulado += textoExtraido + " \n\n ";
+                tipoDocumentoOficial = doc.subtipo; // Captura a classificação do usuário!
             } else if (doc.tipo.startsWith('critica_')) {
                 textoCriticaAcumulado += textoExtraido + " \n\n ";
             }
@@ -432,82 +449,88 @@ async function processarDossie() {
         // MOTORES METODOLÓGICOS (Inteligência Dinâmica e Global)
         // =====================================================================
         
-     function extratorToulmin(textoBase) {
-    // 1. SANITIZAÇÃO
+    function extratorToulmin(textoBase, tipoDoc) {
+    // 1. SANITIZAÇÃO COMUM A TODOS
     let textoLimpo = textoBase.replace(/\s+/g, " ")
                               .replace(/f\s+i\s+c/gi, "fic")
                               .replace(/f\s+i\s+n/gi, "fin")
                               .replace(/e\s+s\s+p\s+e\s+c\s+í\s+f\s+i\s+c\s+a/gi, "específica");
 
-    // 2. ISOLA O DISPOSITIVO (Com \b para evitar falsos positivos como "determinados")
-    let nucleoDecisorio = textoLimpo;
-    const marcoDecisao = textoLimpo.match(/\b(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\b\s*[:-]?\s*(.*)/i);
-    
-    if (marcoDecisao && marcoDecisao[1].length > 50) {
-        nucleoDecisorio = marcoDecisao[1].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
-    }
-
-    // 3. FILTRO PROCEDIMENTAL
     const clichesAdministrativos = /entra em vigor|disposições em contrário|casos omissos|revogam-se|publique-se|cumpra-se|data de (sua )?publicação/i;
 
-    // 4. CAPTURA DE ARTIGOS NORMATIVOS (Setor Público)
-    const regexArtigos = /Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?\s*(.*?)(?=(?:Art\.\s*\d+)|$)/gi;
-    let artigosValidos = [];
-    let matchArt;
-    
-    while ((matchArt = regexArtigos.exec(nucleoDecisorio)) !== null) {
-        let textoArtigo = matchArt[1].trim();
-        if (textoArtigo.length > 20 && !clichesAdministrativos.test(textoArtigo)) {
-            let rotulo = matchArt[0].match(/Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?/i)[0];
-            artigosValidos.push(`<strong>${rotulo} (Alegação Central):</strong> ` + textoArtigo.substring(0, 250) + (textoArtigo.length > 250 ? "..." : ""));
+    // =========================================================
+    // ESTRATÉGIA A: DOCUMENTOS NORMATIVOS (Leis, Decretos, Portarias, Resoluções)
+    // =========================================================
+    if (tipoDoc === "Decreto / Lei" || tipoDoc === "Portaria / Resolução") {
+        let nucleoDecisorio = textoLimpo;
+        // Corta Ementa e Considerandos
+        const marcoDecisao = textoLimpo.match(/\b(?:RESOLVE|DECRETA|DECIDE|DETERMINA|PROMULGA)\b\s*[:-]?\s*(.*)/i);
+        if (marcoDecisao && marcoDecisao[1].length > 50) {
+            // Corta assinaturas e rodapés
+            nucleoDecisorio = marcoDecisao[1].split(/(?:Belo Horizonte|São Paulo|Brasília|Rio de Janeiro|Data de Inserção|Prefeito|Ministr[ao]|Publique-se|Cumpra-se)/i)[0];
         }
-    }
-    
-    if (artigosValidos.length > 0) return artigosValidos.slice(0, 2); 
 
-    // 5. MOTOR CORPORATIVO (Análise de Sentenças)
-    const atosCorporativos = [
-        "determina(?:r|do|da|m|mos)?", "resolve(?:r|m|mos)?", "delibera(?:r|do|da|m|mos)?",
-        "institui(?:r|do|da|m|mos)?", "revoga(?:r|do|da|m|mos)?", "prorroga(?:r|do|da|m|mos)?",
-        "aprova(?:r|da|do|m|mos)?", "estabelece(?:r|m|mos)?", "decide(?:u|r|m)?", 
-        "decidimos", "anuncia(?:mos)?", "comunica(?:mos)?", "informa(?:mos)?", 
-        "passará a", "passaremos a", "irá implementar", "irão implementar"
-    ];
-    
-    // Divide o texto em sentenças completas baseadas na pontuação
-    const sentencas = nucleoDecisorio.split(/(?<=[.;:!])\s+/);
-    let alegacoesValidas = [];
-    const regexVerbos = new RegExp(`\\b(?:${atosCorporativos.join("|")})\\b`, "i");
-
-    for (let sentenca of sentencas) {
-        sentenca = sentenca.trim();
-        // Ignora frases curtas, clichês ou cabeçalhos de e-mail (ruído da CMB)
-        if (sentenca.length < 20 || clichesAdministrativos.test(sentenca) || sentenca.toLowerCase().includes("considerando")) continue;
-        if (sentenca.includes("@") || sentenca.toLowerCase().includes("de:") || sentenca.toLowerCase().includes("para:")) continue;
-
-        if (regexVerbos.test(sentenca)) {
-            sentenca = sentenca.replace(/^[-•*|]\s*/, ""); // Limpa marcadores
-            sentenca = sentenca.charAt(0).toUpperCase() + sentenca.slice(1);
-            alegacoesValidas.push(sentenca);
-        }
-    }
-    
-    if (alegacoesValidas.length > 0) {
-        // Heurística de Foco: Prioriza sentenças que falem do "trabalho" e não sejam gigantescas
-        const palavrasChave = /trabalho|presencial|remoto|híbrido|modelo|regime|jornada/i;
-        let melhorAlegação = alegacoesValidas[0]; 
+        const regexArtigos = /Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?\s*(.*?)(?=(?:Art\.\s*\d+)|$)/gi;
+        let artigosValidos = [];
+        let matchArt;
         
-        for (let a of alegacoesValidas) {
-            if (palavrasChave.test(a) && a.length < 350) {
-                melhorAlegação = a;
-                break;
+        while ((matchArt = regexArtigos.exec(nucleoDecisorio)) !== null) {
+            let textoArtigo = matchArt[1].trim();
+            if (textoArtigo.length > 20 && !clichesAdministrativos.test(textoArtigo)) {
+                let rotulo = matchArt[0].match(/Art\.\s*\d+(?:º|o|\.)?(?:[-.]?[A-Z])?/i)[0];
+                artigosValidos.push(`<strong>${rotulo} (Alegação Normativa):</strong> ` + textoArtigo.substring(0, 300) + (textoArtigo.length > 300 ? "..." : ""));
+            }
+        }
+        if (artigosValidos.length > 0) return artigosValidos.slice(0, 2); // Retorna os 2 primeiros artigos reais
+    }
+
+    // =========================================================
+    // ESTRATÉGIA B: DOCUMENTOS CORPORATIVOS E NARRATIVOS (Cartas, Comunicados, Atas, Memorandos)
+    // =========================================================
+    else if (tipoDoc === "Carta / Comunicado" || tipoDoc === "Ata / Memorando" || tipoDoc === "Outro" || !tipoDoc) {
+        
+        const atosCorporativos = [
+            "determina(?:r|do|da|m|mos)?", "resolve(?:r|m|mos)?", "delibera(?:r|do|da|m|mos)?",
+            "institui(?:r|do|da|m|mos)?", "revoga(?:r|do|da|m|mos)?", "prorroga(?:r|do|da|m|mos)?",
+            "aprova(?:r|da|do|m|mos|u)?", "estabelece(?:r|m|mos)?", "decide(?:u|r|m)?", 
+            "decidimos", "anuncia(?:mos)?", "comunica(?:mos)?", "informa(?:mos)?", 
+            "passará a", "passaremos a", "irá implementar", "irão implementar"
+        ];
+        
+        const regexVerbos = new RegExp(`\\b(?:${atosCorporativos.join("|")})\\b`, "i");
+        const sentencas = textoLimpo.split(/(?<=[.;:!])\s+/);
+        let alegacoesValidas = [];
+
+        for (let sentenca of sentencas) {
+            sentenca = sentenca.trim();
+            // Limpa ruído de e-mail e clichês
+            if (sentenca.length < 20 || clichesAdministrativos.test(sentenca) || sentenca.toLowerCase().includes("considerando")) continue;
+            if (sentenca.includes("@") || sentenca.match(/\bDe:\s/i) || sentenca.match(/\bPara:\s/i)) continue;
+
+            if (regexVerbos.test(sentenca)) {
+                sentenca = sentenca.replace(/^[-•*|]\s*/, ""); 
+                sentenca = sentenca.charAt(0).toUpperCase() + sentenca.slice(1);
+                alegacoesValidas.push(sentenca);
             }
         }
         
-        let textoFormatado = melhorAlegação.substring(0, 300) + (melhorAlegação.length > 300 ? "..." : "");
-        return [ `<strong>Alegação Central (Extração Narrativa):</strong> ${textoFormatado}` ];
+        if (alegacoesValidas.length > 0) {
+            // Heurística de foco: Prioriza palavras de impacto (ex: trabalho, presencial, híbrido, aprova)
+            const palavrasChave = /trabalho|presencial|remoto|híbrido|modelo|regime|jornada/i;
+            let melhorAlegação = alegacoesValidas[0]; // Pega a primeira que achou
+            
+            for (let a of alegacoesValidas) {
+                if (palavrasChave.test(a) && a.length < 350) {
+                    melhorAlegação = a;
+                    break;
+                }
+            }
+            let textoFormatado = melhorAlegação.substring(0, 300) + (melhorAlegação.length > 300 ? "..." : "");
+            return [ `<strong>Alegação Central (Narrativa Corporativa):</strong> ${textoFormatado}` ];
+        }
     }
-    
+
+    // Se falhar em ambas as estratégias (ou não encontrar nada válido)
     return ["Ato impositivo implícito. Requer revisão manual do escopo decisório."];
 }
 		
@@ -1082,6 +1105,7 @@ async function processarDossie() {
 </body>
 
 </html>
+
 
 
 
