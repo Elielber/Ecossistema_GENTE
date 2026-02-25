@@ -764,74 +764,7 @@ function extratorToulmin(textoBase, radarDinamico) {
     
     return alertas;
 }
-        // =====================================================================
-        // MOTOR PRINCIPAL (Com validação de Governança de Contraponto)
-        // =====================================================================
-        async function processarDossie() {
-            const btn = document.getElementById('btn-processar');
-            const loader = document.getElementById('loading-indicator');
-            
-            const temOficial = dossieDocumentos.some(doc => doc.tipo.startsWith('oficial_'));
-            const temCritica = dossieDocumentos.some(doc => doc.tipo.startsWith('critica_'));
-            
-            // Lê o Checkbox de Governança
-            const elContraponto = document.getElementById('ha-contraponto');
-            const exigeContraponto = elContraponto ? elContraponto.checked : false;
-
-            if (!temOficial) {
-                alert("Para garantir a validade da auditoria, adicione pelo menos um Documento Oficial (Tese).");
-                return;
-            }
-            if (exigeContraponto && !temCritica) {
-                alert("Alerta de Governança: Assinalou a existência de contraponto. Adicione ao menos um documento classificado como 'Contraponto/Contexto'.");
-                return;
-            }
-
-            btn.classList.add('hidden');
-            loader.classList.remove('hidden');
-
-            try {
-                let textoOficialAcumulado = "";
-                let textoCriticaAcumulado = "";
-
-                for (const doc of dossieDocumentos) {
-                    const textoExtraido = await lerArquivoTextoOPDF(doc); 
-                    if (doc.tipo.startsWith('oficial_')) {
-                        textoOficialAcumulado += textoExtraido + " \n\n ";
-                    } else if (doc.tipo.startsWith('critica_')) {
-                        textoCriticaAcumulado += textoExtraido + " \n\n ";
-                    }
-                }
-                
-                // 1. PRÉ-PROCESSAMENTO 
-                textoOficialAcumulado = preprocessarTexto(textoOficialAcumulado);
-                textoCriticaAcumulado = preprocessarTexto(textoCriticaAcumulado);
-                
-                dadosAuditoria.rawTextDirex = textoOficialAcumulado;
-                dadosAuditoria.rawTextCritica = textoCriticaAcumulado;
-                
-                // 2. EXECUÇÃO METODOLÓGICA
-                dadosAuditoria.alternativas = extratorToulmin(textoOficialAcumulado);
-                dadosAuditoria.criteriosDirex = extratorBardin(textoOficialAcumulado);
-                dadosAuditoria.alertas = extratorFairclough(textoOficialAcumulado, textoCriticaAcumulado);
-
-                setTimeout(() => {
-                    renderizarRelatorio();
-                    renderizarProjecaoPlays();
-                    gerarResumoExecutivo();
-                    btn.classList.remove('hidden');
-                    loader.classList.add('hidden');
-                    switchTab('relatorio');
-                }, 1000);
-
-            } catch (error) {
-                alert("Falha técnica na extração e indexação de dados. Verifique a integridade dos ficheiros PDF.");
-                console.error(error);
-                btn.classList.remove('hidden');
-                loader.classList.add('hidden');
-            }
-        }
-
+       
         function renderizarRelatorio() {
             document.getElementById('resultado-vazio').classList.add('hidden');
             document.getElementById('resultado-preenchido').classList.remove('hidden');
