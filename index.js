@@ -59,7 +59,33 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+// --- LÓGICA DE FILTRO DE FERRAMENTAS ---
+    const botoesFiltro = document.querySelectorAll('.btn-filtro');
+    const cardsFerramentas = document.querySelectorAll('.ferramenta-card');
 
+    botoesFiltro.forEach(botao => {
+        botao.addEventListener('click', () => {
+            // Remove a classe active de todos os botões e adiciona no clicado
+            botoesFiltro.forEach(b => b.classList.remove('active'));
+            botao.classList.add('active');
+
+            const filtroSelecionado = botao.getAttribute('data-filter');
+
+            // Percorre os cards para mostrar ou esconder
+            cardsFerramentas.forEach(card => {
+                const categoriaCard = card.getAttribute('data-categoria');
+                
+                if (filtroSelecionado === 'todos' || filtroSelecionado === categoriaCard) {
+                    card.classList.remove('escondido');
+                    // Uma pequena animação de fade in (opcional, para ficar suave)
+                    card.style.opacity = '0';
+                    setTimeout(() => card.style.opacity = '1', 50);
+                } else {
+                    card.classList.add('escondido');
+                }
+            });
+        });
+    });
 }); // <-- FIM DO 'DOMContentLoaded'
 
 /**
@@ -129,30 +155,3 @@ function setupCarousel(sliderTrack) {
         resetAutoPlay();
     }
 }
-// --- LÓGICA DE FILTRO DE FERRAMENTAS ---
-    const botoesFiltro = document.querySelectorAll('.btn-filtro');
-    const cardsFerramentas = document.querySelectorAll('.ferramenta-card');
-
-    botoesFiltro.forEach(botao => {
-        botao.addEventListener('click', () => {
-            // Remove a classe active de todos os botões e adiciona no clicado
-            botoesFiltro.forEach(b => b.classList.remove('active'));
-            botao.classList.add('active');
-
-            const filtroSelecionado = botao.getAttribute('data-filter');
-
-            // Percorre os cards para mostrar ou esconder
-            cardsFerramentas.forEach(card => {
-                const categoriaCard = card.getAttribute('data-categoria');
-                
-                if (filtroSelecionado === 'todos' || filtroSelecionado === categoriaCard) {
-                    card.classList.remove('escondido');
-                    // Uma pequena animação de fade in (opcional, para ficar suave)
-                    card.style.opacity = '0';
-                    setTimeout(() => card.style.opacity = '1', 50);
-                } else {
-                    card.classList.add('escondido');
-                }
-            });
-        });
-    });
