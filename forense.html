@@ -370,6 +370,7 @@
         dadosAuditoria.alternativas = extratorToulmin(textoOficialAcumulado, radarDinamico);
         dadosAuditoria.criteriosDirex = extratorBardin(textoOficialParaBardin);
         dadosAuditoria.alertas = extratorFairclough(textoOficialAcumulado, textoCriticaAcumulado);
+        salvarAuditoriaNoNavegador(dadosAuditoria); 
 
         setTimeout(() => {
           renderizarRelatorio();
@@ -765,53 +766,64 @@
       }
       return alertas;
     }
-	
-	function renderizarProjecaoPlays() {
-      const container = document.getElementById('matriz-plays-container');
-      const temConflito = (dadosAuditoria.alertas || []).some((a) => a.includes('Disputa') || a.includes('Viés'));
-      const decisor = 'A: Gestão';
-      const impactado = 'B: Equipes';
-      const nashState = temConflito ? 'DD (Conflito/Travamento)' : 'DC (Conformidade Passiva)';
-      const bgColorNash = temConflito ? 'bg-red-100 border-red-300' : 'bg-blue-100 border-blue-300';
-      const txtColorNash = temConflito ? 'text-red-700' : 'text-blue-700';
+    
+    function renderizarProjecaoPlays() {
+            const container = document.getElementById('matriz-plays-container');
+            
+            // Verifica se há conflito (manifesto/oposição)
+            const temConflito = dadosAuditoria.alertas.some(a => a.includes("Disputa") || a.includes("Viés"));
+            
+            // Definição dos Atores
+            const decisor = "A: Gestão";
+            const impactado = "B: Equipes";
+            
+            // Estado de Nash (Se há conflito, tende a DD. Se não, tende a DC)
+            const nashState = temConflito ? "DD (Conflito/Travamento)" : "DC (Conformidade Passiva)";
+            const bgColorNash = temConflito ? "bg-red-100 border-red-300" : "bg-blue-100 border-blue-300";
+            const txtColorNash = temConflito ? "text-red-700" : "text-blue-700";
 
-      container.innerHTML = `
-        <div class="mb-3">
-          <span class="text-[10px] font-bold text-slate-500 uppercase">Equilíbrio de Nash Projetado:</span>
-          <div class="mt-1 font-bold text-sm ${txtColorNash} ${bgColorNash} border px-3 py-2 rounded">
-            ${nashState}
-          </div>
-        </div>
-        <div class="grid grid-cols-3 gap-1 text-center text-[10px]">
-          <div></div>
-          <div class="font-bold text-slate-600 bg-slate-200 py-1 rounded rounded-b-none">${impactado}<br>Aceita/Coopera</div>
-          <div class="font-bold text-slate-600 bg-slate-200 py-1 rounded rounded-b-none">${impactado}<br>Resiste/Rejeita</div>
+            // Desenha a Matriz 2x2 Simplificada
+            container.innerHTML = `
+                <div class="mb-3">
+                    <span class="text-[10px] font-bold text-slate-500 uppercase">Equilíbrio de Nash Projetado:</span>
+                    <div class="mt-1 font-bold text-sm ${txtColorNash} ${bgColorNash} border px-3 py-2 rounded">
+                        ${nashState}
+                    </div>
+                </div>
 
-          <div class="font-bold text-slate-600 bg-slate-200 py-2 flex items-center justify-center rounded rounded-r-none">${decisor}<br>Alinha/Mitiga</div>
-          <div class="border border-slate-300 bg-white p-2 flex flex-col justify-center">
-            <span class="font-bold text-emerald-600 text-xs">CC (Ganha-Ganha)</span>
-            <span class="text-[9px] text-slate-500 mt-1">Produtividade e Controle</span>
-          </div>
-          <div class="border border-slate-300 bg-white p-2 flex flex-col justify-center opacity-60">
-            <span class="font-bold text-slate-700 text-xs">CD</span>
-            <span class="text-[9px] text-slate-500 mt-1">Perda de Autoridade</span>
-          </div>
-
-          <div class="font-bold text-slate-600 bg-slate-200 py-2 flex items-center justify-center rounded rounded-r-none">${decisor}<br>Impõe Rigor</div>
-          <div class="border border-slate-300 bg-white p-2 flex flex-col justify-center ${!temConflito ? 'ring-2 ring-blue-400 bg-blue-50' : 'opacity-60'}">
-            <span class="font-bold text-slate-700 text-xs">DC</span>
-            <span class="text-[9px] text-slate-500 mt-1">Risco de Turnover</span>
-          </div>
-          <div class="border border-slate-300 bg-white p-2 flex flex-col justify-center ${temConflito ? 'ring-2 ring-red-400 bg-red-50' : 'opacity-60'}">
-            <span class="font-bold ${temConflito ? 'text-red-600' : 'text-slate-700'} text-xs">DD (Perde-perde)</span>
-            <span class="text-[9px] text-slate-500 mt-1">Desgaste e Queda Oculta</span>
-          </div>
-        </div>
-        <p class="text-[10px] text-slate-500 mt-3 italic text-center">
-          ${temConflito ? 'Aviso: A imposição rígida frente a forte oposição documental trava a matriz no quadrante DD. Recomenda-se estratégia de mitigação (CC).' : 'Cenário de conformidade com submissão (DC). Monitorar indicadores de retenção de talentos no médio prazo.'}
-        </p>
-      `;
-    }
+                <div class="grid grid-cols-3 gap-1 text-center text-[10px]">
+                    <div></div>
+                    <div class="font-bold text-slate-600 bg-slate-200 py-1 rounded rounded-b-none">${impactado}<br>Aceita/Coopera</div>
+                    <div class="font-bold text-slate-600 bg-slate-200 py-1 rounded rounded-b-none">${impactado}<br>Resiste/Rejeita</div>
+                    
+                    <div class="font-bold text-slate-600 bg-slate-200 py-2 flex items-center justify-center rounded rounded-r-none">${decisor}<br>Alinha/Mitiga</div>
+                    <div class="border border-slate-300 bg-white p-2 flex flex-col justify-center">
+                        <span class="font-bold text-emerald-600 text-xs">CC (Ganha-Ganha)</span>
+                        <span class="text-[9px] text-slate-500 mt-1">Produtividade e Controle</span>
+                    </div>
+                    <div class="border border-slate-300 bg-white p-2 flex flex-col justify-center opacity-60">
+                        <span class="font-bold text-slate-700 text-xs">CD</span>
+                        <span class="text-[9px] text-slate-500 mt-1">Perda de Autoridade</span>
+                    </div>
+                    
+                    <div class="font-bold text-slate-600 bg-slate-200 py-2 flex items-center justify-center rounded rounded-r-none">${decisor}<br>Impõe Rigor</div>
+                    <div class="border border-slate-300 bg-white p-2 flex flex-col justify-center ${!temConflito ? 'ring-2 ring-blue-400 bg-blue-50' : 'opacity-60'}">
+                        <span class="font-bold text-slate-700 text-xs">DC</span>
+                        <span class="text-[9px] text-slate-500 mt-1">Risco de Turnover</span>
+                    </div>
+                    <div class="border border-slate-300 bg-white p-2 flex flex-col justify-center ${temConflito ? 'ring-2 ring-red-400 bg-red-50' : 'opacity-60'}">
+                        <span class="font-bold ${temConflito ? 'text-red-600' : 'text-slate-700'} text-xs">DD (Perde-perde)</span>
+                        <span class="text-[9px] text-slate-500 mt-1">Desgaste e Queda Oculta</span>
+                    </div>
+                </div>
+                
+                <p class="text-[10px] text-slate-500 mt-3 italic text-center">
+                    ${temConflito 
+                        ? "Aviso: A imposição rígida frente a forte oposição documental trava a matriz no quadrante DD. Recomenda-se estratégia de mitigação (CC)."
+                        : "Cenário de conformidade com submissão (DC). Monitorar indicadores de retenção de talentos no médio prazo."}
+                </p>
+            `;
+        }
 
     /* =========================================================================
        8) Renderização de resultados
@@ -1003,9 +1015,172 @@
 
       doc.save('Parecer_Consultivo_Forense.pdf');
     }
+    
+    
+const CONFIG_GENTE = {
+    nome: "FORENSE",
+    selectorDados: () => {
+        // 1. Tenta pegar os dados ativos na memória global
+        if (typeof dadosAuditoria !== 'undefined' && dadosAuditoria.alternativas && dadosAuditoria.alternativas.length > 0) {
+            return dadosAuditoria;
+        }
+        
+        // 2. Fallback: Busca na memória persistente do navegador
+        const backup = localStorage.getItem('GENTE_ULTIMA_AUDITORIA');
+        if (backup) {
+            return JSON.parse(backup);
+        }
+
+        return null;
+    }
+};
+
+function salvarAuditoriaNoNavegador(dados) {
+    if (dados) {
+        localStorage.setItem('GENTE_ULTIMA_AUDITORIA', JSON.stringify(dados));
+        console.log("Sistema GENTE: Auditoria persistida.");
+    }
+}
+/** 2. FUNÇÃO DE REPARAÇÃO PERSONALIZADA (Obrigatória e Detalhista)*/
+
+function repararDadosGente(dados) {
+    console.log("Protocolo GENTE: Reparando dados para Peixe-Voador...", dados);
+
+    if (dados.origem === "FORENSE") {
+        const c = dados.conteudo;
+
+        // Limpeza de tags HTML das strings (Regex universal)
+        const clean = (str) => str ? str.replace(/<\/?[^>]+(>|$)/g, "") : "";
+
+        // 1. Problema Central (Transformação no CATWOE)
+        if (c.alternativas && c.alternativas.length > 0) {
+            diagramData.effect = "TRANSFORMAÇÃO: " + clean(c.alternativas[0]);
+        }
+
+        // 2. Clientes (C) e Atores (A) - Filtra alertas de hostilidade ou grupos
+        if (c.alertas) {
+            const clientesEncontrados = c.alertas
+                .filter(a => a.toLowerCase().includes("hostilidade") || a.toLowerCase().includes("grupo"))
+                .map(a => ({ text: "IMPACTADO: " + clean(a) }));
+            
+            // Adiciona sem apagar os existentes
+            diagramData.causes.customers = [...diagramData.causes.customers, ...clientesEncontrados];
+        }
+
+        // 3. Visão de Mundo (W) - Mapeia os Vieses Críticos
+        if (c.alertas) {
+            const visoesMundo = c.alertas
+                .filter(a => a.toLowerCase().includes("viés") || a.toLowerCase().includes("omissão"))
+                .map(a => ({ text: "CRÍTICA: " + clean(a) }));
+            
+            diagramData.causes.worldview = [...diagramData.causes.worldview, ...visoesMundo];
+        }
+
+        // 4. Meio Ambiente (E) - Extraído dos Critérios de Risco/Direx
+        if (c.criteriosDirex) {
+            const restricoesAmbientais = c.criteriosDirex
+                .filter(crit => crit.analise.toLowerCase().includes("lei") || crit.analise.toLowerCase().includes("risco"))
+                .map(crit => ({ text: clean(crit.nome) + ": " + clean(crit.analise) }));
+            
+            diagramData.causes.environment = [...diagramData.causes.environment, ...restricoesAmbientais];
+        }
+
+        // Notifica e Atualiza a UI específica do Peixe-Voador
+        if (typeof updateCanvas === "function") updateCanvas();
+        if (typeof renderWizardList === "function") renderWizardList(currentStep); // 'currentStep' deve existir na ferramenta
+        
+        alert("✅ Sincronia Forense -> Peixe-Voador concluída com sucesso!");
+    } else {
+        alert("Recebido de: " + dados.origem + ". Nenhuma regra de reparação específica definida.");
+    }
+}
+</script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<div id="gente-comm-module" class="fixed bottom-16 left-0 w-full bg-slate-900 border-t border-slate-700 p-3 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.5)] z-[40]">
+    <div class="max-w-5xl mx-auto">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <span class="animate-pulse">📡</span> Protocolo de Sincronia GENTE
+            </h3>
+            <button onclick="toggleGenteInterface()" class="text-white text-xs p-1 px-2 hover:bg-slate-800 rounded transition">
+                <span id="gente-toggle-icon">▲</span>
+            </button>
+        </div>
+        <div id="gente-interface-body" class="hidden">
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <button onclick="gerarSaidaGente()" class="bg-slate-700 text-white text-[10px] font-bold py-2 rounded border border-slate-600 transition active:scale-95">📤 Gerar QR</button>
+                <button onclick="iniciarLeitorGente()" class="bg-indigo-600 text-white text-[10px] font-bold py-2 rounded transition active:scale-95">📥 Ler QR</button>
+            </div>
+            <div id="gente-qrcode-output" class="flex justify-center mt-2 empty:hidden bg-white p-2 rounded-lg mx-auto w-fit border-4 border-white shadow-lg"></div>
+            <div id="gente-reader" class="mt-2 rounded-lg overflow-hidden border border-slate-500 hidden mx-auto max-w-[250px] bg-black"></div>
+        </div>
+    </div>
+</div>
+
+    <script>
+/** * LÓGICA DE SINCRONIA GENTE (GENÉRICO) */
+
+let scannerGente = null;
+
+function toggleGenteInterface() {
+    const body = document.getElementById('gente-interface-body');
+    const icon = document.getElementById('gente-toggle-icon');
+    const isHidden = body.classList.contains('hidden');
+    body.classList.toggle('hidden');
+    icon.innerText = isHidden ? '▼' : '▲';
+    if (!isHidden) fecharScannerGente();
+}
+
+function gerarSaidaGente() {
+    fecharScannerGente();
+    const dados = CONFIG_GENTE.selectorDados();
+    if (!dados) return alert("⚠️ Nenhuma modelagem ativa encontrada para exportar.");
+    try {
+        const payload = { origem: CONFIG_GENTE.nome, timestamp: new Date().toISOString(), conteudo: dados };
+        const comprimido = LZString.compressToBase64(JSON.stringify(payload));
+        document.getElementById("gente-qrcode-output").innerHTML = "";
+        new QRCode(document.getElementById("gente-qrcode-output"), { text: "G3!" + comprimido, width: 200, height: 200, correctLevel : QRCode.CorrectLevel.L });
+    } catch (e) { alert("Erro na geração: " + e.message); }
+}
+
+function iniciarLeitorGente() {
+    const readerElement = document.getElementById("gente-reader");
+    document.getElementById("gente-qrcode-output").innerHTML = "";
+    readerElement.classList.remove("hidden");
+    scannerGente = new Html5Qrcode("gente-reader");
+    scannerGente.start({ facingMode: "environment" }, { fps: 10, qrbox: 200 }, (text) => {
+        if (text.startsWith("G3!")) {
+            try {
+                const descompactado = LZString.decompressFromBase64(text.substring(3));
+                const dados = JSON.parse(descompactado);
+                
+                // Chamada da função detalhista definida no topo
+                repararDadosGente(dados); 
+                
+                fecharScannerGente();
+            } catch (e) { alert("Erro ao processar dados."); }
+        }
+    }).catch(err => { alert("Erro na câmera: " + err); readerElement.classList.add("hidden"); });
+}
+
+function fecharScannerGente() {
+    if (scannerGente && scannerGente.isScanning) {
+        scannerGente.stop().then(() => { 
+            document.getElementById("gente-reader").classList.add("hidden"); 
+        }).catch(() => {});
+    } else { 
+        document.getElementById("gente-reader").classList.add("hidden"); 
+    }
+}
+</script>
 
 
-  </script>
+
+
 </body>
 
 </html>
