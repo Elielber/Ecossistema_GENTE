@@ -1020,18 +1020,21 @@
 const CONFIG_GENTE = {
     nome: "FORENSE",
     selectorDados: () => {
-        // 1. Tenta pegar os dados ativos na memória global
-        if (typeof dadosAuditoria !== 'undefined' && dadosAuditoria.alternativas && dadosAuditoria.alternativas.length > 0) {
-            return dadosAuditoria;
-        }
+        // 1. Tenta buscar na variável global (memória ativa)
+        let fonte = (typeof dadosAuditoria !== 'undefined') ? dadosAuditoria : null;
         
-        // 2. Fallback: Busca na memória persistente do navegador
-        const backup = localStorage.getItem('GENTE_ULTIMA_AUDITORIA');
-        if (backup) {
-            return JSON.parse(backup);
+        // 2. Se não estiver na global, tenta buscar no localStorage (memória persistida)
+        if (!fonte || !fonte.alternativas) {
+            const backup = localStorage.getItem('GENTE_ULTIMA_AUDITORIA');
+            if (backup) fonte = JSON.parse(backup);
         }
 
-        return null;
+        // 3. VALIDAÇÃO DE SEGURANÇA (Evita o erro 'reading 0')
+        if (!fonte || !fonte.alternativas || fonte.alternativas.length === 0) {
+            return null;
+        }
+
+        return fonte;
     }
 };
 
