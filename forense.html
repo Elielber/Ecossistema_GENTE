@@ -1052,7 +1052,7 @@ const CONFIG_GENTE = {
     nome: "FORENSE",
     selectorDados: () => {
         const backup = localStorage.getItem('GENTE_ULTIMA_AUDITORIA');
-        const fonte = (dadosAuditoria && dadosAuditoria.alternativas.length > 0) ? 
+        const fonte = (dadosAuditoria && dadosAuditoria.alternativas && dadosAuditoria.alternativas.length > 0) ? 
                       dadosAuditoria : 
                       (backup ? JSON.parse(backup) : null);
 
@@ -1060,24 +1060,26 @@ const CONFIG_GENTE = {
             return null;
         }
 
-        // --- DIETA DE DADOS PARA O QR CODE ---
-        // Limpa HTML e trunca textos muito longos para aliviar a densidade da imagem
-        const limite = 80; // Máximo de caracteres para textos descritivos
-        const clean = (str) => str ? str.replace(/<\/?[^>]+(>|$)/g, "") : "";
-        const truncar = (str) => (str && str.length > limite) ? str.substring(0, limite) + "..." : str;
+        // 1. Verifica se há conflito grave (para acionar os alertas no Hub)
+        const temConflito = fonte.alertas.some(a => a.includes('Disputa') || a.includes('Viés') || a.includes('Hostilidade'));
 
-        // Montamos um payload enxuto só com o que os dashboards e integrações precisam
+        // 2. Extrai apenas a 1ª palavra da categoria e o número (Ex: "Cultura:21.5")
+        const metricasEnxutas = fonte.criteriosDirex.map(c => {
+            const palavraChave = c.nome.split(' ')[0]; // Pega só a primeira palavra
+            return `${palavraChave}:${c.frequencia}`;
+        });
+
+        // 3. Pega só os primeiros 25 caracteres da decisão para dar um "título" no Hub
+        const tituloCurto = fonte.alternativas[0] ? 
+            fonte.alternativas[0].replace(/<\/?[^>]+(>|$)/g, "").substring(0, 25) + "..." : 
+            "Auditoria Padrão";
+
+        // PAYLOAD ULTRA REDUZIDO (Apenas Telemetria)
         return {
-            alternativas: fonte.alternativas.map(a => truncar(clean(a))),
-            
-            // Do Bardin, só precisamos do Nome e da Frequência Matemática para o gráfico. 
-            // Ignoramos os textos literários longos ('analise' e 'referencia')
-            criteriosDirex: fonte.criteriosDirex.map(c => ({
-                nome: c.nome,
-                frequencia: c.frequencia
-            })),
-            
-            alertas: fonte.alertas.map(a => truncar(clean(a)))
+            tit: tituloCurto,       // Título identificador
+            met: metricasEnxutas,   // Array curto de métricas
+            qta: fonte.alertas.length, // Quantidade de alertas (Número)
+            cnf: temConflito        // Booleano (True/False)
         };
     }
 };
