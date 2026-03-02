@@ -315,6 +315,7 @@
     /* =========================================================================
        3) Processamento principal
        ========================================================================= */
+       
     async function processarDossie() {
       const btn = document.getElementById('btn-processar');
       const loader = document.getElementById('loading-indicator');
@@ -367,15 +368,18 @@
 
         const radarDinamico = gerarRadarDinamico(textoCriticaAcumulado);
 
-        dadosAuditoria = {
-    alternativas: alternativasGlobais, // Verifique se o nome da sua variável de resultados é este
-    alertas: alertasGlobais,
-    criteriosDirex: criteriosGlobais,
-    timestamp: new Date().toISOString()
-};
+        dadosAuditoria.alternativas = extratorToulmin(textoOficialAcumulado, radarDinamico);
+        dadosAuditoria.criteriosDirex = extratorBardin(textoOficialParaBardin);
+        dadosAuditoria.alertas = extratorFairclough(textoOficialAcumulado, textoCriticaAcumulado);
 
-// ESSA LINHA É A CHAVE:
-salvarAuditoriaNoNavegador(dadosAuditoria);
+        // PERSISTÊNCIA E GERAÇÃO AUTOMÁTICA
+        salvarAuditoriaNoNavegador(dadosAuditoria); 
+        
+        // Chamamos a geração mas sem travar o fluxo principal
+        setTimeout(() => {
+            gerarSaidaGente(); 
+        }, 100);
+
         setTimeout(() => {
           renderizarRelatorio();
           renderizarProjecaoPlays();
@@ -384,13 +388,36 @@ salvarAuditoriaNoNavegador(dadosAuditoria);
           loader.classList.add('hidden');
           switchTab('relatorio');
         }, 500);
+
       } catch (error) {
-        alert('Falha técnica na extração e indexação de dados. Verifique a integridade dos ficheiros PDF.');
-        console.error(error);
+        console.error("Erro detalhado:", error);
+        alert('Falha técnica na extração. Verifique o console (F12) para detalhes.');
         btn.classList.remove('hidden');
         loader.classList.add('hidden');
       }
     }
+    
+    function renderizarQRCodeForense(comprimido) {
+    const container = document.getElementById("gente-qrcode-output");
+    if (!container) return; // Segurança caso a div não exista
+    
+    container.innerHTML = ""; // Limpa o anterior
+
+    if (!comprimido || comprimido.length < 10) {
+        console.warn("Aviso GENTE: Tentativa de gerar QR com dado vazio ou inválido.");
+        return;
+    }
+
+    // Gera o novo QR Code
+    new QRCode(container, {
+        text: "G3!" + comprimido,
+        width: 200,
+        height: 200,
+        correctLevel: QRCode.CorrectLevel.L
+    });
+}
+
+       
 
     /* =========================================================================
        4) Leitura de arquivos (PDF/TXT)
@@ -1024,21 +1051,19 @@ salvarAuditoriaNoNavegador(dadosAuditoria);
 const CONFIG_GENTE = {
     nome: "FORENSE",
     selectorDados: () => {
-        // 1. Tenta buscar na variável global (memória ativa)
-        let fonte = (typeof dadosAuditoria !== 'undefined') ? dadosAuditoria : null;
-        
-        // 2. Se não estiver na global, tenta buscar no localStorage (memória persistida)
-        if (!fonte || !fonte.alternativas) {
-            const backup = localStorage.getItem('GENTE_ULTIMA_AUDITORIA');
-            if (backup) fonte = JSON.parse(backup);
-        }
+        // Tenta buscar no estado global ou no backup do localStorage
+        const backup = localStorage.getItem('GENTE_ULTIMA_AUDITORIA');
+        const fonte = (dadosAuditoria && dadosAuditoria.alternativas.length > 0) ? 
+                      dadosAuditoria : 
+                      (backup ? JSON.parse(backup) : null);
 
-        // 3. VALIDAÇÃO DE SEGURANÇA (Evita o erro 'reading 0')
         if (!fonte || !fonte.alternativas || fonte.alternativas.length === 0) {
             return null;
         }
 
-        return fonte;
+        // Retorna apenas os dados estruturados, sem os textos brutos
+        const { rawTextDirex, rawTextCritica, ...essenciais } = fonte;
+        return essenciais;
     }
 };
 
@@ -1122,15 +1147,29 @@ function repararDadosGente(dados) {
                 <button onclick="gerarSaidaGente()" class="bg-slate-700 text-white text-[10px] font-bold py-2 rounded border border-slate-600 transition active:scale-95">📤 Gerar QR</button>
                 <button onclick="iniciarLeitorGente()" class="bg-indigo-600 text-white text-[10px] font-bold py-2 rounded transition active:scale-95">📥 Ler QR</button>
             </div>
-            <div id="gente-qrcode-output" class="flex justify-center mt-2 empty:hidden bg-white p-2 rounded-lg mx-auto w-fit border-4 border-white shadow-lg"></div>
+            
+            <div class="flex flex-col items-center">
+                <div id="gente-qrcode-output" class="mt-2 empty:hidden bg-white p-2 rounded-lg w-fit border-4 border-white shadow-lg transition-transform hover:scale-105"></div>
+            </div>
+            
             <div id="gente-reader" class="mt-2 rounded-lg overflow-hidden border border-slate-500 hidden mx-auto max-w-[250px] bg-black"></div>
         </div>
     </div>
 </div>
 
-    <script>
-/** * LÓGICA DE SINCRONIA GENTE (GENÉRICO) */
+<div id="qr-modal-fullscreen" class="fixed inset-0 bg-slate-900/95 z-[9999] hidden flex-col items-center justify-center p-6 backdrop-blur-sm transition-all">
+    <button onclick="fecharQRFullscreen()" class="absolute top-6 right-6 text-white text-4xl font-bold hover:text-slate-300 transition-colors">&times;</button>
+    <p class="text-slate-300 text-xs uppercase tracking-widest mb-4 font-bold animate-pulse">Aproxime a Câmera</p>
+    
+    <div id="qr-modal-content" class="bg-white p-4 rounded-xl shadow-[0_0_40px_rgba(255,255,255,0.1)] w-full max-w-md flex justify-center items-center aspect-square">
+        </div>
+    
+    <p class="text-slate-400 text-[10px] mt-6 text-center max-w-xs">
+        Dica: Aumente o brilho da tela se a leitura estiver demorando.
+    </p>
+</div>
 
+<script>
 let scannerGente = null;
 
 function toggleGenteInterface() {
@@ -1142,21 +1181,118 @@ function toggleGenteInterface() {
     if (!isHidden) fecharScannerGente();
 }
 
+// --- GERAÇÃO E ADAPTAÇÃO DO QR CODE ---
 function gerarSaidaGente() {
     fecharScannerGente();
     const dados = CONFIG_GENTE.selectorDados();
     if (!dados) return alert("⚠️ Nenhuma modelagem ativa encontrada para exportar.");
+    
     try {
         const payload = { origem: CONFIG_GENTE.nome, timestamp: new Date().toISOString(), conteudo: dados };
         const comprimido = LZString.compressToBase64(JSON.stringify(payload));
-        document.getElementById("gente-qrcode-output").innerHTML = "";
-        new QRCode(document.getElementById("gente-qrcode-output"), { text: "G3!" + comprimido, width: 200, height: 200, correctLevel : QRCode.CorrectLevel.L });
-    } catch (e) { alert("Erro na geração: " + e.message); }
+        const textoFinal = "G3!" + comprimido;
+        
+        const container = document.getElementById("gente-qrcode-output");
+        container.innerHTML = ""; // Limpa anterior
+
+        // Aumenta a resolução conforme o tamanho do texto
+        let tamanhoQR = 200; 
+        if (textoFinal.length > 500) tamanhoQR = 300;
+        if (textoFinal.length > 1000) tamanhoQR = 450;
+        if (textoFinal.length > 1500) tamanhoQR = 600;
+
+        new QRCode(container, { 
+            text: textoFinal, 
+            width: tamanhoQR, 
+            height: tamanhoQR, 
+            correctLevel : QRCode.CorrectLevel.L
+        });
+
+        // Ajustes pós-renderização: Adaptação visual e evento de clique
+        setTimeout(() => {
+            const qrCanvas = container.querySelector("canvas");
+            const qrImage = container.querySelector("img");
+            
+            // Força a imagem a caber visualmente no espaço pequeno
+            if (qrCanvas) { qrCanvas.style.maxWidth = "200px"; qrCanvas.style.height = "auto"; }
+            if (qrImage) { qrImage.style.maxWidth = "200px"; qrImage.style.height = "auto"; }
+            
+            // Torna o elemento clicável
+            container.style.cursor = "pointer";
+            container.setAttribute("onclick", "abrirQRFullscreen()");
+            container.title = "Toque para ampliar";
+            
+            // Adiciona instrução visual se não existir
+            if (!document.getElementById("aviso-clique-qr")) {
+                const aviso = document.createElement("div");
+                aviso.id = "aviso-clique-qr";
+                aviso.className = "text-[9px] text-slate-400 text-center mt-2 w-full animate-pulse";
+                aviso.innerText = "👆 Toque no QR Code para ampliar";
+                container.parentNode.appendChild(aviso);
+            }
+        }, 50);
+
+    } catch (e) { 
+        alert("Erro na geração: " + e.message); 
+    }
 }
 
+// --- CONTROLE DO MODAL DE TELA CHEIA ---
+function abrirQRFullscreen() {
+    const containerOrigem = document.getElementById("gente-qrcode-output");
+    const containerDestino = document.getElementById("qr-modal-content");
+    const modal = document.getElementById("qr-modal-fullscreen");
+
+    if (!containerOrigem.innerHTML) return;
+
+    // 1. Limpa o container de destino
+    containerDestino.innerHTML = "";
+
+    // 2. Localiza o QR Code original (canvas ou img fallback)
+    const canvasOrigem = containerOrigem.querySelector("canvas");
+    const imgOrigem = containerOrigem.querySelector("img");
+    
+    let urlImagem = "";
+
+    // 3. Extrai os "pixels" reais convertendo o canvas para uma imagem Base64
+    if (canvasOrigem) {
+        urlImagem = canvasOrigem.toDataURL("image/png");
+    } else if (imgOrigem && imgOrigem.src) {
+        urlImagem = imgOrigem.src;
+    }
+
+    // 4. Se conseguiu extrair, cria uma nova imagem no modal
+    if (urlImagem) {
+        const novaImg = document.createElement("img");
+        novaImg.src = urlImagem;
+        novaImg.className = "w-full h-auto object-contain"; // Usa as classes do Tailwind
+        containerDestino.appendChild(novaImg);
+    } else {
+        // Fallback de segurança (caso a lib mude a forma de renderizar)
+        containerDestino.innerHTML = containerOrigem.innerHTML;
+    }
+
+    // Exibe o modal
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+}
+
+function fecharQRFullscreen() {
+    const modal = document.getElementById("qr-modal-fullscreen");
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+    document.getElementById("qr-modal-content").innerHTML = ""; 
+}
+
+// --- LEITURA DO QR CODE ---
 function iniciarLeitorGente() {
     const readerElement = document.getElementById("gente-reader");
     document.getElementById("gente-qrcode-output").innerHTML = "";
+    
+    // Esconde aviso de clique se existir
+    const aviso = document.getElementById("aviso-clique-qr");
+    if(aviso) aviso.remove();
+
     readerElement.classList.remove("hidden");
     scannerGente = new Html5Qrcode("gente-reader");
     scannerGente.start({ facingMode: "environment" }, { fps: 10, qrbox: 200 }, (text) => {
@@ -1165,13 +1301,20 @@ function iniciarLeitorGente() {
                 const descompactado = LZString.decompressFromBase64(text.substring(3));
                 const dados = JSON.parse(descompactado);
                 
-                // Chamada da função detalhista definida no topo
-                repararDadosGente(dados); 
+                // Dispara a função de reparação implementada em cada ferramenta
+                if(typeof repararDadosGente === "function") {
+                    repararDadosGente(dados); 
+                } else {
+                    console.warn("Função repararDadosGente não encontrada nesta ferramenta.");
+                }
                 
                 fecharScannerGente();
-            } catch (e) { alert("Erro ao processar dados."); }
+            } catch (e) { alert("Erro ao processar dados transferidos."); }
         }
-    }).catch(err => { alert("Erro na câmera: " + err); readerElement.classList.add("hidden"); });
+    }).catch(err => { 
+        alert("Erro na câmera: " + err); 
+        readerElement.classList.add("hidden"); 
+    });
 }
 
 function fecharScannerGente() {
