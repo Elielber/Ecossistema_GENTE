@@ -1048,6 +1048,10 @@
     }
     
     
+<script>
+// ==========================================
+// 1. CONFIGURAÇÃO DE EXPORTAÇÃO (TELEMETRIA)
+// ==========================================
 const CONFIG_GENTE = {
     nome: "FORENSE",
     selectorDados: () => {
@@ -1060,26 +1064,22 @@ const CONFIG_GENTE = {
             return null;
         }
 
-        // 1. Verifica se há conflito grave (para acionar os alertas no Hub)
         const temConflito = fonte.alertas.some(a => a.includes('Disputa') || a.includes('Viés') || a.includes('Hostilidade'));
 
-        // 2. Extrai apenas a 1ª palavra da categoria e o número (Ex: "Cultura:21.5")
         const metricasEnxutas = fonte.criteriosDirex.map(c => {
-            const palavraChave = c.nome.split(' ')[0]; // Pega só a primeira palavra
+            const palavraChave = c.nome.split(' ')[0];
             return `${palavraChave}:${c.frequencia}`;
         });
 
-        // 3. Pega só os primeiros 25 caracteres da decisão para dar um "título" no Hub
         const tituloCurto = fonte.alternativas[0] ? 
             fonte.alternativas[0].replace(/<\/?[^>]+(>|$)/g, "").substring(0, 25) + "..." : 
             "Auditoria Padrão";
 
-        // PAYLOAD ULTRA REDUZIDO (Apenas Telemetria)
         return {
-            tit: tituloCurto,       // Título identificador
-            met: metricasEnxutas,   // Array curto de métricas
-            qta: fonte.alertas.length, // Quantidade de alertas (Número)
-            cnf: temConflito        // Booleano (True/False)
+            tit: tituloCurto,       
+            met: metricasEnxutas,   
+            qta: fonte.alertas.length, 
+            cnf: temConflito        
         };
     }
 };
@@ -1090,62 +1090,18 @@ function salvarAuditoriaNoNavegador(dados) {
         console.log("Sistema GENTE: Auditoria persistida.");
     }
 }
-/** 2. FUNÇÃO DE REPARAÇÃO PERSONALIZADA (Obrigatória e Detalhista)*/
 
+// ==========================================
+// 2. REPARAÇÃO / IMPORTAÇÃO (NEUTRA PARA FORENSE)
+// ==========================================
 function repararDadosGente(dados) {
-    console.log("Protocolo GENTE: Reparando dados para Peixe-Voador...", dados);
-
-    if (dados.origem === "FORENSE") {
-        const c = dados.conteudo;
-
-        // Limpeza de tags HTML das strings (Regex universal)
-        const clean = (str) => str ? str.replace(/<\/?[^>]+(>|$)/g, "") : "";
-
-        // 1. Problema Central (Transformação no CATWOE)
-        if (c.alternativas && c.alternativas.length > 0) {
-            diagramData.effect = "TRANSFORMAÇÃO: " + clean(c.alternativas[0]);
-        }
-
-        // 2. Clientes (C) e Atores (A) - Filtra alertas de hostilidade ou grupos
-        if (c.alertas) {
-            const clientesEncontrados = c.alertas
-                .filter(a => a.toLowerCase().includes("hostilidade") || a.toLowerCase().includes("grupo"))
-                .map(a => ({ text: "IMPACTADO: " + clean(a) }));
-            
-            // Adiciona sem apagar os existentes
-            diagramData.causes.customers = [...diagramData.causes.customers, ...clientesEncontrados];
-        }
-
-        // 3. Visão de Mundo (W) - Mapeia os Vieses Críticos
-        if (c.alertas) {
-            const visoesMundo = c.alertas
-                .filter(a => a.toLowerCase().includes("viés") || a.toLowerCase().includes("omissão"))
-                .map(a => ({ text: "CRÍTICA: " + clean(a) }));
-            
-            diagramData.causes.worldview = [...diagramData.causes.worldview, ...visoesMundo];
-        }
-
-        // 4. Meio Ambiente (E) - Extraído dos Critérios de Risco/Direx
-        if (c.criteriosDirex) {
-            const restricoesAmbientais = c.criteriosDirex
-                .filter(crit => crit.analise.toLowerCase().includes("lei") || crit.analise.toLowerCase().includes("risco"))
-                .map(crit => ({ text: clean(crit.nome) + ": " + clean(crit.analise) }));
-            
-            diagramData.causes.environment = [...diagramData.causes.environment, ...restricoesAmbientais];
-        }
-
-        // Notifica e Atualiza a UI específica do Peixe-Voador
-        if (typeof updateCanvas === "function") updateCanvas();
-        if (typeof renderWizardList === "function") renderWizardList(currentStep); // 'currentStep' deve existir na ferramenta
-        
-        alert("✅ Sincronia Forense -> Peixe-Voador concluída com sucesso!");
-    } else {
-        alert("Recebido de: " + dados.origem + ". Nenhuma regra de reparação específica definida.");
-    }
+    // O Forense é o gerador inicial. Ele exporta para o Hub e outras ferramentas,
+    // mas não precisa importar dados de terceiros para si mesmo nesta versão.
+    alert(`QR Code lido com sucesso! Origem dos dados: [${dados.origem}].\n\nNota: O Forense atua como "Radar Inicial" e gerador de teses. Para cruzar e analisar esses dados, utilize o leitor no Assistente GENTE ou nas ferramentas de desdobramento (Peixe-Voador, PLAYS).`);
 }
 </script>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode"></script>
 
@@ -1179,7 +1135,7 @@ function repararDadosGente(dados) {
     <p class="text-slate-300 text-xs uppercase tracking-widest mb-4 font-bold animate-pulse">Aproxime a Câmera</p>
     
     <div id="qr-modal-content" class="bg-white p-4 rounded-xl shadow-[0_0_40px_rgba(255,255,255,0.1)] w-full max-w-md flex justify-center items-center aspect-square">
-        </div>
+    </div>
     
     <p class="text-slate-400 text-[10px] mt-6 text-center max-w-xs">
         Dica: Aumente o brilho da tela se a leitura estiver demorando.
@@ -1198,7 +1154,6 @@ function toggleGenteInterface() {
     if (!isHidden) fecharScannerGente();
 }
 
-// --- GERAÇÃO E ADAPTAÇÃO DO QR CODE ---
 function gerarSaidaGente() {
     fecharScannerGente();
     const dados = CONFIG_GENTE.selectorDados();
@@ -1210,9 +1165,8 @@ function gerarSaidaGente() {
         const textoFinal = "G3!" + comprimido;
         
         const container = document.getElementById("gente-qrcode-output");
-        container.innerHTML = ""; // Limpa anterior
+        container.innerHTML = ""; 
 
-        // Aumenta a resolução conforme o tamanho do texto
         let tamanhoQR = 200; 
         if (textoFinal.length > 500) tamanhoQR = 300;
         if (textoFinal.length > 1000) tamanhoQR = 450;
@@ -1225,27 +1179,34 @@ function gerarSaidaGente() {
             correctLevel : QRCode.CorrectLevel.L
         });
 
-        // Ajustes pós-renderização: Adaptação visual e evento de clique
         setTimeout(() => {
             const qrCanvas = container.querySelector("canvas");
             const qrImage = container.querySelector("img");
             
-            // Força a imagem a caber visualmente no espaço pequeno
             if (qrCanvas) { qrCanvas.style.maxWidth = "200px"; qrCanvas.style.height = "auto"; }
             if (qrImage) { qrImage.style.maxWidth = "200px"; qrImage.style.height = "auto"; }
             
-            // Torna o elemento clicável
             container.style.cursor = "pointer";
             container.setAttribute("onclick", "abrirQRFullscreen()");
             container.title = "Toque para ampliar";
             
-            // Adiciona instrução visual se não existir
             if (!document.getElementById("aviso-clique-qr")) {
                 const aviso = document.createElement("div");
                 aviso.id = "aviso-clique-qr";
                 aviso.className = "text-[9px] text-slate-400 text-center mt-2 w-full animate-pulse";
-                aviso.innerText = "👆 Toque no QR Code para ampliar";
+                aviso.innerText = "👆 Toque no QR Code para ampliar ou Copiar";
+                
+                // Botão extra de copiar (Fallback para Moiré persistente/uso no mesmo PC)
+                const btnCopy = document.createElement("button");
+                btnCopy.className = "mt-2 bg-slate-700 text-white text-[9px] px-2 py-1 rounded w-full";
+                btnCopy.innerText = "📋 Copiar Código G3!";
+                btnCopy.onclick = (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(textoFinal).then(() => alert("Código copiado com sucesso!"));
+                };
+
                 container.parentNode.appendChild(aviso);
+                container.parentNode.appendChild(btnCopy);
             }
         }, 50);
 
@@ -1254,7 +1215,6 @@ function gerarSaidaGente() {
     }
 }
 
-// --- CONTROLE DO MODAL DE TELA CHEIA ---
 function abrirQRFullscreen() {
     const containerOrigem = document.getElementById("gente-qrcode-output");
     const containerDestino = document.getElementById("qr-modal-content");
@@ -1262,34 +1222,26 @@ function abrirQRFullscreen() {
 
     if (!containerOrigem.innerHTML) return;
 
-    // 1. Limpa o container de destino
     containerDestino.innerHTML = "";
-
-    // 2. Localiza o QR Code original (canvas ou img fallback)
     const canvasOrigem = containerOrigem.querySelector("canvas");
     const imgOrigem = containerOrigem.querySelector("img");
     
     let urlImagem = "";
-
-    // 3. Extrai os "pixels" reais convertendo o canvas para uma imagem Base64
     if (canvasOrigem) {
         urlImagem = canvasOrigem.toDataURL("image/png");
     } else if (imgOrigem && imgOrigem.src) {
         urlImagem = imgOrigem.src;
     }
 
-    // 4. Se conseguiu extrair, cria uma nova imagem no modal
     if (urlImagem) {
         const novaImg = document.createElement("img");
         novaImg.src = urlImagem;
-        novaImg.className = "w-full h-auto object-contain"; // Usa as classes do Tailwind
+        novaImg.className = "w-full h-auto object-contain"; 
         containerDestino.appendChild(novaImg);
     } else {
-        // Fallback de segurança (caso a lib mude a forma de renderizar)
         containerDestino.innerHTML = containerOrigem.innerHTML;
     }
 
-    // Exibe o modal
     modal.classList.remove("hidden");
     modal.classList.add("flex");
 }
@@ -1301,14 +1253,15 @@ function fecharQRFullscreen() {
     document.getElementById("qr-modal-content").innerHTML = ""; 
 }
 
-// --- LEITURA DO QR CODE ---
 function iniciarLeitorGente() {
     const readerElement = document.getElementById("gente-reader");
     document.getElementById("gente-qrcode-output").innerHTML = "";
     
-    // Esconde aviso de clique se existir
     const aviso = document.getElementById("aviso-clique-qr");
-    if(aviso) aviso.remove();
+    if(aviso) {
+        aviso.remove();
+        if(aviso.nextElementSibling) aviso.nextElementSibling.remove(); // remove o btn copiar
+    }
 
     readerElement.classList.remove("hidden");
     scannerGente = new Html5Qrcode("gente-reader");
@@ -1318,11 +1271,8 @@ function iniciarLeitorGente() {
                 const descompactado = LZString.decompressFromBase64(text.substring(3));
                 const dados = JSON.parse(descompactado);
                 
-                // Dispara a função de reparação implementada em cada ferramenta
                 if(typeof repararDadosGente === "function") {
                     repararDadosGente(dados); 
-                } else {
-                    console.warn("Função repararDadosGente não encontrada nesta ferramenta.");
                 }
                 
                 fecharScannerGente();
@@ -1345,9 +1295,5 @@ function fecharScannerGente() {
 }
 </script>
 
-
-
-
 </body>
-
 </html>
