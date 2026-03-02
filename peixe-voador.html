@@ -1090,5 +1090,251 @@ function removeWizardItem(key, idx) {
     renderWizardList(key);
 }
     </script>
+	    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+    <div id="gente-comm-module" class="fixed bottom-0 left-0 w-full bg-slate-900 border-t border-slate-700 p-3 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.5)] z-[60]">
+        <div class="max-w-5xl mx-auto">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <span class="animate-pulse">📡</span> Protocolo de Sincronia GENTE
+                </h3>
+                <button onclick="toggleGenteInterface()" class="text-white text-xs p-1 px-2 hover:bg-slate-800 rounded transition">
+                    <span id="gente-toggle-icon">▲</span>
+                </button>
+            </div>
+            <div id="gente-interface-body" class="hidden">
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <button onclick="gerarSaidaGente()" class="bg-slate-700 text-white text-[10px] font-bold py-2 rounded border border-slate-600 transition active:scale-95">📤 Gerar QR</button>
+                    <button onclick="iniciarLeitorGente()" class="bg-indigo-600 text-white text-[10px] font-bold py-2 rounded transition active:scale-95">📥 Ler QR</button>
+                </div>
+                
+                <div class="flex flex-col items-center">
+                    <div id="gente-qrcode-output" class="mt-2 empty:hidden bg-white p-2 rounded-lg w-fit border-4 border-white shadow-lg transition-transform hover:scale-105"></div>
+                </div>
+                
+                <div id="gente-reader" class="mt-2 rounded-lg overflow-hidden border border-slate-500 hidden mx-auto max-w-[250px] bg-black"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="qr-modal-fullscreen" class="fixed inset-0 bg-slate-900/95 z-[9999] hidden flex-col items-center justify-center p-6 backdrop-blur-sm transition-all">
+        <button onclick="fecharQRFullscreen()" class="absolute top-6 right-6 text-white text-4xl font-bold hover:text-slate-300 transition-colors">&times;</button>
+        <p class="text-slate-300 text-xs uppercase tracking-widest mb-4 font-bold animate-pulse">Aproxime a Câmera</p>
+        
+        <div id="qr-modal-content" class="bg-white p-4 rounded-xl shadow-[0_0_40px_rgba(255,255,255,0.1)] w-full max-w-md flex justify-center items-center aspect-square">
+        </div>
+        
+        <p class="text-slate-400 text-[10px] mt-6 text-center max-w-xs">
+            Dica: Aumente o brilho do ecrã se a leitura estiver demorando.
+        </p>
+    </div>
+
+    <script>
+    const CONFIG_GENTE = {
+        nome: "PEIXE-VOADOR",
+        selectorDados: () => {
+            // EXPORTAÇÃO PARA O HUB (Ultra Dieta)
+            const stats = updateBiasAnalysis();
+            const temConflito = (stats.total > 3 && (stats.sPerc < 20 || stats.hPerc < 20));
+            
+            let count = 0;
+            Object.values(diagramData.causes).forEach(arr => count += arr.length);
+
+            const tituloCurto = diagramData.effect ? 
+                diagramData.effect.substring(0, 25) + "..." : 
+                "Análise Sistémica Padrão";
+
+            return {
+                tit: tituloCurto,       
+                met: [`Setor:${diagramData.sector}`, `Soft:${stats.sPerc}%`, `Hard:${stats.hPerc}%`],   
+                qta: count, 
+                cnf: temConflito        
+            };
+        }
+    };
+
+    function repararDadosGente(dados) {
+        if (dados.origem === "FORENSE") {
+            const c = dados.conteudo;
+            
+            // IMPORTAÇÃO DE TELEMETRIA DO FORENSE
+            if (c.tit) {
+                diagramData.effect = "Forense: " + c.tit;
+                document.getElementById('effect-input').value = diagramData.effect;
+            }
+            
+            if (c.met && c.met.length > 0) {
+                c.met.forEach(m => {
+                    diagramData.causes.environment.push({ text: "Diretriz Matriz: " + m });
+                });
+            }
+            
+            if (c.cnf) {
+                diagramData.causes.worldview.push({ text: "Alerta de Tensão Estratégica detetado na auditoria." });
+            }
+
+            renderDiagram();
+            renderInputPanels();
+            updateBiasAnalysis();
+            alert("Dados base do Forense importados para o diagrama com sucesso!");
+        } else {
+            alert(`Sincronização concluída! Dados recebidos de: [${dados.origem}].`);
+        }
+    }
+
+    let scannerGente = null;
+
+    function toggleGenteInterface() {
+        const body = document.getElementById('gente-interface-body');
+        const icon = document.getElementById('gente-toggle-icon');
+        const isHidden = body.classList.contains('hidden');
+        body.classList.toggle('hidden');
+        icon.innerText = isHidden ? '▼' : '▲';
+        if (!isHidden) fecharScannerGente();
+    }
+
+    function gerarSaidaGente() {
+        fecharScannerGente();
+        const dados = CONFIG_GENTE.selectorDados();
+        if (!dados) return alert("⚠️ Nenhum dado no diagrama para exportar.");
+        
+        try {
+            const payload = { origem: CONFIG_GENTE.nome, timestamp: new Date().toISOString(), conteudo: dados };
+            const comprimido = LZString.compressToBase64(JSON.stringify(payload));
+            const textoFinal = "G3!" + comprimido;
+            
+            const container = document.getElementById("gente-qrcode-output");
+            container.innerHTML = ""; 
+
+            let tamanhoQR = 200; 
+            if (textoFinal.length > 500) tamanhoQR = 300;
+            if (textoFinal.length > 1000) tamanhoQR = 450;
+            if (textoFinal.length > 1500) tamanhoQR = 600;
+
+            new QRCode(container, { 
+                text: textoFinal, 
+                width: tamanhoQR, 
+                height: tamanhoQR, 
+                correctLevel : QRCode.CorrectLevel.L
+            });
+
+            setTimeout(() => {
+                const qrCanvas = container.querySelector("canvas");
+                const qrImage = container.querySelector("img");
+                
+                if (qrCanvas) { qrCanvas.style.maxWidth = "200px"; qrCanvas.style.height = "auto"; }
+                if (qrImage) { qrImage.style.maxWidth = "200px"; qrImage.style.height = "auto"; }
+                
+                container.style.cursor = "pointer";
+                container.setAttribute("onclick", "abrirQRFullscreen()");
+                container.title = "Toque para ampliar";
+                
+                if (!document.getElementById("aviso-clique-qr")) {
+                    const aviso = document.createElement("div");
+                    aviso.id = "aviso-clique-qr";
+                    aviso.className = "text-[9px] text-slate-400 text-center mt-2 w-full animate-pulse";
+                    aviso.innerText = "👆 Toque no QR Code para ampliar ou Copiar";
+                    
+                    const btnCopy = document.createElement("button");
+                    btnCopy.className = "mt-2 bg-slate-700 text-white text-[9px] px-2 py-1 rounded w-full";
+                    btnCopy.innerText = "📋 Copiar Código G3!";
+                    btnCopy.onclick = (e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(textoFinal).then(() => alert("Código copiado! Pode colar no Hub."));
+                    };
+
+                    container.parentNode.appendChild(aviso);
+                    container.parentNode.appendChild(btnCopy);
+                }
+            }, 50);
+
+        } catch (e) { 
+            alert("Erro na geração: " + e.message); 
+        }
+    }
+
+    function abrirQRFullscreen() {
+        const containerOrigem = document.getElementById("gente-qrcode-output");
+        const containerDestino = document.getElementById("qr-modal-content");
+        const modal = document.getElementById("qr-modal-fullscreen");
+
+        if (!containerOrigem.innerHTML) return;
+
+        containerDestino.innerHTML = "";
+        const canvasOrigem = containerOrigem.querySelector("canvas");
+        const imgOrigem = containerOrigem.querySelector("img");
+        
+        let urlImagem = "";
+        if (canvasOrigem) {
+            urlImagem = canvasOrigem.toDataURL("image/png");
+        } else if (imgOrigem && imgOrigem.src) {
+            urlImagem = imgOrigem.src;
+        }
+
+        if (urlImagem) {
+            const novaImg = document.createElement("img");
+            novaImg.src = urlImagem;
+            novaImg.className = "w-full h-auto object-contain"; 
+            containerDestino.appendChild(novaImg);
+        } else {
+            containerDestino.innerHTML = containerOrigem.innerHTML;
+        }
+
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+    }
+
+    function fecharQRFullscreen() {
+        const modal = document.getElementById("qr-modal-fullscreen");
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+        document.getElementById("qr-modal-content").innerHTML = ""; 
+    }
+
+    function iniciarLeitorGente() {
+        const readerElement = document.getElementById("gente-reader");
+        document.getElementById("gente-qrcode-output").innerHTML = "";
+        
+        const aviso = document.getElementById("aviso-clique-qr");
+        if(aviso) {
+            aviso.remove();
+            if(aviso.nextElementSibling) aviso.nextElementSibling.remove();
+        }
+
+        readerElement.classList.remove("hidden");
+        scannerGente = new Html5Qrcode("gente-reader");
+        scannerGente.start({ facingMode: "environment" }, { fps: 10, qrbox: 200 }, (text) => {
+            if (text.startsWith("G3!")) {
+                try {
+                    const descompactado = LZString.decompressFromBase64(text.substring(3));
+                    const dados = JSON.parse(descompactado);
+                    
+                    if(typeof repararDadosGente === "function") {
+                        repararDadosGente(dados); 
+                    }
+                    
+                    fecharScannerGente();
+                } catch (e) { alert("Erro ao processar dados transferidos."); }
+            }
+        }).catch(err => { 
+            alert("Erro na câmara: " + err); 
+            readerElement.classList.add("hidden"); 
+        });
+    }
+
+    function fecharScannerGente() {
+        if (scannerGente && scannerGente.isScanning) {
+            scannerGente.stop().then(() => { 
+                document.getElementById("gente-reader").classList.add("hidden"); 
+            }).catch(() => {});
+        } else { 
+            document.getElementById("gente-reader").classList.add("hidden"); 
+        }
+    }
+    </script>
+
 </body>
 </html>
+
