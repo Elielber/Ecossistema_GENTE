@@ -1104,10 +1104,11 @@ function removeWizardItem(key, idx) {
                     <span id="gente-toggle-icon">▲</span>
                 </button>
             </div>
-            <div id="gente-interface-body" class="hidden">
-                <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div id="gente-interface-body" class="hidden">
+                <div class="grid grid-cols-3 gap-2 mb-3">
                     <button onclick="gerarSaidaGente()" class="bg-slate-700 text-white text-[10px] font-bold py-2 rounded border border-slate-600 transition active:scale-95">📤 Gerar QR</button>
-                    <button onclick="iniciarLeitorGente()" class="bg-indigo-600 text-white text-[10px] font-bold py-2 rounded transition active:scale-95">📥 Ler QR</button>
+                    <button onclick="iniciarLeitorGente()" class="bg-indigo-600 text-white text-[10px] font-bold py-2 rounded transition active:scale-95">📷 Câmara</button>
+                    <button onclick="colarCodigoGente()" class="bg-amber-700 text-white text-[10px] font-bold py-2 rounded transition active:scale-95">📋 Colar</button>
                 </div>
                 
                 <div class="flex flex-col items-center">
@@ -1116,6 +1117,7 @@ function removeWizardItem(key, idx) {
                 
                 <div id="gente-reader" class="mt-2 rounded-lg overflow-hidden border border-slate-500 hidden mx-auto max-w-[250px] bg-black"></div>
             </div>
+
         </div>
     </div>
 
@@ -1323,6 +1325,39 @@ function removeWizardItem(key, idx) {
             readerElement.classList.add("hidden"); 
         });
     }
+    // --- IMPORTAÇÃO VIA ÁREA DE TRANSFERÊNCIA ---
+    function colarCodigoGente() {
+        fecharScannerGente(); // Desliga a câmara se estiver ligada
+        document.getElementById("gente-qrcode-output").innerHTML = "";
+        
+        // Limpa avisos residuais do gerador
+        const aviso = document.getElementById("aviso-clique-qr");
+        if(aviso) {
+            aviso.remove();
+            if(aviso.nextElementSibling) aviso.nextElementSibling.remove();
+        }
+
+        // Pede o código ao utilizador
+        const codigo = prompt("Cole aqui o código G3! copiado da outra ferramenta:");
+        
+        if (codigo && codigo.trim() !== "") {
+            const text = codigo.trim();
+            if (text.startsWith("G3!")) {
+                try {
+                    const descompactado = LZString.decompressFromBase64(text.substring(3));
+                    const dados = JSON.parse(descompactado);
+                    
+                    if(typeof repararDadosGente === "function") {
+                        repararDadosGente(dados); 
+                    }
+                } catch (e) { 
+                    alert("Erro ao processar dados transferidos. O código pode estar corrompido."); 
+                }
+            } else {
+                alert("Aviso: O texto colado não é válido (Falta a assinatura G3! no início).");
+            }
+        }
+    }
 
     function fecharScannerGente() {
         if (scannerGente && scannerGente.isScanning) {
@@ -1337,4 +1372,5 @@ function removeWizardItem(key, idx) {
 
 </body>
 </html>
+
 
