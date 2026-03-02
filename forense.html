@@ -1051,7 +1051,6 @@
 const CONFIG_GENTE = {
     nome: "FORENSE",
     selectorDados: () => {
-        // Tenta buscar no estado global ou no backup do localStorage
         const backup = localStorage.getItem('GENTE_ULTIMA_AUDITORIA');
         const fonte = (dadosAuditoria && dadosAuditoria.alternativas.length > 0) ? 
                       dadosAuditoria : 
@@ -1061,9 +1060,25 @@ const CONFIG_GENTE = {
             return null;
         }
 
-        // Retorna apenas os dados estruturados, sem os textos brutos
-        const { rawTextDirex, rawTextCritica, ...essenciais } = fonte;
-        return essenciais;
+        // --- DIETA DE DADOS PARA O QR CODE ---
+        // Limpa HTML e trunca textos muito longos para aliviar a densidade da imagem
+        const limite = 80; // Máximo de caracteres para textos descritivos
+        const clean = (str) => str ? str.replace(/<\/?[^>]+(>|$)/g, "") : "";
+        const truncar = (str) => (str && str.length > limite) ? str.substring(0, limite) + "..." : str;
+
+        // Montamos um payload enxuto só com o que os dashboards e integrações precisam
+        return {
+            alternativas: fonte.alternativas.map(a => truncar(clean(a))),
+            
+            // Do Bardin, só precisamos do Nome e da Frequência Matemática para o gráfico. 
+            // Ignoramos os textos literários longos ('analise' e 'referencia')
+            criteriosDirex: fonte.criteriosDirex.map(c => ({
+                nome: c.nome,
+                frequencia: c.frequencia
+            })),
+            
+            alertas: fonte.alertas.map(a => truncar(clean(a)))
+        };
     }
 };
 
