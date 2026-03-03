@@ -216,7 +216,7 @@
     // ==========================================
     const GenteDB = {
     dbName: "EcossistemaGente",
-    version: 3, // ATENÇÃO: Mudamos para 3 para criar as novas gavetas (Criter, ANP, Plays)
+    version: 4, 
     db: null,
 
     init() {
@@ -473,7 +473,7 @@ async function atualizarDiagnosticoMaturidade() {
     let scannerHub = null;
 
     // Processa a string descompactada (seja da câmera ou do colar texto)
-               async function processarEntradaG3(textoBruto) {
+  async function processarEntradaG3(textoBruto) {
         if (!textoBruto.startsWith("G3!")) {
             alert("Aviso: O código não pertence ao protocolo GENTE.");
             return;
@@ -483,7 +483,21 @@ async function atualizarDiagnosticoMaturidade() {
             const descompactado = LZString.decompressFromBase64(textoBruto.substring(3));
             const dados = JSON.parse(descompactado);
             
-            // 1. Identifica a gaveta correta
+            // 1. Prepara o objeto final garantindo que a ORIGEM exista
+            // Se salvarmos apenas 'dados.conteudo', perdemos a etiqueta de origem.
+            // Aqui fundimos as duas coisas.
+            let registroFinal = dados.conteudo || dados;
+            
+            // Se o miolo não tiver a origem, injetamos a partir da casca
+            if (typeof registroFinal === 'object' && !registroFinal.origem) {
+                registroFinal.origem = dados.origem; 
+            }
+            // Garantimos também o timestamp
+            if (!registroFinal.timestamp) {
+                registroFinal.timestamp = dados.timestamp || new Date().toISOString();
+            }
+
+            // 2. Identifica a gaveta correta
             const origemStr = (dados.origem || "HistoricoLeituras").toLowerCase();
             let tabelaDestino = "HistoricoLeituras";
             
@@ -494,19 +508,21 @@ async function atualizarDiagnosticoMaturidade() {
             else if (origemStr.includes("plan"))    tabelaDestino = "plan";
             else if (origemStr.includes("plays"))   tabelaDestino = "plays";
 
-            // 2. Salva no banco
-            await GenteDB.salvarEmTabela(tabelaDestino, dados.conteudo || dados);
+            // 3. Salva no banco o registro corrigido
+            await GenteDB.salvarEmTabela(tabelaDestino, registroFinal);
             
             fecharScannerHub();
 
-            // 3. ATUALIZAÇÃO FORÇADA DA UI (Sem travar com Alert ainda)
+            // 4. ATUALIZAÇÃO VISUAL IMEDIATA
+            // Executamos isso ANTES do alert para o usuário ver acontecer
             await carregarArvoreDoBanco(); 
             await atualizarDiagnosticoMaturidade();
 
-            // 4. Feedback ao usuário (com pequeno delay para garantir que a tela pintou)
+            // 5. Feedback com atraso (Permite que o navegador desenhe o gráfico antes de travar)
             setTimeout(() => {
-                alert(`✅ Sincronia Concluída!\nFerramenta: ${dados.origem}\nStatus: Armazenado e Processado.`);
-            }, 300);
+                const titulo = registroFinal.tit || registroFinal.titulo || "Dados";
+                alert(`✅ Sincronia Concluída!\n\nArquivo: ${titulo}\nDestino: Pasta ${dados.origem}`);
+            }, 500); // Meio segundo de espera para garantir a renderização visual
 
         } catch (e) {
             console.error("Erro na sincronia:", e);
@@ -625,15 +641,19 @@ async function atualizarDiagnosticoMaturidade() {
             ...(dadosCompletos.HistoricoLeituras || [])
         ];
 
-        // Mapeamento Robusto (Case Insensitive)
+       // Mapeamento Robusto (Case Insensitive e Seguro contra Null)
         const redePopulada = ecossistemaMapeamento.map(m => ({
             ...m,
             itens: m.ferramentas.map(f => ({
                 nome: f,
-                // AQUI ESTÁ A CORREÇÃO: Compara tudo em maiúsculo para garantir o match
-                registros: historicoConsolidado.filter(reg => 
-                    (reg.origem || "Desconhecido").toUpperCase().includes(f.toUpperCase())
-                )
+                registros: historicoConsolidado.filter(reg => {
+                    // Proteção contra registros antigos sem origem
+                    const origemReg = (reg.origem || "Desconhecido").toUpperCase();
+                    const filtroFerramenta = f.toUpperCase();
+                    
+                    // Verifica se um contém o outro (ex: 'PEIXE' encontra 'PEIXE-VOADOR')
+                    return origemReg.includes(filtroFerramenta) || filtroFerramenta.includes(origemReg);
+                })
             }))
         }));
 
@@ -726,6 +746,7 @@ async function atualizarDiagnosticoMaturidade() {
 </body>
 
 </html>
+
 
 
 
