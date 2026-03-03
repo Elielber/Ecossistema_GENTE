@@ -473,16 +473,20 @@ async function atualizarDiagnosticoMaturidade() {
     let scannerHub = null;
 
     // Processa a string descompactada (seja da câmera ou do colar texto)
-                async function processarEntradaG3(textoBruto) {
-        // ... (validação do G3! e parse JSON)
+               async function processarEntradaG3(textoBruto) {
+        if (!textoBruto.startsWith("G3!")) {
+            alert("Aviso: O código não pertence ao protocolo GENTE.");
+            return;
+        }
+
         try {
             const descompactado = LZString.decompressFromBase64(textoBruto.substring(3));
             const dados = JSON.parse(descompactado);
             
-            const origemStr = (dados.origem || "").toLowerCase();
-            
-            // Mapeamento detalhado para as 6 gavetas
+            // 1. Identifica a gaveta correta
+            const origemStr = (dados.origem || "HistoricoLeituras").toLowerCase();
             let tabelaDestino = "HistoricoLeituras";
+            
             if (origemStr.includes("forense")) tabelaDestino = "forense";
             else if (origemStr.includes("peixe"))   tabelaDestino = "peixe";
             else if (origemStr.includes("criter"))  tabelaDestino = "criter";
@@ -490,21 +494,25 @@ async function atualizarDiagnosticoMaturidade() {
             else if (origemStr.includes("plan"))    tabelaDestino = "plan";
             else if (origemStr.includes("plays"))   tabelaDestino = "plays";
 
+            // 2. Salva no banco
             await GenteDB.salvarEmTabela(tabelaDestino, dados.conteudo || dados);
-    
-            alert(`✅ Sucesso! Dados da ferramenta [${dados.origem}] armazenados no Cofre.`);
-            fecharScannerHub();
             
-            // Atualiza interface e radar instantaneamente
+            fecharScannerHub();
+
+            // 3. ATUALIZAÇÃO FORÇADA DA UI (Sem travar com Alert ainda)
             await carregarArvoreDoBanco(); 
             await atualizarDiagnosticoMaturidade();
 
+            // 4. Feedback ao usuário (com pequeno delay para garantir que a tela pintou)
+            setTimeout(() => {
+                alert(`✅ Sincronia Concluída!\nFerramenta: ${dados.origem}\nStatus: Armazenado e Processado.`);
+            }, 300);
+
         } catch (e) {
             console.error("Erro na sincronia:", e);
-            alert("Erro ao decodificar os dados: " + e.message);
+            alert("Erro ao processar dados: " + e.message);
         }
     }
-
     // Aciona a Câmera
     function iniciarLeitorHub() {
         const readerElement = document.getElementById("gente-reader");
@@ -601,14 +609,12 @@ async function atualizarDiagnosticoMaturidade() {
         { modulo: "5. Gestão Estratégica", id: "m5", ferramentas: ["COCKPIT"] }
     ];
 
-        async function carregarArvoreDoBanco() {
-        // 1. Coleta os dados de todas as novas "gavetas"
+       async function carregarArvoreDoBanco() {
         const dadosCompletos = await GenteDB.obterTodosDados();
         const container = document.getElementById('explorer-content');
         container.innerHTML = "";
 
-        // 2. Consolida tudo em uma única lista para a interface processar
-                // 2. Consolida tudo em uma única lista para a interface processar (TODAS AS GAVETAS)
+        // Consolida tudo
         const historicoConsolidado = [
             ...(dadosCompletos.forense || []),
             ...(dadosCompletos.peixe || []),
@@ -619,48 +625,60 @@ async function atualizarDiagnosticoMaturidade() {
             ...(dadosCompletos.HistoricoLeituras || [])
         ];
 
-
-        // 3. Mapeia as ferramentas para a interface
+        // Mapeamento Robusto (Case Insensitive)
         const redePopulada = ecossistemaMapeamento.map(m => ({
             ...m,
             itens: m.ferramentas.map(f => ({
                 nome: f,
-                registros: historicoConsolidado.filter(reg => (reg.origem || "").toUpperCase().includes(f))
+                // AQUI ESTÁ A CORREÇÃO: Compara tudo em maiúsculo para garantir o match
+                registros: historicoConsolidado.filter(reg => 
+                    (reg.origem || "Desconhecido").toUpperCase().includes(f.toUpperCase())
+                )
             }))
         }));
 
         let totalRegistros = historicoConsolidado.length;
-        document.getElementById("stats-topo").innerText = `${totalRegistros} auditorias/simulações no banco local`;
+        const statsElement = document.getElementById("stats-topo");
+        if(statsElement) statsElement.innerText = `${totalRegistros} registros auditados no Cofre`;
 
-        // 4. Renderização do HTML (Mantém a sua lógica visual original)
+        // Renderização (igual ao anterior)
         redePopulada.forEach(m => {
             let toolsHtml = m.itens.map(ferramenta => {
                 let filesHtml = ferramenta.registros.map(reg => {
                     const dataFormatada = reg.dataSincronia 
-                        ? new Date(reg.dataSincronia).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' })
+                        ? new Date(reg.dataSincronia).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' })
                         : "Data n/d";
                     
+                    // Ajuste para garantir que o ID da tabela seja passado corretamente na exportação
+                    // Se a origem for Forense, a tabela é 'forense'
+                    let tabelaOrigem = ferramenta.nome.toLowerCase(); 
+                    if(tabelaOrigem === 'peixe-voador') tabelaOrigem = 'peixe'; // Ajuste manual para nomes compostos
+
                     return `
-                    <div class="file-row" onclick="event.stopPropagation(); exportarRegistroHub('${reg.origem.toLowerCase()}', ${reg.id})">
+                    <div class="file-row" onclick="event.stopPropagation(); exportarRegistroHub('${tabelaOrigem}', ${reg.id})">
                         <div style="display:flex; flex-direction:column;">
-                            <span>ID #${reg.id} - Sincronizado</span>
-                            <span style="font-size:0.65rem; color:#aaa;">${dataFormatada}</span>
+                            <span style="font-weight:bold; color:#333;">${reg.tit || reg.titulo || "Registro sem título"}</span>
+                            <span style="font-size:0.65rem; color:#aaa;">ID:${reg.id} • ${dataFormatada}</span>
                         </div>
-                        <span style="background: var(--azul); color:white; padding: 4px 8px; border-radius:4px; font-size:0.6rem; text-transform:uppercase;">Abrir/Exportar</span>
+                        <span style="background: var(--azul); color:white; padding: 4px 8px; border-radius:4px; font-size:0.6rem; text-transform:uppercase;">Abrir</span>
                     </div>`;
                 }).join('');
 
-                const corHeader = ferramenta.registros.length > 0 ? "var(--azul)" : "var(--arcos)";
+                const corHeader = ferramenta.registros.length > 0 ? "var(--azul)" : "#999";
+                const icone = ferramenta.registros.length > 0 ? "📂" : "📁";
                 
                 return `
                     <div class="tool-wrapper">
                         <div class="tool-header" onclick="event.stopPropagation(); toggleElement('files-${m.id}-${ferramenta.nome}', this)">
                             <span class="arrow">▶</span>
-                            <span style="margin-right:8px;">${ferramenta.registros.length > 0 ? '📂' : '📁'}</span>
-                            <span style="font-size:0.85rem; color:${corHeader}; font-weight:bold;">${ferramenta.nome} (${ferramenta.registros.length})</span>
+                            <span style="margin-right:8px;">${icone}</span>
+                            <span style="font-size:0.8rem; color:${corHeader}; font-weight:bold;">
+                                ${ferramenta.nome} 
+                                <span style="font-size:0.7em; opacity:0.7;">(${ferramenta.registros.length})</span>
+                            </span>
                         </div>
                         <div id="files-${m.id}-${ferramenta.nome}" class="files-container">
-                            ${filesHtml || '<div style="padding:10px 15px; color:#ccc; font-size:0.7rem;">Nenhum log recebido ainda.</div>'}
+                            ${filesHtml || '<div style="padding:10px 15px; color:#ccc; font-size:0.7rem; font-style:italic;">Nenhum registro sincronizado.</div>'}
                         </div>
                     </div>`;
             }).join('');
@@ -669,8 +687,8 @@ async function atualizarDiagnosticoMaturidade() {
                 <div class="module-wrapper">
                     <div class="module-header" onclick="toggleElement('tools-${m.id}', this)">
                         <span class="arrow">▶</span>
-                        <span class="network-node-icon">🖥️</span>
-                        <span class="module-name">${m.modulo}</span>
+                        <span class="network-node-icon">🔹</span>
+                        <span class="module-name" style="font-size:0.85rem;">${m.modulo}</span>
                     </div>
                     <div id="tools-${m.id}" class="tools-container">
                         ${toolsHtml}
@@ -708,6 +726,7 @@ async function atualizarDiagnosticoMaturidade() {
 </body>
 
 </html>
+
 
 
 
