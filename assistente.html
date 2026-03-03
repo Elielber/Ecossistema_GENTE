@@ -342,16 +342,23 @@
     }
 };
 
-/**
- * MOTOR DE MATURIDADE GENTE - HEXÁGONO DINÂMICO
- * Analisa as 6 gavetas do banco e renderiza o status visual
- */
+
+// ==========================================
+// FUNÇÃO ATUALIZADA: DIAGNÓSTICO EXECUTIVO (COMPLETA)
+// ==========================================
 async function atualizarDiagnosticoMaturidade() {
+    console.log("Iniciando diagnóstico de maturidade..."); // Mantido seu log
+    
+    // Segurança: Garante conexão com o banco
+    if (!GenteDB.db) {
+        console.log("Banco não pronto, inicializando...");
+        await GenteDB.init();
+    }
+
     // 1. Coleta dados de todas as ferramentas
     const dados = await GenteDB.obterTodosDados();
     
-    // 2. Define os critérios de pontuação (0 a 100)
-    // Aqui você pode evoluir a lógica para checar a qualidade dos dados futuramente
+    // 2. Define os critérios de pontuação (Lógica mantida)
     const status = {
         forense: (dados.forense && dados.forense.length > 0) ? 100 : 0,
         peixe:   (dados.peixe && dados.peixe.length > 0) ? 100 : 0,
@@ -360,7 +367,8 @@ async function atualizarDiagnosticoMaturidade() {
         plan:    (dados.plan && dados.plan.length > 0) ? 100 : 0,
         plays:   (dados.plays && dados.plays.length > 0) ? 100 : 0
     };
-    // 3. Atualiza os LEDs (Indicadores Visuais)
+
+    // 3. Atualiza os LEDs (Lógica mantida)
     Object.keys(status).forEach(id => {
         const led = document.getElementById(`led-${id}`);
         if (led) {
@@ -368,17 +376,20 @@ async function atualizarDiagnosticoMaturidade() {
         }
     });
 
-    // 4. Configurações do SVG
+    // 4. Configurações do SVG (AJUSTADO PARA OS NOVOS NOMES)
     const centro = 100;
-    const raioMax = 75;
+    const raioMax = 65; // REDUZIDO DE 75 PARA 65 (Para caber o texto duplo)
+    
+    // Nomes Executivos de Mercado (Taxonomia Korn Ferry/Lominger)
     const labels = [
-        { id: "forense", txt: "1. Forense" },
-        { id: "peixe",   txt: "2. Peixe" },
-        { id: "criter",  txt: "3. Criter" },
-        { id: "anp",     txt: "4. ANP" },
-        { id: "plan",    txt: "5. Plan" },
-        { id: "plays",   txt: "6. Plays" }
+        { id: "forense", txt: "Gestão de Evidências" },
+        { id: "peixe",   txt: "Visão Sistêmica" },
+        { id: "criter",  txt: "Priorização Estratégica" },
+        { id: "anp",     txt: "Análise de Complexidade" },
+        { id: "plan",    txt: "Desdobramento Tático" },     
+        { id: "plays",   txt: "Negociação Stakeholders" }
     ];
+
     const passo = (Math.PI * 2) / labels.length;
 
     // 5. Gera a Teia de Fundo (Grades)
@@ -404,7 +415,7 @@ async function atualizarDiagnosticoMaturidade() {
     // 7. Renderiza o SVG Final
     const container = document.getElementById("radar-container");
     container.innerHTML = `
-        <svg viewBox="0 0 200 200" class="w-full max-w-[350px] drop-shadow-2xl">
+        <svg viewBox="0 0 200 200" class="w-full max-w-[350px] drop-shadow-2xl" style="overflow: visible;">
             ${teiaHtml}
             
             ${labels.map((_, i) => {
@@ -425,9 +436,19 @@ async function atualizarDiagnosticoMaturidade() {
             }).join("")}
 
             ${labels.map((l, i) => {
-                const x = centro + (raioMax + 18) * Math.cos(i * passo - Math.PI / 2);
-                const y = centro + (raioMax + 18) * Math.sin(i * passo - Math.PI / 2);
-                return `<text x="${x}" y="${y}" fill="${status[l.id] > 0 ? '#fff' : '#64748b'}" font-size="7" font-weight="bold" text-anchor="middle" dominant-baseline="middle">${l.txt}</text>`;
+                // Aumentamos a distância para 28px para afastar o texto do gráfico
+                const x = centro + (raioMax + 28) * Math.cos(i * passo - Math.PI / 2);
+                const y = centro + (raioMax + 28) * Math.sin(i * passo - Math.PI / 2);
+                const palavras = l.txt.split(" "); // Quebra o texto nos espaços
+                
+                return `
+                    <text x="${x}" y="${y}" fill="${status[l.id] > 0 ? '#fff' : '#64748b'}" 
+                          font-size="5.5" font-weight="bold" text-anchor="middle" dominant-baseline="middle">
+                        ${palavras.map((palavra, index) => 
+                            // Se for a 1ª palavra sobe um pouquinho (-3), se for a 2ª desce (7)
+                            `<tspan x="${x}" dy="${index === 0 ? (palavras.length > 1 ? -3 : 0) : 7}">${palavra}</tspan>`
+                        ).join("")}
+                    </text>`;
             }).join("")}
 
             <defs>
@@ -438,7 +459,13 @@ async function atualizarDiagnosticoMaturidade() {
             </defs>
         </svg>
     `;
+    
+    // Pequeno efeito visual para confirmar que o botão funcionou
+    container.classList.remove("radar-flash");
+    void container.offsetWidth; 
+    container.classList.add("radar-flash");
 }
+
 
     // ==========================================
     // 2. LÓGICA DE SINCRONIA E QR CODE
@@ -681,6 +708,7 @@ async function atualizarDiagnosticoMaturidade() {
 </body>
 
 </html>
+
 
 
 
