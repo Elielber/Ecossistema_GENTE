@@ -326,6 +326,104 @@
     }
 };
 
+/**
+ * MOTOR DE MATURIDADE GENTE - HEXÁGONO DINÂMICO
+ * Analisa as 6 gavetas do banco e renderiza o status visual
+ */
+async function atualizarDiagnosticoMaturidade() {
+    // 1. Coleta dados de todas as ferramentas
+    const dados = await GenteDB.obterTodosDados();
+    
+    // 2. Define os critérios de pontuação (0 a 100)
+    // Aqui você pode evoluir a lógica para checar a qualidade dos dados futuramente
+    const status = {
+        forense: dados.forense.length > 0 ? 100 : 0,
+        peixe:   dados.peixe.length > 0 ? 100 : 0,
+        criter:  dados.criter.length > 0 ? 100 : 0,
+        anp:     dados.anp.length > 0 ? 100 : 0,
+        plan:    dados.plan.length > 0 ? 100 : 0,
+        plays:   dados.plays.length > 0 ? 100 : 0
+    };
+
+    // 3. Atualiza os LEDs (Indicadores Visuais)
+    Object.keys(status).forEach(id => {
+        const led = document.getElementById(`led-${id}`);
+        if (led) {
+            led.className = `w-2.5 h-2.5 rounded-full transition-all duration-500 ${status[id] > 0 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-slate-700'}`;
+        }
+    });
+
+    // 4. Configurações do SVG
+    const centro = 100;
+    const raioMax = 75;
+    const labels = [
+        { id: "forense", txt: "1. Forense" },
+        { id: "peixe",   txt: "2. Peixe" },
+        { id: "criter",  txt: "3. Criter" },
+        { id: "anp",     txt: "4. ANP" },
+        { id: "plan",    txt: "5. Plan" },
+        { id: "plays",   txt: "6. Plays" }
+    ];
+    const passo = (Math.PI * 2) / labels.length;
+
+    // 5. Gera a Teia de Fundo (Grades)
+    let teiaHtml = "";
+    for (let nivel = 1; nivel <= 4; nivel++) {
+        const r = (raioMax / 4) * nivel;
+        const pontosGrade = labels.map((_, i) => {
+            const x = centro + r * Math.cos(i * passo - Math.PI / 2);
+            const y = centro + r * Math.sin(i * passo - Math.PI / 2);
+            return `${x},${y}`;
+        }).join(" ");
+        teiaHtml += `<polygon points="${pontosGrade}" fill="none" stroke="#334155" stroke-width="0.5" />`;
+    }
+
+    // 6. Calcula a área preenchida pelo usuário
+    const areaUsuario = labels.map((l, i) => {
+        const r = (status[l.id] / 100) * raioMax;
+        const x = centro + r * Math.cos(i * passo - Math.PI / 2);
+        const y = centro + r * Math.sin(i * passo - Math.PI / 2);
+        return `${x},${y}`;
+    }).join(" ");
+
+    // 7. Renderiza o SVG Final
+    const container = document.getElementById("radar-container");
+    container.innerHTML = `
+        <svg viewBox="0 0 200 200" class="w-full max-w-[350px] drop-shadow-2xl">
+            ${teiaHtml}
+            
+            ${labels.map((_, i) => {
+                const x = centro + raioMax * Math.cos(i * passo - Math.PI / 2);
+                const y = centro + raioMax * Math.sin(i * passo - Math.PI / 2);
+                return `<line x1="${centro}" y1="${centro}" x2="${x}" y2="${y}" stroke="#1e293b" stroke-width="1" />`;
+            }).join("")}
+
+            <polygon points="${areaUsuario}" fill="url(#gradienteMaturidade)" stroke="#6366f1" stroke-width="2" stroke-linejoin="round">
+                <animate attributeName="opacity" values="0.6;0.9;0.6" dur="4s" repeatCount="indefinite" />
+            </polygon>
+
+            ${labels.map((l, i) => {
+                const r = (status[l.id] / 100) * raioMax;
+                const x = centro + r * Math.cos(i * passo - Math.PI / 2);
+                const y = centro + r * Math.sin(i * passo - Math.PI / 2);
+                return status[l.id] > 0 ? `<circle cx="${x}" cy="${y}" r="3" fill="#818cf8" />` : '';
+            }).join("")}
+
+            ${labels.map((l, i) => {
+                const x = centro + (raioMax + 18) * Math.cos(i * passo - Math.PI / 2);
+                const y = centro + (raioMax + 18) * Math.sin(i * passo - Math.PI / 2);
+                return `<text x="${x}" y="${y}" fill="${status[l.id] > 0 ? '#fff' : '#64748b'}" font-size="7" font-weight="bold" text-anchor="middle" dominant-baseline="middle">${l.txt}</text>`;
+            }).join("")}
+
+            <defs>
+                <radialGradient id="gradienteMaturidade">
+                    <stop offset="0%" stop-color="#4f46e5" stop-opacity="0.2" />
+                    <stop offset="100%" stop-color="#6366f1" stop-opacity="0.6" />
+                </radialGradient>
+            </defs>
+        </svg>
+    `;
+}
 
     // ==========================================
     // 2. LÓGICA DE SINCRONIA E QR CODE
@@ -426,105 +524,7 @@
         });
     }
 
-    /**
- * MOTOR DE MATURIDADE GENTE - HEXÁGONO DINÂMICO
- * Analisa as 6 gavetas do banco e renderiza o status visual
- */
-async function atualizarDiagnosticoMaturidade() {
-    // 1. Coleta dados de todas as ferramentas
-    const dados = await GenteDB.obterTodosDados();
     
-    // 2. Define os critérios de pontuação (0 a 100)
-    // Aqui você pode evoluir a lógica para checar a qualidade dos dados futuramente
-    const status = {
-        forense: dados.forense.length > 0 ? 100 : 0,
-        peixe:   dados.peixe.length > 0 ? 100 : 0,
-        criter:  dados.criter.length > 0 ? 100 : 0,
-        anp:     dados.anp.length > 0 ? 100 : 0,
-        plan:    dados.plan.length > 0 ? 100 : 0,
-        plays:   dados.plays.length > 0 ? 100 : 0
-    };
-
-    // 3. Atualiza os LEDs (Indicadores Visuais)
-    Object.keys(status).forEach(id => {
-        const led = document.getElementById(`led-${id}`);
-        if (led) {
-            led.className = `w-2.5 h-2.5 rounded-full transition-all duration-500 ${status[id] > 0 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-slate-700'}`;
-        }
-    });
-
-    // 4. Configurações do SVG
-    const centro = 100;
-    const raioMax = 75;
-    const labels = [
-        { id: "forense", txt: "1. Forense" },
-        { id: "peixe",   txt: "2. Peixe" },
-        { id: "criter",  txt: "3. Criter" },
-        { id: "anp",     txt: "4. ANP" },
-        { id: "plan",    txt: "5. Plan" },
-        { id: "plays",   txt: "6. Plays" }
-    ];
-    const passo = (Math.PI * 2) / labels.length;
-
-    // 5. Gera a Teia de Fundo (Grades)
-    let teiaHtml = "";
-    for (let nivel = 1; nivel <= 4; nivel++) {
-        const r = (raioMax / 4) * nivel;
-        const pontosGrade = labels.map((_, i) => {
-            const x = centro + r * Math.cos(i * passo - Math.PI / 2);
-            const y = centro + r * Math.sin(i * passo - Math.PI / 2);
-            return `${x},${y}`;
-        }).join(" ");
-        teiaHtml += `<polygon points="${pontosGrade}" fill="none" stroke="#334155" stroke-width="0.5" />`;
-    }
-
-    // 6. Calcula a área preenchida pelo usuário
-    const areaUsuario = labels.map((l, i) => {
-        const r = (status[l.id] / 100) * raioMax;
-        const x = centro + r * Math.cos(i * passo - Math.PI / 2);
-        const y = centro + r * Math.sin(i * passo - Math.PI / 2);
-        return `${x},${y}`;
-    }).join(" ");
-
-    // 7. Renderiza o SVG Final
-    const container = document.getElementById("radar-container");
-    container.innerHTML = `
-        <svg viewBox="0 0 200 200" class="w-full max-w-[350px] drop-shadow-2xl">
-            ${teiaHtml}
-            
-            ${labels.map((_, i) => {
-                const x = centro + raioMax * Math.cos(i * passo - Math.PI / 2);
-                const y = centro + raioMax * Math.sin(i * passo - Math.PI / 2);
-                return `<line x1="${centro}" y1="${centro}" x2="${x}" y2="${y}" stroke="#1e293b" stroke-width="1" />`;
-            }).join("")}
-
-            <polygon points="${areaUsuario}" fill="url(#gradienteMaturidade)" stroke="#6366f1" stroke-width="2" stroke-linejoin="round">
-                <animate attributeName="opacity" values="0.6;0.9;0.6" dur="4s" repeatCount="indefinite" />
-            </polygon>
-
-            ${labels.map((l, i) => {
-                const r = (status[l.id] / 100) * raioMax;
-                const x = centro + r * Math.cos(i * passo - Math.PI / 2);
-                const y = centro + r * Math.sin(i * passo - Math.PI / 2);
-                return status[l.id] > 0 ? `<circle cx="${x}" cy="${y}" r="3" fill="#818cf8" />` : '';
-            }).join("")}
-
-            ${labels.map((l, i) => {
-                const x = centro + (raioMax + 18) * Math.cos(i * passo - Math.PI / 2);
-                const y = centro + (raioMax + 18) * Math.sin(i * passo - Math.PI / 2);
-                return `<text x="${x}" y="${y}" fill="${status[l.id] > 0 ? '#fff' : '#64748b'}" font-size="7" font-weight="bold" text-anchor="middle" dominant-baseline="middle">${l.txt}</text>`;
-            }).join("")}
-
-            <defs>
-                <radialGradient id="gradienteMaturidade">
-                    <stop offset="0%" stop-color="#4f46e5" stop-opacity="0.2" />
-                    <stop offset="100%" stop-color="#6366f1" stop-opacity="0.6" />
-                </radialGradient>
-            </defs>
-        </svg>
-    `;
-}
-
     // ==========================================
     // 3. EXPLORADOR DE REDE (Ligado ao IndexedDB)
     // ==========================================
@@ -637,6 +637,7 @@ async function atualizarDiagnosticoMaturidade() {
 </body>
 
 </html>
+
 
 
 
