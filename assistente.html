@@ -173,21 +173,23 @@
 </div>
 
 
-    <div id="tela-estrategia" class="tela-container">
-        <header class="view-header">
-            <h2>Consistência da Estratégia</h2>
-            <p class="subtitle">Saúde do Plano de Negócio</p>
+    <div id="tela-estrategia" class="tela-container p-6 bg-slate-950 min-h-screen">
+        <header class="mb-8 border-b border-slate-800 pb-4">
+            <h2 class="text-2xl font-black text-white tracking-tighter uppercase italic">Painel de Impacto</h2>
+            <p class="text-slate-400 text-xs">Projeção de resultados baseada na maturidade atual</p>
         </header>
-        <div class="health-meters">
-            <div class="meter-group">
-                <label>Resiliência a Conflitos (Forense)</label>
-                <div class="progress-bar"><div class="fill" style="width: 75%; background: var(--vermelho);"></div></div>
-            </div>
-            <div class="meter-group">
-                <label>Consistência de Decisão (ANP)</label>
-                <div class="progress-bar"><div class="fill" style="width: 92%; background: var(--azul);"></div></div>
-            </div>
+
+        <div class="grid grid-cols-1 gap-4" id="kpi-container">
+            <div class="text-center text-slate-500 text-sm py-10">Calculando projeções de impacto...</div>
         </div>
+
+        <div class="mt-8 bg-slate-900/50 border border-slate-800 p-4 rounded-xl">
+            <h4 class="text-indigo-400 text-[10px] font-bold uppercase mb-2">Parecer do Algoritmo GENTE</h4>
+            <p id="parecer-estrategico" class="text-slate-300 text-xs leading-relaxed">
+                O sistema aguarda dados consistentes em todas as dimensões para gerar uma projeção confiável de saúde do negócio.
+            </p>
+        </div>
+    </div>
         <div class="alerta-conselho">
             <strong>PARECER GENTE:</strong> Monitoramento ativo. Adicione mais logs no Nexo para calibrar os medidores.
         </div>
@@ -211,7 +213,17 @@
 </nav>
 
 <script>
-        // ==========================================
+
+     // Inicia o sistema
+    window.onload = () => {
+        GenteDB.init().then(() => {
+            carregarArvoreDoBanco();
+            atualizarDiagnosticoMaturidade();
+            atualizarPainelEstrategico();
+        });
+    };
+    
+    // ==========================================
     // 1. MOTOR DE BANCO DE DADOS LOCAL (IndexedDB)
     // ==========================================
     const GenteDB = {
@@ -517,6 +529,7 @@ async function atualizarDiagnosticoMaturidade() {
             // Executamos isso ANTES do alert para o usuário ver acontecer
             await carregarArvoreDoBanco(); 
             await atualizarDiagnosticoMaturidade();
+            await atualizarPainelEstrategico();
 
             // 5. Feedback com atraso (Permite que o navegador desenhe o gráfico antes de travar)
             setTimeout(() => {
@@ -734,18 +747,103 @@ async function atualizarDiagnosticoMaturidade() {
         fecharScannerHub(); // Desliga a câmera se mudar de aba
     }
 
-    // Inicia o sistema
-    window.onload = () => {
-        GenteDB.init().then(() => {
-            carregarArvoreDoBanco();
-            atualizarDiagnosticoMaturidade();
-        });
-    };
+   
+    // ==========================================
+// FUNÇÃO NOVA: PAINEL ESTRATÉGICO (KPIs DE NEGÓCIO)
+// ==========================================
+async function atualizarPainelEstrategico() {
+    // 1. Garante dados atualizados
+    const dados = await GenteDB.obterTodosDados();
+
+    // 2. Mapeamento Causa (Ferramenta) -> Efeito (KPI de Negócio)
+    // Se a gaveta tem dados, consideramos impacto ativo (100% por enquanto)
+    const indicadores = [
+        { 
+            id: "forense", 
+            kpi: "Segurança Jurídica & Compliance", 
+            desc: "Redução de passivos e rastreabilidade",
+            valor: dados.forense?.length > 0 ? 85 : 15, // Valores simulados para demonstração
+            cor: "bg-emerald-500" 
+        },
+        { 
+            id: "peixe", 
+            kpi: "Satisfação de Stakeholders", 
+            desc: "Equilíbrio de interesses do ecossistema",
+            valor: dados.peixe?.length > 0 ? 92 : 20,
+            cor: "bg-blue-500"
+        },
+        { 
+            id: "criter", 
+            kpi: "Eficiência de Capital (ROI)", 
+            desc: "Alocação otimizada de recursos",
+            valor: dados.criter?.length > 0 ? 78 : 10,
+            cor: "bg-amber-500"
+        },
+        { 
+            id: "anp", 
+            kpi: "Mitigação de Riscos Críticos", 
+            desc: "Previsibilidade em cenários complexos",
+            valor: dados.anp?.length > 0 ? 88 : 25,
+            cor: "bg-purple-500"
+        },
+        { 
+            id: "plan", 
+            kpi: "Time-to-Market (Agilidade)", 
+            desc: "Velocidade entre decisão e execução",
+            valor: dados.plan?.length > 0 ? 95 : 30,
+            cor: "bg-rose-500"
+        },
+        { 
+            id: "plays", 
+            kpi: "Governança & Clima", 
+            desc: "Estabilidade política e retenção",
+            valor: dados.plays?.length > 0 ? 82 : 12,
+            cor: "bg-cyan-500"
+        }
+    ];
+
+    // 3. Renderização dos Cards
+    const container = document.getElementById("kpi-container");
+    container.innerHTML = indicadores.map(ind => `
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl relative overflow-hidden group">
+            <div class="flex justify-between items-end mb-2 relative z-10">
+                <div>
+                    <h3 class="text-xs font-bold text-white uppercase tracking-wider">${ind.kpi}</h3>
+                    <p class="text-[10px] text-slate-400">${ind.desc}</p>
+                </div>
+                <span class="text-xl font-black text-white">${ind.valor}%</span>
+            </div>
+            
+            <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden relative z-10">
+                <div class="h-full ${ind.cor} transition-all duration-1000" style="width: ${ind.valor}%"></div>
+            </div>
+
+            <div class="absolute -right-6 -bottom-6 w-24 h-24 ${ind.cor} opacity-10 rounded-full blur-2xl group-hover:opacity-20 transition-opacity"></div>
+        </div>
+    `).join("");
+
+    // 4. Parecer Inteligente (Narrativa Dinâmica)
+    const totalAtivos = indicadores.filter(i => i.valor > 50).length;
+    let parecer = "";
+    
+    if (totalAtivos === 0) {
+        parecer = "A organização opera em <strong>regime de risco elevado</strong>. Recomenda-se iniciar pela <strong>Gestão de Evidências (Forense)</strong> para estancar sangrias decisórias.";
+    } else if (totalAtivos < 3) {
+        parecer = "Evolução detectada, mas com <strong>assimetrias perigosas</strong>. A estratégia possui bons fundamentos isolados, mas carece de visão sistêmica para garantir sustentabilidade.";
+    } else if (totalAtivos < 6) {
+        parecer = "O negócio apresenta <strong>robustez operacional</strong>. O foco agora deve ser a integração fina entre tática (Plan) e governança (Plays) para maximizar o ROI.";
+    } else {
+        parecer = "<strong>Estado de Excelência (G3).</strong> O ecossistema opera em sinergia total. Os indicadores sugerem alta resiliência a crises e prontidão para expansão de mercado.";
+    }
+    
+    document.getElementById("parecer-estrategico").innerHTML = parecer;
+}
 </script>
 
 </body>
 
 </html>
+
 
 
 
