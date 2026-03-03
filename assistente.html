@@ -211,12 +211,12 @@
 </nav>
 
 <script>
-    // ==========================================
+        // ==========================================
     // 1. MOTOR DE BANCO DE DADOS LOCAL (IndexedDB)
     // ==========================================
     const GenteDB = {
-    dbName: "EcossistemaGente", // Mantive o nome para manter compatibilidade
-    version: 2, // Aumentamos a versão para forçar a criação das novas tabelas
+    dbName: "EcossistemaGente",
+    version: 3, // ATENÇÃO: Mudamos para 3 para criar as novas gavetas (Criter, ANP, Plays)
     db: null,
 
     init() {
@@ -225,17 +225,20 @@
             
             request.onupgradeneeded = (e) => {
                 const db = e.target.result;
-                // Criamos as "gavetas" especializadas do ecossistema
-                if (!db.objectStoreNames.contains('forense')) db.createObjectStore('forense', { keyPath: 'id', autoIncrement: true });
-                if (!db.objectStoreNames.contains('peixe')) db.createObjectStore('peixe', { keyPath: 'id', autoIncrement: true });
-                if (!db.objectStoreNames.contains('plan')) db.createObjectStore('plan', { keyPath: 'id', autoIncrement: true });
-                // Mantemos sua store antiga para não perder dados anteriores, se desejar
-                if (!db.objectStoreNames.contains('HistoricoLeituras')) db.createObjectStore('HistoricoLeituras', { keyPath: 'id', autoIncrement: true });
+                // Lista oficial das 6 ferramentas + histórico legado
+                const stores = ['forense', 'peixe', 'criter', 'anp', 'plan', 'plays', 'HistoricoLeituras'];
+                
+                stores.forEach(s => {
+                    if (!db.objectStoreNames.contains(s)) {
+                        db.createObjectStore(s, { keyPath: 'id', autoIncrement: true });
+                        console.log(`Gaveta criada: ${s}`);
+                    }
+                });
             };
 
             request.onsuccess = (e) => {
                 this.db = e.target.result;
-                console.log("Cofre GENTE: Banco de Dados Conectado.");
+                console.log("Cofre GENTE V3: Conectado com todas as gavetas.");
                 resolve();
             };
 
@@ -247,9 +250,12 @@
 
     async salvarEmTabela(tabela, dados) {
         if (!this.db) await this.init();
+        // Fallback para evitar erro se a tabela for enviada errada
+        const tabelaDestino = this.db.objectStoreNames.contains(tabela) ? tabela : "HistoricoLeituras";
+        
         return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction([tabela], "readwrite");
-            const store = transaction.objectStore(tabela);
+            const transaction = this.db.transaction([tabelaDestino], "readwrite");
+            const store = transaction.objectStore(tabelaDestino);
             const registro = { ...dados, dataSincronia: new Date().toISOString() };
             const request = store.add(registro);
             request.onsuccess = () => resolve(request.result);
@@ -258,13 +264,21 @@
     },
 
     async obterTodosDados() {
-        const stores = ['forense', 'peixe', 'plan', 'HistoricoLeituras'];
+        // Agora inclui todas as 7 stores na varredura
+        const stores = ['forense', 'peixe', 'criter', 'anp', 'plan', 'plays', 'HistoricoLeituras'];
         const backupTotal = {};
+        
         for (const store of stores) {
             backupTotal[store] = await new Promise((resolve) => {
+                // Verificação de segurança caso a store ainda não exista no browser do usuário
+                if (!this.db.objectStoreNames.contains(store)) {
+                    resolve([]);
+                    return;
+                }
                 const transaction = this.db.transaction([store], 'readonly');
                 const request = transaction.objectStore(store).getAll();
-                request.onsuccess = () => resolve(request.result);
+                request.onsuccess = () => resolve(request.result || []);
+                request.onerror = () => resolve([]);
             });
         }
         return backupTotal;
@@ -272,10 +286,12 @@
 
     async restaurarDados(dadosCofre) {
         for (const store in dadosCofre) {
-            const transaction = this.db.transaction([store], 'readwrite');
-            const objectStore = transaction.objectStore(store);
-            objectStore.clear(); // Limpa para evitar duplicidade na restauração
-            dadosCofre[store].forEach(item => objectStore.add(item));
+            if (this.db.objectStoreNames.contains(store)) {
+                const transaction = this.db.transaction([store], 'readwrite');
+                const objectStore = transaction.objectStore(store);
+                objectStore.clear(); 
+                dadosCofre[store].forEach(item => objectStore.add(item));
+            }
         }
     },
 
@@ -309,7 +325,7 @@
         reader.onload = async (e) => {
             const texto = e.target.result;
             if (!texto.startsWith("GENTE_VAULT_V1!")) {
-                alert("❌ Arquivo inválido: Assinatura digital GENTE não encontrada.");
+                alert("❌ Arquivo inválido.");
                 return;
             }
             try {
@@ -320,7 +336,7 @@
                     alert("✅ Ecossistema Restaurado!");
                     location.reload();
                 }
-            } catch (err) { alert("Erro ao decodificar cofre."); }
+            } catch (err) { alert("Erro ao decodificar."); }
         };
         reader.readAsText(file);
     }
@@ -431,25 +447,25 @@ async function atualizarDiagnosticoMaturidade() {
     let scannerHub = null;
 
     // Processa a string descompactada (seja da câmera ou do colar texto)
-            async function processarEntradaG3(textoBruto) {
-        if (!textoBruto.startsWith("G3!")) {
-            alert("Aviso: O código não pertence ao protocolo GENTE.");
-            return;
-        }
-
+                async function processarEntradaG3(textoBruto) {
+        // ... (validação do G3! e parse JSON)
         try {
             const descompactado = LZString.decompressFromBase64(textoBruto.substring(3));
             const dados = JSON.parse(descompactado);
             
-            // NOVO FLUXO: Identifica a gaveta correta (forense, peixe, plan, etc)
-            const origemStr = (dados.origem || "HistoricoLeituras").toLowerCase();
-            const tabelaDestino = origemStr.includes("forense") ? "forense" : 
-                                 origemStr.includes("peixe")   ? "peixe"   :
-                                 origemStr.includes("plan")    ? "plan"    : "HistoricoLeituras";
+            const origemStr = (dados.origem || "").toLowerCase();
             
-            // Salva usando o método correto da nova versão do GenteDB
-            await GenteDB.salvarEmTabela(tabelaDestino, dados);
-            
+            // Mapeamento detalhado para as 6 gavetas
+            let tabelaDestino = "HistoricoLeituras";
+            if (origemStr.includes("forense")) tabelaDestino = "forense";
+            else if (origemStr.includes("peixe"))   tabelaDestino = "peixe";
+            else if (origemStr.includes("criter"))  tabelaDestino = "criter";
+            else if (origemStr.includes("anp"))     tabelaDestino = "anp";
+            else if (origemStr.includes("plan"))    tabelaDestino = "plan";
+            else if (origemStr.includes("plays"))   tabelaDestino = "plays";
+
+            await GenteDB.salvarEmTabela(tabelaDestino, dados.conteudo || dados);
+    
             alert(`✅ Sucesso! Dados da ferramenta [${dados.origem}] armazenados no Cofre.`);
             fecharScannerHub();
             
@@ -652,6 +668,7 @@ async function atualizarDiagnosticoMaturidade() {
 </body>
 
 </html>
+
 
 
 
