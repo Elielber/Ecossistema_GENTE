@@ -401,36 +401,49 @@
         { modulo: "5. Gestão Estratégica", id: "m5", ferramentas: ["COCKPIT"] }
     ];
 
-    async function carregarArvoreDoBanco() {
-        const historico = await GenteDB.listarTodos();
+        async function carregarArvoreDoBanco() {
+        // 1. Coleta os dados de todas as novas "gavetas"
+        const dadosCompletos = await GenteDB.obterTodosDados();
         const container = document.getElementById('explorer-content');
         container.innerHTML = "";
 
-        // Estrutura de dados para a UI
+        // 2. Consolida tudo em uma única lista para a interface processar
+        const historicoConsolidado = [
+            ...(dadosCompletos.forense || []),
+            ...(dadosCompletos.peixe || []),
+            ...(dadosCompletos.plan || []),
+            ...(dadosCompletos.HistoricoLeituras || [])
+        ];
+
+        // 3. Mapeia as ferramentas para a interface
         const redePopulada = ecossistemaMapeamento.map(m => ({
             ...m,
             itens: m.ferramentas.map(f => ({
                 nome: f,
-                registros: historico.filter(reg => (reg.origem || "").toUpperCase().includes(f))
+                registros: historicoConsolidado.filter(reg => (reg.origem || "").toUpperCase().includes(f))
             }))
         }));
 
-        let totalRegistros = historico.length;
+        let totalRegistros = historicoConsolidado.length;
         document.getElementById("stats-topo").innerText = `${totalRegistros} auditorias/simulações no banco local`;
 
+        // 4. Renderização do HTML (Mantém a sua lógica visual original)
         redePopulada.forEach(m => {
             let toolsHtml = m.itens.map(ferramenta => {
                 let filesHtml = ferramenta.registros.map(reg => {
-                    const dataFormatada = new Date(reg.dataLeituraHub).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' });
+                    const dataFormatada = reg.dataSincronia 
+                        ? new Date(reg.dataSincronia).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute:'2-digit' })
+                        : "Data n/d";
+                    
                     return `
-                    <div class="file-row" onclick="event.stopPropagation(); exportarRegistroHub(${reg.id})">
+                    <div class="file-row" onclick="event.stopPropagation(); exportarRegistroHub('${reg.origem.toLowerCase()}', ${reg.id})">
                         <div style="display:flex; flex-direction:column;">
                             <span>ID #${reg.id} - Sincronizado</span>
                             <span style="font-size:0.65rem; color:#aaa;">${dataFormatada}</span>
                         </div>
                         <span style="background: var(--azul); color:white; padding: 4px 8px; border-radius:4px; font-size:0.6rem; text-transform:uppercase;">Abrir/Exportar</span>
-                    </div>
-                `}).join('');
+                    </div>`;
+                }).join('');
 
                 const corHeader = ferramenta.registros.length > 0 ? "var(--azul)" : "var(--arcos)";
                 
@@ -444,8 +457,7 @@
                         <div id="files-${m.id}-${ferramenta.nome}" class="files-container">
                             ${filesHtml || '<div style="padding:10px 15px; color:#ccc; font-size:0.7rem;">Nenhum log recebido ainda.</div>'}
                         </div>
-                    </div>
-                `;
+                    </div>`;
             }).join('');
 
             container.innerHTML += `
@@ -458,8 +470,7 @@
                     <div id="tools-${m.id}" class="tools-container">
                         ${toolsHtml}
                     </div>
-                </div>
-            `;
+                </div>`;
         });
     }
 
@@ -491,4 +502,5 @@
 </body>
 
 </html>
+
 
