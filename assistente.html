@@ -109,6 +109,19 @@
             <div id="explorer-content">
                 <p style="padding: 20px; text-align: center; color: #888; font-size: 0.9rem;">Carregando banco de dados...</p>
             </div>
+            <div class="p-4 bg-slate-900/50 rounded-lg border border-slate-700 mt-4">
+    <h3 class="text-[10px] font-bold text-indigo-400 uppercase mb-3">Segurança do Ecossistema</h3>
+    <div class="grid grid-cols-2 gap-2">
+        <button onclick="GenteDB.exportarCofre()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold py-2 rounded">
+            🔒 Gerar Cofre (.gente)
+        </button>
+        <label class="bg-slate-700 hover:bg-slate-600 text-white text-[10px] font-bold py-2 rounded text-center cursor-pointer">
+            🔓 Abrir Cofre
+            <input type="file" accept=".gente" onchange="GenteDB.importarCofre(this)" class="hidden">
+        </label>
+    </div>
+</div>
+
         </div>
     </div>
 
@@ -164,51 +177,117 @@
     // 1. MOTOR DE BANCO DE DADOS LOCAL (IndexedDB)
     // ==========================================
     const GenteDB = {
-        dbName: "EcossistemaGente",
-        storeName: "HistoricoLeituras",
-        version: 1,
-        db: null,
+    dbName: "EcossistemaGente", // Mantive o nome para manter compatibilidade
+    version: 2, // Aumentamos a versão para forçar a criação das novas tabelas
+    db: null,
 
-        init: function() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open(this.dbName, this.version);
-                request.onupgradeneeded = (event) => {
-                    const db = event.target.result;
-                    if (!db.objectStoreNames.contains(this.storeName)) {
-                        db.createObjectStore(this.storeName, { keyPath: "id", autoIncrement: true });
-                    }
-                };
-                request.onsuccess = (event) => {
-                    this.db = event.target.result;
-                    resolve(this.db);
-                };
-                request.onerror = (event) => reject(event.target.error);
-            });
-        },
+    init() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.dbName, this.version);
+            
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                // Criamos as "gavetas" especializadas do ecossistema
+                if (!db.objectStoreNames.contains('forense')) db.createObjectStore('forense', { keyPath: 'id', autoIncrement: true });
+                if (!db.objectStoreNames.contains('peixe')) db.createObjectStore('peixe', { keyPath: 'id', autoIncrement: true });
+                if (!db.objectStoreNames.contains('plan')) db.createObjectStore('plan', { keyPath: 'id', autoIncrement: true });
+                // Mantemos sua store antiga para não perder dados anteriores, se desejar
+                if (!db.objectStoreNames.contains('HistoricoLeituras')) db.createObjectStore('HistoricoLeituras', { keyPath: 'id', autoIncrement: true });
+            };
 
-        salvar: async function(dados) {
-            if (!this.db) await this.init();
-            return new Promise((resolve, reject) => {
-                const transaction = this.db.transaction([this.storeName], "readwrite");
-                const store = transaction.objectStore(this.storeName);
-                const registro = { ...dados, dataLeituraHub: new Date().toISOString() };
-                const request = store.add(registro);
+            request.onsuccess = (e) => {
+                this.db = e.target.result;
+                console.log("Cofre GENTE: Banco de Dados Conectado.");
+                resolve();
+            };
+
+            request.onerror = (e) => reject("Erro ao abrir banco: " + e.target.error);
+        });
+    },
+
+    // --- FUNÇÕES DE GESTÃO DE DADOS ---
+
+    async salvarEmTabela(tabela, dados) {
+        if (!this.db) await this.init();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([tabela], "readwrite");
+            const store = transaction.objectStore(tabela);
+            const registro = { ...dados, dataSincronia: new Date().toISOString() };
+            const request = store.add(registro);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    },
+
+    async obterTodosDados() {
+        const stores = ['forense', 'peixe', 'plan', 'HistoricoLeituras'];
+        const backupTotal = {};
+        for (const store of stores) {
+            backupTotal[store] = await new Promise((resolve) => {
+                const transaction = this.db.transaction([store], 'readonly');
+                const request = transaction.objectStore(store).getAll();
                 request.onsuccess = () => resolve(request.result);
-                request.onerror = (event) => reject(event.target.error);
-            });
-        },
-
-        listarTodos: async function() {
-            if (!this.db) await this.init();
-            return new Promise((resolve, reject) => {
-                const transaction = this.db.transaction([this.storeName], "readonly");
-                const store = transaction.objectStore(this.storeName);
-                const request = store.getAll();
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = (event) => reject(event.target.error);
             });
         }
-    };
+        return backupTotal;
+    },
+
+    async restaurarDados(dadosCofre) {
+        for (const store in dadosCofre) {
+            const transaction = this.db.transaction([store], 'readwrite');
+            const objectStore = transaction.objectStore(store);
+            objectStore.clear(); // Limpa para evitar duplicidade na restauração
+            dadosCofre[store].forEach(item => objectStore.add(item));
+        }
+    },
+
+    // --- PROTOCOLO DE BACKUP/RESTAURAÇÃO (COFRE) ---
+
+    async exportarCofre() {
+        try {
+            const conteudo = await this.obterTodosDados();
+            const payload = {
+                header: "GENTE_VAULT_V1",
+                data: new Date().toLocaleString(),
+                payload: conteudo
+            };
+            const comprimido = LZString.compressToBase64(JSON.stringify(payload));
+            const assinatura = "GENTE_VAULT_V1!" + comprimido;
+
+            const blob = new Blob([assinatura], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Cofre_GENTE_${new Date().toISOString().slice(0,10)}.gente`;
+            a.click();
+            alert("🔒 Cofre GENTE gerado com sucesso!");
+        } catch (err) { alert("Erro na exportação."); }
+    },
+
+    async importarCofre(inputElement) {
+        const file = inputElement.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const texto = e.target.result;
+            if (!texto.startsWith("GENTE_VAULT_V1!")) {
+                alert("❌ Arquivo inválido: Assinatura digital GENTE não encontrada.");
+                return;
+            }
+            try {
+                const comprimido = texto.split("!")[1];
+                const descompactado = JSON.parse(LZString.decompressFromBase64(comprimido));
+                if (confirm(`Restaurar backup de ${descompactado.data}?`)) {
+                    await this.restaurarDados(descompactado.payload);
+                    alert("✅ Ecossistema Restaurado!");
+                    location.reload();
+                }
+            } catch (err) { alert("Erro ao decodificar cofre."); }
+        };
+        reader.readAsText(file);
+    }
+};
+
 
     // ==========================================
     // 2. LÓGICA DE SINCRONIA E QR CODE
@@ -408,4 +487,5 @@
 </script>
 
 </body>
+
 </html>
