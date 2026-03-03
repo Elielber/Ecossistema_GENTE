@@ -1934,5 +1934,312 @@ buildFullModelJson(data, app) {
 		});
 
     </script>
+	    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+    <div id="gente-comm-module" class="fixed bottom-0 left-0 w-full bg-slate-900 border-t border-slate-700 p-3 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.5)] z-[60]">
+        <div class="max-w-5xl mx-auto">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <span class="animate-pulse">📡</span> Protocolo de Sincronia GENTE
+                </h3>
+                <button onclick="toggleGenteInterface()" class="text-white text-xs p-1 px-2 hover:bg-slate-800 rounded transition">
+                    <span id="gente-toggle-icon">▲</span>
+                </button>
+            </div>
+            <div id="gente-interface-body" class="hidden">
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <button onclick="gerarSaidaGente()" class="bg-slate-700 text-white text-[10px] font-bold py-2 rounded border border-slate-600 transition active:scale-95">📤 Gerar QR</button>
+                    <button onclick="iniciarLeitorGente()" class="bg-indigo-600 text-white text-[10px] font-bold py-2 rounded transition active:scale-95">📷 Câmara</button>
+                    <button onclick="colarCodigoGente()" class="bg-amber-700 text-white text-[10px] font-bold py-2 rounded transition active:scale-95">📋 Colar</button>
+                </div>
+                
+                <div class="flex flex-col items-center">
+                    <div id="gente-qrcode-output" class="mt-2 empty:hidden bg-white p-2 rounded-lg w-fit border-4 border-white shadow-lg transition-transform hover:scale-105"></div>
+                </div>
+                
+                <div id="gente-reader" class="mt-2 rounded-lg overflow-hidden border border-slate-500 hidden mx-auto max-w-[250px] bg-black"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="qr-modal-fullscreen" class="fixed inset-0 bg-slate-900/95 z-[9999] hidden flex-col items-center justify-center p-6 backdrop-blur-sm transition-all">
+        <button onclick="fecharQRFullscreen()" class="absolute top-6 right-6 text-white text-4xl font-bold hover:text-slate-300 transition-colors">&times;</button>
+        <p class="text-slate-300 text-xs uppercase tracking-widest mb-4 font-bold animate-pulse">Aproxime a Câmera</p>
+        
+        <div id="qr-modal-content" class="bg-white p-4 rounded-xl shadow-[0_0_40px_rgba(255,255,255,0.1)] w-full max-w-md flex justify-center items-center aspect-square">
+        </div>
+        
+        <p class="text-slate-400 text-[10px] mt-6 text-center max-w-xs">
+            Dica: Aumente o brilho do ecrã se a leitura estiver demorando.
+        </p>
+    </div>
+
+    <script>
+    const CONFIG_GENTE = {
+        nome: "ANP-SOLVER",
+        selectorDados: () => {
+            const state = ANPSolverApp.state;
+            
+            // 1. Tenta calcular resultados preliminares para a Telemetria
+            let topAlt = "Em análise";
+            let topScore = 0;
+            let finalRanking = {};
+            
+            try {
+                if (Object.keys(state.currentJudgments).length > 0) {
+                    const results = ANPSolverApp.calculateANP(state.currentJudgments);
+                    finalRanking = results.alternativePriorities;
+                    
+                    const sortedAlts = Object.entries(results.alternativePriorities).sort((a, b) => b[1] - a[1]);
+                    if (sortedAlts.length > 0) {
+                        topScore = (sortedAlts[0][1] * 100).toFixed(1);
+                        topAlt = `${sortedAlts[0][0]} (${topScore}%)`;
+                    }
+                }
+            } catch (e) { console.warn("Cálculo preliminar GENTE ignorado."); }
+
+            const titulo = state.dynamicClusters.ObjetivoPrincipal || "Modelo ANP";
+            const tituloCurto = titulo.length > 25 ? titulo.substring(0, 25) + "..." : titulo;
+
+            // Retorna Payload Híbrido (Telemetria + Dados para PLAN)
+            return {
+                // --- Para o Assistente/Hub ---
+                tit: tituloCurto,
+                met: [`Vencedora: ${topAlt.split('(')[0].trim()}`, `Score: ${topScore}%`],
+                qta: state.dynamicClusters["Alternativas para alcane do Objetivo"].elements.length,
+                cnf: false, // Flag de inconsistência (seria ideal checar CR global, deixamos false por padrão)
+
+                // --- Para o PLAN (Ferramenta Seguinte) ---
+                resultado: {
+                    objetivo: titulo,
+                    ranking: finalRanking, // Passa as prioridades calculadas
+                    alternativas: state.dynamicClusters["Alternativas para alcane do Objetivo"].elements
+                }
+            };
+        }
+    };
+
+    function repararDadosGente(dados) {
+        // Lógica de Importação: Recebe do CRITER
+        if (dados.origem === "CRITER" && dados.conteudo.modelo) {
+            const m = dados.conteudo.modelo;
+            const app = ANPSolverApp;
+            
+            // 1. Injeta os dados na estrutura do ANP
+            app.state.dynamicClusters.ObjetivoPrincipal = m.objetivo || "Objetivo Importado";
+            
+            // Mapeia Estrutura de Critérios
+            if (m.criterios) {
+                app.state.dynamicClusters["Criterios de Decisao"].elements = Object.keys(m.criterios);
+                app.state.dynamicClusters["Criterios de Decisao"].sub_elements_map = m.criterios;
+            }
+            
+            // Mapeia Alternativas
+            if (m.alternativas) {
+                app.state.dynamicClusters["Alternativas para alcane do Objetivo"].elements = m.alternativas;
+            }
+
+            // 2. Limpa julgamentos antigos (novo modelo requer nova avaliação)
+            app.state.currentJudgments = {};
+            
+            // 3. Reseta para a etapa 0 e força a renderização da UI
+            app.state.currentStep = 0;
+            app.renderCurrentStep();
+            
+            alert(`✅ Modelo importado do CRITER com sucesso!\n\nObjetivo: ${m.objetivo}\nEstrutura carregada. Avance para iniciar os julgamentos.`);
+        } else {
+            alert(`Dados recebidos de [${dados.origem}]. Nenhuma regra de importação automática definida para esta origem.`);
+        }
+    }
+
+    // --- FUNÇÕES PADRÃO DO MÓDULO GENTE ---
+    let scannerGente = null;
+
+    function toggleGenteInterface() {
+        const body = document.getElementById('gente-interface-body');
+        const icon = document.getElementById('gente-toggle-icon');
+        const isHidden = body.classList.contains('hidden');
+        body.classList.toggle('hidden');
+        icon.innerText = isHidden ? '▼' : '▲';
+        if (!isHidden) fecharScannerGente();
+    }
+
+    function gerarSaidaGente() {
+        fecharScannerGente();
+        const dados = CONFIG_GENTE.selectorDados();
+        if (!dados) return alert("⚠️ O modelo parece vazio. Configure o ANP antes de exportar.");
+        
+        try {
+            const payload = { origem: CONFIG_GENTE.nome, timestamp: new Date().toISOString(), conteudo: dados };
+            const comprimido = LZString.compressToBase64(JSON.stringify(payload));
+            const textoFinal = "G3!" + comprimido;
+            
+            const container = document.getElementById("gente-qrcode-output");
+            container.innerHTML = ""; 
+
+            let tamanhoQR = 200; 
+            if (textoFinal.length > 500) tamanhoQR = 300;
+            if (textoFinal.length > 1000) tamanhoQR = 450;
+            if (textoFinal.length > 1500) tamanhoQR = 600;
+
+            new QRCode(container, { 
+                text: textoFinal, 
+                width: tamanhoQR, 
+                height: tamanhoQR, 
+                correctLevel : QRCode.CorrectLevel.L
+            });
+
+            setTimeout(() => {
+                const qrCanvas = container.querySelector("canvas");
+                const qrImage = container.querySelector("img");
+                
+                if (qrCanvas) { qrCanvas.style.maxWidth = "200px"; qrCanvas.style.height = "auto"; }
+                if (qrImage) { qrImage.style.maxWidth = "200px"; qrImage.style.height = "auto"; }
+                
+                container.style.cursor = "pointer";
+                container.setAttribute("onclick", "abrirQRFullscreen()");
+                container.title = "Toque para ampliar";
+                
+                if (!document.getElementById("aviso-clique-qr")) {
+                    const aviso = document.createElement("div");
+                    aviso.id = "aviso-clique-qr";
+                    aviso.className = "text-[9px] text-slate-400 text-center mt-2 w-full animate-pulse";
+                    aviso.innerText = "👆 Toque no QR Code para ampliar ou Copiar";
+                    
+                    const btnCopy = document.createElement("button");
+                    btnCopy.className = "mt-2 bg-slate-700 text-white text-[9px] px-2 py-1 rounded w-full";
+                    btnCopy.innerText = "📋 Copiar Código G3!";
+                    btnCopy.onclick = (e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(textoFinal).then(() => alert("Código copiado! Pode colar no Hub ou no PLAN."));
+                    };
+
+                    container.parentNode.appendChild(aviso);
+                    container.parentNode.appendChild(btnCopy);
+                }
+            }, 50);
+
+        } catch (e) { 
+            alert("Erro na geração: " + e.message); 
+        }
+    }
+
+    function abrirQRFullscreen() {
+        const containerOrigem = document.getElementById("gente-qrcode-output");
+        const containerDestino = document.getElementById("qr-modal-content");
+        const modal = document.getElementById("qr-modal-fullscreen");
+
+        if (!containerOrigem.innerHTML) return;
+
+        containerDestino.innerHTML = "";
+        const canvasOrigem = containerOrigem.querySelector("canvas");
+        const imgOrigem = containerOrigem.querySelector("img");
+        
+        let urlImagem = "";
+        if (canvasOrigem) {
+            urlImagem = canvasOrigem.toDataURL("image/png");
+        } else if (imgOrigem && imgOrigem.src) {
+            urlImagem = imgOrigem.src;
+        }
+
+        if (urlImagem) {
+            const novaImg = document.createElement("img");
+            novaImg.src = urlImagem;
+            novaImg.className = "w-full h-auto object-contain"; 
+            containerDestino.appendChild(novaImg);
+        } else {
+            containerDestino.innerHTML = containerOrigem.innerHTML;
+        }
+
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+    }
+
+    function fecharQRFullscreen() {
+        const modal = document.getElementById("qr-modal-fullscreen");
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+        document.getElementById("qr-modal-content").innerHTML = ""; 
+    }
+
+    function iniciarLeitorGente() {
+        const readerElement = document.getElementById("gente-reader");
+        document.getElementById("gente-qrcode-output").innerHTML = "";
+        
+        const aviso = document.getElementById("aviso-clique-qr");
+        if(aviso) {
+            aviso.remove();
+            if(aviso.nextElementSibling) aviso.nextElementSibling.remove();
+        }
+
+        readerElement.classList.remove("hidden");
+        scannerGente = new Html5Qrcode("gente-reader");
+        scannerGente.start({ facingMode: "environment" }, { fps: 10, qrbox: 200 }, (text) => {
+            if (text.startsWith("G3!")) {
+                try {
+                    const descompactado = LZString.decompressFromBase64(text.substring(3));
+                    const dados = JSON.parse(descompactado);
+                    
+                    if(typeof repararDadosGente === "function") {
+                        repararDadosGente(dados); 
+                    }
+                    
+                    fecharScannerGente();
+                } catch (e) { alert("Erro ao processar dados transferidos."); }
+            }
+        }).catch(err => { 
+            alert("Erro na câmara: " + err); 
+            readerElement.classList.add("hidden"); 
+        });
+    }
+
+    function fecharScannerGente() {
+        if (scannerGente && scannerGente.isScanning) {
+            scannerGente.stop().then(() => { 
+                document.getElementById("gente-reader").classList.add("hidden"); 
+            }).catch(() => {});
+        } else { 
+            document.getElementById("gente-reader").classList.add("hidden"); 
+        }
+    }
+
+    function colarCodigoGente() {
+        fecharScannerGente(); 
+        document.getElementById("gente-qrcode-output").innerHTML = "";
+        
+        const aviso = document.getElementById("aviso-clique-qr");
+        if(aviso) {
+            aviso.remove();
+            if(aviso.nextElementSibling) aviso.nextElementSibling.remove();
+        }
+
+        const codigo = prompt("Cole aqui o código G3! copiado da outra ferramenta:");
+        
+        if (codigo && codigo.trim() !== "") {
+            const text = codigo.trim();
+            if (text.startsWith("G3!")) {
+                try {
+                    const descompactado = LZString.decompressFromBase64(text.substring(3));
+                    const dados = JSON.parse(descompactado);
+                    
+                    if(typeof repararDadosGente === "function") {
+                        repararDadosGente(dados); 
+                    }
+                } catch (e) { 
+                    alert("Erro ao processar dados transferidos. O código pode estar corrompido."); 
+                }
+            } else {
+                alert("Aviso: O texto colado não é válido (Falta a assinatura G3! no início).");
+            }
+        }
+    }
+    
+    // Ajuste de margem para o footer não esconder conteúdo
+    document.body.classList.add('mb-24');
+    </script>
+
 </body>
 </html>
+
