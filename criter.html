@@ -992,7 +992,8 @@ a.click();
                 <div class="grid grid-cols-3 gap-2 mb-3">
                     <button onclick="gerarSaidaGente()" class="bg-slate-700 text-white text-[10px] font-bold py-2 rounded border border-slate-600 transition active:scale-95">📤 Gerar QR</button>
                     <button onclick="iniciarLeitorGente()" class="bg-indigo-600 text-white text-[10px] font-bold py-2 rounded transition active:scale-95">📷 Câmara</button>
-                    <button onclick="colarCodigoGente()" class="bg-amber-700 text-white text-[10px] font-bold py-2 rounded transition active:scale-95">📋 Colar</button>
+                    <button onclick="importarDoEcossistema()" class="bg-slate-700 text-white text-[10px] font-bold py-2 rounded">📂 Puxar do Banco</button>
+					<button onclick="colarCodigoGente()" class="bg-amber-700 text-white text-[10px] font-bold py-2 rounded transition active:scale-95">📋 Colar</button>
                 </div>
                 
                 <div class="flex flex-col items-center">
@@ -1096,7 +1097,10 @@ a.click();
         
         try {
             const payload = { origem: CONFIG_GENTE.nome, timestamp: new Date().toISOString(), conteudo: dados };
-            const comprimido = LZString.compressToBase64(JSON.stringify(payload));
+            if (typeof ConectorGENTE !== 'undefined') {
+                ConectorGENTE.salvarDados('criter', dados); 
+			}
+			const comprimido = LZString.compressToBase64(JSON.stringify(payload));
             const textoFinal = "G3!" + comprimido;
             
             const container = document.getElementById("gente-qrcode-output");
@@ -1228,7 +1232,33 @@ a.click();
         }
     }
 
-    // --- IMPORTAÇÃO VIA ÁREA DE TRANSFERÊNCIA ---
+        async function importarDoEcossistema() {
+        if (!confirm("Deseja buscar a última análise (Forense/Peixe) salva no banco de dados local?")) return;
+
+        try {
+            // Abre o banco compartilhado
+            const dbRequest = indexedDB.open("EcossistemaGente", 2);
+            dbRequest.onsuccess = (e) => {
+                const db = e.target.result;
+                
+                // Vamos checar na gaveta 'forense' primeiro, depois na 'peixe'
+                const trans = db.transaction(['forense', 'peixe'], 'readonly');
+                
+                // Busca o registro mais recente do Forense
+                trans.objectStore('forense').getAll().onsuccess = (ev) => {
+                    const registros = ev.target.result;
+                    if (registros.length > 0) {
+                        const ultimo = registros.sort((a,b) => new Date(b.dataSincronia) - new Date(a.dataSincronia))[0];
+                        repararDadosGente({ origem: "BANCO_FORENSE", conteudo: { tit: ultimo.alternativas[0] || "Auditoria Local" } });
+                    }
+                };
+            };
+        } catch (err) {
+            alert("Não foi possível acessar o banco local. Use o QR Code.");
+        }
+    }
+
+		// --- IMPORTAÇÃO VIA ÁREA DE TRANSFERÊNCIA ---
     function colarCodigoGente() {
         fecharScannerGente(); 
         document.getElementById("gente-qrcode-output").innerHTML = "";
@@ -1267,4 +1297,5 @@ a.click();
 </body>
 
 </html>
+
 
