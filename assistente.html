@@ -353,14 +353,13 @@ async function atualizarDiagnosticoMaturidade() {
     // 2. Define os critérios de pontuação (0 a 100)
     // Aqui você pode evoluir a lógica para checar a qualidade dos dados futuramente
     const status = {
-        forense: dados.forense.length > 0 ? 100 : 0,
-        peixe:   dados.peixe.length > 0 ? 100 : 0,
-        criter:  dados.criter.length > 0 ? 100 : 0,
-        anp:     dados.anp.length > 0 ? 100 : 0,
-        plan:    dados.plan.length > 0 ? 100 : 0,
-        plays:   dados.plays.length > 0 ? 100 : 0
+        forense: (dados.forense && dados.forense.length > 0) ? 100 : 0,
+        peixe:   (dados.peixe && dados.peixe.length > 0) ? 100 : 0,
+        criter:  (dados.criter && dados.criter.length > 0) ? 100 : 0,
+        anp:     (dados.anp && dados.anp.length > 0) ? 100 : 0,
+        plan:    (dados.plan && dados.plan.length > 0) ? 100 : 0,
+        plays:   (dados.plays && dados.plays.length > 0) ? 100 : 0
     };
-
     // 3. Atualiza os LEDs (Indicadores Visuais)
     Object.keys(status).forEach(id => {
         const led = document.getElementById(`led-${id}`);
@@ -513,16 +512,25 @@ async function atualizarDiagnosticoMaturidade() {
     }
 
     // Gera o QR Code e o texto a partir do Hub para enviar a outra ferramenta
-            async function exportarRegistroHub(tabela, idRegistro) {
-        // Busca todos os dados para localizar o item específico
+                async function exportarRegistroHub(tabela, idRegistro) {
+        // 1. Busca todos os dados atualizados
         const todosDados = await GenteDB.obterTodosDados();
-        const gaveta = todosDados[tabela.toLowerCase()] || [];
-        const reg = gaveta.find(r => r.id === idRegistro);
         
-        if(!reg) return alert("Registro não encontrado no banco local.");
+        // 2. Tenta localizar em qual gaveta o ID está
+        let reg = null;
+        if (todosDados[tabela.toLowerCase()]) {
+            reg = todosDados[tabela.toLowerCase()].find(r => r.id === idRegistro);
+        }
+        
+        // 3. Fallback: Se não achou na gaveta específica, busca no histórico geral
+        if (!reg) {
+            reg = todosDados.HistoricoLeituras.find(r => r.id === idRegistro);
+        }
+        
+        if(!reg) return alert("Erro: Registro não localizado no Cofre.");
 
         fecharScannerHub();
-        
+
         try {
             // Remonta o payload original
             const payload = { 
@@ -573,12 +581,17 @@ async function atualizarDiagnosticoMaturidade() {
         container.innerHTML = "";
 
         // 2. Consolida tudo em uma única lista para a interface processar
+                // 2. Consolida tudo em uma única lista para a interface processar (TODAS AS GAVETAS)
         const historicoConsolidado = [
             ...(dadosCompletos.forense || []),
             ...(dadosCompletos.peixe || []),
+            ...(dadosCompletos.criter || []),
+            ...(dadosCompletos.anp || []),
             ...(dadosCompletos.plan || []),
+            ...(dadosCompletos.plays || []),
             ...(dadosCompletos.HistoricoLeituras || [])
         ];
+
 
         // 3. Mapeia as ferramentas para a interface
         const redePopulada = ecossistemaMapeamento.map(m => ({
@@ -668,6 +681,7 @@ async function atualizarDiagnosticoMaturidade() {
 </body>
 
 </html>
+
 
 
 
