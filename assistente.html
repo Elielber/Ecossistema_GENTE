@@ -431,26 +431,35 @@ async function atualizarDiagnosticoMaturidade() {
     let scannerHub = null;
 
     // Processa a string descompactada (seja da câmera ou do colar texto)
-        async function processarEntradaG3(textoBruto) {
-        if (!textoBruto.startsWith("G3!")) return alert("Código inválido.");
+            async function processarEntradaG3(textoBruto) {
+        if (!textoBruto.startsWith("G3!")) {
+            alert("Aviso: O código não pertence ao protocolo GENTE.");
+            return;
+        }
 
         try {
             const descompactado = LZString.decompressFromBase64(textoBruto.substring(3));
             const dados = JSON.parse(descompactado);
             
-            // Define em qual gaveta salvar com base na origem do QR
-            const tabelaDestino = dados.origem.toLowerCase();
+            // NOVO FLUXO: Identifica a gaveta correta (forense, peixe, plan, etc)
+            const origemStr = (dados.origem || "HistoricoLeituras").toLowerCase();
+            const tabelaDestino = origemStr.includes("forense") ? "forense" : 
+                                 origemStr.includes("peixe")   ? "peixe"   :
+                                 origemStr.includes("plan")    ? "plan"    : "HistoricoLeituras";
             
-            // Usa o novo método salvarEmTabela
-            await GenteDB.salvarEmTabela(tabelaDestino, dados.conteudo || dados);
+            // Salva usando o método correto da nova versão do GenteDB
+            await GenteDB.salvarEmTabela(tabelaDestino, dados);
             
-            alert(`✅ Sincronizado: ${dados.origem} armazenado no cofre.`);
+            alert(`✅ Sucesso! Dados da ferramenta [${dados.origem}] armazenados no Cofre.`);
             fecharScannerHub();
-            carregarArvoreDoBanco(); 
-            atualizarDiagnosticoMaturidade(); // Atualiza o radar automaticamente
+            
+            // Atualiza interface e radar instantaneamente
+            await carregarArvoreDoBanco(); 
+            await atualizarDiagnosticoMaturidade();
 
         } catch (e) {
-            alert("Erro ao decodificar: " + e.message);
+            console.error("Erro na sincronia:", e);
+            alert("Erro ao decodificar os dados: " + e.message);
         }
     }
 
@@ -488,25 +497,23 @@ async function atualizarDiagnosticoMaturidade() {
     }
 
     // Gera o QR Code e o texto a partir do Hub para enviar a outra ferramenta
-        async function exportarRegistroHub(tabela, idRegistro) {
-        // 1. Busca todos os dados de todas as gavetas
+            async function exportarRegistroHub(tabela, idRegistro) {
+        // Busca todos os dados para localizar o item específico
         const todosDados = await GenteDB.obterTodosDados();
-        // 2. Localiza o registro específico na gaveta correta
-        const gaveta = todosDados[tabela.toLowerCase()];
-        const reg = gaveta ? gaveta.find(r => r.id === idRegistro) : null;
+        const gaveta = todosDados[tabela.toLowerCase()] || [];
+        const reg = gaveta.find(r => r.id === idRegistro);
         
         if(!reg) return alert("Registro não encontrado no banco local.");
 
         fecharScannerHub();
         
         try {
-            // 3. Remonta o payload original para o Protocolo G3
+            // Remonta o payload original
             const payload = { 
                 origem: reg.origem || tabela.toUpperCase(), 
                 timestamp: reg.timestamp || reg.dataSincronia, 
                 conteudo: reg.conteudo || reg 
             };
-            
             const comprimido = LZString.compressToBase64(JSON.stringify(payload));
             const textoFinal = "G3!" + comprimido;
 
@@ -518,13 +525,10 @@ async function atualizarDiagnosticoMaturidade() {
             document.getElementById("qr-text-container").innerText = textoFinal;
             
             document.getElementById("btn-copiar-qr").onclick = () => {
-                navigator.clipboard.writeText(textoFinal).then(() => alert("Código copiado!"));
+                navigator.clipboard.writeText(textoFinal).then(() => alert("Código G3! copiado."));
             };
 
-            new QRCode(canvasContainer, { 
-                text: textoFinal, width: 250, height: 250, 
-                correctLevel : QRCode.CorrectLevel.L
-            });
+            new QRCode(canvasContainer, { text: textoFinal, width: 250, height: 250, correctLevel : QRCode.CorrectLevel.L });
 
             container.style.display = "flex";
             window.scrollTo(0, 0);
@@ -648,6 +652,7 @@ async function atualizarDiagnosticoMaturidade() {
 </body>
 
 </html>
+
 
 
 
