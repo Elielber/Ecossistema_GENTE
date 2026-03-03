@@ -127,15 +127,51 @@
         
     </div>
 
-    <div id="tela-maturidade" class="tela-container">
-        <header class="view-header">
-            <h2>Evolução Gerencial</h2>
-            <p class="subtitle">Andaime Digital e Maturidade Reflexiva</p>
-        </header>
-        <div style="height: 150px; background: white; border-radius: 8px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--arcos);">
-            <p style="color:#787878; font-size: 0.8rem;">Gráfico de Tendência (Em breve integrado ao IndexedDB)</p>
+<div id="tela-maturidade" class="tela-container p-6 bg-slate-950 min-h-screen">
+    <div class="mb-8">
+        <h2 class="text-2xl font-black text-white tracking-tighter uppercase italic">Diagnóstico de Maturidade</h2>
+        <p class="text-slate-400 text-xs">Análise integrada do Ecossistema GENTE</p>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-8">
+        <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
+            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">1. Forense</span>
+            <div id="led-forense" class="w-2.5 h-2.5 rounded-full bg-slate-800 transition-all duration-700"></div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
+            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">2. Peixe</span>
+            <div id="led-peixe" class="w-2.5 h-2.5 rounded-full bg-slate-800 transition-all duration-700"></div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
+            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">3. Criter</span>
+            <div id="led-criter" class="w-2.5 h-2.5 rounded-full bg-slate-800 transition-all duration-700"></div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
+            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">4. ANP</span>
+            <div id="led-anp" class="w-2.5 h-2.5 rounded-full bg-slate-800 transition-all duration-700"></div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
+            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">5. Plan</span>
+            <div id="led-plan" class="w-2.5 h-2.5 rounded-full bg-slate-800 transition-all duration-700"></div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
+            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">6. Plays</span>
+            <div id="led-plays" class="w-2.5 h-2.5 rounded-full bg-slate-800 transition-all duration-700"></div>
         </div>
     </div>
+
+    <div class="relative bg-slate-900/50 border border-slate-800 rounded-3xl p-8 flex flex-col items-center justify-center overflow-hidden">
+        <div id="radar-container" class="w-full flex justify-center py-4">
+            <div class="text-slate-600 text-[10px] italic">Aguardando dados das ferramentas...</div>
+        </div>
+        
+        <button onclick="atualizarDiagnosticoMaturidade()" 
+                class="mt-6 px-8 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full transition-all active:scale-95 shadow-lg shadow-indigo-500/20">
+            Atualizar Radar
+        </button>
+    </div>
+</div>
+
 
     <div id="tela-estrategia" class="tela-container">
         <header class="view-header">
@@ -390,6 +426,105 @@
         });
     }
 
+    /**
+ * MOTOR DE MATURIDADE GENTE - HEXÁGONO DINÂMICO
+ * Analisa as 6 gavetas do banco e renderiza o status visual
+ */
+async function atualizarDiagnosticoMaturidade() {
+    // 1. Coleta dados de todas as ferramentas
+    const dados = await GenteDB.obterTodosDados();
+    
+    // 2. Define os critérios de pontuação (0 a 100)
+    // Aqui você pode evoluir a lógica para checar a qualidade dos dados futuramente
+    const status = {
+        forense: dados.forense.length > 0 ? 100 : 0,
+        peixe:   dados.peixe.length > 0 ? 100 : 0,
+        criter:  dados.criter.length > 0 ? 100 : 0,
+        anp:     dados.anp.length > 0 ? 100 : 0,
+        plan:    dados.plan.length > 0 ? 100 : 0,
+        plays:   dados.plays.length > 0 ? 100 : 0
+    };
+
+    // 3. Atualiza os LEDs (Indicadores Visuais)
+    Object.keys(status).forEach(id => {
+        const led = document.getElementById(`led-${id}`);
+        if (led) {
+            led.className = `w-2.5 h-2.5 rounded-full transition-all duration-500 ${status[id] > 0 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-slate-700'}`;
+        }
+    });
+
+    // 4. Configurações do SVG
+    const centro = 100;
+    const raioMax = 75;
+    const labels = [
+        { id: "forense", txt: "1. Forense" },
+        { id: "peixe",   txt: "2. Peixe" },
+        { id: "criter",  txt: "3. Criter" },
+        { id: "anp",     txt: "4. ANP" },
+        { id: "plan",    txt: "5. Plan" },
+        { id: "plays",   txt: "6. Plays" }
+    ];
+    const passo = (Math.PI * 2) / labels.length;
+
+    // 5. Gera a Teia de Fundo (Grades)
+    let teiaHtml = "";
+    for (let nivel = 1; nivel <= 4; nivel++) {
+        const r = (raioMax / 4) * nivel;
+        const pontosGrade = labels.map((_, i) => {
+            const x = centro + r * Math.cos(i * passo - Math.PI / 2);
+            const y = centro + r * Math.sin(i * passo - Math.PI / 2);
+            return `${x},${y}`;
+        }).join(" ");
+        teiaHtml += `<polygon points="${pontosGrade}" fill="none" stroke="#334155" stroke-width="0.5" />`;
+    }
+
+    // 6. Calcula a área preenchida pelo usuário
+    const areaUsuario = labels.map((l, i) => {
+        const r = (status[l.id] / 100) * raioMax;
+        const x = centro + r * Math.cos(i * passo - Math.PI / 2);
+        const y = centro + r * Math.sin(i * passo - Math.PI / 2);
+        return `${x},${y}`;
+    }).join(" ");
+
+    // 7. Renderiza o SVG Final
+    const container = document.getElementById("radar-container");
+    container.innerHTML = `
+        <svg viewBox="0 0 200 200" class="w-full max-w-[350px] drop-shadow-2xl">
+            ${teiaHtml}
+            
+            ${labels.map((_, i) => {
+                const x = centro + raioMax * Math.cos(i * passo - Math.PI / 2);
+                const y = centro + raioMax * Math.sin(i * passo - Math.PI / 2);
+                return `<line x1="${centro}" y1="${centro}" x2="${x}" y2="${y}" stroke="#1e293b" stroke-width="1" />`;
+            }).join("")}
+
+            <polygon points="${areaUsuario}" fill="url(#gradienteMaturidade)" stroke="#6366f1" stroke-width="2" stroke-linejoin="round">
+                <animate attributeName="opacity" values="0.6;0.9;0.6" dur="4s" repeatCount="indefinite" />
+            </polygon>
+
+            ${labels.map((l, i) => {
+                const r = (status[l.id] / 100) * raioMax;
+                const x = centro + r * Math.cos(i * passo - Math.PI / 2);
+                const y = centro + r * Math.sin(i * passo - Math.PI / 2);
+                return status[l.id] > 0 ? `<circle cx="${x}" cy="${y}" r="3" fill="#818cf8" />` : '';
+            }).join("")}
+
+            ${labels.map((l, i) => {
+                const x = centro + (raioMax + 18) * Math.cos(i * passo - Math.PI / 2);
+                const y = centro + (raioMax + 18) * Math.sin(i * passo - Math.PI / 2);
+                return `<text x="${x}" y="${y}" fill="${status[l.id] > 0 ? '#fff' : '#64748b'}" font-size="7" font-weight="bold" text-anchor="middle" dominant-baseline="middle">${l.txt}</text>`;
+            }).join("")}
+
+            <defs>
+                <radialGradient id="gradienteMaturidade">
+                    <stop offset="0%" stop-color="#4f46e5" stop-opacity="0.2" />
+                    <stop offset="100%" stop-color="#6366f1" stop-opacity="0.6" />
+                </radialGradient>
+            </defs>
+        </svg>
+    `;
+}
+
     // ==========================================
     // 3. EXPLORADOR DE REDE (Ligado ao IndexedDB)
     // ==========================================
@@ -502,5 +637,6 @@
 </body>
 
 </html>
+
 
 
