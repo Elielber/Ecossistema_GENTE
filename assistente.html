@@ -164,12 +164,12 @@
     
     <div id="txt-frase-dia" style="font-size: 1rem; font-style: italic; line-height: 1.4; margin-bottom: 8px; min-height:40px;">
         </div>
-    </div>
+    
     <div id="txt-autor-dia" style="font-size: 0.8rem; font-weight: bold; text-align: right; color: rgba(255,255,255,0.8);">
         </div>
-
+</div>
     <div style="display: flex; gap: 10px; margin-top: 15px;">
-    <button onclick="compartilharFraseImagem()" 
+    <button onclick="compartilharFraseImagem(event)" 
             style="background: #27ae60; border: none; padding: 10px 20px; border-radius: 20px; color: white; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; gap: 8px; flex: 1; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2);">
         Compartilhar frase
     </button>
@@ -1003,120 +1003,134 @@ async function carregarFraseDoDia() {
     }
 }
 
-function compartilharFraseImagem() {
+function compartilharFraseImagem(event) { // <-- ADICIONE O PARÂMETRO EVENT
     // Verifica se existe frase carregada
     if (typeof fraseAtualObj === 'undefined' || !fraseAtualObj) return;
 
-    const btn = event.currentTarget; // Captura o botão clicado
+    const btn = event.currentTarget; // Agora funciona
     const txtOriginal = btn.innerText;
     btn.innerText = "⏳ Gerando...";
     btn.disabled = true;
 
-    // Configura o Canvas (1080x1080 para Instagram/Zap)
+    // Configura o Canvas
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     canvas.width = 1080;
     canvas.height = 1080;
 
-    // --- 1. FUNDO ---
-    const grd = ctx.createLinearGradient(0, 0, 0, 1080);
-    grd.addColorStop(0, "#2c3e50");   // Topo escuro
-    grd.addColorStop(1, "#000000");   // Base preta
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, 1080, 1080);
-    
-    // Borda superior colorida (Identidade visual)
-    ctx.fillStyle = "#8C1F28"; 
-    ctx.fillRect(0, 0, 1080, 20);
+    // Carrega a imagem da logo (marca d'água e rodapé)
+    const logoMarca = new Image();
+    const logoRodape = new Image(); // Pode ser a mesma imagem, mas vamos carregar uma vez
+    logoMarca.src = 'Logo-GENTE-4.png';
+    logoRodape.src = 'Logo-GENTE-4.png';
 
-    // --- 2. MARCA D'ÁGUA GIGANTE (Ícone da Vertical) ---
-    ctx.font = "bold 400px sans-serif";
-    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
-    ctx.textAlign = "center";
-    ctx.fillText("🤝", 540, 680); 
+    // Contador para saber quando as duas imagens carregaram (simplificamos usando a mesma)
+    // Na prática, podemos usar a mesma imagem para ambos, então só precisamos de um onload.
+    let imagensCarregadas = 0;
 
-    // --- 3. CABEÇALHO ---
-    // Ícone Principal
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "80px sans-serif";
-    ctx.fillText("⌚", 540, 150); 
-    
-    // Nome do App (Na cor da Vertical)
-    ctx.fillStyle = "#8C1F28"; 
-    ctx.font = "bold 50px sans-serif";
-    ctx.fillText("Assistente GENTE", 540, 220); 
-
-    ctx.fillStyle = "#bdc3c7"; // Cinza claro
-    ctx.font = "30px sans-serif";
-    ctx.fillText("Inspiração do Dia", 540, 270);
-
-    // --- 4. A FRASE ---
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "italic 55px serif"; 
-    
-    const texto = `"${fraseAtualObj.frase}"`;
-    let startY = 450;
-    if(texto.length < 50) startY = 500; 
-    
-    // Chama a função wrapText existente no seu código
-    // Se der erro aqui, certifique-se que a função wrapText está declarada no arquivo
-    if (typeof wrapText === "function") {
-        wrapText(ctx, texto, 540, startY, 900, 75);
-    } else {
-        // Fallback simples se wrapText não existir
-        ctx.fillText(texto, 540, 500); 
+    function tentarExportar() {
+        imagensCarregadas++;
+        if (imagensCarregadas === 2) { // Se fossem duas imagens diferentes
+            desenharTudo();
+        }
     }
 
-    // --- 5. AUTOR ---
-    ctx.fillStyle = "#8C1F28"; 
-    ctx.font = "bold 40px sans-serif";
-    ctx.fillText(`— ${fraseAtualObj.autor}`, 540, 850);
+    // Para simplificar, usaremos a mesma imagem e desenharemos tudo no onload dela.
+    // Mas se quiser duas imagens diferentes, adapte.
+    logoMarca.onload = function() {
+        // --- 1. FUNDO ---
+        const grd = ctx.createLinearGradient(0, 0, 0, 1080);
+        grd.addColorStop(0, "#2c3e50");
+        grd.addColorStop(1, "#000000");
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, 1080, 1080);
+        ctx.fillStyle = "#8C1F28";
+        ctx.fillRect(0, 0, 1080, 20);
 
-    // --- 6. RODAPÉ (MODIFICADO AQUI) ---
-    ctx.fillStyle = "rgba(255,255,255,0.8)";
-    ctx.font = "28px sans-serif";
-    
-   
+        // --- 2. MARCA D'ÁGUA GIGANTE (imagem) ---
+        ctx.globalAlpha = 0.03;
+        // Redimensiona para ter aproximadamente 400px de largura
+        const larguraDesejada = 400;
+        const proporcao = larguraDesejada / logoMarca.width;
+        const alturaDesejada = logoMarca.height * proporcao;
+        const x = 540 - larguraDesejada / 2;
+        const y = 680 - alturaDesejada / 2;
+        ctx.drawImage(logoMarca, x, y, larguraDesejada, alturaDesejada);
+        ctx.globalAlpha = 1.0;
 
-    // 2. Monta a frase completa
-    const textoRodape = `Ecossisyema GENTE`;
+        // --- 3. CABEÇALHO ---
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "80px sans-serif";
+        ctx.fillText("⌚", 540, 150);
+        ctx.fillStyle = "#8C1F28";
+        ctx.font = "bold 50px sans-serif";
+        ctx.fillText("Assistente GENTE", 540, 220);
+        ctx.fillStyle = "#bdc3c7";
+        ctx.font = "30px sans-serif";
+        ctx.fillText("Inspiração do Dia", 540, 270);
 
-    // 3. Desenha no canvas
-    ctx.fillText(textoRodape, 540, 980);
-    
-    // Link visual (Opcional, logo abaixo)
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 30px sans-serif";
-    
-
-    // --- 7. EXPORTAÇÃO ---
-    canvas.toBlob(async function(blob) {
-        const fileName = `frase-Assistente GENTE.jpg`; 
-        const file = new File([blob], fileName, { type: "image/jpeg" });
-        const linkAtual = window.location.href;
-
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-            try {
-                await navigator.share({
-                    files: [file],
-                    title: `Frase do Dia - Assistente GENTE`, 
-                    text: `https:www.ecossistemagente.com.br/assistente.html` 
-                });
-            } catch (err) {
-                console.log("Compartilhamento cancelado.");
-            }
+        // --- 4. FRASE ---
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "italic 55px serif";
+        const texto = `"${fraseAtualObj.frase}"`;
+        let startY = 450;
+        if (texto.length < 50) startY = 500;
+        if (typeof wrapText === "function") {
+            wrapText(ctx, texto, 540, startY, 900, 75);
         } else {
-            // Fallback Desktop
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = fileName;
-            a.click();
-            // alert("Imagem salva! Compartilhe manualmente.");
+            ctx.fillText(texto, 540, 500);
         }
-        
-        btn.innerText = txtOriginal;
-        btn.disabled = false;
-    }, 'image/jpeg', 0.9);
+
+        // --- 5. AUTOR ---
+        ctx.fillStyle = "#8C1F28";
+        ctx.font = "bold 40px sans-serif";
+        ctx.fillText(`— ${fraseAtualObj.autor}`, 540, 850);
+
+        // --- 6. RODAPÉ (com logo e texto) ---
+        // Desenha a logo pequena no rodapé
+        const logoPequenaLargura = 40;
+        const logoPequenaAltura = (logoMarca.height * logoPequenaLargura) / logoMarca.width;
+        const xLogo = 540 - 120; // ajuste para posicionar à esquerda do texto
+        const yLogo = 950; // posição vertical da logo
+        ctx.drawImage(logoMarca, xLogo, yLogo, logoPequenaLargura, logoPequenaAltura);
+
+        // Texto ao lado
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.font = "28px sans-serif";
+        ctx.fillText("Ecossistema GENTE", 540, 980);
+
+        // --- 7. EXPORTAÇÃO ---
+        canvas.toBlob(async function(blob) {
+            const fileName = `frase-Assistente GENTE.jpg`;
+            const file = new File([blob], fileName, { type: "image/jpeg" });
+
+            if (navigator.share && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: `Frase do Dia - Assistente GENTE`,
+                        text: `https://www.ecossistemagente.com.br/assistente.html`
+                    });
+                } catch (err) {
+                    console.log("Compartilhamento cancelado.");
+                }
+            } else {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = fileName;
+                a.click();
+            }
+
+            btn.innerText = txtOriginal;
+            btn.disabled = false;
+        }, 'image/jpeg', 0.9);
+    };
+
+    // Se a imagem já estiver em cache, o onload pode disparar imediatamente.
+    // Caso contrário, aguardamos.
+    if (logoMarca.complete) {
+        logoMarca.onload(); // Simula o onload
+    }
 }
 </script>
 
