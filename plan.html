@@ -7,7 +7,8 @@
     <meta charset="UTF-8">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
-    <style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+        <style>
         :root {
             --color-m5-verde-resultado: #2A574A;
             --color-m2-azul-gestao: #1D3557;
@@ -368,6 +369,63 @@
 .delete-post-it-btn:hover {
     color: #d9534f; /* Cor vermelha ao passar o mouse sobre o botão */
 }
+/* --- ESTILOS DA SEÇÃO 4 (QR CODES PARA PLAYS) --- */
+.project-export-card {
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: transform 0.2s;
+}
+.project-export-card:hover {
+    transform: translateY(-3px);
+}
+.project-export-card h5 {
+    color: var(--color-m2-azul-gestao);
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+.project-details {
+    font-size: 0.85rem;
+    color: #555;
+    margin-bottom: 15px;
+    text-align: left;
+    width: 100%;
+    background: #fff;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px dashed #ccc;
+}
+.qr-code-container {
+    margin: 10px 0 15px 0;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    border: 2px solid var(--color-m5-verde-resultado);
+    display: flex;
+    justify-content: center;
+}
+.copy-json-btn {
+    background-color: var(--color-m2-azul-gestao);
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 0.9rem;
+    width: 100%;
+    transition: background-color 0.2s;
+}
+.copy-json-btn:hover {
+    background-color: var(--color-m5-verde-resultado);
+}
 		/* Esconde a ferramenta por padrão */
 #ferramenta-app {display: none;}
 /* Quando a URL terminar em #app, a ferramenta aparece */
@@ -620,11 +678,25 @@ body:has(#ferramenta-app:target) #capa-apresentacao { display: none;}
 </article>
 
             <article class="section-card">
-                <h2 class="section-title">Seção 4: Validação e Exportação do Plano de Ação <span class="arrow">▼</span></h2>
-                <div class="section-content">
-                     <p style="padding: 20px 0;">Em breve: Relatório final do plano de ação, com filtros por área e opções de impressão/exportação.</p>
+    <h2 class="section-title">Seção 4: Exportação de Projetos para PLAYS <span class="arrow">▼</span></h2>
+    <div class="section-content">
+        
+        <div class="tool-section">
+            <h4>1. Gerar Pacotes de Projetos (Microserviços)</h4>
+            <p style="font-size: 0.9rem; color: #666; margin-bottom: 15px;">
+                As ações definidas na Seção 3 foram agrupadas. Cada conjunto originou um <strong>Projeto</strong>. 
+                Escaneie o QR Code ou copie o JSON de cada projeto para importá-lo na ferramenta <strong>PLAYS</strong>, onde ocorrerá o refinamento no Project Model Canvas e a execução.
+            </p>
+            <button id="generate-portfolio-btn" class="control-btn save" style="width: 100%; margin-bottom: 20px; background-color: var(--color-m5-verde-resultado);">
+                🔄 Atualizar e Gerar Integrações dos Projetos
+            </button>
+
+            <div id="portfolio-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
                 </div>
-            </article>
+        </div>
+
+    </div>
+</article>
         </main>
     </div>
  </div>
@@ -1327,6 +1399,135 @@ document.getElementById('color-palette').addEventListener('click', (event) => {
             }
         }
     });
+	// ========================================================================
+    // LÓGICA DA SEÇÃO 4: EXPORTAÇÃO POR QR CODE E COPY PARA O PLAYS
+    // ========================================================================
+    const generatePortfolioBtn = document.getElementById('generate-portfolio-btn');
+    const portfolioContainer = document.getElementById('portfolio-container');
+
+    function renderPortfolio() {
+    portfolioContainer.innerHTML = '';
+
+    // 1. Agrupar as ações da Seção 3 por 'linkedCanvasItemId'
+    const projectsMap = {};
+    
+    actionItems.forEach(action => {
+        if (!projectsMap[action.linkedCanvasItemId]) {
+            const canvasItem = canvasItems.find(c => c.id === action.linkedCanvasItemId);
+            if (canvasItem) {
+                projectsMap[action.linkedCanvasItemId] = {
+                    id: `proj-${canvasItem.id}`,
+                    title: canvasItem.text,
+                    section: canvasItem.sectionId,
+                    actions: [],
+                    areas: new Set(),
+                    deadlines: []
+                };
+            }
+        }
+        
+        if (projectsMap[action.linkedCanvasItemId]) {
+            projectsMap[action.linkedCanvasItemId].actions.push(action);
+            const area = areas.find(a => a.id === action.responsibleAreaId);
+            if (area) projectsMap[action.linkedCanvasItemId].areas.add(area.name);
+            if (action.deadline) projectsMap[action.linkedCanvasItemId].deadlines.push(action.deadline);
+        }
+    });
+
+    const projectKeys = Object.keys(projectsMap);
+    
+    if (projectKeys.length === 0) {
+        portfolioContainer.innerHTML = `
+            <div style="text-align: center; padding: 30px; background: #fff; border-radius: 8px; border: 1px dashed #ccc; grid-column: 1 / -1;">
+                <p style="color: #666;">Nenhuma ação cadastrada na Seção 3 ainda.</p>
+                <p style="font-size: 0.85rem; color: #999;">Desdobre suas notas estratégicas em ações para gerar os pacotes de integração.</p>
+            </div>`;
+        return;
+    }
+
+    // 2. Gerar Card, JSON e QR Code para cada projeto
+    projectKeys.forEach(key => {
+        const proj = projectsMap[key];
+        const maxDeadline = proj.deadlines.length > 0 ? proj.deadlines.sort().reverse()[0] : null;
+        const formattedDeadline = maxDeadline ? new Date(maxDeadline + 'T00:00:00').toLocaleDateString('pt-BR') : 'Não definida';
+        const areasStr = Array.from(proj.areas).join(', ') || 'Nenhuma';
+        
+        // --- INÍCIO DO PROTOCOLO GENTE ---
+        // Montar os dados enxutos do projeto
+        const projectData = {
+            id: proj.id,
+            title: proj.title,
+            strategicOrigin: proj.section,
+            team: areasStr,
+            deadline: maxDeadline,
+            deliverables: proj.actions.map(a => a.description) 
+        };
+
+        // Empacotamento Padrão GENTE
+        const payloadPlays = { 
+            origem: "PLAN", 
+            timestamp: new Date().toISOString(), 
+            conteudo: projectData 
+        };
+        
+        // Compressão e Assinatura
+        const comprimido = LZString.compressToBase64(JSON.stringify(payloadPlays));
+        const codigoFinalG3 = "G3!" + comprimido;
+        // --- FIM DO PROTOCOLO GENTE ---
+
+        // Criar HTML do Card
+        const card = document.createElement('div');
+        card.className = 'project-export-card';
+        card.innerHTML = `
+            <h5>${proj.title}</h5>
+            <div class="project-details">
+                <strong>Origem:</strong> ${proj.section.toUpperCase()}<br>
+                <strong>Responsáveis:</strong> ${areasStr}<br>
+                <strong>Prazo Máx:</strong> ${formattedDeadline}<br>
+                <strong>Entregas (Ações):</strong> ${proj.actions.length} listadas
+            </div>
+            <div class="qr-code-container" title="Escaneie este código no PLAYS">
+                <canvas id="qr-${proj.id}"></canvas>
+            </div>
+            <button class="copy-json-btn" data-json='${codigoFinalG3}'>
+                📋 Copiar Código (G3!)
+            </button>
+        `;
+        
+        portfolioContainer.appendChild(card);
+
+        // Gerar o QR Code no elemento Canvas
+        setTimeout(() => {
+            new QRious({
+                element: document.getElementById(`qr-${proj.id}`),
+                value: codigoFinalG3,
+                size: 200, 
+                level: 'L' // Nível Low reduz o Moiré porque o JSON agora está comprimido
+            });
+        }, 50);
+    });
+
+    // 3. Adicionar evento de Cópia aos botões
+    document.querySelectorAll('.copy-json-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const jsonToCopy = e.target.getAttribute('data-json');
+            navigator.clipboard.writeText(jsonToCopy).then(() => {
+                const originalText = e.target.textContent;
+                e.target.textContent = '✅ Código Copiado!';
+                e.target.style.backgroundColor = 'var(--color-m5-verde-resultado)';
+                
+                setTimeout(() => {
+                    e.target.textContent = originalText;
+                    e.target.style.backgroundColor = '';
+                }, 2500);
+            }).catch(err => {
+                alert('Erro ao copiar para a área de transferência: ' + err);
+            });
+        });
+    });
+}
+
+    generatePortfolioBtn.addEventListener('click', renderPortfolio);
 
     // Chamadas iniciais
     populateStrategicItemsDropdown();
@@ -1334,11 +1535,221 @@ document.getElementById('color-palette').addEventListener('click', (event) => {
     renderPredefinedTags();
 
 });
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
 
+    <div id="gente-comm-module" class="fixed bottom-0 left-0 w-full bg-slate-900 border-t border-slate-700 p-3 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.5)] z-[60]">
+        <div class="max-w-5xl mx-auto">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <span class="animate-pulse">📡</span> Protocolo de Sincronia GENTE
+                </h3>
+                <button onclick="toggleGenteInterface()" class="text-white text-xs p-1 px-2 hover:bg-slate-800 rounded transition">
+                    <span id="gente-toggle-icon">▲</span>
+                </button>
+            </div>
+            <div id="gente-interface-body" class="hidden">
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <button onclick="gerarSaidaGente()" class="bg-slate-700 text-white text-[10px] font-bold py-2 rounded border border-slate-600 transition active:scale-95" title="Exporta a Telemetria do Portfólio para o Hub">📤 Gerar QR (Hub)</button>
+                    <button onclick="iniciarLeitorGente()" class="bg-indigo-600 text-white text-[10px] font-bold py-2 rounded transition active:scale-95" title="Ler Ranking do ANP">📷 Câmara</button>
+                    <button onclick="colarCodigoGente()" class="bg-amber-700 text-white text-[10px] font-bold py-2 rounded transition active:scale-95" title="Colar Ranking do ANP">📋 Colar</button>
+                </div>
+                
+                <div class="flex flex-col items-center">
+                    <div id="gente-qrcode-output" class="mt-2 empty:hidden bg-white p-2 rounded-lg w-fit border-4 border-white shadow-lg transition-transform hover:scale-105"></div>
+                </div>
+                
+                <div id="gente-reader" class="mt-2 rounded-lg overflow-hidden border border-slate-500 hidden mx-auto max-w-[250px] bg-black"></div>
+            </div>
+        </div>
+    </div>
 
+    <div id="qr-modal-fullscreen" class="fixed inset-0 bg-slate-900/95 z-[9999] hidden flex-col items-center justify-center p-6 backdrop-blur-sm transition-all">
+        <button onclick="fecharQRFullscreen()" class="absolute top-6 right-6 text-white text-4xl font-bold hover:text-slate-300 transition-colors">&times;</button>
+        <p class="text-slate-300 text-xs uppercase tracking-widest mb-4 font-bold animate-pulse">Aproxime a Câmera</p>
+        <div id="qr-modal-content" class="bg-white p-4 rounded-xl shadow-[0_0_40px_rgba(255,255,255,0.1)] w-full max-w-md flex justify-center items-center aspect-square"></div>
+    </div>
+
+    <script>
+    const CONFIG_GENTE = {
+        nome: "PLAN",
+        selectorDados: () => {
+            // Esta função exporta apenas a TELEMETRIA para o Hub. 
+            // Os projetos individuais (para o PLAYS) são exportados nos próprios Cards.
+            const objInput = document.getElementById('strategic-objective');
+            const titulo = objInput && objInput.value ? objInput.value : "Portfólio de Projetos";
+            const tituloCurto = titulo.length > 25 ? titulo.substring(0, 25) + "..." : titulo;
+            
+            // Conta quantos projetos foram gerados na tela
+            const numProjetos = document.querySelectorAll('.project-card').length;
+
+            return {
+                tit: tituloCurto,       
+                met: [`Projetos Desdobrados: ${numProjetos}`],   
+                qta: numProjetos, 
+                cnf: false        
+            };
+        }
+    };
+
+    function repararDadosGente(dados) {
+        if (dados.origem === "ANP-SOLVER" && dados.conteudo.resultado) {
+            const res = dados.conteudo.resultado;
+            
+            // 1. Preenche o Objetivo Estratégico
+            const objInput = document.getElementById('strategic-objective');
+            if(objInput) objInput.value = res.objetivo;
+
+            // 2. Injeta o Ranking do ANP na lista de Itens Estratégicos do PLAN
+            // ATENÇÃO: A variável 'strategicItems' precisa estar acessível globalmente (fora do DOMContentLoaded)
+            if (typeof strategicItems !== 'undefined') {
+                strategicItems.length = 0; // Esvazia o array atual
+                let idCounter = 1;
+                
+                // Converte as prioridades (0 a 1) para Score (0 a 100)
+                for (const [nome, score] of Object.entries(res.ranking)) {
+                    strategicItems.push({
+                        id: idCounter++,
+                        name: nome,
+                        score: Math.round(score * 100)
+                    });
+                }
+                
+                // Força a atualização da interface do PLAN
+                if (typeof populateStrategicItemsDropdown === "function") populateStrategicItemsDropdown();
+                if (typeof renderPredefinedTags === "function") renderPredefinedTags();
+                
+                alert(`✅ Matriz Matemática importada!\n\nObjetivo: ${res.objetivo}\nForam carregadas ${Object.keys(res.ranking).length} diretrizes com base no ranking do ANP.`);
+            } else {
+                alert("⚠️ O ranking foi lido, mas a variável 'strategicItems' não está global no código do PLAN. Mova a declaração dela para fora do bloco de inicialização.");
+            }
+        } else {
+            alert(`Sincronização concluída! Dados recebidos de: [${dados.origem}].`);
+        }
+    }
+
+    // --- FUNÇÕES PADRÃO DE INTERFACE DO MÓDULO ---
+    let scannerGente = null;
+
+    function toggleGenteInterface() {
+        const body = document.getElementById('gente-interface-body');
+        const icon = document.getElementById('gente-toggle-icon');
+        const isHidden = body.classList.contains('hidden');
+        body.classList.toggle('hidden');
+        icon.innerText = isHidden ? '▼' : '▲';
+        if (!isHidden) fecharScannerGente();
+    }
+
+    function gerarSaidaGente() {
+        fecharScannerGente();
+        const dados = CONFIG_GENTE.selectorDados();
+        const payload = { origem: CONFIG_GENTE.nome, timestamp: new Date().toISOString(), conteudo: dados };
+        const comprimido = LZString.compressToBase64(JSON.stringify(payload));
+        const textoFinal = "G3!" + comprimido;
+        
+        const container = document.getElementById("gente-qrcode-output");
+        container.innerHTML = ""; 
+        new QRCode(container, { text: textoFinal, width: 250, height: 250, correctLevel : QRCode.CorrectLevel.L });
+
+        setTimeout(() => {
+            container.style.cursor = "pointer";
+            container.setAttribute("onclick", "abrirQRFullscreen()");
+            container.title = "Toque para ampliar";
+            if (!document.getElementById("aviso-clique-qr")) {
+                const aviso = document.createElement("div");
+                aviso.id = "aviso-clique-qr";
+                aviso.className = "text-[9px] text-slate-400 text-center mt-2 w-full animate-pulse";
+                aviso.innerText = "👆 Toque no QR Code para ampliar ou Copiar";
+                
+                const btnCopy = document.createElement("button");
+                btnCopy.className = "mt-2 bg-slate-700 text-white text-[9px] px-2 py-1 rounded w-full";
+                btnCopy.innerText = "📋 Copiar Código G3!";
+                btnCopy.onclick = (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(textoFinal).then(() => alert("Telemetria do PLAN copiada para o Hub!"));
+                };
+                container.parentNode.appendChild(aviso);
+                container.parentNode.appendChild(btnCopy);
+            }
+        }, 50);
+    }
+
+    function abrirQRFullscreen() {
+        const containerOrigem = document.getElementById("gente-qrcode-output");
+        const containerDestino = document.getElementById("qr-modal-content");
+        const modal = document.getElementById("qr-modal-fullscreen");
+        if (!containerOrigem.innerHTML) return;
+        containerDestino.innerHTML = "";
+        const canvasOrigem = containerOrigem.querySelector("canvas");
+        const imgOrigem = containerOrigem.querySelector("img");
+        let urlImagem = canvasOrigem ? canvasOrigem.toDataURL("image/png") : (imgOrigem ? imgOrigem.src : "");
+        if (urlImagem) {
+            const novaImg = document.createElement("img");
+            novaImg.src = urlImagem;
+            novaImg.className = "w-full h-auto object-contain"; 
+            containerDestino.appendChild(novaImg);
+        } else {
+            containerDestino.innerHTML = containerOrigem.innerHTML;
+        }
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+    }
+
+    function fecharQRFullscreen() {
+        const modal = document.getElementById("qr-modal-fullscreen");
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+        document.getElementById("qr-modal-content").innerHTML = ""; 
+    }
+
+    function iniciarLeitorGente() {
+        const readerElement = document.getElementById("gente-reader");
+        document.getElementById("gente-qrcode-output").innerHTML = "";
+        const aviso = document.getElementById("aviso-clique-qr");
+        if(aviso) { aviso.remove(); if(aviso.nextElementSibling) aviso.nextElementSibling.remove(); }
+
+        readerElement.classList.remove("hidden");
+        scannerGente = new Html5Qrcode("gente-reader");
+        scannerGente.start({ facingMode: "environment" }, { fps: 10, qrbox: 200 }, (text) => {
+            if (text.startsWith("G3!")) {
+                try {
+                    const dados = JSON.parse(LZString.decompressFromBase64(text.substring(3)));
+                    if(typeof repararDadosGente === "function") repararDadosGente(dados); 
+                    fecharScannerGente();
+                } catch (e) { alert("Erro ao processar dados transferidos."); }
+            }
+        }).catch(err => { alert("Erro na câmara: " + err); readerElement.classList.add("hidden"); });
+    }
+
+    function fecharScannerGente() {
+        if (scannerGente && scannerGente.isScanning) {
+            scannerGente.stop().then(() => { document.getElementById("gente-reader").classList.add("hidden"); }).catch(() => {});
+        } else { document.getElementById("gente-reader").classList.add("hidden"); }
+    }
+
+    function colarCodigoGente() {
+        fecharScannerGente(); 
+        document.getElementById("gente-qrcode-output").innerHTML = "";
+        const aviso = document.getElementById("aviso-clique-qr");
+        if(aviso) { aviso.remove(); if(aviso.nextElementSibling) aviso.nextElementSibling.remove(); }
+
+        const codigo = prompt("Cole aqui o código G3! copiado do ANP-Solver:");
+        if (codigo && codigo.trim() !== "") {
+            if (codigo.trim().startsWith("G3!")) {
+                try {
+                    const dados = JSON.parse(LZString.decompressFromBase64(codigo.trim().substring(3)));
+                    if(typeof repararDadosGente === "function") repararDadosGente(dados); 
+                } catch (e) { alert("Erro ao processar dados transferidos. O código pode estar corrompido."); }
+            } else { alert("Aviso: O texto colado não é válido."); }
+        }
+    }
+    
+    document.body.classList.add('pb-24');
     </script>
+   
 </body>
 
 </html>
-
 

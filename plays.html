@@ -582,7 +582,10 @@ body:has(#ferramenta-app:target) #capa-apresentacao { display: none;}
                     <i class="fas fa-rocket"></i> Fase 5: Rounds
                 </li>
 				<li class="nav-item" onclick="switchView('phase6')">
-                 <i class="fas fa-chart-line"></i> Fase 6: Auditoria
+                    <i class="fas fa-chart-line"></i> Fase 6: Auditoria
+                </li>
+				<li class="nav-item" onclick="switchView('phase7')">
+                    <i class="fas fa-tachometer-alt"></i> Fase 7: Dashboard GENTE
                 </li>
             </ul>
 
@@ -912,7 +915,42 @@ body:has(#ferramenta-app:target) #capa-apresentacao { display: none;}
         </div>
     </div>
 </div>
+<div id="view-phase7" class="view-section">
+    <div class="view-header">
+        <div class="view-title">
+            <span>Fase 7</span>
+            <h2>Dashboard de Governança GENTE</h2>
+        </div>
+        <button onclick="updateGenteDashboard()" class="control-btn btn-primary">🔄 Atualizar Indicadores</button>
+    </div>
 
+    <div style="margin-top:30px; display:grid; grid-template-columns: 1fr 1fr 1fr; gap:20px;">
+        <div class="tool-card" style="text-align:center;">
+            <h5 style="color:#1D3557;">Viabilidade Política</h5>
+            <div id="health-gauge" style="font-size:3rem; font-weight:800; margin:20px 0;">0%</div>
+            <p style="font-size:0.8rem; color:#718096;">Baseado na taxa de cooperação (Tit-for-Tat) e equilíbrios de Nash alcançados.</p>
+        </div>
+
+        <div class="tool-card" style="text-align:center;">
+            <h5 style="color:#1D3557;">Maturidade do Plano</h5>
+            <div id="canvas-completion" style="font-size:3rem; font-weight:800; margin:20px 0;">0%</div>
+            <p style="font-size:0.8rem; color:#718096;">Percentual de preenchimento do Project Model Canvas (Fase 1).</p>
+        </div>
+
+        <div class="tool-card" style="text-align:center;">
+            <h5 style="color:#1D3557;">Poder do Patrocínio</h5>
+            <div id="sponsor-score" style="font-size:3rem; font-weight:800; margin:20px 0;">Baixo</div>
+            <p style="font-size:0.8rem; color:#718096;">Nível de influência dos stakeholders engajados positivamente.</p>
+        </div>
+    </div>
+
+    <div class="tool-card" style="margin-top:20px;">
+        <h5>🚀 Próximos Passos Críticos</h5>
+        <div id="next-steps-list" style="padding:10px;">
+            <p style="color:#a0aec0;">Atualize para detectar gargalos...</p>
+        </div>
+    </div>
+</div>
         </main>
     </div>
 
@@ -2695,7 +2733,354 @@ function generateMiniMatrix(game, pA, pB) {
     </div>`;
 }
 });
-		
+	window.updateGenteDashboard = function() {
+    // 1. Cálculo de Maturidade do Canvas
+    const totalSections = 13; // Seções do Canvas (excluindo rascunho/ferramentas)
+    const filledSections = new Set(canvasItems.map(i => i.sectionId)).size;
+    const maturity = Math.round((filledSections / totalSections) * 100);
+    document.getElementById('canvas-completion').innerText = maturity + "%";
+    document.getElementById('canvas-completion').style.color = maturity > 70 ? '#38A169' : '#E53E3E';
+
+    // 2. Cálculo de Viabilidade Política (Fase 5 e 6)
+    const totalActions = implementationData.length;
+    const successCount = implementationData.filter(i => i.result === 'success').length;
+    const politicalHealth = totalActions > 0 ? Math.round((successCount / totalActions) * 100) : 0;
+    document.getElementById('health-gauge').innerText = politicalHealth + "%";
+    document.getElementById('health-gauge').style.color = politicalHealth > 50 ? '#3182CE' : '#E53E3E';
+
+    // 3. Poder do Patrocínio (Heurística)
+    let totalPower = 0;
+    implementationData.filter(i => i.result === 'success').forEach(item => {
+        // Assume que Player B é o stakeholder sendo gerido
+        totalPower += calculatePlayerPower(item.playerB);
+    });
+    let sponsorLevel = "Baixo";
+    if(totalPower > 50) sponsorLevel = "Médio";
+    if(totalPower > 100) sponsorLevel = "Alto";
+    if(totalPower > 150) sponsorLevel = "Crítico/Blindado";
+    document.getElementById('sponsor-score').innerText = sponsorLevel;
+
+    // 4. Gerador de Próximos Passos
+    const stepList = document.getElementById('next-steps-list');
+    stepList.innerHTML = '';
+    
+    if(maturity < 100) {
+        stepList.innerHTML += `<div style="padding:10px; border-left:4px solid #ECC94B; margin-bottom:10px; background:#fffaf0;">
+            <strong>Refinar Definição:</strong> O Canvas ainda possui áreas vazias. O risco de desalinhamento técnico é alto.</div>`;
+    }
+    
+    const highRisk = implementationData.find(i => i.result === 'fail');
+    if(highRisk) {
+        stepList.innerHTML += `<div style="padding:10px; border-left:4px solid #F56565; margin-bottom:10px; background:#fff5f5;">
+            <strong>Bloqueio Político:</strong> ${highRisk.playerB} resistiu à estratégia em ${highRisk.contextName}. Reavaliar Payoffs na Fase 3.</div>`;
+    }
+
+    if(politicalHealth > 80 && maturity > 80) {
+        stepList.innerHTML += `<div style="padding:10px; border-left:4px solid #48BB78; margin-bottom:10px; background:#f0fff4;">
+            <strong>Pronto para Decolagem:</strong> Alinhamento político e técnico robusto. Prosseguir para execução.</div>`;
+    }
+};	
+    </script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
+    <div id="gente-comm-module" class="fixed bottom-0 left-0 w-full bg-slate-900 border-t border-slate-700 p-3 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.5)] z-[60]">
+        <div class="max-w-5xl mx-auto">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <span class="animate-pulse">📡</span> Protocolo de Sincronia GENTE
+                </h3>
+                <button onclick="toggleGenteInterface()" class="text-white text-xs p-1 px-2 hover:bg-slate-800 rounded transition">
+                    <span id="gente-toggle-icon">▲</span>
+                </button>
+            </div>
+            <div id="gente-interface-body" class="hidden">
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <button onclick="gerarSaidaGente()" class="bg-slate-700 text-white text-[10px] font-bold py-2 rounded border border-slate-600 transition active:scale-95" title="Exportar Simulador para o Hub/MON">📤 Gerar QR</button>
+                    <button onclick="iniciarLeitorGente()" class="bg-indigo-600 text-white text-[10px] font-bold py-2 rounded transition active:scale-95" title="Ler Projeto do PLAN">📷 Câmara</button>
+                    <button onclick="colarCodigoGente()" class="bg-amber-700 text-white text-[10px] font-bold py-2 rounded transition active:scale-95" title="Colar Projeto do PLAN">📋 Colar</button>
+                </div>
+                
+                <div class="flex flex-col items-center">
+                    <div id="gente-qrcode-output" class="mt-2 empty:hidden bg-white p-2 rounded-lg w-fit border-4 border-white shadow-lg transition-transform hover:scale-105"></div>
+                </div>
+                
+                <div id="gente-reader" class="mt-2 rounded-lg overflow-hidden border border-slate-500 hidden mx-auto max-w-[250px] bg-black"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="qr-modal-fullscreen" class="fixed inset-0 bg-slate-900/95 z-[9999] hidden flex-col items-center justify-center p-6 backdrop-blur-sm transition-all">
+        <button onclick="fecharQRFullscreen()" class="absolute top-6 right-6 text-white text-4xl font-bold hover:text-slate-300 transition-colors">&times;</button>
+        <p class="text-slate-300 text-xs uppercase tracking-widest mb-4 font-bold animate-pulse">Aproxime a Câmera</p>
+        
+        <div id="qr-modal-content" class="bg-white p-4 rounded-xl shadow-[0_0_40px_rgba(255,255,255,0.1)] w-full max-w-md flex justify-center items-center aspect-square">
+        </div>
+        
+        <p class="text-slate-400 text-[10px] mt-6 text-center max-w-xs">
+            Dica: Aumente o brilho do ecrã se a leitura estiver demorando.
+        </p>
+    </div>
+
+    <script>
+    const CONFIG_GENTE = {
+        nome: "PLAYS",
+        selectorDados: () => {
+            const inputTitulo = document.getElementById('project-title');
+            const titulo = inputTitulo ? inputTitulo.value || "Projeto Simulado" : "Projeto Simulado";
+            const tituloCurto = titulo.length > 25 ? titulo.substring(0, 25) + "..." : titulo;
+
+            // Captura os indicadores da Tela 7 (Dashboard)
+            const matScore = document.getElementById('maturity-score') ? document.getElementById('maturity-score').innerText : "0%";
+            const polScore = document.getElementById('political-health-score') ? document.getElementById('political-health-score').innerText : "0%";
+            const spoScore = document.getElementById('sponsor-score') ? document.getElementById('sponsor-score').innerText : "N/A";
+
+            // Verifica se a saúde política é perigosa (abaixo de 50%) para gerar alerta no Hub
+            const saudeValor = parseInt(polScore.replace('%', '')) || 0;
+            const temRiscoPolitico = saudeValor < 50;
+
+            // Extrai a estrutura básica para o futuro MON
+            const entregas = document.getElementById('deliverables') ? document.getElementById('deliverables').value : "";
+            const prazo = document.getElementById('timeline') ? document.getElementById('timeline').value : "";
+
+            return {
+                // --- Telemetria para o Hub ---
+                tit: tituloCurto,       
+                met: [`Maturação: ${matScore}`, `Saúde Pol.: ${polScore}`, `Sponsor: ${spoScore}`],   
+                qta: gamesData ? gamesData.length : 0, // Quantidade de cenários simulados
+                cnf: temRiscoPolitico, // Flag de tensão no Hub
+
+                // --- Payload tático para o MON (Módulo 2) ---
+                resultado: {
+                    projeto: titulo,
+                    entregas: entregas,
+                    prazo: prazo,
+                    saudeGlobal: saudeValor
+                }
+            };
+        }
+    };
+
+    function repararDadosGente(dados) {
+        if (dados.origem === "PLAN" && dados.conteudo) {
+            const p = dados.conteudo;
+            
+            // 1. Mapeia o Título do Projeto
+            const elTitle = document.getElementById('project-title');
+            if (elTitle) elTitle.value = p.title || "Projeto Importado";
+
+            // 2. Mapeia as Entregas (Array de strings para texto)
+            const elDeliverables = document.getElementById('deliverables');
+            if (elDeliverables && p.deliverables) {
+                elDeliverables.value = p.deliverables.map(d => "• " + d).join('\\n');
+            }
+
+            // 3. Mapeia a Equipa/Responsáveis
+            const elTeam = document.getElementById('team');
+            if (elTeam && p.team) {
+                elTeam.value = "Áreas envolvidas: " + p.team;
+            }
+
+            // 4. Mapeia o Prazo
+            const elTimeline = document.getElementById('timeline');
+            if (elTimeline && p.deadline) {
+                const prazoFormatado = new Date(p.deadline + 'T00:00:00').toLocaleDateString('pt-BR');
+                elTimeline.value = "Prazo Máximo: " + prazoFormatado;
+            }
+
+            // 5. Mapeia a Origem Estratégica (Contexto)
+            const elGoal = document.getElementById('goal');
+            if (elGoal && p.strategicOrigin) {
+                elGoal.value = "Eixo Estratégico Matriz: " + p.strategicOrigin.toUpperCase();
+            }
+
+            // Simula o salvamento do Canvas para atualizar os dados internos do PLAYS
+            if (typeof saveCanvas === "function") saveCanvas();
+            
+            alert(`✅ Sucesso! O projeto "${p.title}" foi importado do PLAN.\n\nO Canvas inicial (Passo 1) foi preenchido. Avance para mapear os Atores.`);
+        } else {
+            alert(`Sincronização concluída! Dados recebidos de: [${dados.origem}].`);
+        }
+    }
+
+    // --- FUNÇÕES PADRÃO DO MÓDULO GENTE ---
+    let scannerGente = null;
+
+    function toggleGenteInterface() {
+        const body = document.getElementById('gente-interface-body');
+        const icon = document.getElementById('gente-toggle-icon');
+        const isHidden = body.classList.contains('hidden');
+        body.classList.toggle('hidden');
+        icon.innerText = isHidden ? '▼' : '▲';
+        if (!isHidden) fecharScannerGente();
+    }
+
+    function gerarSaidaGente() {
+        fecharScannerGente();
+        const dados = CONFIG_GENTE.selectorDados();
+        const payload = { origem: CONFIG_GENTE.nome, timestamp: new Date().toISOString(), conteudo: dados };
+        const comprimido = LZString.compressToBase64(JSON.stringify(payload));
+        const textoFinal = "G3!" + comprimido;
+        
+        const container = document.getElementById("gente-qrcode-output");
+        container.innerHTML = ""; 
+
+        let tamanhoQR = 200; 
+        if (textoFinal.length > 500) tamanhoQR = 300;
+        if (textoFinal.length > 1000) tamanhoQR = 450;
+        if (textoFinal.length > 1500) tamanhoQR = 600;
+
+        new QRCode(container, { 
+            text: textoFinal, 
+            width: tamanhoQR, 
+            height: tamanhoQR, 
+            correctLevel : QRCode.CorrectLevel.L
+        });
+
+        setTimeout(() => {
+            const qrCanvas = container.querySelector("canvas");
+            const qrImage = container.querySelector("img");
+            
+            if (qrCanvas) { qrCanvas.style.maxWidth = "200px"; qrCanvas.style.height = "auto"; }
+            if (qrImage) { qrImage.style.maxWidth = "200px"; qrImage.style.height = "auto"; }
+            
+            container.style.cursor = "pointer";
+            container.setAttribute("onclick", "abrirQRFullscreen()");
+            container.title = "Toque para ampliar";
+            
+            if (!document.getElementById("aviso-clique-qr")) {
+                const aviso = document.createElement("div");
+                aviso.id = "aviso-clique-qr";
+                aviso.className = "text-[9px] text-slate-400 text-center mt-2 w-full animate-pulse";
+                aviso.innerText = "👆 Toque no QR Code para ampliar ou Copiar";
+                
+                const btnCopy = document.createElement("button");
+                btnCopy.className = "mt-2 bg-slate-700 text-white text-[9px] px-2 py-1 rounded w-full";
+                btnCopy.innerText = "📋 Copiar Código G3!";
+                btnCopy.onclick = (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(textoFinal).then(() => alert("Código copiado! Pode colar no Hub ou na próxima ferramenta (MON)."));
+                };
+
+                container.parentNode.appendChild(aviso);
+                container.parentNode.appendChild(btnCopy);
+            }
+        }, 50);
+    }
+
+    function abrirQRFullscreen() {
+        const containerOrigem = document.getElementById("gente-qrcode-output");
+        const containerDestino = document.getElementById("qr-modal-content");
+        const modal = document.getElementById("qr-modal-fullscreen");
+
+        if (!containerOrigem.innerHTML) return;
+
+        containerDestino.innerHTML = "";
+        const canvasOrigem = containerOrigem.querySelector("canvas");
+        const imgOrigem = containerOrigem.querySelector("img");
+        
+        let urlImagem = "";
+        if (canvasOrigem) {
+            urlImagem = canvasOrigem.toDataURL("image/png");
+        } else if (imgOrigem && imgOrigem.src) {
+            urlImagem = imgOrigem.src;
+        }
+
+        if (urlImagem) {
+            const novaImg = document.createElement("img");
+            novaImg.src = urlImagem;
+            novaImg.className = "w-full h-auto object-contain"; 
+            containerDestino.appendChild(novaImg);
+        } else {
+            containerDestino.innerHTML = containerOrigem.innerHTML;
+        }
+
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+    }
+
+    function fecharQRFullscreen() {
+        const modal = document.getElementById("qr-modal-fullscreen");
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+        document.getElementById("qr-modal-content").innerHTML = ""; 
+    }
+
+    function iniciarLeitorGente() {
+        const readerElement = document.getElementById("gente-reader");
+        document.getElementById("gente-qrcode-output").innerHTML = "";
+        
+        const aviso = document.getElementById("aviso-clique-qr");
+        if(aviso) {
+            aviso.remove();
+            if(aviso.nextElementSibling) aviso.nextElementSibling.remove();
+        }
+
+        readerElement.classList.remove("hidden");
+        scannerGente = new Html5Qrcode("gente-reader");
+        scannerGente.start({ facingMode: "environment" }, { fps: 10, qrbox: 200 }, (text) => {
+            if (text.startsWith("G3!")) {
+                try {
+                    const descompactado = LZString.decompressFromBase64(text.substring(3));
+                    const dados = JSON.parse(descompactado);
+                    
+                    if(typeof repararDadosGente === "function") {
+                        repararDadosGente(dados); 
+                    }
+                    
+                    fecharScannerGente();
+                } catch (e) { alert("Erro ao processar dados transferidos."); }
+            }
+        }).catch(err => { 
+            alert("Erro na câmara: " + err); 
+            readerElement.classList.add("hidden"); 
+        });
+    }
+
+    function fecharScannerGente() {
+        if (scannerGente && scannerGente.isScanning) {
+            scannerGente.stop().then(() => { 
+                document.getElementById("gente-reader").classList.add("hidden"); 
+            }).catch(() => {});
+        } else { 
+            document.getElementById("gente-reader").classList.add("hidden"); 
+        }
+    }
+
+    function colarCodigoGente() {
+        fecharScannerGente(); 
+        document.getElementById("gente-qrcode-output").innerHTML = "";
+        
+        const aviso = document.getElementById("aviso-clique-qr");
+        if(aviso) {
+            aviso.remove();
+            if(aviso.nextElementSibling) aviso.nextElementSibling.remove();
+        }
+
+        const codigo = prompt("Cole aqui o código G3! copiado do PLAN:");
+        
+        if (codigo && codigo.trim() !== "") {
+            const text = codigo.trim();
+            if (text.startsWith("G3!")) {
+                try {
+                    const descompactado = LZString.decompressFromBase64(text.substring(3));
+                    const dados = JSON.parse(descompactado);
+                    
+                    if(typeof repararDadosGente === "function") {
+                        repararDadosGente(dados); 
+                    }
+                } catch (e) { 
+                    alert("Erro ao processar dados transferidos. O código pode estar corrompido."); 
+                }
+            } else {
+                alert("Aviso: O texto colado não é válido (Falta a assinatura G3! no início).");
+            }
+        }
+    }
+    
+    // Ajuste de margem inferior para a barra não sobrepor botões da interface nativa
+    document.body.classList.add('pb-24');
     </script>
 </body>
 </html>
