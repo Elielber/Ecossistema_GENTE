@@ -879,73 +879,85 @@
             a.click();
         }
 
-       document.getElementById('export-btn').addEventListener('click', () => {
-    const el = document.getElementById('diagram-container');
-    const oldTransform = zoomWrapper.style.transform;
-    zoomWrapper.style.transform = 'scale(1)'; 
-    
-    // --- PAINEL DE CALIBRAÇÃO (EXPORTAÇÃO) ---
-    // Use valores positivos (px) para DESCER
-    // Use valores negativos (-px) para SUBIR
-    
-    const ajusteCausasY = '-5px';    // Texto pequeno das espinhas
-    const ajusteTituloY = '-10px';    // Barras coloridas (C, A, T...)
-    const ajusteHeadY   = '-10px';    // Texto do Problema Central
-    // -----------------------------------------
+document.getElementById('export-btn').addEventListener('click', () => {
+    const originalEl = document.getElementById('diagram-container');
+    const width = originalEl.scrollWidth;
+    const height = originalEl.scrollHeight;
 
-    html2canvas(el, { 
-        scale: 3, 
-        backgroundColor: '#e2e8f0',
-        
-        onclone: (clonedDoc) => {
-            // 1. AJUSTE DAS CAUSAS (Pequenas)
-            const causes = clonedDoc.querySelectorAll('.label-bg');
-            causes.forEach(lbl => {
-                // Habilita posicionamento relativo para aceitar 'top'
-                lbl.style.position = 'relative';
-                lbl.style.top = ajusteCausasY; 
-                
-                // Garante que não quebre linha
-                lbl.style.whiteSpace = 'nowrap';
-            });
+    const ghostWrapper = document.createElement('div');
+    ghostWrapper.style.position = 'absolute';
+    ghostWrapper.style.top = '-9999px'; 
+    ghostWrapper.style.left = '0';
+    ghostWrapper.style.width = width + 'px';
+    ghostWrapper.style.height = height + 'px';
+    ghostWrapper.style.backgroundColor = '#ffffff';
+    ghostWrapper.style.zIndex = '-1';
 
-            // 2. AJUSTE DOS TÍTULOS (Barras Coloridas)
-            const titles = clonedDoc.querySelectorAll('.export-cat-title');
-            titles.forEach(titleContainer => {
-                const textSpan = titleContainer.querySelector('span');
-                if (textSpan) {
-                    // Desliga o alinhamento automático do container
-                    titleContainer.style.alignItems = 'flex-start'; 
-                    
-                    // Move o texto manualmente
-                    textSpan.style.position = 'relative';
-                    // 5px é a base para compensar o 'flex-start' que joga pro topo
-                    textSpan.style.top = `calc(5px + ${ajusteTituloY})`; 
-                }
-            });
+    const clone = originalEl.cloneNode(true);
+    clone.style.transform = 'none'; 
+    clone.style.width = '100%';
+    clone.style.height = '100%';
+    clone.style.margin = '0';
 
-            // 3. AJUSTE DA CABEÇA DO PEIXE
-            const head = clonedDoc.querySelector('.export-head');
-            if(head) {
-                // Desliga centralização vertical automática
-                head.style.alignItems = 'flex-start';
-                
-                // Pega o texto dentro da cabeça
-                const headSpan = head.querySelector('span');
-                if(headSpan) {
-                    headSpan.style.position = 'relative';
-                    // A cabeça é grande, então o ajuste base precisa ser maior (ex: 0)
-                    // Somamos com o valor calibrado
-                    headSpan.style.top = ajusteHeadY;
-                }
-            }
+    // --- INÍCIO DOS AJUSTES FINOS (CALIBRAGEM HD) ---
+    // Você pode alterar esses valores (ex: '-5px', '-2px') se quiser subir ou descer mais o texto
+    const ajusteCausasY = '-3px';  // Sobe um pouco o texto das causas pequenas
+    const ajusteTituloY = '-5px';  // Sobe o texto das barras coloridas CATWOE
+    const ajusteHeadY   = '-6px';  // Sobe o texto da cabeça do peixe
+
+    const causes = clone.querySelectorAll('.label-bg');
+    causes.forEach(lbl => {
+        lbl.style.whiteSpace = 'nowrap';
+        lbl.style.position = 'relative';
+        lbl.style.top = ajusteCausasY; 
+    });
+
+    const titles = clone.querySelectorAll('.export-cat-title');
+    titles.forEach(titleContainer => {
+        const textSpan = titleContainer.querySelector('span');
+        if (textSpan) {
+            textSpan.style.position = 'relative';
+            textSpan.style.top = ajusteTituloY;
         }
-    }).then(canvas => {
-        const a = document.createElement('a');
-        a.download = `CATWOE-Diagrama-${new Date().toISOString().slice(0,10)}.png`;
-        a.href = canvas.toDataURL();
-        a.click();
-        zoomWrapper.style.transform = oldTransform;
+    });
+
+    const head = clone.querySelector('.export-head');
+    if (head) {
+        const headSpan = head.querySelector('span');
+        if (headSpan) {
+            headSpan.style.position = 'relative';
+            headSpan.style.top = ajusteHeadY;
+        }
+    }
+    // --- FIM DOS AJUSTES FINOS ---
+
+    ghostWrapper.appendChild(clone);
+    document.body.appendChild(ghostWrapper);
+
+    // Garante que a fonte do Google carregou antes de fotografar
+    document.fonts.ready.then(() => {
+        setTimeout(() => {
+            html2canvas(clone, {
+                scale: 3,                  
+                useCORS: true,             
+                backgroundColor: '#ffffff', 
+                windowWidth: width,        
+                windowHeight: height       
+            }).then(canvas => {
+                const a = document.createElement('a');
+                a.download = `Peixe-Voador-HD-${new Date().toISOString().slice(0,10)}.png`;
+                a.href = canvas.toDataURL('image/png', 1.0);
+                a.click();
+                
+                document.body.removeChild(ghostWrapper);
+            }).catch(err => {
+                console.error("Erro no html2canvas:", err);
+                alert("Erro ao exportar. Tente novamente.");
+                if (document.body.contains(ghostWrapper)) {
+                    document.body.removeChild(ghostWrapper);
+                }
+            });
+        }, 150);
     });
 });
 				
