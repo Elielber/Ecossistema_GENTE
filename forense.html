@@ -42,6 +42,11 @@
 #ferramenta-app:target { display: block; }
 /* Quando a ferramenta estiver ativa (#target), a capa desaparece */
 body:has(#ferramenta-app:target) #capa-apresentacao { display: none;}
+/* --- Estilos da Jornada Guiada --- */
+    .progress-container { width: 100%; background-color: #e2e8f0; border-radius: 9999px; height: 8px; margin-bottom: 20px; overflow: hidden; }
+    .progress-bar { height: 100%; background-color: var(--color-m2-azul-gestao); transition: width 0.4s ease; width: 11.11%; }
+    .step-guiado { display: none; animation: fadeIn 0.3s ease; }
+    .step-guiado.active { display: block; }
 	  
   </style>
 </head>
@@ -133,52 +138,246 @@ body:has(#ferramenta-app:target) #capa-apresentacao { display: none;}
   </header>
 
   <main class="p-4 max-w-5xl mx-auto">
-    <section id="tab-analisar" class="tab-content active">
-      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-4">
-        <h2 class="font-semibold text-slate-800 mb-2">Acervo Documental da Auditoria</h2>
-        <p class="text-xs text-slate-500 mb-5 leading-relaxed">
-          Classifique e carregue os documentos que compõem esta decisão. O Forense agrupará ofícios e votos como
-          <strong>"Tese Oficial"</strong>, e artigos ou manifestos como <strong>"Contraponto/Contexto"</strong>.
-        </p>
-
-        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-4 space-y-4">
-          <div>
-            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Papel na Auditoria (Posição):</label>
-            <select id="doc-classificacao" class="w-full text-sm p-2 border border-slate-300 rounded-md bg-white text-slate-700 focus:outline-none focus:border-slate-500">
-              <option value="oficial_">Documento Oficial (Tese / Decisão da Gestão)</option>
-              <option value="critica_">Documento de Contraponto (Antítese / Manifesto)</option>
-            </select>
-          </div>
-
-          <div class="mb-3">
-            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Arquivo (PDF ou TXT):</label>
-            <input type="file" id="doc-arquivo" accept=".pdf,.txt" class="block w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300 cursor-pointer" />
-          </div>
-
-          <button onclick="adicionarDocumento()" class="w-full bg-slate-200 text-slate-700 font-semibold py-2 rounded-md hover:bg-slate-300 transition text-xs uppercase tracking-wide">
-            + Adicionar ao Dossiê
+ <section id="tab-analisar" class="tab-content active">
+      
+      <div id="modo-seletor" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 text-center">
+        <h2 class="font-bold text-xl text-slate-800 mb-2">Qual é o cenário da Auditoria?</h2>
+        <p class="text-xs text-slate-500 mb-8">Escolha como deseja inserir os dados para a análise científica.</p>
+        
+        <div class="grid md:grid-cols-2 gap-4">
+          <button onclick="selecionarModo('guiado')" class="flex flex-col items-center justify-center p-6 border-2 border-indigo-100 hover:border-indigo-500 hover:bg-indigo-50 rounded-xl transition-all group">
+            <span class="text-4xl mb-3 group-hover:scale-110 transition-transform">🧭</span>
+            <span class="font-bold text-slate-800 uppercase tracking-widest text-sm mb-1">Jornada Guiada</span>
+            <span class="text-[11px] text-slate-500">Decodifique o conflito passo a passo. Ideal quando o problema é tácito ou disperso.</span>
+          </button>
+          
+          <button onclick="selecionarModo('automatizado')" class="flex flex-col items-center justify-center p-6 border-2 border-slate-100 hover:border-slate-500 hover:bg-slate-50 rounded-xl transition-all group">
+            <span class="text-4xl mb-3 group-hover:scale-110 transition-transform">📄</span>
+            <span class="font-bold text-slate-800 uppercase tracking-widest text-sm mb-1">Modo Documental</span>
+            <span class="text-[11px] text-slate-500">Faça o upload de PDFs ou atas. Ideal para normativos já publicados e abaixo-assinados.</span>
           </button>
         </div>
+      </div>
 
-        <div class="mb-4 flex items-center justify-between bg-amber-50 p-3 rounded-lg border border-amber-200">
-          <label for="ha-contraponto" class="text-xs font-bold text-amber-800 flex flex-col cursor-pointer w-full">
-            <span>Existe manifestação de contraponto?</span>
-            <span class="text-[10px] text-amber-600 font-normal">Alerte o sistema se a decisão sofreu críticas ou abaixo-assinados (Auditoria de Groupthink).</span>
-          </label>
-          <input type="checkbox" id="ha-contraponto" class="w-5 h-5 text-amber-600 bg-white border-amber-300 rounded focus:ring-amber-500 cursor-pointer" />
+      <div id="modo-automatizado" class="hidden">
+        <button onclick="voltarSeletor()" class="text-xs text-slate-500 hover:text-slate-800 mb-4 font-bold uppercase tracking-widest flex items-center gap-1">← Voltar</button>
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-4">
+          <h2 class="font-semibold text-slate-800 mb-2">Acervo Documental da Auditoria</h2>
+          <p class="text-xs text-slate-500 mb-5 leading-relaxed">Classifique e carregue os documentos que compõem esta decisão.</p>
+
+          <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-4 space-y-4">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Papel na Auditoria:</label>
+              <select id="doc-classificacao" class="w-full text-sm p-2 border border-slate-300 rounded-md bg-white text-slate-700">
+                <option value="oficial_">Documento Oficial (Tese / Decisão)</option>
+                <option value="critica_">Documento de Contraponto (Crítica / Manifesto)</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Arquivo (PDF ou TXT):</label>
+              <input type="file" id="doc-arquivo" accept=".pdf,.txt" class="block w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-bold file:bg-slate-200 file:text-slate-700 hover:file:bg-slate-300 cursor-pointer" />
+            </div>
+            <button onclick="adicionarDocumento()" class="w-full bg-slate-200 text-slate-700 font-semibold py-2 rounded-md hover:bg-slate-300 transition text-xs uppercase tracking-wide">+ Adicionar ao Dossiê</button>
+          </div>
+
+          <div class="mb-4 flex items-center justify-between bg-amber-50 p-3 rounded-lg border border-amber-200">
+            <label for="ha-contraponto" class="text-xs font-bold text-amber-800 flex flex-col cursor-pointer w-full">
+              <span>Existe manifestação de contraponto?</span>
+            </label>
+            <input type="checkbox" id="ha-contraponto" class="w-5 h-5 text-amber-600 bg-white border-amber-300 rounded focus:ring-amber-500 cursor-pointer" />
+          </div>
         </div>
+
+        <div class="mb-6">
+          <h3 class="text-xs font-bold text-slate-700 uppercase border-b border-slate-200 pb-1 mb-2">Documentos em Memória</h3>
+          <ul id="lista-documentos" class="space-y-2 empty:after:content-['Nenhum_documento_carregado.'] empty:after:text-xs empty:after:text-slate-400"></ul>
+        </div>
+        <button onclick="processarDossie()" id="btn-processar" class="w-full bg-slate-800 text-white font-semibold py-3 rounded-lg shadow-sm hover:bg-slate-900 transition flex justify-center items-center text-sm uppercase tracking-wide">Executar Auditoria Científica</button>
+        <div id="loading-indicator" class="hidden text-center mt-3 text-xs text-slate-600 font-medium animate-pulse uppercase tracking-widest">Processando...</div>
       </div>
 
-      <div class="mb-6">
-        <h3 class="text-xs font-bold text-slate-700 uppercase border-b border-slate-200 pb-1 mb-2">Documentos em Memória</h3>
-        <ul id="lista-documentos" class="space-y-2 empty:after:content-['Nenhum_documento_carregado.'] empty:after:text-xs empty:after:text-slate-400"></ul>
-      </div>
+      <div id="modo-guiado" class="hidden">
+        <button onclick="voltarSeletor()" class="text-xs text-slate-500 hover:text-slate-800 mb-2 font-bold uppercase tracking-widest flex items-center gap-1">← Voltar</button>
+        
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 relative">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest" id="texto-etapa">Etapa 1 de 9</span>
+            <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Decodificação Heurística</span>
+          </div>
+          <div class="progress-container"><div id="barra-progresso" class="progress-bar"></div></div>
 
-      <button onclick="processarDossie()" id="btn-processar" class="w-full bg-slate-800 text-white font-semibold py-3 rounded-lg shadow-sm hover:bg-slate-900 transition flex justify-center items-center text-sm uppercase tracking-wide">
-        Executar Auditoria Científica
-      </button>
-      <div id="loading-indicator" class="hidden text-center mt-3 text-xs text-slate-600 font-medium animate-pulse uppercase tracking-widest">
-        Processando Acervo Documental...
+          <div id="step-1" class="step-guiado active">
+            <h3 class="font-bold text-lg text-slate-800 mb-1">O Sintoma</h3>
+            <p class="text-xs text-slate-500 mb-4">Descreva apenas o que é observado hoje. Evite explicar o motivo por enquanto.</p>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">1. O que está acontecendo agora que gera desconforto?</label>
+                <textarea id="jg_q1" class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" rows="2"></textarea>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">2. Esse desconforto ocorreu uma vez ou se repete?</label>
+                <select id="jg_q2" class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white">
+                  <option value="isolado">Evento isolado</option><option value="repetindo">Está se repetindo</option><option value="nao_sei">Não tenho certeza</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">3. Quem é diretamente afetado?</label>
+                <select id="jg_q3" class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white">
+                  <option value="pessoa">Apenas uma pessoa</option><option value="equipe">Uma equipe</option><option value="areas">Várias áreas</option><option value="instituicao">A instituição como um todo</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div id="step-2" class="step-guiado">
+            <h3 class="font-bold text-lg text-slate-800 mb-1">Natureza e Percepção</h3>
+            <p class="text-xs text-slate-500 mb-4">Mapeamento da taxonomia de Bardin e tensão térmica.</p>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">4. Quais palavras melhor descrevem o clima dessa situação?</label>
+                <input type="text" id="jg_q4" placeholder="Ex: #processo, #injustiça, #orçamento, #sobrecarga" class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">5. Em uma escala de 0 a 10, qual o nível de tensão?</label>
+                <input type="range" id="jg_q5" min="0" max="10" value="5" class="w-full accent-indigo-600" oninput="document.getElementById('jg_q5_val').innerText = this.value">
+                <div class="text-center text-xs font-bold text-slate-500 mt-1">Nível: <span id="jg_q5_val">5</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="step-3" class="step-guiado">
+            <h3 class="font-bold text-lg text-slate-800 mb-1">O Fato Gerador</h3>
+            <p class="text-xs text-slate-500 mb-4">Separação do sintoma da causa inicial (Modelo de Toulmin).</p>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">6. Qual foi a decisão, ação ou fato concreto que deu origem a isso?</label>
+                <textarea id="jg_q6" placeholder="Ex: A publicação da portaria X, corte no sistema Y..." class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" rows="2"></textarea>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">7. Por que você considera isso um problema?</label>
+                <textarea id="jg_q7" class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div id="step-4" class="step-guiado">
+            <h3 class="font-bold text-lg text-slate-800 mb-1">Base e Justificativa</h3>
+            <p class="text-xs text-slate-500 mb-4">Busca pela regra ou valor em conflito institucional.</p>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">8. Essa situação fere alguma regra, norma ou valor da instituição?</label>
+                <select id="jg_q8" class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white">
+                  <option value="sim">Sim</option><option value="nao">Não</option><option value="nao_sei">Não sei</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">9. Qual poderia ser essa regra ou valor?</label>
+                <input type="text" id="jg_q9" placeholder="Ex: Acordo coletivo, prática de transparência..." class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+            </div>
+          </div>
+
+          <div id="step-5" class="step-guiado">
+            <h3 class="font-bold text-lg text-slate-800 mb-1">Evidência e Faticidade</h3>
+            <p class="text-xs text-slate-500 mb-4">Calibragem do motor de pontuação heurística.</p>
+            <div class="space-y-4">
+              <label class="block text-sm font-bold text-slate-700">10. Como você pode comprovar que isso ocorreu?</label>
+              
+              <div class="flex flex-col gap-2">
+                <label class="flex items-start gap-2 text-sm text-slate-700 cursor-pointer bg-slate-50 p-2 rounded border border-slate-200">
+                  <input type="radio" name="jg_q10" value="documental" class="mt-1 accent-indigo-600" onclick="document.getElementById('jg_q10_box').classList.remove('hidden')" />
+                  <span><strong>Tenho documento formal</strong> (e-mail, ata, portaria). O sistema exigirá rigor de caracteres.</span>
+                </label>
+                <label class="flex items-start gap-2 text-sm text-slate-700 cursor-pointer bg-slate-50 p-2 rounded border border-slate-200">
+                  <input type="radio" name="jg_q10" value="declaratoria" class="mt-1 accent-indigo-600" onclick="document.getElementById('jg_q10_box').classList.remove('hidden')" />
+                  <span><strong>Não tenho documento</strong>, presenciei o fato. O sistema focará na densidade semântica.</span>
+                </label>
+              </div>
+
+              <div id="jg_q10_box" class="hidden mt-2">
+                <label class="block text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-1">Cole o trecho ou descreva o fato exato (Máx 1 parágrafo):</label>
+                <textarea id="jg_q10_texto" class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" rows="3"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div id="step-6" class="step-guiado">
+            <h3 class="font-bold text-lg text-slate-800 mb-1">Confiança e Limites</h3>
+            <p class="text-xs text-slate-500 mb-4">Teste de mitigação de Groupthink (Janis, 1982).</p>
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">11. Quão confiante você está na sua interpretação?</label>
+                <input type="range" id="jg_q11" min="0" max="100" value="80" class="w-full accent-indigo-600" oninput="document.getElementById('jg_q11_val').innerText = this.value + '%'">
+                <div class="text-center text-xs font-bold text-slate-500 mt-1"><span id="jg_q11_val">80%</span></div>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">12. Você já conversou com outras pessoas sobre isso?</label>
+                <div class="flex gap-4">
+                  <label><input type="radio" name="jg_q12" value="sim" class="accent-indigo-600"> Sim</label>
+                  <label><input type="radio" name="jg_q12" value="nao" class="accent-indigo-600"> Não</label>
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">13. O que precisaria acontecer para você mudar de opinião?</label>
+                <input type="text" id="jg_q13" class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+              </div>
+            </div>
+          </div>
+
+          <div id="step-7" class="step-guiado">
+            <h3 class="font-bold text-lg text-slate-800 mb-1">Poder e Payoffs</h3>
+            <p class="text-xs text-slate-500 mb-4">Mapeamento da utilidade marginal para Teoria dos Jogos.</p>
+            <div class="space-y-4">
+              <div class="grid grid-cols-2 gap-4">
+                <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Decisor (Quem manda?)</label><input type="text" id="jg_q14" class="w-full p-2 border border-slate-300 rounded-lg text-sm" /></div>
+                <div><label class="block text-[10px] font-bold text-slate-500 uppercase">Impactado (A Base)</label><input type="text" id="jg_q15" class="w-full p-2 border border-slate-300 rounded-lg text-sm" /></div>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">16. O que o decisor GANHA mantendo essa situação?</label>
+                <input type="text" id="jg_q16" placeholder="Ex: Controle, orçamento, cumpre meta..." class="w-full p-2 border border-slate-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1">17. O que o grupo afetado PERDE se nada for feito?</label>
+                <input type="text" id="jg_q17" placeholder="Ex: Motivação, tempo, qualidade..." class="w-full p-2 border border-slate-300 rounded-lg text-sm" />
+              </div>
+            </div>
+          </div>
+
+          <div id="step-8" class="step-guiado">
+            <h3 class="font-bold text-lg text-slate-800 mb-1">Omissões e Riscos</h3>
+            <p class="text-xs text-slate-500 mb-4">Identificação do não-dito (Análise Crítica do Discurso).</p>
+            <div class="space-y-4">
+              <label class="block text-sm font-bold text-slate-700">18. Existe algo que as pessoas evitam registrar formalmente?</label>
+              <div class="flex gap-4">
+                <label><input type="radio" name="jg_q18" value="sim" onclick="document.getElementById('jg_q18_box').classList.remove('hidden')" class="accent-indigo-600"> Sim</label>
+                <label><input type="radio" name="jg_q18" value="nao" onclick="document.getElementById('jg_q18_box').classList.add('hidden')" class="accent-indigo-600"> Não</label>
+              </div>
+              <div id="jg_q18_box" class="hidden mt-2">
+                <label class="block text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-1">O que tende a ficar apenas "fora do papel"?</label>
+                <textarea id="jg_q18_texto" class="w-full p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div id="step-9" class="step-guiado">
+            <h3 class="font-bold text-lg text-slate-800 mb-1">Impacto Axiológico</h3>
+            <p class="text-xs text-slate-500 mb-4">Risco sistêmico de médio prazo (Quiet Quitting).</p>
+            <div class="space-y-4">
+              <label class="block text-sm font-bold text-slate-700">19. Isso afeta o pertencimento e a motivação a longo prazo?</label>
+              <div class="flex gap-4">
+                <label><input type="radio" name="jg_q19" value="sim" class="accent-indigo-600"> Sim</label>
+                <label><input type="radio" name="jg_q19" value="nao" class="accent-indigo-600"> Não</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-8 flex justify-between pt-4 border-t border-slate-100">
+            <button id="btn-prev" onclick="irEtapa(-1)" class="hidden bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-widest hover:bg-slate-300">Anterior</button>
+            <div class="flex-grow"></div>
+            <button id="btn-next" onclick="irEtapa(1)" class="bg-indigo-600 text-white px-6 py-2 rounded-lg text-sm font-bold uppercase tracking-widest hover:bg-indigo-700 shadow-sm">Próximo</button>
+            <button id="btn-finish" onclick="finalizarJornada()" class="hidden bg-slate-800 text-white px-6 py-2 rounded-lg text-sm font-bold uppercase tracking-widest hover:bg-slate-900 shadow-sm">Executar Diagnóstico</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1380,6 +1579,138 @@ function fecharScannerGente() {
     } else { 
         document.getElementById("gente-reader").classList.add("hidden"); 
     }
+}
+// ==========================================
+// MÓDULO: JORNADA GUIADA E INTERFACE DE SELEÇÃO
+// ==========================================
+let etapaAtual = 1;
+const totalEtapas = 9;
+
+function selecionarModo(modo) {
+    document.getElementById('modo-seletor').classList.add('hidden');
+    if(modo === 'automatizado') {
+        document.getElementById('modo-automatizado').classList.remove('hidden');
+    } else {
+        document.getElementById('modo-guiado').classList.remove('hidden');
+        etapaAtual = 1;
+        atualizarUIEtapa();
+    }
+}
+
+function voltarSeletor() {
+    document.getElementById('modo-automatizado').classList.add('hidden');
+    document.getElementById('modo-guiado').classList.add('hidden');
+    document.getElementById('modo-seletor').classList.remove('hidden');
+}
+
+function irEtapa(direcao) {
+    etapaAtual += direcao;
+    if(etapaAtual < 1) etapaAtual = 1;
+    if(etapaAtual > totalEtapas) etapaAtual = totalEtapas;
+    atualizarUIEtapa();
+}
+
+function atualizarUIEtapa() {
+    // Esconder todas as etapas
+    for(let i=1; i<=totalEtapas; i++) {
+        document.getElementById('step-'+i).classList.remove('active');
+    }
+    // Mostrar a atual
+    document.getElementById('step-'+etapaAtual).classList.add('active');
+    
+    // Atualizar Barra e Texto
+    document.getElementById('texto-etapa').innerText = `Etapa ${etapaAtual} de ${totalEtapas}`;
+    document.getElementById('barra-progresso').style.width = ((etapaAtual/totalEtapas)*100) + '%';
+    
+    // Botões
+    document.getElementById('btn-prev').classList.toggle('hidden', etapaAtual === 1);
+    
+    if(etapaAtual === totalEtapas) {
+        document.getElementById('btn-next').classList.add('hidden');
+        document.getElementById('btn-finish').classList.remove('hidden');
+    } else {
+        document.getElementById('btn-next').classList.remove('hidden');
+        document.getElementById('btn-finish').classList.add('hidden');
+    }
+}
+
+function finalizarJornada() {
+    // 1. Coleta de Dados do Formulário
+    const q1 = document.getElementById('jg_q1').value;
+    const q4 = document.getElementById('jg_q4').value; // Hashtags
+    const q5 = parseInt(document.getElementById('jg_q5').value || 5);
+    const q6 = document.getElementById('jg_q6').value; // Fato Gerador
+    
+    const elemTipoEvidencia = document.querySelector('input[name="jg_q10"]:checked');
+    const q10Tipo = elemTipoEvidencia ? elemTipoEvidencia.value : 'declaratoria';
+    const q10Texto = document.getElementById('jg_q10_texto').value;
+    
+    // 2. Transposição para Toulmin (Alternativas)
+    let alegaçãoFormatada = `<strong>Fato Gerador (Sintoma: ${q1.substring(0,30)}...):</strong> ${q6}`;
+    let evidenciaFormatada = '';
+    
+    if(q10Tipo === 'documental' && q10Texto.length > 5) {
+        evidenciaFormatada = `<strong>Evidência Documental:</strong> ${q10Texto}`;
+    } else if(q10Texto.length > 5) {
+        evidenciaFormatada = `<strong>Relato Declaratório:</strong> ${q10Texto}`;
+    } else {
+        evidenciaFormatada = `<strong>Aviso:</strong> Nenhuma evidência formal fornecida.`;
+    }
+    
+    dadosAuditoria.alternativas = [alegaçãoFormatada, evidenciaFormatada];
+    
+    // 3. Transposição para Bardin (Axiologia)
+    // O motor Bardin já existe e analisa Strings. Vamos concatenar os campos textuais.
+    const textoBardin = `${q1} ${q4} ${q6} ${q10Texto} ${document.getElementById('jg_q7').value} ${document.getElementById('jg_q9').value}`;
+    dadosAuditoria.criteriosDirex = extratorBardin(textoBardin);
+    if(dadosAuditoria.criteriosDirex.length === 0) {
+        // Fallback caso usuário digite pouco
+        dadosAuditoria.criteriosDirex.push({
+            nome: 'Clima e Cultura Tácita',
+            frequencia: 10,
+            analise: 'Inferência automática devido à escassez de dados quantitativos na decodificação.',
+            referencia: 'Ref: Comportamento Organizacional.'
+        });
+    }
+
+    // 4. Transposição para Fairclough e Teoria dos Jogos (Alertas)
+    dadosAuditoria.alertas = [];
+    
+    if (q5 >= 7) {
+        dadosAuditoria.alertas.push(`<strong>Termómetro de Hostilidade Elevado (Score: ${q5}/10):</strong> O usuário declarou tensão crítica. Risco agudo de atrito operacional, "quiet quitting" ou judicialização iminente.`);
+    }
+    
+    const elemQ12 = document.querySelector('input[name="jg_q12"]:checked');
+    if (elemQ12 && elemQ12.value === 'nao') {
+        dadosAuditoria.alertas.push('<strong>Isolação Decisória (Groupthink):</strong> A percepção relatada não foi discutida ou validada com os pares afetados, o que aumenta o viés de isolação e distorção cognitiva.');
+    }
+    
+    const elemQ18 = document.querySelector('input[name="jg_q18"]:checked');
+    if (elemQ18 && elemQ18.value === 'sim') {
+        const txtOmissao = document.getElementById('jg_q18_texto').value;
+        dadosAuditoria.alertas.push(`<strong>Viés de Omissão Estratégica (O Não-Dito):</strong> Foi detectada uma agenda oculta que não transita nos documentos formais. <em>"${txtOmissao}"</em>. Este é um ponto cego tático de governança.`);
+    }
+    
+    const elemQ19 = document.querySelector('input[name="jg_q19"]:checked');
+    if (elemQ19 && elemQ19.value === 'sim') {
+        dadosAuditoria.alertas.push('<strong>Risco de Ruptura Axiológica:</strong> O conflito relatado já atinge o sentimento de pertencimento institucional e motivação a longo prazo.');
+    }
+    
+    const q14 = document.getElementById('jg_q14').value || 'Gestão';
+    const q15 = document.getElementById('jg_q15').value || 'Equipe';
+    if(document.getElementById('jg_q16').value) {
+         dadosAuditoria.alertas.push(`<strong>Mapeamento de Payoff (Decisor ${q14}):</strong> Utilidade marginal mapeada na manutenção do conflito: <em>"${document.getElementById('jg_q16').value}"</em>.`);
+    }
+
+    // 5. Finalização e Renderização
+    salvarAuditoriaNoNavegador(dadosAuditoria); 
+    
+    setTimeout(() => { gerarSaidaGente(); }, 100);
+    
+    renderizarRelatorio();
+    renderizarProjecaoPlays();
+    gerarResumoExecutivo();
+    switchTab('relatorio');
 }
 </script>
 
