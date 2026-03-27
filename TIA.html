@@ -316,97 +316,87 @@ header {
          * ============================================================================
          */
 // ----------------------------------------------------------------------------
-// MÓDULO 0: AUTENTICAÇÃO E CRACHÁ DIGITAL
-// ----------------------------------------------------------------------------
-const Autenticacao = {
-    cracha: null,
-    leitorHTML5: null,
+        // MÓDULO 0: AUTENTICAÇÃO E CRACHÁ DIGITAL
+        // ----------------------------------------------------------------------------
+        const Autenticacao = {
+            cracha: null,
+            leitorHTML5: null,
 
-    verificarAcesso: function() {
-        // Tenta buscar o crachá salvo no cache do navegador
-        const dadosSalvos = localStorage.getItem('aTIA_Cracha');
-        
-        if (dadosSalvos) {
-            this.cracha = JSON.parse(dadosSalvos);
-            console.log("[Autenticação] Crachá encontrado. Bem-vindo de volta,", this.cracha.nome);
-            this.atualizarHUD();
-            // Pula a tela de login e inicia o motor principal
-            aTIA_Core.iniciar();
-       } else {
-            console.log("[Autenticação] Nenhum crachá encontrado. Aguardando leitura do QR Code.");
-            Navegador.exibirTela('tela-login', '', 'IDENTIFICAÇÃO');
-            // Só liga a câmara se o botão for clicado, o HTML5-qrcode é pesado para carregar em background
-        }
-    },
+            verificarAcesso: function() {
+                const dadosSalvos = localStorage.getItem('aTIA_Cracha');
+                
+                if (dadosSalvos) {
+                    this.cracha = JSON.parse(dadosSalvos);
+                    console.log("[Autenticação] Crachá encontrado. Bem-vindo de volta,", this.cracha.nome);
+                    this.atualizarHUD();
+                    aTIA_Core.iniciar();
+               } else {
+                    console.log("[Autenticação] Nenhum crachá encontrado. Aguardando leitura.");
+                    Navegador.exibirTela('tela-login', '', 'IDENTIFICAÇÃO');
+                }
+            },
 
-    iniciarCamera: function() {
-        if (this.leitorHTML5) return; // Evita abrir duas vezes
+            iniciarCamera: function() {
+                if (this.leitorHTML5) return; 
 
-        this.leitorHTML5 = new Html5QrcodeScanner("leitor-qr-login", { fps: 10, qrbox: {width: 250, height: 250} }, false);
-        
-        this.leitorHTML5.render((textoDecodificado) => {
-            console.log("[Leitor QR] Código detectado:", textoDecodificado);
-            this.processarCrachaQR(textoDecodificado);
-        }, (erro) => {
-            // Ignora os erros contínuos de "QR Code não encontrado no frame atual"
-        });
-    },
+                this.leitorHTML5 = new Html5QrcodeScanner("leitor-qr-login", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+                
+                this.leitorHTML5.render((textoDecodificado) => {
+                    console.log("[Leitor QR] Código detectado:", textoDecodificado);
+                    this.processarCrachaQR(textoDecodificado);
+                }, (erro) => {});
+            },
 
-    processarCrachaQR: function(textoDecodificado) {
-        try {
-            // Esperamos que o QR Code seja um JSON válido.
-            // Exemplo do que estará impresso no papel do aluno: 
-            // {"alunoId": "2026_IA_01", "nome": "Elielber Antunes", "cursoId": "TecnicoIA.json"}
-            const dadosAluno = JSON.parse(textoDecodificado);
-            
-            if (!dadosAluno.alunoId || !dadosAluno.cursoId) throw new Error("QR Code Inválido");
+            processarCrachaQR: function(textoDecodificado) {
+                try {
+                    const dadosAluno = JSON.parse(textoDecodificado);
+                    
+                    if (!dadosAluno.alunoId || !dadosAluno.cursoId) throw new Error("QR Code Inválido");
 
-            // Para o leitor da câmera
-            if (this.leitorHTML5) {
-                this.leitorHTML5.clear();
+                    if (this.leitorHTML5) {
+                        this.leitorHTML5.clear();
+                    }
+
+                    localStorage.setItem('aTIA_Cracha', JSON.stringify(dadosAluno));
+                    this.cracha = dadosAluno;
+
+                    this.atualizarHUD();
+                    aTIA_Core.iniciar();
+
+                } catch (erro) {
+                    alert("QR Code inválido ou não pertence ao Ecossistema GENTE.");
+                }
+            },
+
+            atualizarHUD: function() {
+                if (this.cracha) {
+                    const partesNome = this.cracha.nome.split(" ");
+                    const sigla = partesNome.length > 1 
+                        ? (partesNome[0][0] + partesNome[1][0]).toUpperCase() 
+                        : this.cracha.nome.substring(0, 2).toUpperCase();
+                        
+                    document.querySelector('.avatar-container').innerText = sigla;
+                    document.querySelector('.nome-aluno').innerText = this.cracha.nome;
+                    document.querySelector('header').style.display = 'flex';
+                }
+            },
+
+            // Função DEV atualizada com os dados reais do João
+            simularLeitura: function() {
+                const qrJoao = JSON.stringify({
+                    alunoId: "2026_IA_001",
+                    nome: "João Silva",
+                    cursoId: "TecnicoIA.json"
+                });
+                this.processarCrachaQR(qrJoao);
             }
+        };
 
-            // Salva no navegador para acessos futuros offline
-            localStorage.setItem('aTIA_Cracha', JSON.stringify(dadosAluno));
-            this.cracha = dadosAluno;
-
-            // Atualiza o visual e dá partida no sistema
-            this.atualizarHUD();
-            aTIA_Core.iniciar();
-
-        } catch (erro) {
-            alert("QR Code inválido ou não pertence ao Ecossistema GENTE.");
-        }
-    },
-
-    atualizarHUD: function() {
-        // Altera o nome e a sigla no cabeçalho fixo com os dados reais do crachá
-        if (this.cracha) {
-            const sigla = this.cracha.nome.substring(0, 2).toUpperCase();
-            document.querySelector('.avatar-container').innerText = sigla;
-            document.querySelector('.nome-aluno').innerText = this.cracha.nome;
-            
-            // Exibe o HUD (se você o tiver ocultado inicialmente)
-            document.querySelector('header').style.display = 'flex';
-        }
-    },
-
-    // Função auxiliar para testar sem precisar da câmera do celular
-    simularLeitura: function() {
-        const qrFalso = JSON.stringify({
-            alunoId: "DEV_001",
-            nome: "Aluno Teste",
-            cursoId: "TecnicoIA.json" // Aponta para o arquivo que subimos pro GitHub
-        });
-        this.processarCrachaQR(qrFalso);
-    }
-};
         // ----------------------------------------------------------------------------
         // MÓDULO 1: CONTROLE DE INTERFACE E ZOOM SEMÂNTICO (UI)
         // ----------------------------------------------------------------------------
-       const Navegador = {
+        const Navegador = {
             iniciar: function(telaInicial = 'tela-macro', breadcrumb = 'MAPA GLOBAL') {
-                // Agora o inicializador aceita um parâmetro para saber onde deve arrancar
                 history.replaceState({ tela: telaInicial }, '', `#${telaInicial.replace('tela-', '')}`);
                 
                 window.addEventListener('popstate', (evento) => {
@@ -468,7 +458,6 @@ const Autenticacao = {
                     request.onupgradeneeded = (e) => {
                         const db = e.target.result;
                         if (!db.objectStoreNames.contains('historico_missoes')) {
-                            // idMissao é a chave primária de busca
                             db.createObjectStore('historico_missoes', { keyPath: 'idMissao' });
                         }
                     };
@@ -501,13 +490,10 @@ const Autenticacao = {
         // MÓDULO 3: MOTOR DE ORQUESTRAÇÃO (CORE)
         // ----------------------------------------------------------------------------
         const aTIA_Core = {
-            mapaCurricular: null, // O Blueprint carregado do GitHub (TecnicoIA.json)
-            diarioDeBordo: [],    // O estado atual do aluno carregado do IndexedDB
+            mapaCurricular: null, 
+            diarioDeBordo: [],    
 
-            /**
-             * Função de Boot: Inicia o aplicativo de forma resiliente
-             */
-          iniciar: async function() {
+            iniciar: async function() {
                 try {
                     console.log("[Boot] 1. Conectando ao Diário de Bordo (IndexedDB)...");
                     await DB.conectar();
@@ -524,34 +510,31 @@ const Autenticacao = {
                     Navegador.exibirTela('tela-macro', 'zoom-in-enter', 'MAPA GLOBAL');
                     this.renderizarMapaMacro();
 
+                // ERRO DE SINTAXE CORRIGIDO AQUI: A chave e a vírgula que faltavam
                 } catch (erro) {
+                    console.error("[ERRO CRÍTICO NO BOOT]", erro);
+                    alert("Erro ao carregar os dados do curso. Verifique sua conexão ou o console para mais detalhes.");
+                }
+            },
 
-            /**
-             * Faz o Fetch do JSON hospedado no mesmo diretório (GitHub Pages)
-             */
-           carregarBlueprint: async function() {
-        // Agora o sistema busca o JSON dinamicamente baseado no QR Code escaneado!
-        const arquivoDoCurso = Autenticacao.cracha.cursoId;
-        
-        console.log(`[Boot] Baixando a matriz do curso: ${arquivoDoCurso}`);
-        
-        const resposta = await fetch(`./${arquivoDoCurso}`);
-        if (!resposta.ok) {
-            throw new Error(`Falha HTTP ao buscar o currículo: ${resposta.status}`);
-        }
-        this.mapaCurricular = await resposta.json();
-    },
+            carregarBlueprint: async function() {
+                const arquivoDoCurso = Autenticacao.cracha.cursoId;
+                console.log(`[Boot] Baixando a matriz do curso: ${arquivoDoCurso}`);
+                
+                const resposta = await fetch(`./${arquivoDoCurso}`);
+                if (!resposta.ok) {
+                    throw new Error(`Falha HTTP ao buscar o currículo: ${resposta.status}`);
+                }
+                this.mapaCurricular = await resposta.json();
+            },
 
             sincronizarEstado: function() {
                 console.log("Sincronização concluída. Motor pronto para análise.");
             },
 
-            /**
-             * Função Auxiliar: Calcula o estado de um Território baseando-se nas suas Missões.
-             */
             calcularStatusTerritorio: function(territorio) {
                 if (!territorio.missoes || territorio.missoes.length === 0) {
-                    return "bloqueado"; // Ambientes vazios ou em construção
+                    return "bloqueado"; 
                 }
 
                 let missoesConcluidas = 0;
@@ -580,13 +563,10 @@ const Autenticacao = {
                 return "bloqueado";
             },
 
-            /**
-             * Verifica se o território imediatamente anterior está 100% concluído.
-             */
             verificarTerritorioAnterior: function(ordemAnterior) {
                 if (ordemAnterior < 1) return true;
                 const terrAnterior = this.mapaCurricular.territorios.find(t => t.ordem === ordemAnterior);
-                if (!terrAnterior) return true; // Falha segura
+                if (!terrAnterior) return true; 
                 
                 const todasConcluidas = terrAnterior.missoes.every(missaoBp => {
                     const hist = this.diarioDeBordo.find(m => m.idMissao === missaoBp.idMissao);
@@ -596,14 +576,10 @@ const Autenticacao = {
                 return todasConcluidas;
             },
 
-            /**
-             * Renderização Dinâmica: Camada 1 (O Mundo Holográfico)
-             */
             renderizarMapaMacro: function() {
                 const container = document.getElementById('mapa-macro-dinamico');
                 if (!container || !this.mapaCurricular) return;
 
-                // Limpa o contentor e recria a linha central de órbita
                 container.innerHTML = '<div class="linha-orbita"></div>';
 
                 const iconesHolograficos = ['dns', 'schema', 'psychology', 'memory', 'api'];
@@ -624,7 +600,6 @@ const Autenticacao = {
                         corEstilo = "color: var(--cor-primaria); border-color: var(--cor-primaria);";
                         textoAcao = `<br><small style="color: var(--texto-suave); font-weight: normal;">Toque para Mergulhar</small>`;
                         
-                        // Passa o id do território para a renderização da próxima camada
                         planetaDiv.onclick = () => {
                             aTIA_Core.renderizarArvoreMeso(territorio.idTerritorio);
                             Navegador.zoomIn('tela-meso', `${territorio.idTerritorio}: ${territorio.titulo}`);
@@ -653,26 +628,22 @@ const Autenticacao = {
             },
 
             renderizarArvoreMeso: function(idTerritorio) {
-                // A implementar: Pega as Missões do JSON e desenha a Skill Tree da Camada 2
                 console.log("Renderizar Árvore Meso para:", idTerritorio);
+                // O próximo passo será ler o this.mapaCurricular e injetar os losangos aqui!
             },
 
             renderizarMalhaMicro: function(idMissao) {
-                // A implementar: Pega os Cards da Missão e desenha a interface de extração de dados
                 console.log("Renderizar Malha Micro para:", idMissao);
             }
         };
 
-       // ============================================================================
-// INICIALIZAÇÃO DO APLICATIVO
-// ============================================================================
-document.addEventListener('DOMContentLoaded', () => {
-    // Oculta o header na tela de login
-    document.querySelector('header').style.display = 'none';
-    
-    // Inicia a verificação de acesso
-    Autenticacao.verificarAcesso();
-});
+        // ============================================================================
+        // INICIALIZAÇÃO DO APLICATIVO
+        // ============================================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelector('header').style.display = 'none';
+            Autenticacao.verificarAcesso();
+        });
     </script>
     
 </body>
