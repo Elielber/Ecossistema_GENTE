@@ -310,7 +310,91 @@ header {
          * Arquitetura: Módulo de Navegação + Módulo de Dados + Motor de Orquestração
          * ============================================================================
          */
+// ----------------------------------------------------------------------------
+// MÓDULO 0: AUTENTICAÇÃO E CRACHÁ DIGITAL
+// ----------------------------------------------------------------------------
+const Autenticacao = {
+    cracha: null,
+    leitorHTML5: null,
 
+    verificarAcesso: function() {
+        // Tenta buscar o crachá salvo no cache do navegador
+        const dadosSalvos = localStorage.getItem('aTIA_Cracha');
+        
+        if (dadosSalvos) {
+            this.cracha = JSON.parse(dadosSalvos);
+            console.log("[Autenticação] Crachá encontrado. Bem-vindo de volta,", this.cracha.nome);
+            this.atualizarHUD();
+            // Pula a tela de login e inicia o motor principal
+            aTIA_Core.iniciar();
+        } else {
+            console.log("[Autenticação] Nenhum crachá encontrado. Aguardando leitura do QR Code.");
+            Navegador.exibirTela('tela-login', '', 'IDENTIFICAÇÃO');
+        }
+    },
+
+    iniciarCamera: function() {
+        if (this.leitorHTML5) return; // Evita abrir duas vezes
+
+        this.leitorHTML5 = new Html5QrcodeScanner("leitor-qr-login", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+        
+        this.leitorHTML5.render((textoDecodificado) => {
+            console.log("[Leitor QR] Código detectado:", textoDecodificado);
+            this.processarCrachaQR(textoDecodificado);
+        }, (erro) => {
+            // Ignora os erros contínuos de "QR Code não encontrado no frame atual"
+        });
+    },
+
+    processarCrachaQR: function(textoDecodificado) {
+        try {
+            // Esperamos que o QR Code seja um JSON válido.
+            // Exemplo do que estará impresso no papel do aluno: 
+            // {"alunoId": "2026_IA_01", "nome": "Elielber Antunes", "cursoId": "TecnicoIA.json"}
+            const dadosAluno = JSON.parse(textoDecodificado);
+            
+            if (!dadosAluno.alunoId || !dadosAluno.cursoId) throw new Error("QR Code Inválido");
+
+            // Para o leitor da câmera
+            if (this.leitorHTML5) {
+                this.leitorHTML5.clear();
+            }
+
+            // Salva no navegador para acessos futuros offline
+            localStorage.setItem('aTIA_Cracha', JSON.stringify(dadosAluno));
+            this.cracha = dadosAluno;
+
+            // Atualiza o visual e dá partida no sistema
+            this.atualizarHUD();
+            aTIA_Core.iniciar();
+
+        } catch (erro) {
+            alert("QR Code inválido ou não pertence ao Ecossistema GENTE.");
+        }
+    },
+
+    atualizarHUD: function() {
+        // Altera o nome e a sigla no cabeçalho fixo com os dados reais do crachá
+        if (this.cracha) {
+            const sigla = this.cracha.nome.substring(0, 2).toUpperCase();
+            document.querySelector('.avatar-container').innerText = sigla;
+            document.querySelector('.nome-aluno').innerText = this.cracha.nome;
+            
+            // Exibe o HUD (se você o tiver ocultado inicialmente)
+            document.querySelector('header').style.display = 'flex';
+        }
+    },
+
+    // Função auxiliar para testar sem precisar da câmera do celular
+    simularLeitura: function() {
+        const qrFalso = JSON.stringify({
+            alunoId: "DEV_001",
+            nome: "Aluno Teste",
+            cursoId: "TecnicoIA.json" // Aponta para o arquivo que subimos pro GitHub
+        });
+        this.processarCrachaQR(qrFalso);
+    }
+};
         // ----------------------------------------------------------------------------
         // MÓDULO 1: CONTROLE DE INTERFACE E ZOOM SEMÂNTICO (UI)
         // ----------------------------------------------------------------------------
@@ -442,13 +526,18 @@ header {
             /**
              * Faz o Fetch do JSON hospedado no mesmo diretório (GitHub Pages)
              */
-            carregarBlueprint: async function() {
-                const resposta = await fetch('./TecnicoIA.json');
-                if (!resposta.ok) {
-                    throw new Error(`Falha HTTP ao buscar o currículo: ${resposta.status}`);
-                }
-                this.mapaCurricular = await resposta.json();
-            },
+           carregarBlueprint: async function() {
+        // Agora o sistema busca o JSON dinamicamente baseado no QR Code escaneado!
+        const arquivoDoCurso = Autenticacao.cracha.cursoId;
+        
+        console.log(`[Boot] Baixando a matriz do curso: ${arquivoDoCurso}`);
+        
+        const resposta = await fetch(`./${arquivoDoCurso}`);
+        if (!resposta.ok) {
+            throw new Error(`Falha HTTP ao buscar o currículo: ${resposta.status}`);
+        }
+        this.mapaCurricular = await resposta.json();
+    },
 
             sincronizarEstado: function() {
                 console.log("Sincronização concluída. Motor pronto para análise.");
@@ -571,12 +660,16 @@ header {
             }
         };
 
-        // ============================================================================
-        // INICIALIZAÇÃO DO APLICATIVO
-        // ============================================================================
-        document.addEventListener('DOMContentLoaded', () => {
-            aTIA_Core.iniciar();
-        });
+       // ============================================================================
+// INICIALIZAÇÃO DO APLICATIVO
+// ============================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Oculta o header na tela de login
+    document.querySelector('header').style.display = 'none';
+    
+    // Inicia a verificação de acesso
+    Autenticacao.verificarAcesso();
+});
     </script>
     
 </body>
