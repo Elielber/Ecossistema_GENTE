@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>a-TIA | Painel de Exploração</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    
+    <style>
+        /* --- VARIÁVEIS E ESTÉTICA GAMER / CYBERPUNK --- */
+        :root {
+            --bg-body: #0a0e17; --bg-card: #161c2c; 
+            --cor-primaria: #a855f7; /* Roxo Neon */
+            --cor-secundaria: #3b82f6; /* Azul Elétrico */
+            --cor-sucesso: #4ade80; /* Verde Hacker */
+            --cor-alerta: #f59e0b; /* Laranja Alerta */
+            --texto-puro: #ffffff; --texto-suave: #94a3b8;
+            --borda-raio: 16px; 
+            --transicao: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg-body); color: var(--texto-puro);
+            height: 100vh; overflow: hidden; user-select: none; 
+            display: flex; flex-direction: column;
+            background-image: radial-gradient(circle at 50% 0%, #1a1025 0%, #0a0e17 70%); /* Brilho de fundo */
+        }
+
+        /* --- MECÂNICA DE ZOOM SEMÂNTICO --- */
+        .tela {
+            display: none; flex-direction: column; height: 100%; width: 100%;
+            overflow-y: auto; padding-bottom: 100px; position: absolute; top: 0; left: 0;
+        }
+        .tela.ativa { display: flex; z-index: 10; }
+        .zoom-in-enter { animation: zoomInEnter 0.4s forwards ease-out; }
+        .zoom-out-enter { animation: zoomOutEnter 0.4s forwards ease-out; }
+
+        @keyframes zoomInEnter { from { opacity: 0; transform: scale(1.15); filter: blur(4px); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
+        @keyframes zoomOutEnter { from { opacity: 0; transform: scale(0.85); filter: blur(4px); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
+
+        /* --- HUD GAMIFICADO (CABEÇALHO FIXO) --- */
+        header {
+            background-color: rgba(10, 14, 23, 0.85); padding: 1rem;
+            display: flex; align-items: center; gap: 1rem; backdrop-filter: blur(12px);
+            z-index: 100; border-bottom: 1px solid rgba(168, 85, 247, 0.2);
+        }
+        .avatar-container { width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--cor-primaria); display: flex; align-items: center; justify-content: center; font-weight: bold; background: #161c2c; color: var(--cor-primaria); box-shadow: 0 0 10px rgba(168,85,247,0.3);}
+        .info-progresso { flex: 1; }
+        .nome-aluno { font-weight: bold; font-size: 0.95rem; }
+        .breadcrumbs { font-size: 0.7rem; color: var(--cor-sucesso); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px; display: flex; align-items: center; gap: 4px;}
+
+        /* --- A PRESENÇA DA a-TIA (Guia Flutuante) --- */
+        .assistente-tia {
+            background: linear-gradient(135deg, rgba(30, 58, 138, 0.6), rgba(88, 28, 135, 0.6));
+            border: 1px solid var(--cor-primaria); border-radius: 12px; padding: 1rem; margin: 1rem;
+            display: flex; gap: 1rem; align-items: center; box-shadow: 0 4px 20px rgba(168, 85, 247, 0.15);
+            backdrop-filter: blur(5px);
+        }
+        .tia-avatar {
+            width: 40px; height: 40px; background-color: var(--cor-primaria); border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            animation: flutuar 3s ease-in-out infinite; box-shadow: 0 0 15px rgba(168,85,247,0.5);
+        }
+        @keyframes flutuar { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+        /* --- CAMADA 1: NÍVEL MACRO (MAPA HOLOGRÁFICO) --- */
+        .container-macro { padding: 2rem 1rem; display: flex; flex-direction: column; align-items: center; gap: 2rem; position: relative; }
+        /* A "órbita" que conecta os mundos */
+        .linha-orbita { position: absolute; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, var(--cor-sucesso) 0%, var(--cor-primaria) 50%, #1f2937 100%); z-index: 0; }
+
+        .planeta-macro {
+            width: 90px; height: 90px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(circle at 30% 30%, var(--bg-card), #05070a);
+            border: 2px solid transparent; z-index: 2; position: relative;
+            transition: var(--transicao); cursor: pointer;
+        }
+        .planeta-macro.concluido { border-color: var(--cor-sucesso); box-shadow: 0 0 25px rgba(74, 222, 128, 0.3); color: var(--cor-sucesso); }
+        .planeta-macro.ativo { border-color: var(--cor-primaria); box-shadow: 0 0 35px rgba(168, 85, 247, 0.6); color: var(--cor-primaria); animation: pulsarNeon 2s infinite; }
+        .planeta-macro.bloqueado { border-color: #1f2937; color: var(--texto-suave); background: #0a0e17; }
+        .planeta-macro span.icon { font-size: 2.5rem; }
+        
+        .rotulo-planeta {
+            position: absolute; left: 110px; white-space: nowrap;
+            background: rgba(22,28,44,0.9); padding: 8px 12px; border-radius: 8px;
+            border: 1px solid rgba(148,163,184,0.2); font-size: 0.85rem; font-weight: bold;
+        }
+
+        /* --- CAMADA 2: NÍVEL MESO (A SKILL TREE RAMIFICADA) --- */
+        .container-trilha { position: relative; padding: 1rem 0; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+        .nivel-trilha { display: flex; flex-direction: column; align-items: center; width: 100%; z-index: 10; }
+        .ramificacao { display: flex; justify-content: center; gap: 1.5rem; width: 100%; position: relative; padding: 1rem 0; }
+        
+        .conector { width: 4px; height: 40px; background: linear-gradient(to bottom, var(--cor-sucesso), var(--cor-primaria)); border-radius: 2px; }
+        .ramificacao::before, .ramificacao::after { content: ''; position: absolute; width: 50%; height: 30px; border: 3px solid transparent; z-index: 0; }
+        .ramificacao::before { top: -15px; border-top-color: var(--cor-primaria); border-left-color: var(--cor-primaria); border-right-color: var(--cor-primaria); border-radius: 12px 12px 0 0; }
+        .ramificacao::after { bottom: -15px; border-bottom-color: #1f2937; border-left-color: #1f2937; border-right-color: #1f2937; border-radius: 0 0 12px 12px; }
+
+        .nodo-arvore { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.5rem; max-width: 120px; z-index: 2; position: relative;}
+        .nodo-icone { width: 60px; height: 60px; border-radius: 14px; background-color: var(--bg-card); border: 3px solid #1f2937; display: flex; align-items: center; justify-content: center; transform: rotate(45deg); transition: var(--transicao); }
+        .nodo-icone span { transform: rotate(-45deg); font-size: 1.8rem; }
+        .nodo-titulo { font-size: 0.75rem; font-weight: bold; background-color: rgba(22, 28, 44, 0.9); padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.2); }
+
+        .nodo-arvore.concluido .nodo-icone { border-color: var(--cor-sucesso); color: var(--cor-sucesso); box-shadow: 0 0 15px rgba(74, 222, 128, 0.3); }
+        .nodo-arvore.ativo .nodo-icone { border-color: var(--cor-primaria); color: var(--cor-primaria); box-shadow: 0 0 25px rgba(168, 85, 247, 0.6); animation: pulsarNeon 2s infinite; cursor: pointer; }
+        .nodo-arvore.bloqueado .nodo-icone { border-color: #1f2937; color: var(--texto-suave); opacity: 0.5; }
+
+        @keyframes pulsarNeon { 0% { box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); } 50% { box-shadow: 0 0 30px rgba(168, 85, 247, 0.8); } 100% { box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); } }
+
+        /* --- CAMADA 3: NÍVEL MICRO (MÓDULOS DE DADOS / CARDS) --- */
+        .malha-container { padding: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+        .card-modulo {
+            background: rgba(22, 28, 44, 0.7); border-radius: var(--borda-raio);
+            padding: 1rem; position: relative; overflow: hidden;
+            border: 1px solid rgba(148, 163, 184, 0.1); cursor: pointer;
+            backdrop-filter: blur(10px); display: flex; flex-direction: column; gap: 8px;
+        }
+        
+        /* O "Brilho" lateral indicando a dimensão da rúbrica */
+        .card-modulo::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+        .card-modulo.tipo-contexto::before { background: var(--cor-sucesso); box-shadow: 0 0 10px var(--cor-sucesso); }
+        .card-modulo.tipo-cognitivo::before { background: var(--cor-primaria); box-shadow: 0 0 10px var(--cor-primaria); }
+        
+        .card-modulo.bloqueado { opacity: 0.6; cursor: not-allowed; border: 1px dashed #334155; }
+        .card-modulo.bloqueado::before { background: #334155; box-shadow: none; }
+
+        .modulo-header { display: flex; justify-content: space-between; align-items: center; }
+        .badge-dimensao { font-size: 0.65rem; text-transform: uppercase; font-weight: bold; letter-spacing: 1px; }
+        .tipo-contexto .badge-dimensao { color: var(--cor-sucesso); }
+        .tipo-cognitivo .badge-dimensao { color: var(--cor-primaria); }
+
+        .modulo-titulo { font-size: 0.85rem; line-height: 1.4; color: var(--texto-puro); }
+        
+        /* O Card Chefe (Execução Técnica) ocupa a linha toda */
+        .card-chefe { grid-column: 1 / -1; background: rgba(10, 14, 23, 0.8); border: 1px solid var(--cor-alerta); text-align: center; padding: 1.5rem; }
+        .card-chefe::before { display: none; } /* Remove barra lateral */
+
+        /* --- BOTÕES INFERIORES --- */
+        .area-acoes-fixa { position: fixed; bottom: 0; left: 0; width: 100%; background-color: rgba(10, 14, 23, 0.95); backdrop-filter: blur(10px); padding: 1rem; display: flex; gap: 1rem; border-top: 1px solid rgba(148, 163, 184, 0.1); z-index: 90; }
+        .btn { flex: 1; padding: 1rem; border: none; border-radius: 12px; font-size: 0.9rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; color: white; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); transition: var(--transicao); text-transform: uppercase; }
+        .btn:active { transform: scale(0.96); background: rgba(255,255,255,0.1); }
+        .btn-primario { background: linear-gradient(135deg, var(--cor-primaria), #7e22ce); border: none; box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4); }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="avatar-container">JS</div>
+        <div class="info-progresso">
+            <div class="nome-aluno">João Silva</div>
+            <div class="breadcrumbs" id="ui-breadcrumbs">
+                <span class="material-icons-round" style="font-size: 14px;">public</span> MAPA GLOBAL
+            </div>
+        </div>
+    </header>
+
+    <section id="tela-macro" class="tela ativa">
+        
+        <div class="assistente-tia">
+            <div class="tia-avatar"><span class="material-icons-round" style="color: white;">smart_toy</span></div>
+            <div>
+                <p style="font-size: 0.8rem; color: var(--cor-sucesso); font-weight: bold;">a-TIA ONLINE</p>
+                <p id="mensagem-assistente-macro" style="font-size: 0.85rem;">A analisar a matriz curricular e a sincronizar os dados do território...</p>
+            </div>
+        </div>
+
+        <div id="mapa-macro-dinamico" class="container-macro">
+            </div>
+        
+        <div class="area-acoes-fixa">
+            <button class="btn"><span class="material-icons-round">qr_code_scanner</span> Sync Protocolo G3</button>
+        </div>
+    </section>
+
+    <section id="tela-meso" class="tela">
+        
+        <div class="assistente-tia">
+            <div class="tia-avatar"><span class="material-icons-round" style="color: white;">smart_toy</span></div>
+            <div>
+                <p style="font-size: 0.8rem; color: var(--cor-primaria); font-weight: bold;">ANÁLISE DE TERRITÓRIO</p>
+                <p style="font-size: 0.85rem;">Temos dois caminhos abertos. O nó central está protegido por dependências. Resolva as ramificações primeiro.</p>
+            </div>
+        </div>
+
+        <div class="container-trilha">
+            <div class="nivel-trilha">
+                <div class="nodo-arvore concluido">
+                    <div class="nodo-icone"><span class="material-icons-round">power</span></div>
+                    <div class="nodo-titulo">Boot Inicial</div>
+                </div>
+            </div>
+
+            <div class="conector"></div>
+
+            <div class="ramificacao">
+                <div class="nodo-arvore concluido">
+                    <div class="nodo-icone"><span class="material-icons-round">data_object</span></div>
+                    <div class="nodo-titulo">Lógica Pura</div>
+                </div>
+
+                <div class="nodo-arvore ativo" onclick="Navegador.zoomIn('tela-micro', 'INFILTRAÇÃO BD')">
+                    <div class="nodo-icone"><span class="material-icons-round">hub</span></div>
+                    <div class="nodo-titulo" style="color: var(--cor-primaria);">Infiltração BD</div>
+                </div>
+            </div>
+
+            <div class="nivel-trilha" style="margin-top: 2rem;">
+                <div class="nodo-arvore bloqueado">
+                    <div class="nodo-icone" style="border-radius: 50%; width: 70px; height: 70px; transform: rotate(0);"><span class="material-icons-round" style="transform: rotate(0); font-size: 2rem;">security</span></div>
+                    <div class="nodo-titulo" style="border-color: var(--cor-alerta); color: var(--cor-alerta);">Firewall de Dados</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="area-acoes-fixa">
+            <button class="btn" onclick="Navegador.zoomOut('tela-macro', 'MAPA GLOBAL')">
+                <span class="material-icons-round">rocket</span> Subir Órbita
+            </button>
+        </div>
+    </section>
+
+    <section id="tela-micro" class="tela">
+        
+        <div class="assistente-tia" style="background: rgba(10, 14, 23, 0.9); border-color: var(--texto-suave);">
+            <div class="tia-avatar" style="background: var(--bg-card);"><span class="material-icons-round" style="color: var(--cor-alerta);">warning</span></div>
+            <div>
+                <p style="font-size: 0.8rem; color: var(--cor-alerta); font-weight: bold;">MÓDULO DE EXECUÇÃO BLOQUEADO</p>
+                <p style="font-size: 0.85rem;">Mestre, não podemos injetar o código SQL ainda. Extraia os dados de Contexto e Decisão para liberar o terminal.</p>
+            </div>
+        </div>
+
+        <div class="malha-container">
+            <div class="card-modulo tipo-contexto">
+                <div class="modulo-header">
+                    <span class="badge-dimensao">Contexto EPT</span>
+                    <span class="material-icons-round" style="font-size: 1rem; color: var(--cor-sucesso);">explore</span>
+                </div>
+                <div class="modulo-titulo">Identifique o gargalo de carga no Porto do Açu.</div>
+            </div>
+
+            <div class="card-modulo tipo-cognitivo">
+                <div class="modulo-header">
+                    <span class="badge-dimensao">Estratégia</span>
+                    <span class="material-icons-round" style="font-size: 1rem; color: var(--cor-primaria);">psychology</span>
+                </div>
+                <div class="modulo-titulo">Defina a relação (1:N ou N:M) ideal para o problema.</div>
+            </div>
+
+            <div class="card-modulo card-chefe bloqueado">
+                <span class="material-icons-round" style="font-size: 2rem; color: var(--texto-suave); margin-bottom: 0.5rem;">lock</span>
+                <div class="badge-dimensao" style="color: var(--cor-alerta); margin-bottom: 0.5rem;">Terminal Técnico</div>
+                <div class="modulo-titulo" style="color: var(--texto-suave);">Desenvolver Script de Infiltração (SQL)</div>
+            </div>
+        </div>
+
+        <div class="area-acoes-fixa">
+            <button class="btn" onclick="Navegador.zoomOut('tela-meso', 'T2: MODELAGEM')">
+                <span class="material-icons-round">arrow_back</span> Abortar
+            </button>
+            <button class="btn btn-primario">
+                <span class="material-icons-round">terminal</span> Terminal
+            </button>
+        </div>
+    </section>
+
+    <script>
+
+        /**
+         * ============================================================================
+         * a-TIA | SISTEMA OPERACIONAL PRINCIPAL
+         * Arquitetura: Módulo de Navegação + Módulo de Dados + Motor de Orquestração
+         * ============================================================================
+         */
+
+        // ----------------------------------------------------------------------------
+        // MÓDULO 1: CONTROLE DE INTERFACE E ZOOM SEMÂNTICO (UI)
+        // ----------------------------------------------------------------------------
+        const Navegador = {
+            iniciar: function() {
+                history.replaceState({ tela: 'tela-macro' }, '', '#mapa-global');
+                window.addEventListener('popstate', (evento) => {
+                    if (evento.state && evento.state.tela) {
+                        this.exibirTela(evento.state.tela, '', 'RETORNO');
+                    }
+                });
+            },
+
+            exibirTela: function(idTelaAlvo, tipoAnimacao, breadcrumbText) {
+                const telas = document.querySelectorAll('.tela');
+                telas.forEach(tela => tela.classList.remove('ativa', 'zoom-in-enter', 'zoom-out-enter'));
+                
+                const telaAlvo = document.getElementById(idTelaAlvo);
+                if (telaAlvo) {
+                    telaAlvo.classList.add('ativa', tipoAnimacao);
+                    telaAlvo.scrollTop = 0; 
+                }
+                
+                if (breadcrumbText) {
+                    document.getElementById('ui-breadcrumbs').innerHTML = 
+                        `<span class="material-icons-round" style="font-size: 14px;">subdirectory_arrow_right</span> ${breadcrumbText}`;
+                }
+            },
+
+            zoomIn: function(idTelaAlvo, breadcrumbText) { 
+                this.exibirTela(idTelaAlvo, 'zoom-in-enter', breadcrumbText); 
+                history.pushState({ tela: idTelaAlvo }, '', '#' + idTelaAlvo);
+            },
+            
+            zoomOut: function(idTelaAlvo, breadcrumbText) { 
+                this.exibirTela(idTelaAlvo, 'zoom-out-enter', breadcrumbText); 
+                history.pushState({ tela: idTelaAlvo }, '', '#' + idTelaAlvo);
+            }
+        };
+
+        // ----------------------------------------------------------------------------
+        // MÓDULO 2: PERSISTÊNCIA OFFLINE (DIÁRIO DE BORDO - IndexedDB)
+        // ----------------------------------------------------------------------------
+        class ArmazenamentoLocal {
+            constructor(nomeBanco = "aTIA_Diario", versao = 1) {
+                this.nomeBanco = nomeBanco;
+                this.versao = versao;
+                this.db = null;
+            }
+
+            conectar() {
+                return new Promise((resolve, reject) => {
+                    if (this.db) return resolve();
+
+                    const request = window.indexedDB.open(this.nomeBanco, this.versao);
+
+                    request.onerror = (e) => reject(e.target.error);
+                    request.onsuccess = (e) => {
+                        this.db = e.target.result;
+                        resolve();
+                    };
+
+                    request.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains('historico_missoes')) {
+                            // idMissao é a chave primária de busca
+                            db.createObjectStore('historico_missoes', { keyPath: 'idMissao' });
+                        }
+                    };
+                });
+            }
+
+            obterTodoHistorico() {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) return reject("DB offline");
+                    const transacao = this.db.transaction(['historico_missoes'], 'readonly');
+                    const request = transacao.objectStore('historico_missoes').getAll();
+                    request.onsuccess = (e) => resolve(e.target.result || []);
+                    request.onerror = (e) => reject(e.target.error);
+                });
+            }
+
+            salvarProgresso(missao) {
+                return new Promise((resolve, reject) => {
+                    const transacao = this.db.transaction(['historico_missoes'], 'readwrite');
+                    const request = transacao.objectStore('historico_missoes').put(missao);
+                    request.onsuccess = () => resolve();
+                    request.onerror = (e) => reject(e.target.error);
+                });
+            }
+        }
+
+        const DB = new ArmazenamentoLocal();
+
+        // ----------------------------------------------------------------------------
+        // MÓDULO 3: MOTOR DE ORQUESTRAÇÃO (CORE)
+        // ----------------------------------------------------------------------------
+        const aTIA_Core = {
+            mapaCurricular: null, // O Blueprint carregado do GitHub (TecnicoIA.json)
+            diarioDeBordo: [],    // O estado atual do aluno carregado do IndexedDB
+
+            /**
+             * Função de Boot: Inicia o aplicativo de forma resiliente
+             */
+            iniciar: async function() {
+                try {
+                    console.log("[Boot] 1. Iniciando Navegador UI...");
+                    Navegador.iniciar();
+
+                    console.log("[Boot] 2. Conectando ao Diário de Bordo (IndexedDB)...");
+                    await DB.conectar();
+                    this.diarioDeBordo = await DB.obterTodoHistorico();
+
+                    console.log("[Boot] 3. Buscando Mapa Curricular no GitHub...");
+                    await this.carregarBlueprint();
+
+                    console.log("[Boot] 4. Sincronizando Mapa com Histórico do Aluno...");
+                    this.sincronizarEstado();
+
+                    console.log("[Boot] 5. Desenhando a Interface (Renderização)...");
+                    this.renderizarMapaMacro();
+
+                } catch (erro) {
+                    console.error("[ERRO CRÍTICO NO BOOT]", erro);
+                    alert("Erro ao carregar os dados do curso. Verifique sua conexão inicial ou se o ficheiro TecnicoIA.json se encontra na mesma pasta.");
+                }
+            },
+
+            /**
+             * Faz o Fetch do JSON hospedado no mesmo diretório (GitHub Pages)
+             */
+            carregarBlueprint: async function() {
+                const resposta = await fetch('./TecnicoIA.json');
+                if (!resposta.ok) {
+                    throw new Error(`Falha HTTP ao buscar o currículo: ${resposta.status}`);
+                }
+                this.mapaCurricular = await resposta.json();
+            },
+
+            sincronizarEstado: function() {
+                console.log("Sincronização concluída. Motor pronto para análise.");
+            },
+
+            /**
+             * Função Auxiliar: Calcula o estado de um Território baseando-se nas suas Missões.
+             */
+            calcularStatusTerritorio: function(territorio) {
+                if (!territorio.missoes || territorio.missoes.length === 0) {
+                    return "bloqueado"; // Ambientes vazios ou em construção
+                }
+
+                let missoesConcluidas = 0;
+                let temMissaoAtiva = false;
+
+                territorio.missoes.forEach(missaoBlueprint => {
+                    const historico = this.diarioDeBordo.find(m => m.idMissao === missaoBlueprint.idMissao);
+                    if (historico && historico.status === "concluida") {
+                        missoesConcluidas++;
+                    } else if (historico && historico.status === "em_progresso") {
+                        temMissaoAtiva = true;
+                    }
+                });
+
+                if (missoesConcluidas === territorio.missoes.length) {
+                    return "concluido";
+                }
+                
+                const ordem = territorio.ordem;
+                const territorioAnteriorConcluido = this.verificarTerritorioAnterior(ordem - 1);
+                
+                if (ordem === 1 || territorioAnteriorConcluido) {
+                    return "ativo";
+                }
+
+                return "bloqueado";
+            },
+
+            /**
+             * Verifica se o território imediatamente anterior está 100% concluído.
+             */
+            verificarTerritorioAnterior: function(ordemAnterior) {
+                if (ordemAnterior < 1) return true;
+                const terrAnterior = this.mapaCurricular.territorios.find(t => t.ordem === ordemAnterior);
+                if (!terrAnterior) return true; // Falha segura
+                
+                const todasConcluidas = terrAnterior.missoes.every(missaoBp => {
+                    const hist = this.diarioDeBordo.find(m => m.idMissao === missaoBp.idMissao);
+                    return hist && hist.status === "concluida";
+                });
+                
+                return todasConcluidas;
+            },
+
+            /**
+             * Renderização Dinâmica: Camada 1 (O Mundo Holográfico)
+             */
+            renderizarMapaMacro: function() {
+                const container = document.getElementById('mapa-macro-dinamico');
+                if (!container || !this.mapaCurricular) return;
+
+                // Limpa o contentor e recria a linha central de órbita
+                container.innerHTML = '<div class="linha-orbita"></div>';
+
+                const iconesHolograficos = ['dns', 'schema', 'psychology', 'memory', 'api'];
+
+                this.mapaCurricular.territorios.forEach((territorio, index) => {
+                    const status = this.calcularStatusTerritorio(territorio);
+                    const icone = iconesHolograficos[index % iconesHolograficos.length];
+                    
+                    const planetaDiv = document.createElement('div');
+                    planetaDiv.className = `planeta-macro ${status}`;
+                    
+                    let corEstilo = "";
+                    let textoAcao = "";
+                    
+                    if (status === "concluido") {
+                        corEstilo = "color: var(--cor-sucesso); border-color: var(--cor-sucesso);";
+                    } else if (status === "ativo") {
+                        corEstilo = "color: var(--cor-primaria); border-color: var(--cor-primaria);";
+                        textoAcao = `<br><small style="color: var(--texto-suave); font-weight: normal;">Toque para Mergulhar</small>`;
+                        
+                        // Passa o id do território para a renderização da próxima camada
+                        planetaDiv.onclick = () => {
+                            aTIA_Core.renderizarArvoreMeso(territorio.idTerritorio);
+                            Navegador.zoomIn('tela-meso', `${territorio.idTerritorio}: ${territorio.titulo}`);
+                        };
+                    } else {
+                        corEstilo = "color: var(--texto-suave); border-color: #1f2937;";
+                    }
+
+                    planetaDiv.innerHTML = `
+                        <span class="material-icons-round icon">${icone}</span>
+                        <div class="rotulo-planeta" style="${corEstilo}">
+                            ${territorio.idTerritorio}: ${territorio.titulo}
+                            ${textoAcao}
+                        </div>
+                    `;
+
+                    container.appendChild(planetaDiv);
+                });
+                
+                const msgEl = document.getElementById('mensagem-assistente-macro');
+                if(msgEl){
+                    msgEl.innerText = `Matriz ${this.mapaCurricular.metadados.nomeCurso} carregada. Selecione um território ativo para iniciar a exploração.`;
+                }
+                    
+                console.log("[Renderização] Mapa Macro gerado com sucesso.");
+            },
+
+            renderizarArvoreMeso: function(idTerritorio) {
+                // A implementar: Pega as Missões do JSON e desenha a Skill Tree da Camada 2
+                console.log("Renderizar Árvore Meso para:", idTerritorio);
+            },
+
+            renderizarMalhaMicro: function(idMissao) {
+                // A implementar: Pega os Cards da Missão e desenha a interface de extração de dados
+                console.log("Renderizar Malha Micro para:", idMissao);
+            }
+        };
+
+        // ============================================================================
+        // INICIALIZAÇÃO DO APLICATIVO
+        // ============================================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            aTIA_Core.iniciar();
+        });
+    </script>
+    
+</body>
+</html>
