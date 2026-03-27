@@ -327,9 +327,10 @@ const Autenticacao = {
             this.atualizarHUD();
             // Pula a tela de login e inicia o motor principal
             aTIA_Core.iniciar();
-        } else {
+       } else {
             console.log("[Autenticação] Nenhum crachá encontrado. Aguardando leitura do QR Code.");
             Navegador.exibirTela('tela-login', '', 'IDENTIFICAÇÃO');
+            // Só liga a câmara se o botão for clicado, o HTML5-qrcode é pesado para carregar em background
         }
     },
 
@@ -398,9 +399,11 @@ const Autenticacao = {
         // ----------------------------------------------------------------------------
         // MÓDULO 1: CONTROLE DE INTERFACE E ZOOM SEMÂNTICO (UI)
         // ----------------------------------------------------------------------------
-        const Navegador = {
-            iniciar: function() {
-                history.replaceState({ tela: 'tela-macro' }, '', '#mapa-global');
+       const Navegador = {
+            iniciar: function(telaInicial = 'tela-macro', breadcrumb = 'MAPA GLOBAL') {
+                // Agora o inicializador aceita um parâmetro para saber onde deve arrancar
+                history.replaceState({ tela: telaInicial }, '', `#${telaInicial.replace('tela-', '')}`);
+                
                 window.addEventListener('popstate', (evento) => {
                     if (evento.state && evento.state.tela) {
                         this.exibirTela(evento.state.tela, '', 'RETORNO');
@@ -499,29 +502,24 @@ const Autenticacao = {
             /**
              * Função de Boot: Inicia o aplicativo de forma resiliente
              */
-            iniciar: async function() {
+          iniciar: async function() {
                 try {
-                    console.log("[Boot] 1. Iniciando Navegador UI...");
-                    Navegador.iniciar();
-
-                    console.log("[Boot] 2. Conectando ao Diário de Bordo (IndexedDB)...");
+                    console.log("[Boot] 1. Conectando ao Diário de Bordo (IndexedDB)...");
                     await DB.conectar();
                     this.diarioDeBordo = await DB.obterTodoHistorico();
 
-                    console.log("[Boot] 3. Buscando Mapa Curricular no GitHub...");
+                    console.log("[Boot] 2. Buscando Mapa Curricular no GitHub...");
                     await this.carregarBlueprint();
 
-                    console.log("[Boot] 4. Sincronizando Mapa com Histórico do Aluno...");
+                    console.log("[Boot] 3. Sincronizando Mapa com Histórico do Aluno...");
                     this.sincronizarEstado();
 
-                    console.log("[Boot] 5. Desenhando a Interface (Renderização)...");
+                    console.log("[Boot] 4. Iniciando UI e Desenhando a Interface...");
+                    Navegador.iniciar('tela-macro', 'MAPA GLOBAL');
+                    Navegador.exibirTela('tela-macro', 'zoom-in-enter', 'MAPA GLOBAL');
                     this.renderizarMapaMacro();
 
                 } catch (erro) {
-                    console.error("[ERRO CRÍTICO NO BOOT]", erro);
-                    alert("Erro ao carregar os dados do curso. Verifique sua conexão inicial ou se o ficheiro TecnicoIA.json se encontra na mesma pasta.");
-                }
-            },
 
             /**
              * Faz o Fetch do JSON hospedado no mesmo diretório (GitHub Pages)
