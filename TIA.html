@@ -165,9 +165,9 @@ header {
 </head>
 <body>
 <script src="https://unpkg.com/html5-qrcode"></script>
-    <section id="tela-login" class="tela ativa" style="justify-content: center; padding: 2rem;">
+    <section id="tela-login" class="tela ativa" style="justify-content: center; align-items: center; padding: 2rem;">
         
-        <div class="assistente-tia" style="margin: 0 0 2rem 0; background: rgba(10, 14, 23, 0.9);">
+        <div class="assistente-tia" style="margin: 0 0 2rem 0; background: rgba(10, 14, 23, 0.9); width: 100%; max-width: 400px;">
             <div class="tia-avatar"><span class="material-icons-round" style="color: white;">qr_code_scanner</span></div>
             <div>
                 <p style="font-size: 0.8rem; color: var(--cor-primaria); font-weight: bold;">CATRACA ATIVADA</p>
@@ -175,16 +175,14 @@ header {
             </div>
         </div>
 
-        <div style="background: var(--bg-card); padding: 1rem; border-radius: 16px; border: 2px solid var(--cor-primaria); box-shadow: 0 0 20px rgba(168,85,247,0.3);">
-            <div id="leitor-qr-login" style="width: 100%; border-radius: 8px; overflow: hidden;"></div>
+        <div style="background: var(--bg-card); padding: 1rem; border-radius: 16px; border: 2px solid var(--cor-primaria); box-shadow: 0 0 20px rgba(168,85,247,0.3); width: 100%; max-width: 400px;">
+            <div id="leitor-qr-login" style="width: 100%; min-height: 250px; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #05070a;">
+                <span class="material-icons-round" style="font-size: 3rem; color: var(--texto-suave);">videocam_off</span>
+            </div>
         </div>
 
-        <button class="btn btn-primario" style="margin-top: 2rem;" onclick="Autenticacao.iniciarCamera()">
+        <button class="btn btn-primario" style="margin-top: 2rem; width: 100%; max-width: 400px; padding: 1.2rem;" onclick="Autenticacao.iniciarCamera()">
             <span class="material-icons-round">camera_alt</span> Ligar Câmera
-        </button>
-
-        <button class="btn" style="margin-top: 1rem; background: transparent; border: 1px dashed var(--texto-suave);" onclick="Autenticacao.simularLeitura()">
-            [DEV] Simular Leitura do QR
         </button>
 
     </section>
@@ -316,84 +314,84 @@ header {
          * ============================================================================
          */
 // ----------------------------------------------------------------------------
-        // MÓDULO 0: AUTENTICAÇÃO E CRACHÁ DIGITAL
-        // ----------------------------------------------------------------------------
-        const Autenticacao = {
-            cracha: null,
-            leitorHTML5: null,
+// MÓDULO 0: AUTENTICAÇÃO E CRACHÁ DIGITAL
+// ----------------------------------------------------------------------------
+const Autenticacao = {
+    cracha: null,
+    leitorHTML5: null,
 
-            verificarAcesso: function() {
-                const dadosSalvos = localStorage.getItem('aTIA_Cracha');
-                
-                if (dadosSalvos) {
-                    this.cracha = JSON.parse(dadosSalvos);
-                    console.log("[Autenticação] Crachá encontrado. Bem-vindo de volta,", this.cracha.nome);
-                    this.atualizarHUD();
-                    aTIA_Core.iniciar();
-               } else {
-                    console.log("[Autenticação] Nenhum crachá encontrado. Aguardando leitura.");
-                    Navegador.exibirTela('tela-login', '', 'IDENTIFICAÇÃO');
-                }
-            },
+    verificarAcesso: function() {
+        const dadosSalvos = localStorage.getItem('aTIA_Cracha');
+        
+        if (dadosSalvos) {
+            this.cracha = JSON.parse(dadosSalvos);
+            console.log("[Autenticação] Crachá encontrado. Bem-vindo de volta,", this.cracha.nome);
+            this.atualizarHUD();
+            aTIA_Core.iniciar();
+       } else {
+            console.log("[Autenticação] Nenhum crachá encontrado. Aguardando leitura do QR Code.");
+            Navegador.exibirTela('tela-login', '', 'IDENTIFICAÇÃO');
+        }
+    },
 
-            iniciarCamera: function() {
-                if (this.leitorHTML5) return; 
+    iniciarCamera: function() {
+        if (this.leitorHTML5) return; // Evita abrir duas vezes
 
-                this.leitorHTML5 = new Html5QrcodeScanner("leitor-qr-login", { fps: 10, qrbox: {width: 250, height: 250} }, false);
-                
-                this.leitorHTML5.render((textoDecodificado) => {
-                    console.log("[Leitor QR] Código detectado:", textoDecodificado);
-                    this.processarCrachaQR(textoDecodificado);
-                }, (erro) => {});
-            },
+        // Ajustamos o qrbox para 200px para caber melhor nos ecrãs estreitos
+        this.leitorHTML5 = new Html5QrcodeScanner("leitor-qr-login", { 
+            fps: 10, 
+            qrbox: {width: 200, height: 200},
+            aspectRatio: 1.0 // Força um formato quadrado para o vídeo
+        }, false);
+        
+        this.leitorHTML5.render((textoDecodificado) => {
+            console.log("[Leitor QR] Código detectado:", textoDecodificado);
+            this.processarCrachaQR(textoDecodificado);
+        }, (erro) => {
+            // Ignora os erros contínuos (necessário para a biblioteca funcionar)
+        });
+    },
 
-            processarCrachaQR: function(textoDecodificado) {
-    try {
-        const dadosAluno = JSON.parse(textoDecodificado);
+    processarCrachaQR: function(textoDecodificado) {
+        try {
+            const dadosAluno = JSON.parse(textoDecodificado);
 
-        if (!dadosAluno.alunoId || !dadosAluno.cursoId)
-            throw new Error("QR Code inválido");
-
-        console.log("[QR] Dados válidos:", dadosAluno);
-
-        if (this.leitorHTML5) this.leitorHTML5.clear();
-
-        localStorage.setItem('aTIA_Cracha', JSON.stringify(dadosAluno));
-        this.cracha = dadosAluno;
-
-        this.atualizarHUD();
-        aTIA_Core.iniciar();
-
-    } catch (erro) {
-        console.error("[QR] Erro:", erro);
-        alert("QR Code inválido ou não pertence ao Ecossistema GENTE.");
-    }
-}
-
-            atualizarHUD: function() {
-                if (this.cracha) {
-                    const partesNome = this.cracha.nome.split(" ");
-                    const sigla = partesNome.length > 1 
-                        ? (partesNome[0][0] + partesNome[1][0]).toUpperCase() 
-                        : this.cracha.nome.substring(0, 2).toUpperCase();
-                        
-                    document.querySelector('.avatar-container').innerText = sigla;
-                    document.querySelector('.nome-aluno').innerText = this.cracha.nome;
-                    document.querySelector('header').style.display = 'flex';
-                }
-            },
-
-            // Função DEV atualizada com os dados reais do João
-            simularLeitura: function() {
-                const qrJoao = JSON.stringify({
-                    alunoId: "2026_IA_001",
-                    nome: "João Silva",
-                    cursoId: "TecnicoIA.json"
-                });
-                this.processarCrachaQR(qrJoao);
+            if (!dadosAluno.alunoId || !dadosAluno.cursoId) {
+                throw new Error("Formato JSON inválido. Faltam chaves obrigatórias.");
             }
-        };
 
+            console.log("[QR] Dados válidos:", dadosAluno);
+
+            if (this.leitorHTML5) {
+                this.leitorHTML5.clear();
+                this.leitorHTML5 = null; // Limpa a referência
+            }
+
+            localStorage.setItem('aTIA_Cracha', JSON.stringify(dadosAluno));
+            this.cracha = dadosAluno;
+
+            this.atualizarHUD();
+            aTIA_Core.iniciar();
+
+        } catch (erro) {
+            console.error("[QR] Erro:", erro);
+            alert("QR Code inválido. O formato deve ser um JSON do Ecossistema GENTE.");
+        }
+    },
+
+    atualizarHUD: function() {
+        if (this.cracha) {
+            const partesNome = this.cracha.nome.split(" ");
+            const sigla = partesNome.length > 1 
+                ? (partesNome[0][0] + partesNome[1][0]).toUpperCase() 
+                : this.cracha.nome.substring(0, 2).toUpperCase();
+                
+            document.querySelector('.avatar-container').innerText = sigla;
+            document.querySelector('.nome-aluno').innerText = this.cracha.nome;
+            document.querySelector('header').style.display = 'flex';
+        }
+    }
+};
         // ----------------------------------------------------------------------------
         // MÓDULO 1: CONTROLE DE INTERFACE E ZOOM SEMÂNTICO (UI)
         // ----------------------------------------------------------------------------
