@@ -348,25 +348,27 @@ header {
             },
 
             processarCrachaQR: function(textoDecodificado) {
-                try {
-                    const dadosAluno = JSON.parse(textoDecodificado);
-                    
-                    if (!dadosAluno.alunoId || !dadosAluno.cursoId) throw new Error("QR Code Inválido");
+    try {
+        const dadosAluno = JSON.parse(textoDecodificado);
 
-                    if (this.leitorHTML5) {
-                        this.leitorHTML5.clear();
-                    }
+        if (!dadosAluno.alunoId || !dadosAluno.cursoId)
+            throw new Error("QR Code inválido");
 
-                    localStorage.setItem('aTIA_Cracha', JSON.stringify(dadosAluno));
-                    this.cracha = dadosAluno;
+        console.log("[QR] Dados válidos:", dadosAluno);
 
-                    this.atualizarHUD();
-                    aTIA_Core.iniciar();
+        if (this.leitorHTML5) this.leitorHTML5.clear();
 
-                } catch (erro) {
-                    alert("QR Code inválido ou não pertence ao Ecossistema GENTE.");
-                }
-            },
+        localStorage.setItem('aTIA_Cracha', JSON.stringify(dadosAluno));
+        this.cracha = dadosAluno;
+
+        this.atualizarHUD();
+        aTIA_Core.iniciar();
+
+    } catch (erro) {
+        console.error("[QR] Erro:", erro);
+        alert("QR Code inválido ou não pertence ao Ecossistema GENTE.");
+    }
+}
 
             atualizarHUD: function() {
                 if (this.cracha) {
@@ -398,7 +400,6 @@ header {
         const Navegador = {
             iniciar: function(telaInicial = 'tela-macro', breadcrumb = 'MAPA GLOBAL') {
                 history.replaceState({ tela: telaInicial }, '', `#${telaInicial.replace('tela-', '')}`);
-                
                 window.addEventListener('popstate', (evento) => {
                     if (evento.state && evento.state.tela) {
                         this.exibirTela(evento.state.tela, '', 'RETORNO');
@@ -406,28 +407,33 @@ header {
                 });
             },
 
-                        exibirTela: function(idTelaAlvo, tipoAnimacao, breadcrumbText) {
+            exibirTela: function(idTelaAlvo, tipoAnimacao, breadcrumbText) {
                 const telas = document.querySelectorAll('.tela');
                 telas.forEach(tela => tela.classList.remove('ativa', 'zoom-in-enter', 'zoom-out-enter'));
                 
                 const telaAlvo = document.getElementById(idTelaAlvo);
                 if (telaAlvo) {
-                    // Adiciona a classe 'ativa' obrigatoriamente
                     telaAlvo.classList.add('ativa');
-                    
-                    // Só adiciona a animação se a string não for vazia
-                    if (tipoAnimacao) {
-                        telaAlvo.classList.add(tipoAnimacao);
-                    }
-                    
+                    if(tipoAnimacao) telaAlvo.classList.add(tipoAnimacao); // Proteção contra classes vazias
                     telaAlvo.scrollTop = 0; 
                 }
                 
                 if (breadcrumbText) {
-                    document.getElementById('ui-breadcrumbs').innerHTML = 
-                        `<span class="material-icons-round" style="font-size: 14px;">subdirectory_arrow_right</span> ${breadcrumbText}`;
+                    document.getElementById('ui-breadcrumbs').innerHTML = `<span class="material-icons-round" style="font-size: 14px;">subdirectory_arrow_right</span> ${breadcrumbText}`;
                 }
             },
+
+            zoomIn: function(idTelaAlvo, breadcrumbText) { 
+                this.exibirTela(idTelaAlvo, 'zoom-in-enter', breadcrumbText); 
+                history.pushState({ tela: idTelaAlvo }, '', '#' + idTelaAlvo);
+            },
+            
+            zoomOut: function(idTelaAlvo, breadcrumbText) { 
+                this.exibirTela(idTelaAlvo, 'zoom-out-enter', breadcrumbText); 
+                history.pushState({ tela: idTelaAlvo }, '', '#' + idTelaAlvo);
+            }
+        };
+
 
         // ----------------------------------------------------------------------------
         // MÓDULO 2: PERSISTÊNCIA OFFLINE (DIÁRIO DE BORDO - IndexedDB)
@@ -481,6 +487,7 @@ header {
         }
 
         const DB = new ArmazenamentoLocal();
+		console.log("[DB] Salvando progresso:", missao);
 
         // ----------------------------------------------------------------------------
         // MÓDULO 3: MOTOR DE ORQUESTRAÇÃO (CORE)
@@ -490,28 +497,28 @@ header {
             diarioDeBordo: [],    
 
             iniciar: async function() {
-                try {
-                    console.log("[Boot] 1. Conectando ao Diário de Bordo (IndexedDB)...");
-                    await DB.conectar();
-                    this.diarioDeBordo = await DB.obterTodoHistorico();
+    try {
+        console.log("[Boot] 1. Conectando ao Diário...");
+        await DB.conectar();
 
-                    console.log("[Boot] 2. Buscando Mapa Curricular no GitHub...");
-                    await this.carregarBlueprint();
+        this.diarioDeBordo = await DB.obterTodoHistorico();
 
-                    console.log("[Boot] 3. Sincronizando Mapa com Histórico do Aluno...");
-                    this.sincronizarEstado();
+        console.log("[Boot] 2. Carregando Blueprint...");
+        await this.carregarBlueprint();
 
-                    console.log("[Boot] 4. Iniciando UI e Desenhando a Interface...");
-                    Navegador.iniciar('tela-macro', 'MAPA GLOBAL');
-                    Navegador.exibirTela('tela-macro', 'zoom-in-enter', 'MAPA GLOBAL');
-                    this.renderizarMapaMacro();
+        console.log("[Boot] 3. Sincronizando...");
+        this.sincronizarEstado();
 
-                // ERRO DE SINTAXE CORRIGIDO AQUI: A chave e a vírgula que faltavam
-                } catch (erro) {
-                    console.error("[ERRO CRÍTICO NO BOOT]", erro);
-                    alert("Erro ao carregar os dados do curso. Verifique sua conexão ou o console para mais detalhes.");
-                }
-            },
+        console.log("[Boot] 4. Renderizando UI...");
+        Navegador.iniciar('tela-macro', 'MAPA GLOBAL');
+        Navegador.exibirTela('tela-macro', 'zoom-in-enter', 'MAPA GLOBAL');
+
+        this.renderizarMapaMacro();
+
+    } catch (erro) {
+        console.error("[ERRO CRÍTICO]", erro);
+    }
+},
 
             carregarBlueprint: async function() {
                 const arquivoDoCurso = Autenticacao.cracha.cursoId;
