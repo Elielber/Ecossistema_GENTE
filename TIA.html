@@ -356,57 +356,71 @@ header {
                     alert("Erro ao abrir câmera. Verifique permissões.");
                 });
             },
-			processarLogin(dados) {
-			    if (!dados.alunoId || !dados.cursoId) {
- 			       throw new Error("Login inválido");
- 			   }
+			processarLogin: function(dados) {
+    if (!dados.alunoId || !dados.cursoId) {
+        throw new Error("Login inválido");
+    }
 
-			    localStorage.setItem('aTIA_Cracha', JSON.stringify(dados));
-			    this.cracha = dados;
+    localStorage.setItem('aTIA_Cracha', JSON.stringify(dados));
+    this.cracha = dados;
 
-			    this.atualizarHUD();
-			    this.desenharCracha(dados);
+    this.atualizarHUD();
+    this.desenharCracha(dados);
 
-			    setTimeout(() => aTIA_Core.iniciar(), 1500);
-			}
+    setTimeout(() => aTIA_Core.iniciar(), 1500);
+},
 
-            processarCrachaQR: function(textoDecodificado) {
-                try {
-                    // MÁGICA DA RESILIÊNCIA: Transforma aspas inclinadas em aspas retas de código
-                    const textoLimpo = textoDecodificado
-                        .replace(/[\u201C\u201D]/g, '"') 
-                        .replace(/[\u2018\u2019]/g, "'");
+processarCrachaQR: function(textoDecodificado) {
+    try {
+        const decodificarHTML = (texto) => {
+            const txt = document.createElement("textarea");
+            txt.innerHTML = texto;
+            return txt.value;
+        };
 
-                    let dados = JSON.parse(textoLimpo);
+        let textoLimpo = decodificarHTML(textoDecodificado)
+            .trim()
+            .replace(/[\u200B-\u200D\uFEFF]/g, "")
+            .replace(/[\u201C\u201D]/g, '"') 
+            .replace(/[\u2018\u2019]/g, "'");
 
-                   if (!dados.tipo) {
-                       throw new Error("QR sem tipo definido");
-                   }
+        let dados = JSON.parse(textoLimpo);
 
-                   switch (dados.tipo) {
+        if (!dados.tipo) {
+            throw new Error("QR sem tipo definido");
+        }
 
-                       case "aTIA_LOGIN":
-                           this.processarLogin(dados);
-                           break;
+        switch (dados.tipo) {
 
-                       case "aTIA_G3":
-                           this.processarG3(dados);
-                           break;
+            case "aTIA_LOGIN":
+                this.processarLogin(dados);
+                break;
 
-                       default:
-                       throw new Error("Tipo de QR desconhecido");
-               }
-            },
-			processarG3(dados) {
-			    console.log("Recebendo pacote G3:", dados);
+            case "aTIA_G3":
+                this.processarG3(dados);
+                break;
 
-			    // Exemplo:
-			    dados.dados.progresso.forEach(missao => {
-			        DB.salvarProgresso(missao);
-			    });
+            default:
+                throw new Error("Tipo de QR desconhecido");
+        }
 
-			    alert("Sincronização concluída!");
-			}
+    } catch (erro) {
+        console.error("ERRO QR:", erro);
+        alert("QR Code inválido ou mal formatado.");
+    }
+},
+
+processarG3: function(dados) {
+    console.log("Recebendo pacote G3:", dados);
+
+    if (dados?.dados?.progresso) {
+        dados.dados.progresso.forEach(missao => {
+            DB.salvarProgresso(missao);
+        });
+    }
+
+    alert("Sincronização concluída!");
+},
 
             desenharCracha: function(dados) {
                 const areaCracha = document.getElementById('area-cracha');
