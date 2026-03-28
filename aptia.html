@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AP-TIA | Assistente Pedagógico de Trilhas Interativas do Aprendizado</title>
+	<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">👓</text></svg>' />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    
+    <style>
+        /* ESTÉTICA EXECUTIVA / ACADÊMICA (Sóbria, mas alinhada ao Ecossistema GENTE) */
+        :root {
+            --bg-principal: #0f172a; --bg-painel: #1e293b; 
+            --cor-destaque: #8b5cf6; --cor-sucesso: #10b981;
+            --texto-puro: #f8fafc; --texto-suave: #cbd5e1;
+            --borda: #334155;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
+
+        body { background-color: var(--bg-principal); color: var(--texto-puro); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* CABEÇALHO EXECUTIVO */
+        header { background: #0b0f19; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--borda); }
+        .logo-area { display: flex; align-items: center; gap: 10px; }
+        .tag-beta { background: rgba(139, 92, 246, 0.2); color: var(--cor-destaque); padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; letter-spacing: 1px; }
+
+        /* ÁREA DE TRABALHO (SPLIT SCREEN) */
+        .workspace { display: flex; flex: 1; overflow: hidden; }
+
+        /* PAINEL ESQUERDO: INGESTÃO */
+        .painel-ingestao { width: 40%; background: var(--bg-painel); border-right: 1px solid var(--borda); display: flex; flex-direction: column; padding: 2rem; gap: 1.5rem; }
+        .instrucoes h2 { font-size: 1.2rem; margin-bottom: 0.5rem; }
+        .instrucoes p { color: var(--texto-suave); font-size: 0.9rem; line-height: 1.5; }
+        
+        .area-input { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+        textarea { flex: 1; background: #0f172a; border: 2px dashed var(--borda); border-radius: 8px; padding: 1rem; color: var(--texto-suave); font-size: 0.95rem; resize: none; transition: all 0.3s; }
+        textarea:focus { outline: none; border-color: var(--cor-destaque); background: #151e32; color: var(--texto-puro); }
+        
+        .btn-analisar { background: var(--cor-destaque); color: white; border: none; padding: 1rem; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
+        .btn-analisar:hover { background: #7c3aed; }
+
+        /* PAINEL DIREITO: SÍNTESE (O DOCUMENTO) */
+        .painel-sintese { width: 60%; background: #0f172a; padding: 2rem 4rem; overflow-y: auto; display: flex; flex-direction: column; }
+        
+        .documento-vazio { margin: auto; text-align: center; color: var(--texto-suave); opacity: 0.5; }
+        
+        #documento-consolidado { display: none; background: #1e293b; border: 1px solid var(--borda); border-radius: 12px; padding: 2.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .doc-header { border-bottom: 2px solid var(--borda); padding-bottom: 1rem; margin-bottom: 2rem; }
+        .doc-header h1 { font-size: 1.5rem; color: var(--cor-destaque); margin-bottom: 0.5rem; }
+        .doc-meta { display: flex; gap: 2rem; color: var(--texto-suave); font-size: 0.85rem; }
+        
+        .territorio-item { background: #0f172a; border-left: 4px solid var(--cor-destaque); padding: 1rem 1.5rem; margin-bottom: 1rem; border-radius: 0 8px 8px 0; }
+        .territorio-item h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+        .territorio-item p { font-size: 0.9rem; color: var(--texto-suave); }
+
+        .btn-aprovar { background: var(--cor-sucesso); color: #000; border: none; padding: 1.2rem; border-radius: 8px; font-weight: bold; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 2rem; width: 100%; transition: 0.2s; }
+        .btn-aprovar:hover { background: #059669; color: white; }
+
+        /* Animação de Carregamento */
+        .loader { display: none; margin: auto; text-align: center; color: var(--cor-destaque); }
+        .spinner { width: 40px; height: 40px; border: 4px solid rgba(139, 92, 246, 0.3); border-top: 4px solid var(--cor-destaque); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-area">
+            <span style="font-size: 28px;">👓</span>
+            <h1 style="font-size: 1.2rem;">AP-TIA</h1>
+            <span class="tag-beta">Assistente Pedagógico de Trilhas Interativas de Aprendizado</span>
+        </div>
+        <div style="color: var(--texto-suave); font-size: 0.9rem;">
+            <span class="material-icons-round" style="vertical-align: middle; font-size: 18px;">shield</span> Processamento 100% Local (Offline)
+        </div>
+    </header>
+
+    <div class="workspace">
+        
+        <section class="painel-ingestao">
+            <div class="instrucoes">
+                <h2>Ingestão de Ementa</h2>
+                <p>Cole abaixo o texto do Projeto Pedagógico (PPC) ou da ementa do curso. O motor heurístico identificará os territórios, missões e competências automaticamente.</p>
+            </div>
+
+            <div class="area-input">
+                <textarea id="texto-ementa" placeholder="Ex:&#10;Módulo 1: Fundamentos de IA&#10;Objetivo: Compreender a base de dados...&#10;&#10;Módulo 2: Modelagem&#10;Objetivo: Criar esquemas JSON..."></textarea>
+                <button class="btn-analisar" onclick="MotorHeuristico.iniciarProcessamento()">
+                    <span class="material-icons-round">psychology</span> Sintetizar Currículo
+                </button>
+            </div>
+        </section>
+
+        <section class="painel-sintese">
+            
+            <div id="estado-vazio" class="documento-vazio">
+                <span class="material-icons-round" style="font-size: 4rem; margin-bottom: 1rem;">article</span>
+                <h2>Aguardando Documento</h2>
+                <p>A síntese executiva aparecerá aqui.</p>
+            </div>
+
+            <div id="estado-carregando" class="loader">
+                <div class="spinner"></div>
+                <h3 id="status-texto">A extrair âncoras pedagógicas...</h3>
+            </div>
+
+            <div id="documento-consolidado">
+                <div class="doc-header">
+                    <h1>Síntese da Matriz Curricular</h1>
+                    <div class="doc-meta">
+                        <span><strong id="meta-territorios">0</strong> Territórios identificados</span>
+                        <span><strong id="meta-missoes">0</strong> Missões estimadas</span>
+                    </div>
+                </div>
+
+                <div id="lista-territorios">
+                    </div>
+
+                <button class="btn-aprovar" onclick="alert('Funcionalidade de Geração de JSON em desenvolvimento!')">
+                    <span class="material-icons-round">check_circle</span> APROVAR E GERAR MATRIZ (a-TIA)
+                </button>
+            </div>
+
+        </section>
+    </div>
+
+    <script>
+        // ----------------------------------------------------------------------------
+        // MOTOR HEURÍSTICO (O "Cérebro" Offline)
+        // ----------------------------------------------------------------------------
+        const MotorHeuristico = {
+            
+            iniciarProcessamento: function() {
+                const textoRaw = document.getElementById('texto-ementa').value;
+                if(textoRaw.trim() === '') {
+                    alert("Por favor, cole o texto da ementa primeiro.");
+                    return;
+                }
+
+                // UI: Alterna para modo de carregamento
+                document.getElementById('estado-vazio').style.display = 'none';
+                document.getElementById('documento-consolidado').style.display = 'none';
+                document.getElementById('estado-carregando').style.display = 'block';
+
+                // Simula o tempo de processamento heurístico (para UX)
+                let passos = [
+                    "A mapear verbos de competência...",
+                    "A estruturar ramificações...",
+                    "A redigir síntese executiva..."
+                ];
+                let passoAtual = 0;
+                
+                let intervalo = setInterval(() => {
+                    if(passoAtual < passos.length) {
+                        document.getElementById('status-texto').innerText = passos[passoAtual];
+                        passoAtual++;
+                    } else {
+                        clearInterval(intervalo);
+                        this.executarParser(textoRaw);
+                    }
+                }, 800); // 800ms por passo
+            },
+
+            executarParser: function(texto) {
+                // Aqui entrarão as Expressões Regulares (RegEx) pesadas no futuro.
+                // Por enquanto, vamos criar um parser ultra-simples para prova de conceito:
+                // Ele procura a palavra "Módulo" ou "Território" para quebrar o texto.
+                
+                const linhas = texto.split('\n');
+                let territoriosExtraidos = [];
+                let territorioAtual = null;
+
+                linhas.forEach(linha => {
+                    linha = linha.trim();
+                    if(linha.toLowerCase().includes('módulo') || linha.toLowerCase().includes('território')) {
+                        if(territorioAtual) territoriosExtraidos.push(territorioAtual);
+                        territorioAtual = { titulo: linha, missoes: 0 };
+                    } 
+                    // Tenta contar verbos de ação para chutar quantas "missões" existem
+                    else if (territorioAtual && (linha.toLowerCase().includes('objetivo') || linha.toLowerCase().includes('competência') || linha.toLowerCase().includes('desenvolver'))) {
+                        territorioAtual.missoes += 1;
+                    }
+                });
+                if(territorioAtual) territoriosExtraidos.push(territorioAtual);
+
+                // Se não achou nada, cria um genérico para o professor não ficar com a tela em branco
+                if(territoriosExtraidos.length === 0) {
+                    territoriosExtraidos.push({ titulo: "Território 1: Fundamentos (Extraído Automaticamente)", missoes: 3 });
+                }
+
+                this.renderizarDocumento(territoriosExtraidos);
+            },
+
+            renderizarDocumento: function(territorios) {
+                // Atualiza Metadados
+                document.getElementById('meta-territorios').innerText = territorios.length;
+                let totalMissoes = territorios.reduce((acc, curr) => acc + (curr.missoes || 2), 0);
+                document.getElementById('meta-missoes').innerText = totalMissoes;
+
+                // Desenha a lista
+                const container = document.getElementById('lista-territorios');
+                container.innerHTML = '';
+
+                territorios.forEach((terr, index) => {
+                    let qtdMissoes = terr.missoes > 0 ? terr.missoes : 2; // Garante pelo menos 2 se não achar verbos
+                    container.innerHTML += `
+                        <div class="territorio-item">
+                            <h3>${terr.titulo}</h3>
+                            <p><strong>Densidade Inferida:</strong> ${qtdMissoes} missões principais de extração de dados.</p>
+                        </div>
+                    `;
+                });
+
+                // UI: Mostra o documento e esconde o loader
+                document.getElementById('estado-carregando').style.display = 'none';
+                document.getElementById('documento-consolidado').style.display = 'block';
+            }
+        };
+    </script>
+</body>
+</html>
