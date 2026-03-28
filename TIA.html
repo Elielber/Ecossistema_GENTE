@@ -322,7 +322,7 @@ header {
          * Arquitetura: Módulo de Navegação + Módulo de Dados + Motor de Orquestração
          * ============================================================================
          */
-        // ----------------------------------------------------------------------------
+       // ----------------------------------------------------------------------------
         // MÓDULO 0: AUTENTICAÇÃO E CRACHÁ DIGITAL
         // ----------------------------------------------------------------------------
         const Autenticacao = {
@@ -334,14 +334,10 @@ header {
                 
                 if (dadosSalvos) {
                     this.cracha = JSON.parse(dadosSalvos);
-                    console.log("[Autenticação] Crachá encontrado. Bem-vindo de volta,", this.cracha.nome);
                     this.atualizarHUD();
-                    
-                    // Desenha o crachá e entra rápido se já estava salvo
                     this.desenharCracha(this.cracha);
                     setTimeout(() => { aTIA_Core.iniciar(); }, 1200);
                } else {
-                    console.log("[Autenticação] Nenhum crachá encontrado. Aguardando leitura.");
                     Navegador.exibirTela('tela-login', '', 'IDENTIFICAÇÃO');
                 }
             },
@@ -349,6 +345,7 @@ header {
             iniciarCamera: function() {
                 if (this.leitorHTML5) return; 
 
+                // Usando a API pura para não gerar aquele menu feio
                 this.leitorHTML5 = new Html5Qrcode("leitor-qr-login");
                 this.leitorHTML5.start(
                     { facingMode: "environment" }, 
@@ -356,16 +353,20 @@ header {
                     (textoDecodificado) => { this.processarCrachaQR(textoDecodificado); },
                     (errorMessage) => {}
                 ).catch((err) => {
-                    console.error("Erro ao abrir a câmera:", err);
-                    alert("Verifique as permissões de câmera do navegador.");
+                    alert("Erro ao abrir câmera. Verifique permissões.");
                 });
             },
 
             processarCrachaQR: function(textoDecodificado) {
                 try {
-                    const dadosAluno = JSON.parse(textoDecodificado);
+                    // MÁGICA DA RESILIÊNCIA: Transforma aspas inclinadas em aspas retas de código
+                    const textoLimpo = textoDecodificado
+                        .replace(/[\u201C\u201D]/g, '"') 
+                        .replace(/[\u2018\u2019]/g, "'");
 
-                    if (!dadosAluno.alunoId || !dadosAluno.cursoId) throw new Error("QR Code inválido");
+                    const dadosAluno = JSON.parse(textoLimpo);
+
+                    if (!dadosAluno.alunoId || !dadosAluno.cursoId) throw new Error("Faltam chaves");
 
                     if (this.leitorHTML5) {
                         this.leitorHTML5.stop().then(() => { this.leitorHTML5.clear(); });
@@ -375,16 +376,14 @@ header {
                     this.cracha = dadosAluno;
                     this.atualizarHUD();
 
-                    // MÁGICA VISUAL: Desenha o crachá no espaço reservado
+                    // Desenha o crachá animado
                     this.desenharCracha(dadosAluno);
 
-                    // Espera 2.5 segundos para o aluno curtir a identidade confirmada antes de ir pro Mapa
-                    setTimeout(() => {
-                        aTIA_Core.iniciar();
-                    }, 2500);
+                    // Espera 2.5 segundos e inicia o sistema
+                    setTimeout(() => { aTIA_Core.iniciar(); }, 2500);
 
                 } catch (erro) {
-                    alert("QR Code inválido ou não pertence ao Ecossistema GENTE.");
+                    alert("QR Code inválido. Certifique-se de que é um JSON válido do a-TIA.");
                 }
             },
 
@@ -392,7 +391,6 @@ header {
                 const areaCracha = document.getElementById('area-cracha');
                 if (!areaCracha) return;
 
-                // Animação CSS via JS
                 areaCracha.style.background = "linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(59, 130, 246, 0.2))";
                 areaCracha.style.border = "2px solid var(--cor-sucesso)";
                 areaCracha.style.boxShadow = "0 0 25px rgba(74, 222, 128, 0.4)";
@@ -400,7 +398,6 @@ header {
                 const partesNome = dados.nome.split(" ");
                 const sigla = partesNome.length > 1 ? (partesNome[0][0] + partesNome[1][0]).toUpperCase() : dados.nome.substring(0, 2).toUpperCase();
 
-                // Injeta os dados do aluno num formato de crachá cibernético
                 areaCracha.innerHTML = `
                     <div style="width: 65px; height: 65px; border-radius: 50%; background: var(--bg-card); border: 3px solid var(--cor-sucesso); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: bold; color: var(--cor-sucesso); margin-bottom: 10px;">
                         ${sigla}
