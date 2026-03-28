@@ -356,6 +356,19 @@ header {
                     alert("Erro ao abrir câmera. Verifique permissões.");
                 });
             },
+			processarLogin(dados) {
+			    if (!dados.alunoId || !dados.cursoId) {
+ 			       throw new Error("Login inválido");
+ 			   }
+
+			    localStorage.setItem('aTIA_Cracha', JSON.stringify(dados));
+			    this.cracha = dados;
+
+			    this.atualizarHUD();
+			    this.desenharCracha(dados);
+
+			    setTimeout(() => aTIA_Core.iniciar(), 1500);
+			}
 
             processarCrachaQR: function(textoDecodificado) {
                 try {
@@ -364,28 +377,36 @@ header {
                         .replace(/[\u201C\u201D]/g, '"') 
                         .replace(/[\u2018\u2019]/g, "'");
 
-                    const dadosAluno = JSON.parse(textoLimpo);
+                    let dados = JSON.parse(textoLimpo);
 
-                    if (!dadosAluno.alunoId || !dadosAluno.cursoId) throw new Error("Faltam chaves");
+                   if (!dados.tipo) {
+                       throw new Error("QR sem tipo definido");
+                   }
 
-                    if (this.leitorHTML5) {
-                        this.leitorHTML5.stop().then(() => { this.leitorHTML5.clear(); });
-                    }
+                   switch (dados.tipo) {
 
-                    localStorage.setItem('aTIA_Cracha', JSON.stringify(dadosAluno));
-                    this.cracha = dadosAluno;
-                    this.atualizarHUD();
+                       case "aTIA_LOGIN":
+                           this.processarLogin(dados);
+                           break;
 
-                    // Desenha o crachá animado
-                    this.desenharCracha(dadosAluno);
+                       case "aTIA_G3":
+                           this.processarG3(dados);
+                           break;
 
-                    // Espera 2.5 segundos e inicia o sistema
-                    setTimeout(() => { aTIA_Core.iniciar(); }, 2500);
-
-                } catch (erro) {
-                    alert("QR Code inválido. Certifique-se de que é um JSON válido do a-TIA.");
-                }
+                       default:
+                       throw new Error("Tipo de QR desconhecido");
+               }
             },
+			processarG3(dados) {
+			    console.log("Recebendo pacote G3:", dados);
+
+			    // Exemplo:
+			    dados.dados.progresso.forEach(missao => {
+			        DB.salvarProgresso(missao);
+			    });
+
+			    alert("Sincronização concluída!");
+			}
 
             desenharCracha: function(dados) {
                 const areaCracha = document.getElementById('area-cracha');
