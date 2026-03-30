@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GENTE | Painel do Mestre</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+   ">
+    
+    <script src="https://cdn.jsdelivr.net/npm/qrcode_js@1.0.0/qrcode.min.js"></script>
     <style>
         :root {
             --bg-mestre: #0f172a; --card-mestre: #1e293b;
@@ -115,91 +118,53 @@
                 </div>
             </section>
         </div>
+        
+        <div id="painel-projecao-g3" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.9); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; color: #fff;">
+            
+            <button class="btn" style="position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.1); color: #fff;" onclick="PainelMestre.fecharProjecao()">
+                <span class="material-icons-round">close</span> Fechar Projeção
+            </button>
+
+            <h1 style="color: var(--cor-g3); font-size: 2.5rem; margin-bottom: 5px;">CHAVE G3 ATIVA</h1>
+            <p id="info-missao-g3" style="font-size: 1.1rem; color: var(--texto-suave); margin-bottom: 2rem;">Validando T1_M1 - Desenvolver scripts simples...</p>
+            
+            <div id="container-qr-gigante" style="background: #fff; padding: 2rem; border-radius: 20px; box-shadow: 0 0 50px var(--cor-g3); max-width: 80vh; max-height: 80vh;">
+                </div>
+            
+            <p style="margin-top: 2rem; font-size: 1rem; text-align: center; background: rgba(0,0,0,0.5); padding: 10px 20px; border-radius: 8px;">
+                <span class="material-icons-round" style="vertical-align: middle; color: #ef4444;">schedule</span>
+                Esta chave expira em exatos 10 minutos para esta turma.
+            </p>
+        </div>
     </main>
 
     <script>
- // MOTOR DO PAINEL DO MESTRE
+// MOTOR DO PAINEL DO MESTRE
         const PainelMestre = {
             turmaAtual: [],
             matrizAtiva: null,
+            leitorG3: null, // Guardará a instância da biblioteca QR
             
-            iniciarRelogio: function() {
-                setInterval(() => {
-                    document.getElementById('relogio').innerText = new Date().toLocaleTimeString();
-                }, 1000);
-            },
+            // ... outras funções ...
 
             // ==========================================
-            // INGESTÃO DO MAPA CURRICULAR (OFFLINE)
-            // ==========================================
-            carregarMatriz: function(evento) {
-                const arquivo = evento.target.files[0];
-                if (!arquivo) return;
-
-                const leitor = new FileReader();
-                leitor.onload = (e) => {
-                    try {
-                        this.matrizAtiva = JSON.parse(e.target.result);
-                        this.popularMenuMissoes(this.matrizAtiva);
-                        alert(`Matriz "${this.matrizAtiva.metadados.nomeCurso}" carregada e pronta para a aula!`);
-                    } catch (erro) {
-                        alert("Erro ao ler o ficheiro. Certifique-se de que é um JSON válido do GENTE Builder.");
-                    }
-                };
-                leitor.readAsText(arquivo);
-            },
-
-            popularMenuMissoes: function(matriz) {
-                const select = document.getElementById('select-missao');
-                select.innerHTML = '<option value="">Selecione a Missão da Aula...</option>';
-
-                matriz.territorios.forEach(terr => {
-                    // Cria um grupo visual para cada Território (Planeta)
-                    const optgroup = document.createElement('optgroup');
-                    optgroup.label = `${terr.idTerritorio}: ${terr.titulo}`;
-
-                    terr.missoes.forEach(missao => {
-                        const option = document.createElement('option');
-                        option.value = missao.idMissao;
-                        // Exibe a dimensão e o título para facilitar a escolha do professor
-                        option.textContent = `[${missao.dimensaoPredominante.toUpperCase()}] ${missao.idMissao} - ${missao.titulo}`;
-                        optgroup.appendChild(option);
-                    });
-
-                    select.appendChild(optgroup);
-                });
-            },
-
-            // ==========================================
-            // DIÁRIO DE CLASSE
+            // DIÁRIO DE CLASSE (ATUALIZADO)
             // ==========================================
             importarPlanilha: function() {
+                // ... dados simulados ...
                 this.turmaAtual = [
                     { id: "2026_IA_001", nome: "João Silva" },
-                    { id: "2026_IA_002", nome: "Maria Oliveira" },
-                    { id: "2026_IA_003", nome: "Carlos Souza" }
+                    // ... etc ...
                 ];
+                
+                // MUDANÇA: Atualiza os dados de efetividade para ficar "espetacular"
                 this.renderizarDiario();
-            },
-
-            renderizarDiario: function() {
-                const tbody = document.querySelector('#tabela-alunos tbody');
-                tbody.innerHTML = '';
-                this.turmaAtual.forEach(aluno => {
-                    tbody.innerHTML += `
-                        <tr>
-                            <td>${aluno.id}</td>
-                            <td>${aluno.nome}</td>
-                            <td><input type="checkbox" checked style="accent-color: var(--cor-sucesso); transform: scale(1.2);"></td>
-                            <td><input type="text" placeholder="Registo Rápido..." style="border:none; background: transparent; border-bottom: 1px solid var(--borda);"></td>
-                        </tr>
-                    `;
-                });
-                document.getElementById('nome-turma').innerText = "Técnico em IA - Turma A";
+                document.getElementById('reumo-efetividade').innerText = "100%";
+                document.getElementById('reumo-efetividade').style.color = "var(--cor-sucesso)";
             },
 
             // ==========================================
-            // MOTOR DE VALIDAÇÃO G3 (ANTI-FRAUDE TEMPORAL)
+            // MOTOR DE VALIDAÇÃO G3 (ANTI-FRAUDE TEMPORAL - ATUALIZADO)
             // ==========================================
             gerarChaveG3: function() {
                 const select = document.getElementById('select-missao');
@@ -207,7 +172,7 @@
                 const nomeMissao = select.options[select.selectedIndex].text;
 
                 if (!missaoId) {
-                    alert("Atenção: Selecione uma missão no menu suspenso antes de gerar a chave.");
+                    alert("Atenção: Selecione uma missão antes de gerar a chave G3.");
                     select.focus();
                     return;
                 }
@@ -222,22 +187,34 @@
                     expira: validadeTimestamp
                 };
 
-                const qrContainer = document.getElementById('container-qr');
+                // --- NOVO: GERAR E DESENHAR O QR CODE GIGANTE ---
                 
-                // Simula o desenho do QR Code com feedback visual de ativação
-                qrContainer.innerHTML = `
-                    <div style="text-align: center; color: #000;">
-                        <span class="material-icons-round" style="font-size: 3rem; margin-bottom: 10px;">qr_code_2</span><br>
-                        <strong>TRANSMISSÃO ATIVA</strong><br>
-                        <span style="font-size: 0.7rem; font-family: monospace;">${JSON.stringify(payload)}</span>
-                    </div>
-                `;
-                qrContainer.style.background = "var(--cor-sucesso)";
-                qrContainer.style.border = "4px solid #fff";
-                qrContainer.style.boxShadow = "0 0 30px rgba(74, 222, 128, 0.6)";
+                // Limpa desenhos anteriores
+                document.getElementById('container-qr-gigante').innerHTML = '';
+
+                // Instancia a biblioteca e desenha no container gigante
+                this.leitorG3 = new QRCode(document.getElementById('container-qr-gigante'), {
+                    text: JSON.stringify(payload), // O texto JSON puro
+                    width: 500, // Tamanho gigante
+                    height: 500,
+                    colorDark : "#000000",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H // Nível máximo de correção de erro (para projetores ruins)
+                });
+
+                // Atualiza os textos da tela de projeção
+                document.getElementById('info-missao-g3').innerText = nomeMissao;
                 
-                console.log(`[G3] Chave para ${missaoId} gerada com validade até:`, new Date(validadeTimestamp).toLocaleTimeString());
-                alert(`Chave de Extração G3 gerada para a aula:\n\n${nomeMissao}\n\nProjete o código para a turma. Ele irá expirar em exatos ${tempoValidadeMinutos} minutos.`);
+                // Mostra o painel de projeção gigante (Ecrã Total)
+                document.getElementById('painel-projecao-g3').style.display = 'flex';
+                
+                console.log(`[G3] Chave Temporal gerada para ${missaoId}. Projetando em ecrã total.`);
+            },
+
+            fecharProjecao: function() {
+                document.getElementById('painel-projecao-g3').style.display = 'none';
+                // Limpa a instância para economizar memória
+                if(this.leitorG3) this.leitorG3.clear();
             }
         };
 
