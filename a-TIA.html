@@ -344,56 +344,80 @@ header {
 },
 
 processarCrachaQR: function(textoDecodificado) {
-    try {
-        const decodificarHTML = (texto) => {
-            const txt = document.createElement("textarea");
-            txt.innerHTML = texto;
-            return txt.value;
-        };
+                try {
+                    const decodificarHTML = (texto) => {
+                        const txt = document.createElement("textarea");
+                        txt.innerHTML = texto;
+                        return txt.value;
+                    };
 
-        let textoLimpo = decodificarHTML(textoDecodificado)
-            .trim()
-            .replace(/[\u200B-\u200D\uFEFF]/g, "")
-            .replace(/[\u201C\u201D]/g, '"') 
-            .replace(/[\u2018\u2019]/g, "'");
+                    let textoLimpo = decodificarHTML(textoDecodificado)
+                        .trim()
+                        .replace(/[\u200B-\u200D\uFEFF]/g, "")
+                        .replace(/[\u201C\u201D]/g, '"') 
+                        .replace(/[\u2018\u2019]/g, "'");
 
-        let dados = JSON.parse(textoLimpo);
+                    let dados = JSON.parse(textoLimpo);
 
-        if (!dados.tipo) {
-            throw new Error("QR sem tipo definido");
-        }
+                    if (!dados.tipo) {
+                        throw new Error("QR sem tipo definido");
+                    }
 
-        switch (dados.tipo) {
+                    switch (dados.tipo) {
+                        case "aTIA_LOGIN":
+                            this.processarLogin(dados);
+                            break;
 
-            case "aTIA_LOGIN":
-                this.processarLogin(dados);
-                break;
+                        case "G3_VALIDACAO": // <-- ALINHADO COM O MESTRE!
+                            this.processarG3Validacao(dados);
+                            break;
 
-            case "aTIA_G3":
-                this.processarG3(dados);
-                break;
+                        default:
+                            throw new Error("Tipo de QR desconhecido");
+                    }
 
-            default:
-                throw new Error("Tipo de QR desconhecido");
-        }
+                } catch (erro) {
+                    console.error("ERRO QR:", erro);
+                    alert("QR Code inválido ou mal formatado.");
+                }
+            },
 
-    } catch (erro) {
-        console.error("ERRO QR:", erro);
-        alert("QR Code inválido ou mal formatado.");
-    }
-},
+            processarG3Validacao: async function(dados) {
+                console.log("[Protocolo G3] Recebendo chave de validação:", dados);
 
-processarG3: function(dados) {
-    console.log("Recebendo pacote G3:", dados);
+                // 1. Verificação Anti-Fraude (O Relógio)
+                const agora = new Date().getTime();
+                if (agora > dados.expira) {
+                    alert("⚠️ ACESSO NEGADO: Esta chave G3 expirou. Validação presencial falhou.");
+                    if (this.leitorHTML5) { this.leitorHTML5.clear(); this.leitorHTML5 = null; }
+                    return;
+                }
 
-    if (dados?.dados?.progresso) {
-        dados.dados.progresso.forEach(missao => {
-            DB.salvarProgresso(missao);
-        });
-    }
+                // 2. Extrai qual foi a missão concluída
+                const idMissaoConcluida = dados.idMissao;
 
-    alert("Sincronização concluída!");
-},
+                // 3. Salva no Banco de Dados Offline (IndexedDB)
+                const registroMissao = {
+                    idMissao: idMissaoConcluida,
+                    status: "concluida",
+                    dataConclusao: new Date().toISOString()
+                };
+                
+                await DB.salvarProgresso(registroMissao);
+                console.log(`[Banco de Dados] Missão ${idMissaoConcluida} salva como concluída!`);
+
+                // 4. Feedback Visual de Sucesso
+                alert(`✅ EXTRAÇÃO BEM-SUCEDIDA!\n\nMissão ${idMissaoConcluida} concluída e validada pelo Mestre.`);
+                
+                // 5. Limpa a câmera e reinicia o motor para redesenhar a Árvore de Habilidades
+                if (this.leitorHTML5) {
+                    this.leitorHTML5.clear();
+                    this.leitorHTML5 = null;
+                }
+                
+                // Recarrega o Core para o losango seguinte acender!
+                aTIA_Core.iniciar();
+            },
 
             desenharCracha: function(dados) {
                 const areaCracha = document.getElementById('area-cracha');
