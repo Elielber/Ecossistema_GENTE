@@ -692,14 +692,112 @@ processarG3: function(dados) {
             },
 
             renderizarArvoreMeso: function(idTerritorio) {
-                console.log("Renderizar Árvore Meso para:", idTerritorio);
-                // O próximo passo será ler o this.mapaCurricular e injetar os losangos aqui!
+                console.log("[Renderização] A desenhar Árvore Meso para:", idTerritorio);
+                
+                const territorio = this.mapaCurricular.territorios.find(t => t.idTerritorio === idTerritorio);
+                const container = document.getElementById('mapa-meso-dinamico');
+
+                if (!territorio || !container) return;
+
+                // 1. Limpa o estado anterior para não sobrepor desenhos
+                container.innerHTML = '';
+
+                // 2. Atualiza a comunicação da Assistente a-TIA no HUD
+                const assistenteMsg = document.querySelector('#tela-meso .assistente-tia p:nth-child(2)');
+                if(assistenteMsg) {
+                    assistenteMsg.innerText = `Território acessado. Identifiquei ${territorio.missoes.length} nós de missão nesta ramificação.`;
+                }
+
+                // 3. Constrói a Árvore de Cima para Baixo
+                territorio.missoes.forEach((missao, index) => {
+                    
+                    // Lógica de Desbloqueio Sequencial
+                    let status = "bloqueado";
+                    const historico = this.diarioDeBordo.find(m => m.idMissao === missao.idMissao);
+
+                    if (historico && historico.status === "concluida") {
+                        status = "concluido";
+                    } else if (index === 0) {
+                        // A primeira missão do território está sempre disponível
+                        status = "ativo";
+                    } else {
+                        // Verifica se a missão imediatamente acima já foi concluída
+                        const missaoAnterior = territorio.missoes[index - 1];
+                        const histAnterior = this.diarioDeBordo.find(m => m.idMissao === missaoAnterior.idMissao);
+                        if (histAnterior && histAnterior.status === "concluida") {
+                            status = "ativo";
+                        }
+                    }
+
+                    // Motor de Renderização Semântica (Lê os dados gerados pelo AP-TIA)
+                    let icone = "memory"; // Padrão
+                    if (missao.dimensaoPredominante === "tecnica") icone = "code";
+                    if (missao.dimensaoPredominante === "analitica") icone = "analytics";
+                    if (missao.dimensaoPredominante === "contexto") icone = "menu_book";
+                    if (missao.dimensaoPredominante === "socio") icone = "groups";
+
+                    const nivelDiv = document.createElement('div');
+                    nivelDiv.className = 'nivel-trilha';
+
+                    // Se a missão estiver ativa, preparamos o gatilho para a Camada Micro
+                    const acaoClique = (status === 'ativo' || status === 'concluido') 
+                        ? `onclick="aTIA_Core.renderizarMalhaMicro('${missao.idMissao}'); Navegador.zoomIn('tela-micro', 'M: ${missao.idMissao}')"` 
+                        : '';
+
+                    let htmlConteudo = `
+                        <div class="nodo-arvore ${status}" ${acaoClique}>
+                            <div class="nodo-icone" title="Dimensão: ${missao.dimensaoPredominante}">
+                                <span class="material-icons-round">${icone}</span>
+                            </div>
+                            <div class="nodo-titulo" style="max-width: 180px; white-space: normal;">
+                                <span style="color: var(--cor-destaque);">${missao.idMissao}</span><br>
+                                ${missao.titulo}
+                            </div>
+                        </div>
+                    `;
+
+                    // Desenha o cabo de fibra ótica para conectar à próxima missão
+                    if (index < territorio.missoes.length - 1) {
+                        htmlConteudo += `<div class="conector"></div>`;
+                    }
+
+                    nivelDiv.innerHTML = htmlConteudo;
+                    container.appendChild(nivelDiv);
+                });
             },
 
             renderizarMalhaMicro: function(idMissao) {
-                console.log("Renderizar Malha Micro para:", idMissao);
+                console.log("[Renderização] A desenhar Malha Micro para:", idMissao);
+                
+                // Encontra os dados completos da Missão clicada
+                let missaoEncontrada = null;
+                for(let t of this.mapaCurricular.territorios) {
+                    const m = t.missoes.find(x => x.idMissao === idMissao);
+                    if(m) { missaoEncontrada = m; break; }
+                }
+
+                if(!missaoEncontrada) return;
+
+                // Atualiza a Assistente
+                const assistenteMsg = document.querySelector('#tela-micro .assistente-tia p:nth-child(2)');
+                if(assistenteMsg) {
+                    assistenteMsg.innerText = `A iniciar extração tática para: ${missaoEncontrada.titulo}`;
+                }
+
+                // Desenha a interface do Terminal (que será a ponte para o protocolo G3)
+                const container = document.querySelector('.malha-container');
+                container.innerHTML = `
+                    <div class="card-chefe">
+                        <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-alerta); margin-bottom: 1rem;">lock_outline</span>
+                        <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">TERMINAL DE DADOS BLOQUEADO</h3>
+                        <p style="font-size: 0.85rem; color: var(--texto-suave);">Para concluir a missão <strong>${missaoEncontrada.idMissao}</strong>, necessita extrair os dados contextuais das aulas.</p>
+                        
+                        <button class="btn btn-primario" style="margin-top: 20px; width: 100%;" onclick="alert('Motor G3 em Desenvolvimento!')">
+                            <span class="material-icons-round">qr_code_scanner</span> Ativar Recetor G3
+                        </button>
+                    </div>
+                `;
             }
-        };
 
         // ============================================================================
         // INICIALIZAÇÃO DO APLICATIVO
