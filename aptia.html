@@ -85,10 +85,18 @@
             </div>
 
             <div class="area-input">
-                <textarea id="texto-ementa" placeholder="Ex:&#10;Módulo 1: Fundamentos de IA&#10;Objetivo: Compreender a base de dados...&#10;&#10;Módulo 2: Modelagem&#10;Objetivo: Criar esquemas JSON..."></textarea>
-                <button class="btn-analisar" onclick="MotorHeuristico.iniciarProcessamento()">
-                    <span class="material-icons-round">psychology</span> Sintetizar Currículo
-                </button>
+                <input type="text" id="nome-curso" placeholder="Nome do Curso (Ex: Técnico em IA)" style="background: #0f172a; border: 1px solid var(--borda); border-radius: 8px; padding: 1rem; color: var(--texto-puro); font-size: 1rem; font-weight: bold; transition: all 0.3s; outline: none; margin-bottom: 5px;">
+                
+                <textarea id="texto-ementa" placeholder="Cole aqui a ementa do curso...&#10;&#10;Ex:&#10;Módulo 1: Fundamentos de IA&#10;Objetivo: Compreender a base de dados..."></textarea>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-analisar" style="flex: 3;" onclick="MotorHeuristico.iniciarProcessamento()">
+                        <span class="material-icons-round">psychology</span> Sintetizar Currículo
+                    </button>
+                    <button class="btn-analisar" style="flex: 1; background: #334155;" onclick="MotorHeuristico.restaurarRascunho()" title="Restaurar Rascunho Salvo">
+                        <span class="material-icons-round">restore</span>
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -117,19 +125,25 @@
                 <div id="lista-territorios">
                     </div>
 
-                <button class="btn-aprovar" onclick="alert('Funcionalidade de Geração de JSON em desenvolvimento!')">
-                    <span class="material-icons-round">check_circle</span> APROVAR E GERAR MATRIZ (a-TIA)
-                </button>
-            </div>
+                <div style="display: flex; gap: 1rem; margin-top: 2.5rem;">
+                    <button class="btn-aprovar" style="background: #334155; color: white; flex: 1;" onclick="MotorHeuristico.salvarRascunho()">
+                        <span class="material-icons-round">save</span> SALVAR RASCUNHO
+                    </button>
+                    <button class="btn-aprovar" style="flex: 2;" onclick="MotorHeuristico.exportarJSON()">
+                        <span class="material-icons-round">download</span> EXPORTAR MATRIZ (a-TIA)
+                    </button>
+                </div>
 
         </section>
     </div>
 
     <script>
         // ----------------------------------------------------------------------------
-        // MOTOR HEURÍSTICO (O "Cérebro" Offline)
+        // MOTOR HEURÍSTICO (O "Cérebro" Offline baseado na Taxonomia GENTE)
         // ----------------------------------------------------------------------------
         const MotorHeuristico = {
+            
+            curriculoAtual: null, // Guarda a matriz na memória RAM para exportação
             
             iniciarProcessamento: function() {
                 const textoRaw = document.getElementById('texto-ementa').value;
@@ -138,16 +152,15 @@
                     return;
                 }
 
-                // UI: Alterna para modo de carregamento
                 document.getElementById('estado-vazio').style.display = 'none';
                 document.getElementById('documento-consolidado').style.display = 'none';
                 document.getElementById('estado-carregando').style.display = 'block';
 
-                // Simula o tempo de processamento heurístico (para UX)
                 let passos = [
-                    "A mapear verbos de competência...",
-                    "A estruturar ramificações...",
-                    "A redigir síntese executiva..."
+                    "A higienizar texto bruto...",
+                    "A aplicar padrões de Expressão Regular (RegEx)...",
+                    "A mapear verbos via Taxonomia de Bloom...",
+                    "A compilar Síntese Executiva..."
                 ];
                 let passoAtual = 0;
                 
@@ -159,64 +172,224 @@
                         clearInterval(intervalo);
                         this.executarParser(textoRaw);
                     }
-                }, 800); // 800ms por passo
+                }, 600); 
             },
 
-            executarParser: function(texto) {
-                // Aqui entrarão as Expressões Regulares (RegEx) pesadas no futuro.
-                // Por enquanto, vamos criar um parser ultra-simples para prova de conceito:
-                // Ele procura a palavra "Módulo" ou "Território" para quebrar o texto.
-                
-                const linhas = texto.split('\n');
-                let territoriosExtraidos = [];
+            executarParser: function(textoRaw) {
+                const texto = textoRaw.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+                const linhas = texto.split('\n').filter(l => l.trim().length > 2); 
+
+                const dicTecnico = ['desenvolver', 'criar', 'implementar', 'programar', 'configurar', 'codificar', 'construir', 'aplicar', 'executar'];
+                const dicAnalitico = ['analisar', 'resolver', 'estruturar', 'comparar', 'otimizar', 'modelar', 'avaliar', 'testar', 'diagnosticar'];
+                const dicContexto = ['identificar', 'compreender', 'descrever', 'reconhecer', 'mapear', 'entender', 'listar', 'explicar', 'conceituar'];
+                const dicSocio = ['colaborar', 'debater', 'refletir', 'argumentar', 'criticar', 'propor', 'discutir', 'comunicar'];
+
+                // NOVO: Lê o nome do curso diretamente do campo (com fallback)
+                const nomeDoCurso = document.getElementById('nome-curso').value.trim() || "Curso Sem Nome";
+
+                let curriculo = {
+                    metadados: { 
+                        idCurso: "CURSO_" + new Date().getFullYear(),
+                        nomeCurso: nomeDoCurso, // Injeta o nome aqui!
+                        cargaHoraria: "Não identificada",
+                        versaoBlueprint: 1.0
+                    },
+                    territorios: []
+                };
+
                 let territorioAtual = null;
+                const regexTerritorio = /^(?:m[óo]dulo|unidade|territ[óo]rio|eixo|cap[íi]tulo)\s*(?:\d+|[ivx]+)?[\s:\-\.]*(.+)/i;
+                const regexCargaHoraria = /(?:carga hor[áa]ria|ch)\s*[:\-]?\s*(\d+\s*h(?:oras)?)/i;
 
                 linhas.forEach(linha => {
-                    linha = linha.trim();
-                    if(linha.toLowerCase().includes('módulo') || linha.toLowerCase().includes('território')) {
-                        if(territorioAtual) territoriosExtraidos.push(territorioAtual);
-                        territorioAtual = { titulo: linha, missoes: 0 };
-                    } 
-                    // Tenta contar verbos de ação para chutar quantas "missões" existem
-                    else if (territorioAtual && (linha.toLowerCase().includes('objetivo') || linha.toLowerCase().includes('competência') || linha.toLowerCase().includes('desenvolver'))) {
-                        territorioAtual.missoes += 1;
+                    const linhaLimpa = linha.trim();
+                    const linhaLower = linhaLimpa.toLowerCase();
+
+                    const matchCH = linhaLimpa.match(regexCargaHoraria);
+                    if (matchCH && curriculo.territorios.length === 0) curriculo.metadados.cargaHoraria = matchCH[1];
+
+                    const matchTerritorio = linhaLimpa.match(regexTerritorio);
+                    if (matchTerritorio) {
+                        territorioAtual = {
+                            idTerritorio: "T" + (curriculo.territorios.length + 1),
+                            titulo: matchTerritorio[1].trim() || "Território sem nome",
+                            ordem: curriculo.territorios.length + 1,
+                            missoes: [],
+                            score: { tecnica: 0, analitica: 0, contexto: 0, socio: 0 }
+                        };
+                        curriculo.territorios.push(territorioAtual);
+                        return; 
+                    }
+
+                    if (!territorioAtual) {
+                        territorioAtual = { idTerritorio: "T1", titulo: "Fundamentos Gerais", ordem: 1, missoes: [], score: { tecnica: 0, analitica: 0, contexto: 0, socio: 0 } };
+                        curriculo.territorios.push(territorioAtual);
+                    }
+
+                    const palavras = linhaLower.replace(/[^\w\sáéíóúãõç]/g, '').split(/\s+/);
+                    let verbosEncontrados = [];
+                    let dimensaoVencedora = 'contexto'; 
+
+                    palavras.forEach(palavra => {
+                        if (dicTecnico.includes(palavra)) { verbosEncontrados.push(palavra); territorioAtual.score.tecnica++; dimensaoVencedora = 'tecnica'; }
+                        if (dicAnalitico.includes(palavra)) { verbosEncontrados.push(palavra); territorioAtual.score.analitica++; dimensaoVencedora = 'analitica';}
+                        if (dicContexto.includes(palavra)) { verbosEncontrados.push(palavra); territorioAtual.score.contexto++; dimensaoVencedora = 'contexto';}
+                        if (dicSocio.includes(palavra)) { verbosEncontrados.push(palavra); territorioAtual.score.socio++; dimensaoVencedora = 'socio';}
+                    });
+
+                    if (verbosEncontrados.length > 0 || (linhaLimpa.length > 25 && (linhaLower.startsWith('objetivo') || linhaLower.startsWith('competência')))) {
+                        let tituloMissao = linhaLimpa;
+                        if(linhaLower.includes(':') && tituloMissao.length < 100) tituloMissao = tituloMissao.split(':')[1].trim();
+                        if(tituloMissao.length > 80) tituloMissao = tituloMissao.substring(0, 77) + "...";
+
+                        territorioAtual.missoes.push({
+                            idMissao: territorioAtual.idTerritorio + "_M" + (territorioAtual.missoes.length + 1),
+                            titulo: tituloMissao,
+                            dimensaoPredominante: dimensaoVencedora, 
+                            verbosExtraidos: verbosEncontrados,
+                            dependencias_missao: [], 
+                            cards: [] 
+                        });
                     }
                 });
-                if(territorioAtual) territoriosExtraidos.push(territorioAtual);
 
-                // Se não achou nada, cria um genérico para o professor não ficar com a tela em branco
-                if(territoriosExtraidos.length === 0) {
-                    territoriosExtraidos.push({ titulo: "Território 1: Fundamentos (Extraído Automaticamente)", missoes: 3 });
-                }
-
-                this.renderizarDocumento(territoriosExtraidos);
+                curriculo.territorios.forEach(t => delete t.score);
+                this.curriculoAtual = curriculo;
+                this.renderizarDocumento(curriculo);
             },
 
-            renderizarDocumento: function(territorios) {
-                // Atualiza Metadados
-                document.getElementById('meta-territorios').innerText = territorios.length;
-                let totalMissoes = territorios.reduce((acc, curr) => acc + (curr.missoes || 2), 0);
+            renderizarDocumento: function(curriculo) {
+                document.getElementById('meta-territorios').innerText = curriculo.territorios.length;
+                let totalMissoes = curriculo.territorios.reduce((acc, curr) => acc + curr.missoes.length, 0);
                 document.getElementById('meta-missoes').innerText = totalMissoes;
 
-                // Desenha a lista
                 const container = document.getElementById('lista-territorios');
                 container.innerHTML = '';
 
-                territorios.forEach((terr, index) => {
-                    let qtdMissoes = terr.missoes > 0 ? terr.missoes : 2; // Garante pelo menos 2 se não achar verbos
+                if (curriculo.metadados.cargaHoraria !== "Não identificada") {
+                    container.innerHTML += `<div style="margin-bottom: 1.5rem; color: var(--cor-destaque); font-size: 0.9rem;">
+                        <span class="material-icons-round" style="vertical-align: middle; font-size: 16px;">schedule</span> Carga Horária Detetada: <strong>${curriculo.metadados.cargaHoraria}</strong>
+                    </div>`;
+                }
+
+                curriculo.territorios.forEach(terr => {
+                    let htmlMissoes = terr.missoes.map(m => `
+                        <li style="margin-bottom: 8px; font-size: 0.85rem; color: var(--texto-suave);">
+                            <span style="color: ${m.dimensaoPredominante === 'tecnica' ? 'var(--cor-sucesso)' : 'var(--cor-destaque)'}; font-weight: bold; text-transform: uppercase; font-size: 0.7rem; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; margin-right: 6px;">
+                                ${m.dimensaoPredominante}
+                            </span>
+                            ${m.titulo} 
+                            ${m.verbosExtraidos.length > 0 ? `<em style="opacity: 0.5;">(${m.verbosExtraidos.join(', ')})</em>` : ''}
+                        </li>
+                    `).join('');
+
+                    if(htmlMissoes === '') htmlMissoes = '<li style="color: var(--texto-suave); font-size: 0.8rem; font-style: italic;">Nenhuma ação específica detetada.</li>';
+
                     container.innerHTML += `
                         <div class="territorio-item">
-                            <h3>${terr.titulo}</h3>
-                            <p><strong>Densidade Inferida:</strong> ${qtdMissoes} missões principais de extração de dados.</p>
+                            <h3 style="color: var(--texto-puro);">${terr.idTerritorio}: ${terr.titulo}</h3>
+                            <ul style="list-style: none; margin-top: 1rem; padding-left: 0;">${htmlMissoes}</ul>
                         </div>
                     `;
                 });
 
-                // UI: Mostra o documento e esconde o loader
                 document.getElementById('estado-carregando').style.display = 'none';
                 document.getElementById('documento-consolidado').style.display = 'block';
+            },
+
+            // ==========================================
+            // NOVAS FUNÇÕES DE GESTÃO DE RASCUNHOS
+            // ==========================================
+            salvarRascunho: function() {
+                const nomeCurso = document.getElementById('nome-curso').value.trim();
+                const textoEmenta = document.getElementById('texto-ementa').value.trim();
+
+                if(!nomeCurso) {
+                    alert("Atenção: Por favor, preencha o 'Nome do Curso' no painel esquerdo antes de salvar.");
+                    document.getElementById('nome-curso').focus();
+                    return;
+                }
+                if(!textoEmenta) {
+                    alert("A ementa está vazia. Não há o que salvar.");
+                    return;
+                }
+
+                // Recupera a lista de rascunhos (ou cria uma vazia)
+                let rascunhos = JSON.parse(localStorage.getItem('aptia_rascunhos_multiplos') || '[]');
+                
+                // Procura se já existe um curso com este nome
+                const index = rascunhos.findIndex(r => r.nomeCurso.toLowerCase() === nomeCurso.toLowerCase());
+                
+                const novoRascunho = {
+                    nomeCurso: nomeCurso,
+                    textoEmenta: textoEmenta,
+                    dataSalvo: new Date().toLocaleDateString() + " às " + new Date().toLocaleTimeString()
+                };
+
+                if(index >= 0) {
+                    rascunhos[index] = novoRascunho; // Atualiza o existente
+                } else {
+                    rascunhos.push(novoRascunho); // Cria um novo slot
+                }
+
+                localStorage.setItem('aptia_rascunhos_multiplos', JSON.stringify(rascunhos));
+                alert(`Rascunho do curso "${nomeCurso}" salvo com sucesso!`);
+            },
+
+            restaurarRascunho: function() {
+                let rascunhos = JSON.parse(localStorage.getItem('aptia_rascunhos_multiplos') || '[]');
+                
+                if(rascunhos.length === 0) {
+                    alert("Ainda não existe nenhum rascunho de curso salvo neste navegador.");
+                    return;
+                }
+
+                // Cria um menu elegante nativo para o coordenador escolher o projeto
+                let menu = "RASCUNHOS SALVOS\n\nEscolha o NÚMERO do curso que deseja restaurar:\n\n";
+                rascunhos.forEach((r, i) => {
+                    menu += `[ ${i + 1} ] - ${r.nomeCurso}\n      (Salvo em: ${r.dataSalvo})\n\n`;
+                });
+
+                const escolha = prompt(menu);
+
+                if(escolha !== null && escolha.trim() !== '') {
+                    const index = parseInt(escolha) - 1;
+                    if(index >= 0 && index < rascunhos.length) {
+                        const selecionado = rascunhos[index];
+                        
+                        // Restaura os dados para os campos visuais
+                        document.getElementById('nome-curso').value = selecionado.nomeCurso;
+                        document.getElementById('texto-ementa').value = selecionado.textoEmenta;
+                        
+                        // MÁGICA: Ao restaurar, ele já aciona a leitura da IA automaticamente!
+                        this.iniciarProcessamento();
+                    } else {
+                        alert("Opção inválida.");
+                    }
+                }
+            },
+
+            exportarJSON: function() {
+                if(!this.curriculoAtual) {
+                    alert("Por favor, clique em 'Sintetizar Currículo' primeiro para gerar a Matriz.");
+                    return;
+                }
+
+                // Normaliza o nome do ficheiro (tira espaços e acentos)
+                const nomeSeguro = this.curriculoAtual.metadados.nomeCurso.normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                
+                const jsonString = JSON.stringify(this.curriculoAtual, null, 4);
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonString);
+                
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", `matriz_${nomeSeguro}.json`); // Ex: matriz_tecnico_ia.json
+                document.body.appendChild(downloadAnchorNode); 
+                
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
             }
-        };
+			};
     </script>
 </body>
 </html>
