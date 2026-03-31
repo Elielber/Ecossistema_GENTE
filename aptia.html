@@ -3,393 +3,1158 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AP-TIA | Assistente Pedagógico de Trilhas Interativas do Aprendizado</title>
-	<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">👓</text></svg>' />
+    <title>AP-TIA | Design de Trilhas Dual-Engine</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     
     <style>
-        /* ESTÉTICA EXECUTIVA / ACADÊMICA (Sóbria, mas alinhada ao Ecossistema GENTE) */
+        /* ESTÉTICA EXECUTIVA / ACADÊMICA GENTE */
         :root {
             --bg-principal: #0f172a; --bg-painel: #1e293b; 
             --cor-destaque: #8b5cf6; --cor-sucesso: #10b981;
+            --cor-alerta: #ef4444; --cor-aviso: #f59e0b;
             --texto-puro: #f8fafc; --texto-suave: #cbd5e1;
             --borda: #334155;
+            
+            /* CORES DAS DIMENSÕES FORMATIVAS */
+            --dim-tecnica: #10b981;    /* Verde */
+            --dim-cognitiva: #3b82f6;  /* Azul */
+            --dim-contextual: #f59e0b; /* Laranja */
+            --dim-social: #8b5cf6;     /* Roxo */
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
-
-        body { background-color: var(--bg-principal); color: var(--texto-puro); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-
-        /* CABEÇALHO EXECUTIVO */
-        header { background: #0b0f19; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--borda); }
-        .logo-area { display: flex; align-items: center; gap: 10px; }
-        .tag-beta { background: rgba(139, 92, 246, 0.2); color: var(--cor-destaque); padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; letter-spacing: 1px; }
-
-        /* ÁREA DE TRABALHO (SPLIT SCREEN) */
-        .workspace { display: flex; flex: 1; overflow: hidden; }
-
-        /* PAINEL ESQUERDO: INGESTÃO */
-        .painel-ingestao { width: 40%; background: var(--bg-painel); border-right: 1px solid var(--borda); display: flex; flex-direction: column; padding: 2rem; gap: 1.5rem; }
-        .instrucoes h2 { font-size: 1.2rem; margin-bottom: 0.5rem; }
-        .instrucoes p { color: var(--texto-suave); font-size: 0.9rem; line-height: 1.5; }
         
-        .area-input { flex: 1; display: flex; flex-direction: column; gap: 10px; }
-        textarea { flex: 1; background: #0f172a; border: 2px dashed var(--borda); border-radius: 8px; padding: 1rem; color: var(--texto-suave); font-size: 0.95rem; resize: none; transition: all 0.3s; }
-        textarea:focus { outline: none; border-color: var(--cor-destaque); background: #151e32; color: var(--texto-puro); }
+        /* ========================================== */
+        /* LAYOUT LATERAL (MENU DUAL-ENGINE)          */
+        /* ========================================== */
+        body { background-color: var(--bg-principal); color: var(--texto-puro); height: 100vh; display: flex; flex-direction: row; overflow: hidden; }
+        nav.sidebar { width: 260px; background: #0b0f19; border-right: 1px solid var(--borda); padding: 1.5rem; display: flex; flex-direction: column; z-index: 20; }
+        .content-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
         
-        .btn-analisar { background: var(--cor-destaque); color: white; border: none; padding: 1rem; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
-        .btn-analisar:hover { background: #7c3aed; }
+        .menu-btn { padding: 1rem; border-radius: 8px; color: var(--texto-suave); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: 0.2s; margin-bottom: 5px; }
+        .menu-btn:hover { background: rgba(255,255,255,0.05); color: var(--texto-puro); }
+        .menu-btn.active { background: rgba(139, 92, 246, 0.1); color: var(--cor-destaque); border-right: 4px solid var(--cor-destaque); }
+        .tag-beta { background: rgba(139, 92, 246, 0.2); color: var(--cor-destaque); padding: 4px 8px; border-radius: 4px; font-weight: bold; letter-spacing: 1px; }
 
-        /* PAINEL DIREITO: SÍNTESE (O DOCUMENTO) */
-        .painel-sintese { width: 60%; background: #0f172a; padding: 2rem 4rem; overflow-y: auto; display: flex; flex-direction: column; }
+        /* CABEÇALHO DA ÁREA DE TRABALHO */
+        header { background: #0b0f19; padding: 1rem 2rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--borda); z-index: 10;}
         
-        .documento-vazio { margin: auto; text-align: center; color: var(--texto-suave); opacity: 0.5; }
-        
-        #documento-consolidado { display: none; background: #1e293b; border: 1px solid var(--borda); border-radius: 12px; padding: 2.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-        .doc-header { border-bottom: 2px solid var(--borda); padding-bottom: 1rem; margin-bottom: 2rem; }
-        .doc-header h1 { font-size: 1.5rem; color: var(--cor-destaque); margin-bottom: 0.5rem; }
-        .doc-meta { display: flex; gap: 2rem; color: var(--texto-suave); font-size: 0.85rem; }
-        
-        .territorio-item { background: #0f172a; border-left: 4px solid var(--cor-destaque); padding: 1rem 1.5rem; margin-bottom: 1rem; border-radius: 0 8px 8px 0; }
-        .territorio-item h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
-        .territorio-item p { font-size: 0.9rem; color: var(--texto-suave); }
+        /* WIZARD PROGRESS BAR */
+        .wizard-container { background: var(--bg-painel); padding: 1.5rem 2rem; border-bottom: 1px solid var(--borda); }
+        .wizard-steps { display: flex; justify-content: space-between; max-width: 800px; margin: 0 auto; position: relative; }
+        .wizard-steps::before { content: ''; position: absolute; top: 16px; left: 40px; right: 40px; height: 2px; background: var(--borda); z-index: 1; }
+        .step { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--texto-suave); width: 120px; text-align: center; opacity: 0.5; transition: 0.3s; }
+        .step.active { opacity: 1; color: var(--cor-destaque); }
+        .step.completed { opacity: 1; color: var(--cor-sucesso); }
+        .step-circle { width: 34px; height: 34px; border-radius: 50%; background: var(--bg-principal); border: 2px solid var(--borda); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9rem; transition: all 0.3s; }
+        .step.active .step-circle { border-color: var(--cor-destaque); background: var(--cor-destaque); color: white; box-shadow: 0 0 15px rgba(139, 92, 246, 0.4); }
+        .step.completed .step-circle { border-color: var(--cor-sucesso); background: var(--cor-sucesso); color: white; }
+        .step-label { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 
-        .btn-aprovar { background: var(--cor-sucesso); color: #000; border: none; padding: 1.2rem; border-radius: 8px; font-weight: bold; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 2rem; width: 100%; transition: 0.2s; }
-        .btn-aprovar:hover { background: #059669; color: white; }
+        /* ÁREA DE TRABALHO (VIEWS) */
+        .workspace { flex: 1; position: relative; overflow: hidden; }
+        .view-section { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; gap: 2rem; padding: 2rem; opacity: 0; visibility: hidden; transition: opacity 0.3s; overflow-y: auto; }
+        .view-section.active { opacity: 1; visibility: visible; }
+        #view-micro { display: block; } /* Micro não é split-screen */
 
-        /* Animação de Carregamento */
-        .loader { display: none; margin: auto; text-align: center; color: var(--cor-destaque); }
-        .spinner { width: 40px; height: 40px; border: 4px solid rgba(139, 92, 246, 0.3); border-top: 4px solid var(--cor-destaque); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
+        .panel-input { flex: 1; display: flex; flex-direction: column; gap: 1rem; }
+        .panel-output { flex: 1.5; background: #0b0f19; border: 1px solid var(--borda); border-radius: 12px; padding: 1.5rem; display: flex; flex-direction: column; }
+        
+        input.text-field, textarea.text-area, select.text-field { background: #0f172a; border: 1px solid var(--borda); border-radius: 8px; padding: 1rem; color: var(--texto-puro); font-size: 0.95rem; width: 100%; outline: none; transition: 0.3s; }
+        textarea.text-area { flex: 1; resize: none; font-family: monospace; }
+        input.text-field:focus, textarea.text-area:focus { border-color: var(--cor-destaque); }
+
+        .btn-primary { background: var(--cor-destaque); color: white; border: none; padding: 1rem; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
+        .btn-primary:hover { background: #7c3aed; }
+        .btn-success { background: var(--cor-sucesso); color: #000; border: none; padding: 1rem; border-radius: 8px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
+        .btn-success:hover { background: #059669; color: white; }
+
+        /* CARDS DO TERRITÓRIO (MACRO) */
+        .card-territorio { background: var(--bg-painel); border: 1px solid var(--borda); border-radius: 8px; padding: 1.2rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* TOGGLE SWITCH (Rede vs Sequencial) */
+        .toggle-wrapper { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; font-weight: bold; color: var(--texto-suave); }
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--borda); transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--cor-destaque); }
+        input:checked + .slider:before { transform: translateX(20px); }
+        .lbl-rede { color: var(--cor-destaque); }
+        .lbl-seq { color: var(--texto-suave); }
+        input:checked ~ .lbl-seq { color: var(--cor-destaque); }
+        input:checked ~ .lbl-rede { color: var(--texto-suave); }
+        
+        /* Barra Omnilateral (IMO) */
+        .territorio-header { background: #151e32; border: 1px solid var(--borda); border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; }
+        .imo-bar-container { height: 12px; background: #0b0f19; border-radius: 6px; overflow: hidden; display: flex; margin-top: 10px; border: 1px solid var(--borda); }
+        .imo-segment { height: 100%; transition: width 0.5s ease-in-out; }
+        
+        /* Cards da Práxis Docente (Micro) */
+        .card-micro { background: #0b0f19; border: 1px solid var(--borda); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; border-left: 4px solid; transition: 0.3s; }
+        .card-micro.tecnica { border-left-color: var(--dim-tecnica); }
+        .card-micro.cognitiva { border-left-color: var(--dim-cognitiva); }
+        .card-micro.contextual { border-left-color: var(--dim-contextual); }
+        .card-micro.social { border-left-color: var(--dim-social); }
+        
+        .grid-configuracao { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--borda); }
+        .alerta-erro { color: var(--cor-alerta); font-size: 0.8rem; margin-top: 4px; display: none; }
+        .painel-penalidade { background: rgba(255,255,255,0.02); padding: 8px; border-radius: 6px; border: 1px solid var(--borda); }
+    /* ========================================== */
+        /* ESTILOS DO SIMULADOR (CYBERPUNK a-TIA)     */
+        /* ========================================== */
+        #view-simulador .tela-smartphone { background-color: #0a0e17; color: #f8fafc; border-radius: 22px; padding: 1.5rem 1rem; position: relative; overflow-y: auto; overflow-x: hidden; }
+        
+        #view-simulador .card-trilha { background: linear-gradient(145deg, #161c2c, #1e2638); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 16px; padding: 1.2rem; margin-bottom: 1.5rem; position: relative; overflow: hidden; }
+        #view-simulador .card-trilha::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: #a855f7; }
+        
+        #view-simulador .card-missao-sim { background: #161c2c; border-radius: 12px; padding: 1rem; margin-top: 1rem; border-left: 3px solid #3b82f6; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        
+        #view-simulador .tarefa-row { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.4); padding: 0.8rem; border-radius: 8px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.05); }
+        
+        #view-simulador .tag-dimensao { font-size: 0.65rem; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; margin-bottom: 6px; }
+        #view-simulador .tag-dimensao.tecnica { background: rgba(74, 222, 128, 0.15); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.3); }
+        #view-simulador .tag-dimensao.cognitiva { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+        #view-simulador .tag-dimensao.contextual { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+        #view-simulador .tag-dimensao.social { background: rgba(168, 85, 247, 0.15); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.3); }
+	
+	</style>
 </head>
 <body>
 
-    <header>
-        <div class="logo-area">
+    <nav class="sidebar">
+        <div class="logo-area" style="margin-bottom: 2rem;">
             <span style="font-size: 28px;">👓</span>
-            <h1 style="font-size: 1.2rem;">AP-TIA</h1>
-            <span class="tag-beta">Assistente Pedagógico de Trilhas Interativas de Aprendizado</span>
+            <div>
+                <h1 style="font-size: 1.2rem; color: var(--texto-puro);">AP-TIA</h1>
+                <span class="tag-beta" style="font-size: 0.6rem;">DESIGN GENTE</span>
+            </div>
         </div>
-        <div style="color: var(--texto-suave); font-size: 0.9rem;">
-            <span class="material-icons-round" style="vertical-align: middle; font-size: 18px;">shield</span> Processamento 100% Local (Offline)
-        </div>
-    </header>
 
-    <div class="workspace">
+        <div style="font-size: 0.75rem; color: var(--texto-suave); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">Motores de Ingestão</div>
         
-        <section class="painel-ingestao">
-            <div class="instrucoes">
-                <h2>Ingestão de Ementa</h2>
-                <p>Cole abaixo o texto do Projeto Pedagógico (PPC) ou da ementa do curso. O motor heurístico identificará os territórios, missões e competências automaticamente.</p>
-            </div>
+        <div class="menu-btn active" id="btn-menu-genesis" onclick="AppGENTE.setModo('genesis')">
+            <span class="material-icons-round">architecture</span> Modo Gênesis
+        </div>
+        <div class="menu-btn" id="btn-menu-digitalizacao" onclick="AppGENTE.setModo('digitalizacao')">
+            <span class="material-icons-round">document_scanner</span> Digitalização PPC
+        </div>
+        <div class="menu-btn" id="btn-menu-simulador" onclick="AppGENTE.setModo('simulador')" style="margin-top: 1rem; border-top: 1px dashed var(--borda); padding-top: 1.5rem; border-radius: 0;">
+            <span class="material-icons-round" style="color: var(--cor-sucesso);">smartphone</span> Simulador a-TIA
+        </div>
+        <div style="margin-top: auto; border-top: 1px solid var(--borda); padding-top: 1rem; font-size: 0.75rem; color: var(--texto-suave); text-align: center;">
+            Motor Heurístico Ativo
+        </div>
+    </nav>
 
-            <div class="area-input">
-                <input type="text" id="nome-curso" placeholder="Nome do Curso (Ex: Técnico em IA)" style="background: #0f172a; border: 1px solid var(--borda); border-radius: 8px; padding: 1rem; color: var(--texto-puro); font-size: 1rem; font-weight: bold; transition: all 0.3s; outline: none; margin-bottom: 5px;">
-                
-                <textarea id="texto-ementa" placeholder="Cole aqui a ementa do curso...&#10;&#10;Ex:&#10;Módulo 1: Fundamentos de IA&#10;Objetivo: Compreender a base de dados..."></textarea>
-                
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn-analisar" style="flex: 3;" onclick="MotorHeuristico.iniciarProcessamento()">
-                        <span class="material-icons-round">psychology</span> Sintetizar Currículo
-                    </button>
-                    <button class="btn-analisar" style="flex: 1; background: #334155;" onclick="MotorHeuristico.restaurarRascunho()" title="Restaurar Rascunho Salvo">
-                        <span class="material-icons-round">restore</span>
-                    </button>
+    <div class="content-wrapper">
+        <header>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h2 style="font-size: 1.1rem; font-weight: 500;" id="titulo-modo-ativo">Design Estratégico (Simulador IMO)</h2>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-primary" style="background: transparent; border: 1px solid var(--borda); padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="AppGENTE.salvarRascunho()">
+                    <span class="material-icons-round" style="font-size: 16px;">save</span> Salvar Rascunho
+                </button>
+                <button class="btn-primary" style="background: transparent; border: 1px solid var(--borda); padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="AppGENTE.restaurarRascunho()">
+                    <span class="material-icons-round" style="font-size: 16px;">restore</span> Restaurar
+                </button>
+                <button class="btn-success" style="padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="AppGENTE.exportarJSON()">
+                    <span class="material-icons-round" style="font-size: 16px;">download</span> Exportar Matriz
+                </button>
+            </div>
+        </header>
+
+        <div class="wizard-container">
+            <div class="wizard-steps">
+                <div class="step active" id="step-1">
+                    <div class="step-circle">1</div>
+                    <div class="step-label">Camada Macro</div>
+                    <span style="font-size: 0.65rem;">Territórios & Estrutura</span>
+                </div>
+                <div class="step" id="step-2">
+                    <div class="step-circle">2</div>
+                    <div class="step-label">Camada Meso</div>
+                    <span style="font-size: 0.65rem;">Missões & Grade</span>
+                </div>
+                <div class="step" id="step-3">
+                    <div class="step-circle">3</div>
+                    <div class="step-label">Camada Micro</div>
+                    <span style="font-size: 0.65rem;">Cards & Dimensões</span>
                 </div>
             </div>
-        </section>
+        </div>
 
-        <section class="painel-sintese">
+        <main class="workspace">
             
-            <div id="estado-vazio" class="documento-vazio">
-                <span class="material-icons-round" style="font-size: 4rem; margin-bottom: 1rem;">article</span>
-                <h2>Aguardando Documento</h2>
-                <p>A síntese executiva aparecerá aqui.</p>
-            </div>
+            <section id="view-macro-genesis" class="view-section active">
+                <div class="panel-input" style="flex: 1;">
+                    <div style="background: rgba(255,255,255,0.02); padding: 1.5rem; border: 1px solid var(--borda); border-radius: 8px; display: flex; flex-direction: column; gap: 1rem;">
+                        <div><label style="font-size: 0.8rem; color: var(--texto-suave);">Nome do Curso</label><input type="text" id="genesis-nome" class="text-field"></div>
+                        <div><label style="font-size: 0.8rem; color: var(--texto-suave);">Município / Região</label><input type="text" id="genesis-cidade" class="text-field"></div>
+                        <div><label style="font-size: 0.8rem; color: var(--texto-suave);">Vocação Econômica</label><textarea id="genesis-vocacao" class="text-area" style="height: 60px;"></textarea></div>
+                        <div><label style="font-size: 0.8rem; color: var(--texto-suave);">Perfil do Egresso</label><textarea id="genesis-perfil" class="text-area" style="height: 60px;"></textarea></div>
+                    </div>
+                    <button class="btn-primary" onclick="AppGENTE.adicionarTerritorioGenesis()"><span class="material-icons-round">add_circle</span> Adicionar Território</button>
+                </div>
 
-            <div id="estado-carregando" class="loader">
-                <div class="spinner"></div>
-                <h3 id="status-texto">A extrair âncoras pedagógicas...</h3>
-            </div>
+                <div class="panel-output" style="flex: 1.5;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--borda); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+                        <h2>Arquitetura de Territórios</h2><span style="font-size: 0.8rem; color: var(--texto-suave);">Simulador IMO</span>
+                    </div>
+                    <div id="macro-vazio-genesis" style="margin: auto; text-align: center; color: var(--texto-suave); opacity: 0.5;"><span class="material-icons-round" style="font-size: 4rem;">architecture</span></div>
+                    <div id="lista-territorios-genesis" style="overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 1.5rem;"></div>
+                </div>
+            </section>
 
-            <div id="documento-consolidado">
-                <div class="doc-header">
-                    <h1>Síntese da Matriz Curricular</h1>
-                    <div class="doc-meta">
-                        <span><strong id="meta-territorios">0</strong> Territórios identificados</span>
-                        <span><strong id="meta-missoes">0</strong> Missões estimadas</span>
+            <section id="view-macro-digitalizacao" class="view-section">
+                <div class="panel-input">
+                    <div><h2 style="font-size: 1.2rem; margin-bottom: 5px;">Decodificador de Ementas</h2></div>
+                    <input type="text" id="digital-nome" class="text-field" placeholder="Nome do Curso">
+                    <textarea id="texto-macro" class="text-area" placeholder="Cole aqui o texto bruto do PPC contendo os Módulos/Territórios..."></textarea>
+                    <button class="btn-primary" onclick="AppGENTE.processarMacroDigitalizacao()"><span class="material-icons-round">account_tree</span> Mapear Territórios</button>
+                </div>
+
+                <div class="panel-output">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--borda); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+                        <h2>Territórios Extraídos</h2>
+                    </div>
+                    <div id="macro-vazio-digital" style="margin: auto; text-align: center; color: var(--texto-suave); opacity: 0.5;"><span class="material-icons-round" style="font-size: 4rem;">document_scanner</span></div>
+                    <div id="lista-territorios-digital" style="overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 1.5rem;"></div>
+                </div>
+            </section>
+
+            <section id="view-meso" class="view-section">
+                <div class="panel-input">
+                    <div>
+                        <h2 style="font-size: 1.2rem; margin-bottom: 5px;">Planejamento Meso</h2>
+                        <p style="font-size: 0.85rem; color: var(--texto-suave);">Editando: <strong id="lbl-territorio-ativo" style="color: var(--cor-destaque);">Território Selecionado</strong></p>
+                    </div>
+                    <textarea id="texto-meso" class="text-area" placeholder="Cole aqui a ementa ou os conteúdos específicos deste território para que a IA extraia as Missões..."></textarea>
+                    <button class="btn-primary" onclick="AppGENTE.processarMeso()">
+                        <span class="material-icons-round">route</span> Extrair Missões
+                    </button>
+                    <button class="btn-primary" style="background: transparent; border: 1px solid var(--borda); margin-top: 10px;" onclick="AppGENTE.voltarParaMacro()">
+                        <span class="material-icons-round">arrow_back</span> Voltar à Visão Macro
+                    </button>
+                </div>
+
+                <div class="panel-output">
+                    <div id="cabecalho-imo" style="display: none;">
+                        <div class="territorio-header">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <h3 id="lbl-territorio-titulo">Nome do Território</h3>
+                                <span style="font-size: 0.8rem; background: rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 4px;">Fluxo: <span id="lbl-fluxo-tipo">REDE</span></span>
+                            </div>
+                            <p style="font-size: 0.85rem; color: var(--texto-suave); margin-top: 1rem; margin-bottom: 5px;">
+                                Índice de Maturidade (IMO): <strong id="imo-texto" style="color: var(--texto-suave);">Aguardando Planejamento</strong>
+                            </p>
+                            <div class="imo-bar-container" id="barra-imo-visual"></div>
+                        </div>
+                    </div>
+                    <div id="meso-vazio" style="margin: auto; text-align: center; color: var(--texto-suave); opacity: 0.5;">
+                        <span class="material-icons-round" style="font-size: 4rem; margin-bottom: 1rem;">account_tree</span>
+                        <p>Cole a ementa ao lado para gerar as missões.</p>
+                    </div>
+                    <div id="lista-missoes-meso" style="overflow-y: auto; flex: 1;"></div>
+                </div>
+            </section>
+
+            <section id="view-micro" class="view-section">
+                <div style="max-width: 1000px; margin: 0 auto; width: 100%;">
+                    <button class="btn-primary" style="background: transparent; border: 1px solid var(--borda); margin-bottom: 1.5rem;" onclick="AppGENTE.voltarParaMeso()">
+                        <span class="material-icons-round">arrow_back</span> Voltar para Missões
+                    </button>
+                    <h2 id="lbl-missao-ativa" style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--borda); padding-bottom: 10px; color: var(--cor-destaque);">
+                        Nome da Missão
+                    </h2>
+                    <div id="lista-cards-micro">
+                        <div style="text-align: center; color: var(--texto-suave); margin-top: 2rem;">
+                            <span class="material-icons-round" style="font-size: 3rem; opacity: 0.5;">dashboard_customize</span>
+                            <p>Os 4 cards obrigatórios da dimensão omnilateral serão carregados aqui.</p>
+                        </div>
+                    </div>
+                    <div style="text-align: right; margin-top: 2rem; border-top: 1px solid var(--borda); padding-top: 1.5rem;">
+                        <button class="btn-success" onclick="AppGENTE.salvarPrataxisMicro()">
+                            <span class="material-icons-round">save</span> Validar Práxis Docente & Atualizar IMO
+                        </button>
+                    </div>
+                </div>
+            </section>
+               <section id="view-simulador" class="view-section" style="justify-content: center; background: #000;">
+                
+                <div style="width: 100%; max-width: 400px; background: #1e293b; border-radius: 30px; border: 8px solid #334155; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.8); display: flex; flex-direction: column;">
+                    
+                    <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 120px; height: 20px; background: #334155; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; z-index: 10;"></div>
+
+                    <div class="tela-smartphone" style="flex: 1; height: 100%; margin-top: 10px; margin-bottom: 5px;">
+                        
+                        <div style="text-align: center; margin-bottom: 2rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; padding-top: 1rem;">
+                            <span style="font-size: 2rem; display: block; margin-bottom: 5px;">♾️</span>
+                            <h2 style="color: #f8fafc; font-size: 1.2rem; font-weight: 800; letter-spacing: 1px;">MALHA NEURAL</h2>
+                            <p style="color: #3b82f6; font-size: 0.8rem; font-weight: bold;" id="simulador-nome-curso">Carregando...</p>
+                        </div>
+
+                        <div id="trilha-aluno-container" style="display: flex; flex-direction: column;">
+                            </div>
+
                     </div>
                 </div>
 
-                <div id="lista-territorios">
-                    </div>
-
-                <div style="display: flex; gap: 1rem; margin-top: 2.5rem;">
-                    <button class="btn-aprovar" style="background: #334155; color: white; flex: 1;" onclick="MotorHeuristico.salvarRascunho()">
-                        <span class="material-icons-round">save</span> SALVAR RASCUNHO
-                    </button>
-                    <button class="btn-aprovar" style="flex: 2;" onclick="MotorHeuristico.exportarJSON()">
-                        <span class="material-icons-round">download</span> EXPORTAR MATRIZ (a-TIA)
-                    </button>
-                </div>
-
-        </section>
+            </section>
+        </main>
     </div>
 
     <script>
-        // ----------------------------------------------------------------------------
-        // MOTOR HEURÍSTICO (O "Cérebro" Offline baseado na Taxonomia GENTE)
-        // ----------------------------------------------------------------------------
-        const MotorHeuristico = {
+    const AppGENTE = {
+        curriculo: { metadados: {}, territorios: [] },
+        territorioAtivoIndex: null,
+        missaoAtivaIndex: null,
+        modoAtivo: 'genesis',
+
+        // ========================================================================
+        // CONTROLE DE INTERFACE (MENU LATERAL)
+        // ========================================================================
+        setModo: function(modo) {
+            this.modoAtivo = modo;
             
-            curriculoAtual: null, // Guarda a matriz na memória RAM para exportação
-            
-            iniciarProcessamento: function() {
-                const textoRaw = document.getElementById('texto-ementa').value;
-                if(textoRaw.trim() === '') {
-                    alert("Por favor, cole o texto da ementa primeiro.");
-                    return;
+            // Controle visual do Menu Lateral
+            document.getElementById('btn-menu-genesis').classList.remove('active');
+            document.getElementById('btn-menu-digitalizacao').classList.remove('active');
+            document.getElementById('btn-menu-simulador').classList.remove('active');
+            document.getElementById(`btn-menu-${modo}`).classList.add('active');
+
+            // Troca de Título no Header
+            const titulos = {
+                'genesis': 'Design Estratégico (Simulador IMO)',
+                'digitalizacao': 'Decodificador de Matriz (PPC Legado)',
+                'simulador': 'Simulador da Experiência do Aluno'
+            };
+            document.getElementById('titulo-modo-ativo').innerText = titulos[modo];
+
+            // Oculta TODAS as views primeiro
+            document.getElementById('view-macro-genesis').classList.remove('active');
+            document.getElementById('view-macro-digitalizacao').classList.remove('active');
+            document.getElementById('view-meso').classList.remove('active');
+            document.getElementById('view-micro').classList.remove('active');
+            document.getElementById('view-simulador').classList.remove('active');
+
+            // Lógica de exibição com base no modo
+            if(modo === 'simulador') {
+                document.querySelector('.wizard-container').style.display = 'none'; // Esconde a barra de progresso (Wizard)
+                document.getElementById('view-simulador').classList.add('active');
+                this.renderizarSimulador(); // Puxa os dados para o celular
+            } else {
+                document.querySelector('.wizard-container').style.display = 'block'; // Mostra a barra de progresso
+                document.getElementById(`view-macro-${modo}`).classList.add('active');
+                
+                // Reseta o Wizard para o Passo 1
+                document.getElementById('step-2').classList.remove('active', 'completed');
+                document.getElementById('step-3').classList.remove('active', 'completed');
+                document.getElementById('step-1').classList.add('active');
+            }
+        },
+
+        // ========================================================================
+        // O MOTOR DO APLICATIVO DO ALUNO (RENDERIZAÇÃO)
+        // ========================================================================
+        renderizarSimulador: function() {
+            document.getElementById('simulador-nome-curso').innerText = (this.curriculo.metadados.nomeCurso || "Matriz em Construção").toUpperCase();
+            const container = document.getElementById('trilha-aluno-container');
+            container.innerHTML = '';
+
+            if(!this.curriculo.territorios || this.curriculo.territorios.length === 0) {
+                container.innerHTML = `<div style="text-align:center; color: #cbd5e1; padding: 2rem; font-size: 0.9rem;">A malha neural está vazia.<br>Projete no Gênesis.</div>`;
+                return;
+            }
+
+            this.curriculo.territorios.forEach(t => {
+                // 1. Calcula o Total de XP do Território
+                let xpTotalTerritorio = 0;
+                let qtdMissoes = t.missoes ? t.missoes.length : 0;
+                if(t.missoes) {
+                    t.missoes.forEach(m => m.cards.forEach(c => xpTotalTerritorio += (c.tempo * 10)));
                 }
 
-                document.getElementById('estado-vazio').style.display = 'none';
-                document.getElementById('documento-consolidado').style.display = 'none';
-                document.getElementById('estado-carregando').style.display = 'block';
+                // 2. Renderiza o Card do Território (Trilha Macro)
+                let html = `
+                    <div class="card-trilha">
+                        <h3 style="color: #f8fafc; font-size: 1.1rem; margin-bottom: 5px; text-transform: uppercase;">${t.id}: ${t.titulo}</h3>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #cbd5e1; margin-bottom: 12px; font-weight: bold;">
+                            <span>${qtdMissoes} NÓS (MISSÕES)</span>
+                            <span style="color: #a855f7;">${xpTotalTerritorio} XP</span>
+                        </div>
+                        <div style="height: 6px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
+                            <div style="height: 100%; width: 0%; background: #a855f7;"></div>
+                        </div>
+                `;
 
-                let passos = [
-                    "A higienizar texto bruto...",
-                    "A aplicar padrões de Expressão Regular (RegEx)...",
-                    "A mapear verbos via Taxonomia de Bloom...",
-                    "A compilar Síntese Executiva..."
-                ];
-                let passoAtual = 0;
+                // 3. Renderiza as Missões e Cards (Malha Micro)
+                if(qtdMissoes > 0) {
+                    t.missoes.forEach(m => {
+                        html += `
+                            <div class="card-missao-sim">
+                                <h4 style="color: #f8fafc; font-size: 0.95rem; margin-bottom: 5px;">${m.titulo}</h4>
+                        `;
+                        
+                        m.cards.forEach(c => {
+                            const xp = c.tempo * 10;
+                            const isAula = c.acesso === 'aula';
+                            // Ícones e cores baseados no modelo aTIA
+                            const icone = isAula ? 'lock_outline' : 'play_arrow';
+                            const corIcone = isAula ? '#ef4444' : '#4ade80'; 
+                            const labelDesbloqueio = isAula ? 'Exige G3' : 'Livre';
+                            
+                            // Traduz a dimensão para o rótulo do aluno
+                            const dimMap = { 'tecnica': 'Ação Material', 'cognitiva': 'Saber Elaborado', 'contextual': 'Território', 'social': 'Ética/Intervenção' };
+                            const nomeDimensao = dimMap[c.dimensao] || c.dimensao;
+                            const textoCard = c.texto_editado || 'Decodificando nó de dados...';
+
+                            html += `
+                                <div class="tarefa-row">
+                                    <div style="flex: 1; padding-right: 10px;">
+                                        <span class="tag-dimensao ${c.dimensao}">${nomeDimensao}</span>
+                                        <div style="font-size: 0.8rem; color: #cbd5e1; line-height: 1.3;">
+                                            ${textoCard.length > 60 ? textoCard.substring(0, 60) + '...' : textoCard}
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; min-width: 65px;">
+                                        <div style="color: #f59e0b; font-weight: 900; font-size: 0.85rem; margin-bottom: 6px;">+${xp} XP</div>
+                                        <div style="display: flex; align-items: center; gap: 4px; font-size: 0.65rem; font-weight: bold; color: ${corIcone}; background: rgba(255,255,255,0.05); padding: 4px 6px; border-radius: 4px; border: 1px solid ${corIcone}40;">
+                                            <span class="material-icons-round" style="font-size: 12px;">${icone}</span>
+                                            ${labelDesbloqueio}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        html += `</div>`; // Fecha card-missao-sim
+                    });
+                } else {
+                    html += `<div style="margin-top: 15px; font-size: 0.8rem; color: #64748b; font-style: italic;">Nenhum nó de missão projetado.</div>`;
+                }
                 
-                let intervalo = setInterval(() => {
-                    if(passoAtual < passos.length) {
-                        document.getElementById('status-texto').innerText = passos[passoAtual];
-                        passoAtual++;
-                    } else {
-                        clearInterval(intervalo);
-                        this.executarParser(textoRaw);
-                    }
-                }, 600); 
+                html += `</div>`; // Fecha card-trilha
+                container.innerHTML += html;
+            });
+        },
+
+        // ==========================================
+        // 1. DICIONÁRIOS EXAUSTIVOS (N-GRAMS + PMDF)
+        // ==========================================
+        dics: {
+            tecnica: { 
+                trinomes: ['operar maquinas industriais', 'manusear ferramentas precisas', 'realizar manutencao preventiva', 'codificar algoritmos estruturados', 'implementar redes locais', 'configurar servidores nuvem', 'desenvolver interfaces responsivas', 'empregar armamento letal', 'conduzir viatura policial', 'realizar abordagem policial', 'aplicar algemacao tatica', 'executar tiro defensivo', 'realizar busca pessoal', 'operar radio comunicacao', 'isolar local crime', 'prestar atendimento pre-hospitalar'],
+                binomes: ['operar maquinas', 'instalar softwares', 'soldar componentes', 'redigir relatorios', 'configurar dispositivos', 'prototipar solucoes', 'montar circuitos', 'mapear dados', 'empregar armamento', 'realizar abordagem', 'aplicar algemacao', 'conduzir viatura', 'executar tiro', 'isolar local', 'prestar socorro', 'redigir ocorrencia', 'lavrar termo', 'patrulhar area', 'imobilizar suspeito'],
+                nomes: ['fazer', 'executar', 'operar', 'manusear', 'construir', 'instalar', 'montar', 'codificar', 'programar', 'aplicar', 'produzir', 'atirar', 'algemar', 'abordar', 'patrulhar', 'conduzir', 'isolar', 'socorrer', 'imobilizar', 'empregar', 'lavrar']
             },
+            cognitiva: { 
+                trinomes: ['analisar fundamentos cientificos', 'sistematizar saberes teoricos', 'conceituar principios logicos', 'avaliar desempenho sistemico', 'calcular variaveis complexas', 'modelar processos abstratos', 'interpretar dados estatisticos', 'analisar cenarios taticos', 'fundamentar acao policial', 'avaliar risco ocorrencia', 'interpretar legislacao penal', 'compreender balistica forense', 'sistematizar dados inteligencia', 'estudar processo decisorio'],
+                binomes: ['analisar dados', 'resolver problemas', 'otimizar sistemas', 'modelar fluxos', 'avaliar resultados', 'testar hipoteses', 'diagnosticar problemas', 'fundamentar praticas', 'analisar cenarios', 'avaliar risco', 'interpretar legislacao', 'fundamentar acao', 'compreender normas', 'estudar balistica', 'processar informacoes', 'diagnosticar vulnerabilidades', 'redigir documentos'],
+                nomes: ['analisar', 'resolver', 'entender', 'calcular', 'projetar', 'avaliar', 'comparar', 'deduzir', 'sistematizar', 'fundamentar', 'abstrair', 'interpretar', 'investigar', 'compreender', 'estudar', 'processar', 'diagnosticar', 'decidir']
+            },
+            contextual: { 
+                trinomes: ['mapear territorio produtivo', 'investigar realidade social', 'identificar demandas locais', 'problematizar relacoes trabalho', 'situar contexto regional', 'analisar impactos ambientais', 'pesquisar mercado regional', 'mapear mancha criminal', 'compreender dinamica criminal', 'identificar vulnerabilidades locais', 'analisar impacto seguranca', 'situar contexto ordem', 'reconhecer area atuacao'],
+                binomes: ['mapear territorio', 'investigar realidade', 'identificar necessidades', 'analisar impactos', 'descrever processos', 'situar mercado', 'reconhecer arranjos', 'vincular teoria', 'mapear mancha', 'compreender dinamica', 'identificar vulnerabilidades', 'situar contexto', 'policiar territorio', 'reconhecer area', 'avaliar ambiente'],
+                nomes: ['situar', 'vincular', 'contextualizar', 'mapear', 'pesquisar', 'identificar', 'problematizar', 'reconhecer', 'investigar', 'policiar', 'patrulhar']
+            },
+            social: { 
+                trinomes: ['intervir socialmente territorio', 'agir etica profissional', 'propor solucoes sustentaveis', 'colaborar equipe projeto', 'emancipar sujeito critico', 'mediar conflitos coletivos', 'debater dilemas eticos', 'garantir direitos humanos', 'mediar conflitos urbanos', 'aplicar uso proporcional', 'respeitar dignidade pessoa', 'proteger integridade fisica', 'promover policia comunitaria', 'preservar ordem publica'],
+                binomes: ['intervir realidade', 'agir eticamente', 'cooperar coletivamente', 'propor mudancas', 'emancipar cidadao', 'mediar conflitos', 'liderar equipes', 'respeitar diversidade', 'garantir direitos', 'usar forca', 'respeitar dignidade', 'proteger cidadania', 'promover seguranca', 'preservar ordem', 'comunicar cidadao', 'gerenciar crise'],
+                nomes: ['intervir', 'colaborar', 'cooperar', 'mediar', 'emancipar', 'liderar', 'comunicar', 'refletir', 'respeitar', 'agir', 'propor', 'debater', 'garantir', 'proteger', 'promover', 'preservar', 'pacificar', 'gerenciar']
+            }
+        },
 
-            executarParser: function(textoRaw) {
-                const texto = textoRaw.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-                const linhas = texto.split('\n').filter(l => l.trim().length > 2); 
+        gerarNgrams: function(palavras, n) {
+            let ngrams = [];
+            for (let i = 0; i <= palavras.length - n; i++) { ngrams.push(palavras.slice(i, i + n).join(' ')); }
+            return ngrams;
+        },
 
-                const dicTecnico = ['desenvolver', 'criar', 'implementar', 'programar', 'configurar', 'codificar', 'construir', 'aplicar', 'executar'];
-                const dicAnalitico = ['analisar', 'resolver', 'estruturar', 'comparar', 'otimizar', 'modelar', 'avaliar', 'testar', 'diagnosticar'];
-                const dicContexto = ['identificar', 'compreender', 'descrever', 'reconhecer', 'mapear', 'entender', 'listar', 'explicar', 'conceituar'];
-                const dicSocio = ['colaborar', 'debater', 'refletir', 'argumentar', 'criticar', 'propor', 'discutir', 'comunicar'];
+        // ==========================================
+        // 2A. MODO DIGITALIZAÇÃO DE PPC 
+        // ==========================================
+        processarMacroDigitalizacao: function() {
+            const nomeCurso = document.getElementById('digital-nome').value.trim() || "Curso Sem Nome";
+            const textoRaw = document.getElementById('texto-macro').value.trim();
+            if(!textoRaw) { alert("Cole as diretrizes macro primeiro!"); return; }
 
-                // NOVO: Lê o nome do curso diretamente do campo (com fallback)
-                const nomeDoCurso = document.getElementById('nome-curso').value.trim() || "Curso Sem Nome";
+            if(!this.curriculo.metadados) this.curriculo.metadados = {};
+            this.curriculo.metadados.nomeCurso = nomeCurso;
+            this.curriculo.territorios = [];
 
-                let curriculo = {
-                    metadados: { 
-                        idCurso: "CURSO_" + new Date().getFullYear(),
-                        nomeCurso: nomeDoCurso, // Injeta o nome aqui!
-                        cargaHoraria: "Não identificada",
-                        versaoBlueprint: 1.0
-                    },
-                    territorios: []
-                };
+            const linhas = textoRaw.split('\n').filter(l => l.trim().length > 2);
+            const regexTerritorio = /^(?:m[óo]dulo|unidade|territ[óo]rio|eixo|cap[íi]tulo|t[íi]tulo|disciplina)\s*(?:\d+|[ivx]+)?[\s:\-\.]*(.+)/i;
 
-                let territorioAtual = null;
-                const regexTerritorio = /^(?:m[óo]dulo|unidade|territ[óo]rio|eixo|cap[íi]tulo)\s*(?:\d+|[ivx]+)?[\s:\-\.]*(.+)/i;
-                const regexCargaHoraria = /(?:carga hor[áa]ria|ch)\s*[:\-]?\s*(\d+\s*h(?:oras)?)/i;
+            linhas.forEach(linha => {
+                const match = linha.match(regexTerritorio);
+                if (match) {
+                    this.curriculo.territorios.push({
+                        id: "T" + (this.curriculo.territorios.length + 1),
+                        titulo: match[1].trim(),
+                        fluxo: "rede",
+                        metasCH: { tecnica: 0, cognitiva: 0, contextual: 0, social: 0 },
+                        diretrizes: { tecnica: "", cognitiva: "", contextual: "", social: "" },
+                        missoes: [],
+                        imo: { nota: 0, classificacao: "Aguardando", cor: "var(--texto-suave)", pTecnica: 0, pCognitiva: 0, pContextual: 0, pSocial: 0 }
+                    });
+                }
+            });
 
-                linhas.forEach(linha => {
-                    const linhaLimpa = linha.trim();
-                    const linhaLower = linhaLimpa.toLowerCase();
+            if(this.curriculo.territorios.length === 0) {
+                this.curriculo.territorios.push({ id: "T1", titulo: "Fundamentos Gerais", fluxo: "rede", metasCH: { tecnica:0, cognitiva:0, contextual:0, social:0 }, diretrizes: { tecnica: "", cognitiva: "", contextual: "", social: "" }, missoes: [], imo: {nota:0, classificacao:"Aguardando", cor:"var(--texto-suave)", pTecnica:0, pCognitiva:0, pContextual:0, pSocial:0} });
+            }
 
-                    const matchCH = linhaLimpa.match(regexCargaHoraria);
-                    if (matchCH && curriculo.territorios.length === 0) curriculo.metadados.cargaHoraria = matchCH[1];
+            this.renderizarMacroDigitalizacao();
+        },
 
-                    const matchTerritorio = linhaLimpa.match(regexTerritorio);
-                    if (matchTerritorio) {
-                        territorioAtual = {
-                            idTerritorio: "T" + (curriculo.territorios.length + 1),
-                            titulo: matchTerritorio[1].trim() || "Território sem nome",
-                            ordem: curriculo.territorios.length + 1,
-                            missoes: [],
-                            score: { tecnica: 0, analitica: 0, contexto: 0, socio: 0 }
-                        };
-                        curriculo.territorios.push(territorioAtual);
-                        return; 
-                    }
+        renderizarMacroDigitalizacao: function() {
+            document.getElementById('macro-vazio-digital').style.display = 'none';
+            const lista = document.getElementById('lista-territorios-digital');
+            lista.innerHTML = '';
 
-                    if (!territorioAtual) {
-                        territorioAtual = { idTerritorio: "T1", titulo: "Fundamentos Gerais", ordem: 1, missoes: [], score: { tecnica: 0, analitica: 0, contexto: 0, socio: 0 } };
-                        curriculo.territorios.push(territorioAtual);
-                    }
+            this.curriculo.territorios.forEach((t, index) => {
+                lista.innerHTML += `
+                    <div class="card-territorio" style="flex-direction: column; align-items: stretch;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--borda);">
+                            <div><h3 style="color: var(--cor-destaque);">${t.id}: ${t.titulo}</h3></div>
+                            <div class="toggle-wrapper">
+                                <span class="lbl-rede" style="color: var(--cor-destaque);">Rede</span>
+                                <label class="switch">
+                                    <input type="checkbox" onchange="AppGENTE.mudarFluxo(${index}, this.checked)" ${t.fluxo === 'sequencial' ? 'checked' : ''}>
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="lbl-seq">Seq</span>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--texto-suave); margin-bottom: 8px;">Competências / Diretrizes Macro:</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px;">
+                            <input type="text" placeholder="Técnica..." value="${t.diretrizes.tecnica}" class="text-field" onchange="AppGENTE.atualizarDiretriz(${index}, 'tecnica', this.value)" style="border-left: 3px solid var(--dim-tecnica); font-size: 0.8rem; padding: 0.5rem;">
+                            <input type="text" placeholder="Cognitiva..." value="${t.diretrizes.cognitiva}" class="text-field" onchange="AppGENTE.atualizarDiretriz(${index}, 'cognitiva', this.value)" style="border-left: 3px solid var(--dim-cognitiva); font-size: 0.8rem; padding: 0.5rem;">
+                            <input type="text" placeholder="Contextual..." value="${t.diretrizes.contextual}" class="text-field" onchange="AppGENTE.atualizarDiretriz(${index}, 'contextual', this.value)" style="border-left: 3px solid var(--dim-contextual); font-size: 0.8rem; padding: 0.5rem;">
+                            <input type="text" placeholder="Social..." value="${t.diretrizes.social}" class="text-field" onchange="AppGENTE.atualizarDiretriz(${index}, 'social', this.value)" style="border-left: 3px solid var(--dim-social); font-size: 0.8rem; padding: 0.5rem;">
+                        </div>
+                        <div style="text-align: right;">
+                            <button class="btn-primary" style="padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="AppGENTE.abrirMeso(${index})">
+                                <span class="material-icons-round" style="font-size: 16px;">edit</span> Planejar Missões ➔
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        },
 
-                    const palavras = linhaLower.replace(/[^\w\sáéíóúãõç]/g, '').split(/\s+/);
-                    let verbosEncontrados = [];
-                    let dimensaoVencedora = 'contexto'; 
+        mudarFluxo: function(index, isSequencial) {
+            this.curriculo.territorios[index].fluxo = isSequencial ? "sequencial" : "rede";
+        },
 
-                    palavras.forEach(palavra => {
-                        if (dicTecnico.includes(palavra)) { verbosEncontrados.push(palavra); territorioAtual.score.tecnica++; dimensaoVencedora = 'tecnica'; }
-                        if (dicAnalitico.includes(palavra)) { verbosEncontrados.push(palavra); territorioAtual.score.analitica++; dimensaoVencedora = 'analitica';}
-                        if (dicContexto.includes(palavra)) { verbosEncontrados.push(palavra); territorioAtual.score.contexto++; dimensaoVencedora = 'contexto';}
-                        if (dicSocio.includes(palavra)) { verbosEncontrados.push(palavra); territorioAtual.score.socio++; dimensaoVencedora = 'socio';}
+        // ==========================================
+        // 2B. MODO GÊNESIS E SIMULADOR IMO 
+        // ==========================================
+        adicionarTerritorioGenesis: function() {
+            document.getElementById('macro-vazio-genesis').style.display = 'none';
+            
+            if (!this.curriculo.metadados) { this.curriculo.metadados = {}; }
+            if (!this.curriculo.territorios) { this.curriculo.territorios = []; }
+
+            this.curriculo.metadados.nomeCurso = document.getElementById('genesis-nome').value || "Curso em Planejamento";
+            this.curriculo.metadados.cidade = document.getElementById('genesis-cidade').value;
+            this.curriculo.metadados.vocacao = document.getElementById('genesis-vocacao').value;
+            this.curriculo.metadados.perfil = document.getElementById('genesis-perfil').value;
+
+            const novoIndex = this.curriculo.territorios.length;
+            this.curriculo.territorios.push({
+                id: "T" + (novoIndex + 1),
+                titulo: "Novo Território Temático",
+                fluxo: "rede",
+                metasCH: { tecnica: 0, cognitiva: 0, contextual: 0, social: 0 },
+                diretrizes: { tecnica: "", cognitiva: "", contextual: "", social: "" },
+                missoes: [],
+                imo: { nota: 0, classificacao: "Aguardando Metas", cor: "var(--texto-suave)", pTecnica: 0, pCognitiva: 0, pContextual: 0, pSocial: 0 }
+            });
+
+            this.renderizarMacroGenesis();
+        },
+
+        renderizarMacroGenesis: function() {
+            const lista = document.getElementById('lista-territorios-genesis');
+            lista.innerHTML = '';
+            if(this.curriculo.territorios.length > 0) document.getElementById('macro-vazio-genesis').style.display = 'none';
+
+            this.curriculo.territorios.forEach((t, index) => {
+                lista.innerHTML += `
+                    <div class="card-territorio" style="flex-direction: column; align-items: stretch; background: #151e32; border: 1px solid var(--borda);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <input type="text" class="text-field" value="${t.titulo}" onchange="AppGENTE.curriculo.territorios[${index}].titulo = this.value" style="font-size: 1.1rem; font-weight: bold; background: transparent; border: none; border-bottom: 1px dashed var(--borda); border-radius: 0; padding: 0.2rem; width: 60%; color: var(--cor-destaque);">
+                            
+                            <div class="toggle-wrapper">
+                                <span class="lbl-rede" style="color: var(--cor-destaque);">Rede</span>
+                                <label class="switch">
+                                    <input type="checkbox" onchange="AppGENTE.mudarFluxo(${index}, this.checked)" ${t.fluxo === 'sequencial' ? 'checked' : ''}>
+                                    <span class="slider"></span>
+                                </label>
+                                <span class="lbl-seq">Seq</span>
+                            </div>
+                        </div>
+
+                        <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; margin-bottom: 15px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <span style="font-size: 0.8rem; color: var(--texto-suave);">IMO Projetado: <strong id="imo-proj-texto-${index}" style="color: ${t.imo.cor};">${t.imo.classificacao} (${t.imo.nota} pts)</strong></span>
+                                <span style="font-size: 0.8rem; color: var(--texto-suave);">Total: <strong id="imo-proj-total-${index}">0</strong>h</span>
+                            </div>
+                            
+                            <div class="imo-bar-container" id="imo-proj-barra-${index}" style="margin-bottom: 15px; height: 8px;">
+                                <div class="imo-segment" style="width: ${t.imo.pTecnica}%; background: var(--dim-tecnica);"></div>
+                                <div class="imo-segment" style="width: ${t.imo.pCognitiva}%; background: var(--dim-cognitiva);"></div>
+                                <div class="imo-segment" style="width: ${t.imo.pContextual}%; background: var(--dim-contextual);"></div>
+                                <div class="imo-segment" style="width: ${t.imo.pSocial}%; background: var(--dim-social);"></div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+                                <div><label style="font-size:0.7rem; color:var(--dim-tecnica);">Técnica (h)</label><input type="number" min="0" value="${t.metasCH.tecnica}" class="text-field" oninput="AppGENTE.simularImoGenesis(${index}, 'tecnica', this.value)" style="padding: 0.4rem;"></div>
+                                <div><label style="font-size:0.7rem; color:var(--dim-cognitiva);">Cognit. (h)</label><input type="number" min="0" value="${t.metasCH.cognitiva}" class="text-field" oninput="AppGENTE.simularImoGenesis(${index}, 'cognitiva', this.value)" style="padding: 0.4rem;"></div>
+                                <div><label style="font-size:0.7rem; color:var(--dim-contextual);">Context. (h)</label><input type="number" min="0" value="${t.metasCH.contextual}" class="text-field" oninput="AppGENTE.simularImoGenesis(${index}, 'contextual', this.value)" style="padding: 0.4rem;"></div>
+                                <div><label style="font-size:0.7rem; color:var(--dim-social);">Social (h)</label><input type="number" min="0" value="${t.metasCH.social}" class="text-field" oninput="AppGENTE.simularImoGenesis(${index}, 'social', this.value)" style="padding: 0.4rem;"></div>
+                            </div>
+                        </div>
+
+                        <div style="text-align: right;">
+                            <button class="btn-primary" style="padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="AppGENTE.abrirMeso(${index})">
+                                <span class="material-icons-round" style="font-size: 16px;">edit</span> Criar Missões ➔
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        },
+
+        simularImoGenesis: function(index, dimensao, valor) {
+            let t = this.curriculo.territorios[index];
+            t.metasCH[dimensao] = parseInt(valor) || 0;
+
+            let tec = t.metasCH.tecnica;
+            let ccs = t.metasCH.cognitiva + t.metasCH.contextual + t.metasCH.social;
+            let total = tec + ccs;
+
+            document.getElementById(`imo-proj-total-${index}`).innerText = total;
+
+            if(total === 0) return;
+
+            let notaCobertura = 0;
+            if(t.metasCH.tecnica > 0) notaCobertura += 10;
+            if(t.metasCH.cognitiva > 0) notaCobertura += 10;
+            if(t.metasCH.contextual > 0) notaCobertura += 10;
+            if(t.metasCH.social > 0) notaCobertura += 10;
+
+            let proporcaoCCS = ccs / total;
+            let taxaAlcance = proporcaoCCS / 0.30; 
+            let notaEquilibrio = Math.min(60, taxaAlcance * 60);
+
+            let notaFinal = Math.round(notaCobertura + notaEquilibrio);
+            t.imo.nota = notaFinal;
+
+            t.imo.pTecnica = (tec / total) * 100;
+            t.imo.pCognitiva = (t.metasCH.cognitiva / total) * 100;
+            t.imo.pContextual = (t.metasCH.contextual / total) * 100;
+            t.imo.pSocial = (t.metasCH.social / total) * 100;
+
+            if (notaFinal < 40) { t.imo.classificacao = "Funcional / Alienante"; t.imo.cor = "var(--cor-alerta)"; } 
+            else if (notaFinal < 70) { t.imo.classificacao = "Cognitivo-Comportamental"; t.imo.cor = "var(--dim-contextual)"; } 
+            else if (notaFinal < 90) { t.imo.classificacao = "Adaptativo / Territorial"; t.imo.cor = "var(--dim-tecnica)"; } 
+            else { t.imo.classificacao = "Formação Humana Integral"; t.imo.cor = "var(--dim-social)"; }
+
+            const lblTexto = document.getElementById(`imo-proj-texto-${index}`);
+            lblTexto.innerText = `${t.imo.classificacao} (${t.imo.nota} pts)`;
+            lblTexto.style.color = t.imo.cor;
+
+            const barra = document.getElementById(`imo-proj-barra-${index}`);
+            barra.children[0].style.width = `${t.imo.pTecnica}%`;
+            barra.children[1].style.width = `${t.imo.pCognitiva}%`;
+            barra.children[2].style.width = `${t.imo.pContextual}%`;
+            barra.children[3].style.width = `${t.imo.pSocial}%`;
+        },
+
+        // ==========================================
+        // 3. CAMADA MESO (MISSÕES & IMO REAL)
+        // ==========================================
+        abrirMeso: function(index = 0) {
+            this.territorioAtivoIndex = index;
+            const t = this.curriculo.territorios[index];
+            
+            document.getElementById('lbl-territorio-ativo').innerText = `${t.id}: ${t.titulo}`;
+            document.getElementById('lbl-territorio-titulo').innerText = `${t.id}: ${t.titulo}`;
+            document.getElementById('lbl-fluxo-tipo').innerText = t.fluxo.toUpperCase();
+            
+            document.getElementById('view-macro-genesis').classList.remove('active');
+            document.getElementById('view-macro-digitalizacao').classList.remove('active');
+            document.getElementById('view-micro').classList.remove('active');
+            document.getElementById('view-meso').classList.add('active');
+            
+            document.getElementById('step-1').classList.add('completed'); document.getElementById('step-1').classList.remove('active');
+            document.getElementById('step-3').classList.remove('active'); document.getElementById('step-2').classList.add('active');
+
+            this.atualizarVisorIMO();
+            this.renderizarMissoesMeso();
+        },
+
+        processarMeso: function() {
+            const textoRaw = document.getElementById('texto-meso').value.trim();
+            if(!textoRaw) { alert("Cole a ementa deste território!"); return; }
+
+            const linhas = textoRaw.split('\n').filter(l => l.trim().length > 2);
+            let territorio = this.curriculo.territorios[this.territorioAtivoIndex];
+            territorio.missoes = []; 
+
+            linhas.forEach((linha) => {
+                const linhaLimpa = linha.trim();
+                const linhaLower = linhaLimpa.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+                const palavras = linhaLower.replace(/[^\w\s]/g, '').split(/\s+/);
+                
+                const unigrams = palavras;
+                const bigrams = this.gerarNgrams(palavras, 2);
+                const trigrams = this.gerarNgrams(palavras, 3);
+
+                let verbosEncontrados = { tecnica: [], cognitiva: [], contextual: [], social: [] };
+                const buscarVerbos = (seqs, dic, chave) => { seqs.forEach(s => { if(dic.includes(s)) verbosEncontrados[chave].push(s); }); };
+
+                Object.keys(this.dics).forEach(chave => {
+                    buscarVerbos(trigrams, this.dics[chave].trinomes, chave);
+                    buscarVerbos(bigrams, this.dics[chave].binomes, chave);
+                    buscarVerbos(unigrams, this.dics[chave].nomes, chave);
+                });
+
+                if (Object.values(verbosEncontrados).flat().length > 0 || linhaLimpa.length > 20) {
+                    let cards = [];
+                    Object.keys(verbosEncontrados).forEach(dim => {
+                        let verbos = [...new Set(verbosEncontrados[dim])];
+                        cards.push({
+                            dimensao: dim, 
+                            verbos: verbos, 
+                            tempo: verbos.length > 0 ? 30 : 0,
+                            criticidade: dim === 'social' ? 'complementar' : 'estruturante'
+                        });
                     });
 
-                    if (verbosEncontrados.length > 0 || (linhaLimpa.length > 25 && (linhaLower.startsWith('objetivo') || linhaLower.startsWith('competência')))) {
-                        let tituloMissao = linhaLimpa;
-                        if(linhaLower.includes(':') && tituloMissao.length < 100) tituloMissao = tituloMissao.split(':')[1].trim();
-                        if(tituloMissao.length > 80) tituloMissao = tituloMissao.substring(0, 77) + "...";
-
-                        territorioAtual.missoes.push({
-                            idMissao: territorioAtual.idTerritorio + "_M" + (territorioAtual.missoes.length + 1),
-                            titulo: tituloMissao,
-                            dimensaoPredominante: dimensaoVencedora, 
-                            verbosExtraidos: verbosEncontrados,
-                            dependencias_missao: [], 
-                            cards: [] 
-                        });
-                    }
-                });
-
-                curriculo.territorios.forEach(t => delete t.score);
-                this.curriculoAtual = curriculo;
-                this.renderizarDocumento(curriculo);
-            },
-
-            renderizarDocumento: function(curriculo) {
-                document.getElementById('meta-territorios').innerText = curriculo.territorios.length;
-                let totalMissoes = curriculo.territorios.reduce((acc, curr) => acc + curr.missoes.length, 0);
-                document.getElementById('meta-missoes').innerText = totalMissoes;
-
-                const container = document.getElementById('lista-territorios');
-                container.innerHTML = '';
-
-                if (curriculo.metadados.cargaHoraria !== "Não identificada") {
-                    container.innerHTML += `<div style="margin-bottom: 1.5rem; color: var(--cor-destaque); font-size: 0.9rem;">
-                        <span class="material-icons-round" style="vertical-align: middle; font-size: 16px;">schedule</span> Carga Horária Detetada: <strong>${curriculo.metadados.cargaHoraria}</strong>
-                    </div>`;
+                    territorio.missoes.push({
+                        id: `${territorio.id}_M${territorio.missoes.length + 1}`,
+                        titulo: linhaLimpa.length > 60 ? linhaLimpa.substring(0, 57) + "..." : linhaLimpa,
+                        cards: cards
+                    });
                 }
+            });
 
-                curriculo.territorios.forEach(terr => {
-                    let htmlMissoes = terr.missoes.map(m => `
-                        <li style="margin-bottom: 8px; font-size: 0.85rem; color: var(--texto-suave);">
-                            <span style="color: ${m.dimensaoPredominante === 'tecnica' ? 'var(--cor-sucesso)' : 'var(--cor-destaque)'}; font-weight: bold; text-transform: uppercase; font-size: 0.7rem; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; margin-right: 6px;">
-                                ${m.dimensaoPredominante}
-                            </span>
-                            ${m.titulo} 
-                            ${m.verbosExtraidos.length > 0 ? `<em style="opacity: 0.5;">(${m.verbosExtraidos.join(', ')})</em>` : ''}
-                        </li>
-                    `).join('');
+            this.calcularIMOTerritorio();
+            this.renderizarMissoesMeso();
+        },
 
-                    if(htmlMissoes === '') htmlMissoes = '<li style="color: var(--texto-suave); font-size: 0.8rem; font-style: italic;">Nenhuma ação específica detetada.</li>';
-
-                    container.innerHTML += `
-                        <div class="territorio-item">
-                            <h3 style="color: var(--texto-puro);">${terr.idTerritorio}: ${terr.titulo}</h3>
-                            <ul style="list-style: none; margin-top: 1rem; padding-left: 0;">${htmlMissoes}</ul>
-                        </div>
-                    `;
-                });
-
-                document.getElementById('estado-carregando').style.display = 'none';
-                document.getElementById('documento-consolidado').style.display = 'block';
-            },
-
-            // ==========================================
-            // NOVAS FUNÇÕES DE GESTÃO DE RASCUNHOS
-            // ==========================================
-            salvarRascunho: function() {
-                const nomeCurso = document.getElementById('nome-curso').value.trim();
-                const textoEmenta = document.getElementById('texto-ementa').value.trim();
-
-                if(!nomeCurso) {
-                    alert("Atenção: Por favor, preencha o 'Nome do Curso' no painel esquerdo antes de salvar.");
-                    document.getElementById('nome-curso').focus();
-                    return;
-                }
-                if(!textoEmenta) {
-                    alert("A ementa está vazia. Não há o que salvar.");
-                    return;
-                }
-
-                // Recupera a lista de rascunhos (ou cria uma vazia)
-                let rascunhos = JSON.parse(localStorage.getItem('aptia_rascunhos_multiplos') || '[]');
-                
-                // Procura se já existe um curso com este nome
-                const index = rascunhos.findIndex(r => r.nomeCurso.toLowerCase() === nomeCurso.toLowerCase());
-                
-                const novoRascunho = {
-                    nomeCurso: nomeCurso,
-                    textoEmenta: textoEmenta,
-                    dataSalvo: new Date().toLocaleDateString() + " às " + new Date().toLocaleTimeString()
-                };
-
-                if(index >= 0) {
-                    rascunhos[index] = novoRascunho; // Atualiza o existente
-                } else {
-                    rascunhos.push(novoRascunho); // Cria um novo slot
-                }
-
-                localStorage.setItem('aptia_rascunhos_multiplos', JSON.stringify(rascunhos));
-                alert(`Rascunho do curso "${nomeCurso}" salvo com sucesso!`);
-            },
-
-            restaurarRascunho: function() {
-                let rascunhos = JSON.parse(localStorage.getItem('aptia_rascunhos_multiplos') || '[]');
-                
-                if(rascunhos.length === 0) {
-                    alert("Ainda não existe nenhum rascunho de curso salvo neste navegador.");
-                    return;
-                }
-
-                // Cria um menu elegante nativo para o coordenador escolher o projeto
-                let menu = "RASCUNHOS SALVOS\n\nEscolha o NÚMERO do curso que deseja restaurar:\n\n";
-                rascunhos.forEach((r, i) => {
-                    menu += `[ ${i + 1} ] - ${r.nomeCurso}\n      (Salvo em: ${r.dataSalvo})\n\n`;
-                });
-
-                const escolha = prompt(menu);
-
-                if(escolha !== null && escolha.trim() !== '') {
-                    const index = parseInt(escolha) - 1;
-                    if(index >= 0 && index < rascunhos.length) {
-                        const selecionado = rascunhos[index];
-                        
-                        // Restaura os dados para os campos visuais
-                        document.getElementById('nome-curso').value = selecionado.nomeCurso;
-                        document.getElementById('texto-ementa').value = selecionado.textoEmenta;
-                        
-                        // MÁGICA: Ao restaurar, ele já aciona a leitura da IA automaticamente!
-                        this.iniciarProcessamento();
-                    } else {
-                        alert("Opção inválida.");
-                    }
-                }
-            },
-
-            exportarJSON: function() {
-                if(!this.curriculoAtual) {
-                    alert("Por favor, clique em 'Sintetizar Currículo' primeiro para gerar a Matriz.");
-                    return;
-                }
-
-                // Normaliza o nome do ficheiro (tira espaços e acentos)
-                const nomeSeguro = this.curriculoAtual.metadados.nomeCurso.normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/gi, '_').toLowerCase();
-                
-                const jsonString = JSON.stringify(this.curriculoAtual, null, 4);
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonString);
-                
-                const downloadAnchorNode = document.createElement('a');
-                downloadAnchorNode.setAttribute("href", dataStr);
-                downloadAnchorNode.setAttribute("download", `matriz_${nomeSeguro}.json`); // Ex: matriz_tecnico_ia.json
-                document.body.appendChild(downloadAnchorNode); 
-                
-                downloadAnchorNode.click();
-                downloadAnchorNode.remove();
+        renderizarMissoesMeso: function() {
+            const lista = document.getElementById('lista-missoes-meso');
+            const territorio = this.curriculo.territorios[this.territorioAtivoIndex];
+            
+            if(territorio.missoes.length === 0) {
+                document.getElementById('cabecalho-imo').style.display = 'none';
+                document.getElementById('meso-vazio').style.display = 'block';
+                lista.innerHTML = '';
+                return;
             }
-			};
+
+            document.getElementById('meso-vazio').style.display = 'none';
+            document.getElementById('cabecalho-imo').style.display = 'block';
+            lista.innerHTML = '';
+
+            territorio.missoes.forEach((m, index) => {
+                lista.innerHTML += `
+                    <div style="background: var(--bg-painel); border: 1px solid var(--borda); border-left: 4px solid var(--cor-destaque); border-radius: 8px; padding: 1rem; margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h4 style="color: var(--texto-puro);">${m.id}: ${m.titulo}</h4>
+                            <p style="font-size: 0.8rem; color: var(--texto-suave);">4 Cards Formativos. Requer validação.</p>
+                        </div>
+                        <button class="btn-primary" onclick="AppGENTE.abrirMicro(${index})">
+                            <span class="material-icons-round">dashboard</span> Validar Cards
+                        </button>
+                    </div>
+                `;
+            });
+        },
+
+        // ==========================================
+        // 4. CAMADA MICRO (PRÁXIS, TEMPOS E ACESSO)
+        // ==========================================
+        abrirMicro: function(indexMissao) {
+            this.missaoAtivaIndex = indexMissao;
+            const missao = this.curriculo.territorios[this.territorioAtivoIndex].missoes[indexMissao];
+            
+            document.getElementById('lbl-missao-ativa').innerHTML = `
+                <span style="color: var(--texto-suave); font-size: 0.8em; margin-right: 8px;">${missao.id}:</span> 
+                <input type="text" id="input_titulo_missao" value="${missao.titulo}" style="background: transparent; border: none; border-bottom: 1px dashed var(--cor-destaque); color: var(--cor-destaque); font-size: 1.3rem; font-weight: bold; width: 75%; outline: none; padding: 4px; transition: 0.3s;" onfocus="this.style.background='rgba(139, 92, 246, 0.1)'" onblur="this.style.background='transparent'">
+            `;
+            
+            document.getElementById('view-meso').classList.remove('active');
+            document.getElementById('view-micro').classList.add('active');
+            
+            document.getElementById('step-2').classList.add('completed'); document.getElementById('step-2').classList.remove('active');
+            document.getElementById('step-3').classList.add('active');
+
+            const listaCards = document.getElementById('lista-cards-micro');
+            listaCards.innerHTML = '';
+
+            missao.cards.forEach((card, i) => {
+                if (card.texto_editado === undefined) {
+                    card.texto_editado = card.verbos && card.verbos.length > 0 ? `Atividade sugerida: ${card.verbos.join(', ')}` : "";
+                }
+                
+                // NOVO: Define o padrão como Exploração se não existir
+                if (!card.acesso) card.acesso = 'exploracao'; 
+
+                const selEstruturante = card.criticidade === 'estruturante' ? 'selected' : '';
+                const selComplementar = card.criticidade === 'complementar' ? 'selected' : '';
+                const selExploracao = card.acesso === 'exploracao' ? 'selected' : '';
+                const selAula = card.acesso === 'aula' ? 'selected' : '';
+
+                const dims = [
+                    {val: 'tecnica', lbl: 'Ação Material (Técnica)'},
+                    {val: 'cognitiva', lbl: 'Saber Elaborado (Cognitiva)'},
+                    {val: 'contextual', lbl: 'Território (Contextual)'},
+                    {val: 'social', lbl: 'Ética/Integração (Social)'}
+                ];
+                let comboDimensao = `<select id="dim_${i}" class="text-field" style="padding: 0.3rem; font-size: 0.8rem; width: auto; background: transparent; border: 1px solid var(--borda); color: var(--texto-suave);" onchange="AppGENTE.mudarCorCard(this, ${i})">`;
+                dims.forEach(d => { comboDimensao += `<option value="${d.val}" ${card.dimensao === d.val ? 'selected' : ''}>${d.lbl}</option>`; });
+                comboDimensao += `</select>`;
+
+                const btnExcluir = missao.cards.length > 1 ? 
+                    `<button class="btn-primary" style="background: transparent; border: 1px solid var(--cor-alerta); color: var(--cor-alerta); padding: 0.3rem; margin-left: auto;" onclick="AppGENTE.removerCardMicro(${i})"><span class="material-icons-round" style="font-size: 16px;">delete</span></button>` : '';
+
+                listaCards.innerHTML += `
+                    <div id="card_ui_${i}" class="card-micro ${card.dimensao}">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <span class="material-icons-round" style="font-size: 18px; opacity: 0.7;">category</span>
+                            ${comboDimensao}
+                            ${btnExcluir}
+                        </div>
+                        
+                        <textarea id="texto_card_${i}" class="text-area" style="min-height: 70px; padding: 0.8rem; font-size: 0.95rem; background: rgba(0,0,0,0.2);" placeholder="Descreva a atividade docente a ser realizada...">${card.texto_editado}</textarea>
+                        
+                        <div class="grid-configuracao" style="grid-template-columns: 1fr 1fr 1.5fr; margin-bottom: 10px; border-bottom: none; padding-bottom: 0;">
+                            <div>
+                                <label style="font-size: 0.8rem; color: var(--texto-suave);">Tempo (Minutos)</label>
+                                <input type="number" id="tempo_${i}" class="text-field tempo-input" value="${card.tempo}" min="15" onchange="AppGENTE.validarTempoUI(this)">
+                                <div class="alerta-erro">Mínimo: 15 min.</div>
+                            </div>
+                            <div>
+                                <label style="font-size: 0.8rem; color: var(--texto-suave);">Criticidade</label>
+                                <select id="crit_${i}" class="text-field" onchange="AppGENTE.atualizarRegraUI(this)">
+                                    <option value="estruturante" ${selEstruturante}>Estruturante (Penal XP)</option>
+                                    <option value="complementar" ${selComplementar}>Complementar (Bloqueio)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size: 0.8rem; color: var(--texto-suave);">Formato (Desbloqueio)</label>
+                                <select id="acesso_${i}" class="text-field" onchange="AppGENTE.atualizarAcessoUI(this)">
+                                    <option value="exploracao" ${selExploracao}>Exploração (Livre)</option>
+                                    <option value="aula" ${selAula}>Aula (Exige QR Code)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="painel-penalidade" style="display: flex; flex-direction: column; gap: 4px;">
+                            <span class="texto-regra" style="font-size: 0.8rem; color: var(--texto-suave);">Ajuste a criticidade para ver a regra.</span>
+                            <span class="texto-acesso" style="font-size: 0.8rem; color: var(--texto-suave);">Ajuste o formato para ver a trava.</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            listaCards.innerHTML += `
+                <div style="text-align: center; margin-top: 1.5rem;">
+                    <button class="btn-primary" style="background: transparent; border: 1px dashed var(--borda); color: var(--texto-suave); margin: 0 auto;" onclick="AppGENTE.adicionarCardMicro()">
+                        <span class="material-icons-round">add</span> Adicionar Nova Atividade
+                    </button>
+                </div>
+            `;
+            
+            setTimeout(() => { 
+                for(let i=0; i<missao.cards.length; i++) { 
+                    this.atualizarRegraUI(document.getElementById(`crit_${i}`));
+                    this.atualizarAcessoUI(document.getElementById(`acesso_${i}`));
+                } 
+            }, 100);
+        },
+
+        validarTempoUI: function(el) {
+            let v = parseInt(el.value);
+            if(v < 15 || isNaN(v)) { el.value = 15; el.nextElementSibling.style.display = 'block'; el.style.borderColor = 'var(--cor-alerta)'; } 
+            else { el.nextElementSibling.style.display = 'none'; el.style.borderColor = 'var(--borda)'; }
+        },
+
+        atualizarRegraUI: function(selectEl) {
+            if(!selectEl) return;
+            // Ajustado para encontrar a div correta devido à nova estrutura do grid
+            const txt = selectEl.parentElement.parentElement.nextElementSibling.querySelector('.texto-regra');
+            if(selectEl.value === 'estruturante') {
+                txt.innerHTML = "<span style='color:var(--cor-aviso)'>Atraso: Penalidade -5% XP/dia.</span> (Piso de 50%). Permanece aberto.";
+            } else {
+                txt.innerHTML = "<span style='color:var(--cor-alerta)'>Atraso: Bloqueio Permanente.</span> Oportunidade perdida (0 XP).";
+            }
+        },
+
+        atualizarAcessoUI: function(selectEl) {
+            if(!selectEl) return;
+            const txt = selectEl.parentElement.parentElement.nextElementSibling.querySelector('.texto-acesso');
+            if(selectEl.value === 'aula') {
+                txt.innerHTML = "<span class='material-icons-round' style='font-size:14px; vertical-align:text-bottom;'>qr_code_scanner</span> <span style='color:var(--cor-destaque)'>Check-in Físico: Exige leitura do QR Code do Painel do Mestre.</span>";
+            } else {
+                txt.innerHTML = "<span class='material-icons-round' style='font-size:14px; vertical-align:text-bottom;'>lock_open</span> <span style='color:var(--cor-sucesso)'>Trilha Livre: O aluno pode iniciar a qualquer momento via app.</span>";
+            }
+        },
+
+        mudarCorCard: function(selectEl, index) {
+            const cardUI = document.getElementById(`card_ui_${index}`);
+            if(cardUI) cardUI.className = `card-micro ${selectEl.value}`; 
+        },
+
+        salvarEstadoMicroTemp: function() {
+            const missao = this.curriculo.territorios[this.territorioAtivoIndex].missoes[this.missaoAtivaIndex];
+            
+            const elTitulo = document.getElementById('input_titulo_missao');
+            if(elTitulo) missao.titulo = elTitulo.value;
+
+            missao.cards.forEach((card, i) => {
+                const elTempo = document.getElementById(`tempo_${i}`);
+                const elCrit = document.getElementById(`crit_${i}`);
+                const elTexto = document.getElementById(`texto_card_${i}`);
+                const elDim = document.getElementById(`dim_${i}`);
+                const elAcesso = document.getElementById(`acesso_${i}`); // Salva o formato
+                
+                if(elTempo) card.tempo = parseInt(elTempo.value) || 15;
+                if(elCrit) card.criticidade = elCrit.value;
+                if(elTexto) card.texto_editado = elTexto.value;
+                if(elDim) card.dimensao = elDim.value;
+                if(elAcesso) card.acesso = elAcesso.value;
+            });
+        },
+
+        adicionarCardMicro: function() {
+            this.salvarEstadoMicroTemp(); 
+            
+            const missao = this.curriculo.territorios[this.territorioAtivoIndex].missoes[this.missaoAtivaIndex];
+            missao.cards.push({
+                dimensao: 'tecnica', 
+                verbos: [],
+                texto_editado: "",
+                tempo: 15,
+                criticidade: 'complementar',
+                acesso: 'exploracao' // Novo card nasce como exploração
+            });
+            
+            this.abrirMicro(this.missaoAtivaIndex); 
+        },
+
+        removerCardMicro: function(index) {
+            if(!confirm("Tem certeza que deseja excluir esta atividade da missão?")) return;
+            
+            this.salvarEstadoMicroTemp();
+            const missao = this.curriculo.territorios[this.territorioAtivoIndex].missoes[this.missaoAtivaIndex];
+            
+            missao.cards.splice(index, 1); 
+            this.abrirMicro(this.missaoAtivaIndex); 
+        },
+
+        salvarPrataxisMicro: function() {
+            this.salvarEstadoMicroTemp(); 
+            this.calcularIMOTerritorio(); 
+            this.abrirMeso(this.territorioAtivoIndex); 
+        },
+        // ==========================================
+        // 5. CÁLCULO E NAVEGAÇÃO
+        // ==========================================
+        calcularIMOTerritorio: function() {
+            let territorio = this.curriculo.territorios[this.territorioAtivoIndex];
+            let totais = { tecnica: 0, cognitiva: 0, contextual: 0, social: 0 };
+            let coberturaMissaoCount = 0;
+
+            if(territorio.missoes.length === 0) return;
+
+            territorio.missoes.forEach(m => {
+                let cobriuTudo = true;
+                m.cards.forEach(c => {
+                    if(c.tempo >= 15) { totais[c.dimensao] += c.tempo; }
+                    else { cobriuTudo = false; }
+                });
+                if(cobriuTudo) coberturaMissaoCount++;
+            });
+
+            let notaCobertura = (coberturaMissaoCount / territorio.missoes.length) * 40;
+            let tempoTotal = totais.tecnica + totais.cognitiva + totais.contextual + totais.social;
+            let tempoCCS = totais.cognitiva + totais.contextual + totais.social;
+            let notaEquilibrio = 0;
+
+            if (tempoTotal > 0) {
+                let proporcaoCCS = tempoCCS / tempoTotal;
+                let taxaAlcance = proporcaoCCS / 0.30; 
+                notaEquilibrio = Math.min(60, taxaAlcance * 60); 
+                
+                territorio.imo.pTecnica = (totais.tecnica / tempoTotal) * 100;
+                territorio.imo.pCognitiva = (totais.cognitiva / tempoTotal) * 100;
+                territorio.imo.pContextual = (totais.contextual / tempoTotal) * 100;
+                territorio.imo.pSocial = (totais.social / tempoTotal) * 100;
+            }
+
+            let notaFinal = Math.round(notaCobertura + notaEquilibrio);
+            territorio.imo.nota = notaFinal;
+
+            if (notaFinal < 40) { territorio.imo.classificacao = "Funcional / Alienante"; territorio.imo.cor = "var(--cor-alerta)"; } 
+            else if (notaFinal < 70) { territorio.imo.classificacao = "Cognitivo-Comportamental"; territorio.imo.cor = "var(--dim-contextual)"; } 
+            else if (notaFinal < 90) { territorio.imo.classificacao = "Adaptativo / Territorial"; territorio.imo.cor = "var(--dim-tecnica)"; } 
+            else { territorio.imo.classificacao = "Formação Humana Integral"; territorio.imo.cor = "var(--dim-social)"; }
+
+            this.atualizarVisorIMO();
+        },
+
+        atualizarVisorIMO: function() {
+            let imo = this.curriculo.territorios[this.territorioAtivoIndex].imo;
+            document.getElementById('imo-texto').innerText = `${imo.classificacao} (${imo.nota} pts)`;
+            document.getElementById('imo-texto').style.color = imo.cor;
+
+            const barra = document.getElementById('barra-imo-visual');
+            barra.innerHTML = `
+                <div class="imo-segment" style="width: ${imo.pTecnica}%; background: var(--dim-tecnica);" title="Técnica: ${Math.round(imo.pTecnica)}%"></div>
+                <div class="imo-segment" style="width: ${imo.pCognitiva}%; background: var(--dim-cognitiva);" title="Cognitiva: ${Math.round(imo.pCognitiva)}%"></div>
+                <div class="imo-segment" style="width: ${imo.pContextual}%; background: var(--dim-contextual);" title="Contextual: ${Math.round(imo.pContextual)}%"></div>
+                <div class="imo-segment" style="width: ${imo.pSocial}%; background: var(--dim-social);" title="Social: ${Math.round(imo.pSocial)}%"></div>
+            `;
+        },
+          voltarParaMeso: function() {
+            // Se o professor clicar em voltar, salvamos o rascunho dos cards por segurança
+            this.salvarEstadoMicroTemp(); 
+            this.abrirMeso(this.territorioAtivoIndex);
+        },
+		
+        voltarParaMacro: function() {
+            document.getElementById('view-meso').classList.remove('active');
+            document.getElementById('view-micro').classList.remove('active');
+            document.getElementById('view-macro-genesis').classList.remove('active');
+            document.getElementById('view-macro-digitalizacao').classList.remove('active');
+            
+            document.getElementById(`view-macro-${this.modoAtivo}`).classList.add('active');
+            
+            document.getElementById('step-2').classList.remove('active'); 
+            document.getElementById('step-1').classList.add('active');
+            document.getElementById('step-1').classList.remove('completed');
+            
+            if(this.modoAtivo === 'genesis') {
+                this.renderizarMacroGenesis();
+            } else {
+                this.renderizarMacroDigitalizacao();
+            }
+        },
+    
+        atualizarDiretriz: function(index, dimensao, valor) {
+            this.curriculo.territorios[index].diretrizes[dimensao] = valor;
+        },
+
+        salvarRascunho: function() {
+            let nomeCurso = "";
+            if (this.modoAtivo === 'genesis') {
+                nomeCurso = document.getElementById('genesis-nome').value.trim() || "Curso em Planejamento";
+            } else {
+                nomeCurso = document.getElementById('digital-nome').value.trim() || "Curso em Planejamento";
+            }
+            
+            if(!this.curriculo.metadados) this.curriculo.metadados = {};
+            this.curriculo.metadados.nomeCurso = nomeCurso;
+            
+            if (this.modoAtivo === 'genesis') {
+                this.curriculo.metadados.cidade = document.getElementById('genesis-cidade').value;
+                this.curriculo.metadados.vocacao = document.getElementById('genesis-vocacao').value;
+                this.curriculo.metadados.perfil = document.getElementById('genesis-perfil').value;
+            }
+
+            let rascunhos = JSON.parse(localStorage.getItem('aptia_rascunhos_multiplos') || '[]');
+            const rascunhosFiltrados = rascunhos.filter(r => r.nomeCurso !== nomeCurso);
+            
+            const novoRascunho = {
+                nomeCurso: nomeCurso,
+                curriculo: this.curriculo,
+                modo: this.modoAtivo,
+                dataSalvo: new Date().toLocaleDateString() + " às " + new Date().toLocaleTimeString()
+            };
+
+            rascunhosFiltrados.push(novoRascunho);
+            localStorage.setItem('aptia_rascunhos_multiplos', JSON.stringify(rascunhosFiltrados));
+            alert(`Rascunho do curso "${nomeCurso}" salvo com sucesso!`);
+        },
+
+        restaurarRascunho: function() {
+            let rascunhos = JSON.parse(localStorage.getItem('aptia_rascunhos_multiplos') || '[]');
+            if(rascunhos.length === 0) {
+                alert("Nenhum rascunho de curso salvo neste navegador.");
+                return;
+            }
+
+            let menu = "RASCUNHOS SALVOS\n\nEscolha o NÚMERO do curso que deseja restaurar:\n\n";
+            rascunhos.forEach((r, i) => { menu += `[ ${i + 1} ] - ${r.nomeCurso} (Modo: ${r.modo})\n      (Salvo em: ${r.dataSalvo})\n\n`; });
+
+            const escolha = prompt(menu);
+
+            if(escolha !== null && escolha.trim() !== '') {
+                const index = parseInt(escolha) - 1;
+                if(index >= 0 && index < rascunhos.length) {
+                    const selecionado = rascunhos[index];
+                    
+                    this.curriculo = selecionado.curriculo || { metadados: {}, territorios: [] };
+                    if (!this.curriculo.metadados) this.curriculo.metadados = {};
+                    if (!this.curriculo.territorios) this.curriculo.territorios = [];
+
+                    // Seta o modo correto
+                    this.setModo(selecionado.modo || 'genesis');
+
+                    if (this.modoAtivo === 'genesis') {
+                        document.getElementById('genesis-nome').value = this.curriculo.metadados.nomeCurso || '';
+                        document.getElementById('genesis-cidade').value = this.curriculo.metadados.cidade || '';
+                        document.getElementById('genesis-vocacao').value = this.curriculo.metadados.vocacao || '';
+                        document.getElementById('genesis-perfil').value = this.curriculo.metadados.perfil || '';
+                        this.renderizarMacroGenesis();
+                    } else {
+                        document.getElementById('digital-nome').value = this.curriculo.metadados.nomeCurso || '';
+                        this.renderizarMacroDigitalizacao();
+                    }
+                    
+                    alert("Rascunho restaurado com sucesso!");
+                } else { alert("Opção inválida."); }
+            }
+        },
+
+        exportarJSON: function() {
+            if(this.curriculo.territorios.length === 0) {
+                alert("Não há dados para exportar. Crie os territórios primeiro.");
+                return;
+            }
+
+            const nomeSeguro = (this.curriculo.metadados.nomeCurso || "curso_gente").normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const jsonString = JSON.stringify(this.curriculo, null, 4);
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonString);
+            
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `matriz_gente_${nomeSeguro}.json`);
+            document.body.appendChild(downloadAnchorNode); 
+            
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+    }; 
+
+    // ==========================================
+    // INICIALIZAÇÃO E BINDINGS
+    // ==========================================
+    // Inicia o sistema no modo Gênesis
+    document.addEventListener("DOMContentLoaded", () => {
+        AppGENTE.setModo('genesis');
+    });
+
+    // Eventos passivos anexados nas funções para garantir fluxo reverso
+    function avancarParaMeso() { AppGENTE.abrirMeso(0); }
+    function voltarParaMeso() { AppGENTE.abrirMeso(AppGENTE.territorioAtivoIndex); }
     </script>
 </body>
 </html>
