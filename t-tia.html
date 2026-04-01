@@ -1067,6 +1067,118 @@ processarCrachaQR: function(textoDecodificado) {
                 });
             }, 3000); // 3 segundos de memorização
         }
+		// Engine 6: Taxonomia Dinâmica (Múltiplos Cestos)
+        else if (p.e === 6) {
+            this.estadoAtual.indexItem = 0;
+            
+            // Área de exibição do item central
+            const visorItem = document.createElement('div');
+            visorItem.style = "grid-column: 1 / -1; background: rgba(0,0,0,0.5); border-radius: 20px; height: 180px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; border: 2px solid var(--cor-secundaria); box-shadow: inset 0 0 20px rgba(59, 130, 246, 0.2);";
+            
+            const renderizarItemAtual = () => {
+                const idx = this.estadoAtual.indexItem;
+                if(idx >= p.d.i.length) {
+                    this.finalizarJogo(true, "CLASSIFICAÇÃO CONCLUÍDA");
+                    return;
+                }
+                visorItem.innerHTML = `<span class="material-icons-round" style="font-size: 6rem; color: var(--texto-puro); animation: zoomInEnter 0.2s;">${p.d.i[idx].x}</span>`;
+            };
+
+            const avaliarCesto = (indexCesto) => {
+                const itemAtual = p.d.i[this.estadoAtual.indexItem];
+                if (itemAtual.y === indexCesto) {
+                    this.estadoAtual.indexItem++;
+                    renderizarItemAtual();
+                } else {
+                    document.getElementById('console-g3j').style.animation = "glitchErro 0.3s";
+                    this.finalizarJogo(false, "ERRO DE ROTEAMENTO/CLASSIFICAÇÃO");
+                }
+            };
+
+            grid.appendChild(visorItem);
+            
+            // Cria os cestos na base (colunas dinâmicas dependendo da quantidade de categorias)
+            const gridCestos = document.createElement('div');
+            gridCestos.style = `grid-column: 1 / -1; display: grid; grid-template-columns: repeat(${p.d.c.length}, 1fr); gap: 10px;`;
+            
+            p.d.c.forEach((iconeCesto, index) => {
+                const btnCesto = document.createElement('div');
+                btnCesto.className = 'g3j-item';
+                btnCesto.style = "padding: 1.5rem 0; border-color: var(--texto-suave);";
+                btnCesto.innerHTML = `<span class="material-icons-round">${iconeCesto}</span>`;
+                btnCesto.onclick = () => avaliarCesto(index);
+                gridCestos.appendChild(btnCesto);
+            });
+            
+            grid.appendChild(gridCestos);
+            renderizarItemAtual();
+        }
+
+        // Engine 7: Interceptação / Radar (Foco Sustentado)
+        else if (p.e === 7) {
+            grid.style.gridTemplateColumns = `1fr`;
+            
+            const radar = document.createElement('div');
+            radar.style = "background: radial-gradient(circle, rgba(74,222,128,0.2) 0%, rgba(0,0,0,0.8) 70%); border: 2px solid var(--cor-sucesso); border-radius: 50%; width: 200px; height: 200px; margin: 0 auto 30px auto; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;";
+            
+            const alvoIcone = document.createElement('span');
+            alvoIcone.className = 'material-icons-round';
+            alvoIcone.style = "font-size: 5rem; color: var(--cor-sucesso);";
+            radar.appendChild(alvoIcone);
+            
+            // Linha de scan do radar
+            radar.innerHTML += `<div style="position:absolute; top:50%; left:50%; width:100px; height:2px; background:var(--cor-sucesso); transform-origin: left center; animation: radarSpin 2s linear infinite;"></div>`;
+            
+            grid.appendChild(radar);
+
+            let iconeVisivelAtual = "";
+            let loopRadar;
+
+            // Motor de ciclo rápido
+            const iniciarRadar = () => {
+                loopRadar = setInterval(() => {
+                    // 20% de chance de aparecer o alvo, 80% de ser distração
+                    if (Math.random() < 0.2) {
+                        iconeVisivelAtual = p.d.a;
+                    } else {
+                        iconeVisivelAtual = p.d.f[Math.floor(Math.random() * p.d.f.length)];
+                    }
+                    radar.children[0].innerText = iconeVisivelAtual;
+                    radar.children[0].style.color = (iconeVisivelAtual === p.d.a) ? "var(--cor-alerta)" : "var(--cor-sucesso)";
+                }, p.d.v); // Velocidade definida no cartucho (ex: 350ms)
+            };
+
+            const btnInterceptar = document.createElement('button');
+            btnInterceptar.className = 'btn btn-primario';
+            btnInterceptar.style = "width: 100%; padding: 1.5rem; font-size: 1.5rem; letter-spacing: 2px; border-radius: 16px;";
+            btnInterceptar.innerText = "INTERCEPTAR";
+            
+            btnInterceptar.onclick = () => {
+                clearInterval(loopRadar); // Para o radar imediatamente
+                if (iconeVisivelAtual === p.d.a) {
+                    this.finalizarJogo(true, "ALVO INTERCEPTADO COM SUCESSO");
+                } else {
+                    radar.style.borderColor = "var(--cor-alerta)";
+                    radar.style.background = "rgba(239,68,68,0.3)";
+                    this.finalizarJogo(false, "ALVO INCORRETO ABATIDO. MISSÃO FALHOU.");
+                }
+            };
+
+            grid.appendChild(btnInterceptar);
+            
+            // Adiciona o CSS da animação do radar se não existir
+            if (!document.getElementById('style-radar')) {
+                const style = document.createElement('style');
+                style.id = 'style-radar';
+                style.innerHTML = `@keyframes radarSpin { 100% { transform: rotate(360deg); } }`;
+                document.head.appendChild(style);
+            }
+
+            iniciarRadar();
+            
+            // Salva a referência do intervalo para limpá-lo se o tempo geral acabar
+            this.estadoAtual.intervaloRadar = loopRadar; 
+        }
         arena.appendChild(grid);
     },
 
