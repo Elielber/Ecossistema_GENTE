@@ -161,7 +161,34 @@ header {
         .btn { flex: 1; padding: 1rem; border: none; border-radius: 12px; font-size: 0.9rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; color: white; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); transition: var(--transicao); text-transform: uppercase; }
         .btn:active { transform: scale(0.96); background: rgba(255,255,255,0.1); }
         .btn-primario { background: linear-gradient(135deg, var(--cor-primaria), #7e22ce); border: none; box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4); }
-    </style>
+    
+	/* --- TIA GAME ENGINE (OVERLAY) --- */
+#console-g3j {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: radial-gradient(circle at 50% 50%, #1a1025 0%, #05070a 80%);
+    z-index: 9999; display: flex; flex-direction: column;
+    color: var(--texto-puro); padding: 2rem 1.5rem; backdrop-filter: blur(10px);
+}
+.g3j-header { text-align: center; margin-bottom: 2rem; }
+.g3j-comando { font-size: 1.2rem; font-weight: bold; color: var(--cor-sucesso); text-transform: uppercase; letter-spacing: 1px; margin-top: 10px; }
+.g3j-timer { font-family: monospace; font-size: 3rem; font-weight: 900; color: var(--texto-puro); text-shadow: 0 0 15px rgba(255,255,255,0.5); }
+.g3j-timer.urgente { color: var(--cor-alerta); text-shadow: 0 0 20px rgba(245, 158, 11, 0.8); animation: pulsarUrgente 0.5s infinite; }
+
+/* Grid Responsivo para Jogos Gráficos */
+.g3j-arena { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
+.g3j-grid { display: grid; gap: 15px; width: 100%; max-width: 350px; }
+.g3j-item { 
+    background: rgba(22, 28, 44, 0.8); border: 2px solid #334155; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center; padding: 2rem 0;
+    font-size: 3rem; cursor: pointer; transition: var(--transicao); color: var(--texto-suave);
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+}
+.g3j-item:active { transform: scale(0.9); }
+.g3j-item.selecionado { border-color: var(--cor-primaria); color: var(--cor-primaria); box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); }
+
+@keyframes pulsarUrgente { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+@keyframes glitchErro { 0% { transform: translate(0) } 20% { transform: translate(-5px, 5px) } 40% { transform: translate(-5px, -5px) } 60% { transform: translate(5px, 5px) } 80% { transform: translate(5px, -5px) } 100% { transform: translate(0) } }
+	</style>
 </head>
 <body>
 <script src="https://unpkg.com/html5-qrcode"></script>
@@ -370,6 +397,11 @@ processarCrachaQR: function(textoDecodificado) {
 
                         case "G3_VALIDACAO": // <-- ALINHADO COM O MESTRE!
                             this.processarG3Validacao(dados);
+                            break;
+							
+						case "G3J": // <--- NOVO: PROTOCOLO DE JOGO
+                            if (this.leitorHTML5) { this.leitorHTML5.pause(true); } // Pausa a câmera
+                            GenteGameEngine.iniciarCartucho(dados);
                             break;
 
                         default:
@@ -789,14 +821,148 @@ processarCrachaQR: function(textoDecodificado) {
                         <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">TERMINAL DE DADOS BLOQUEADO</h3>
                         <p style="font-size: 0.85rem; color: var(--texto-suave);">Para concluir a missão <strong>${missaoEncontrada.idMissao}</strong>, necessita extrair os dados contextuais das aulas.</p>
                         
-                        <button class="btn btn-primario" style="margin-top: 20px; width: 100%;" onclick="Autenticacao.iniciarCamera()">
-                         <span class="material-icons-round">qr_code_scanner</span> Ativar Recetor G3
+                        <button class="btn btn-primario" style="margin-top: 20px; width: 100%;" onclick="alert('Motor G3 em Desenvolvimento!')">
+                            <span class="material-icons-round">qr_code_scanner</span> Ativar Recetor G3
                         </button>
                     </div>
                 `;
             }
 			};
-			
+			const GenteGameEngine = {
+    timerInterval: null,
+    estadoAtual: null,
+
+    // Inicia o console ao ler o QR Code
+    iniciarCartucho: function(payload) {
+        this.estadoAtual = payload;
+        this.estadoAtual.selecoes = []; // Array para rastrear toques do jogador
+
+        const consoleDiv = document.createElement('div');
+        consoleDiv.id = "console-g3j";
+        consoleDiv.innerHTML = `
+            <div class="g3j-header">
+                <div style="font-size:0.8rem; color:var(--texto-suave); letter-spacing:2px;">[ EXTRAÇÃO TÁTICA ATIVA ]</div>
+                <div class="g3j-timer" id="ui-g3j-timer">${payload.s}</div>
+                <div class="g3j-comando">${payload.c}</div>
+            </div>
+            <div class="g3j-arena" id="ui-g3j-arena"></div>
+        `;
+        document.body.appendChild(consoleDiv);
+
+        this.montarArena(payload);
+        this.iniciarRelogio(payload.s);
+    },
+
+    iniciarRelogio: function(segundos) {
+        let tempoRestante = segundos;
+        const uiTimer = document.getElementById('ui-g3j-timer');
+        
+        this.timerInterval = setInterval(() => {
+            tempoRestante--;
+            uiTimer.innerText = tempoRestante;
+            
+            if(tempoRestante <= 5) uiTimer.classList.add('urgente');
+            
+            if(tempoRestante <= 0) {
+                this.finalizarJogo(false, "TEMPO ESGOTADO");
+            }
+        }, 1000);
+    },
+
+    montarArena: function(p) {
+        const arena = document.getElementById('ui-g3j-arena');
+        const grid = document.createElement('div');
+        grid.className = 'g3j-grid';
+
+        // Engine 3: Problema Gráfico (Encontrar a Anomalia no Grid)
+        if (p.e === 3) {
+            // Define colunas dinamicamente baseado na quantidade de itens
+            grid.style.gridTemplateColumns = `repeat(${Math.ceil(Math.sqrt(p.d.length))}, 1fr)`;
+            
+            p.d.forEach((icone, index) => {
+                const btn = document.createElement('div');
+                btn.className = 'g3j-item';
+                btn.innerHTML = `<span class="material-icons-round">${icone}</span>`;
+                
+                btn.onclick = () => {
+                    // Se tocou no índice correto definido no payload ('a')
+                    if (index === p.a) {
+                        btn.style.borderColor = "var(--cor-sucesso)";
+                        btn.style.color = "var(--cor-sucesso)";
+                        this.finalizarJogo(true, "PADRÃO CORRIGIDO");
+                    } else {
+                        btn.style.borderColor = "var(--cor-alerta)";
+                        btn.style.color = "var(--cor-alerta)";
+                        document.getElementById('console-g3j').style.animation = "glitchErro 0.3s";
+                        setTimeout(() => document.getElementById('console-g3j').style.animation = "", 300);
+                        this.finalizarJogo(false, "FALHA CRÍTICA DE SISTEMA");
+                    }
+                };
+                grid.appendChild(btn);
+            });
+        }
+        
+        // Engine 2: Ordenação Lógica (Tocar na ordem certa)
+        else if (p.e === 2) {
+            grid.style.gridTemplateColumns = `1fr`; // Lista vertical
+            
+            p.d.forEach((passo, index) => {
+                const btn = document.createElement('div');
+                btn.className = 'g3j-item';
+                btn.style.padding = "1rem";
+                btn.style.justifyContent = "flex-start";
+                btn.style.fontSize = "1.2rem";
+                btn.innerHTML = `<span class="material-icons-round" style="margin-right:15px; color:var(--cor-primaria);">${passo.icone}</span> ${passo.texto}`;
+                
+                btn.onclick = () => {
+                    if(btn.classList.contains('selecionado')) return;
+                    btn.classList.add('selecionado');
+                    this.estadoAtual.selecoes.push(passo.id);
+                    
+                    // Verifica se já selecionou todos
+                    if(this.estadoAtual.selecoes.length === p.d.length) {
+                        // Verifica se a array de seleções é igual à array de resposta correta 'a'
+                        if(JSON.stringify(this.estadoAtual.selecoes) === JSON.stringify(p.a)) {
+                            this.finalizarJogo(true, "SEQUÊNCIA LÓGICA ESTABELECIDA");
+                        } else {
+                            this.finalizarJogo(false, "ORDEM DE EXECUÇÃO INCORRETA");
+                        }
+                    }
+                };
+                grid.appendChild(btn);
+            });
+        }
+
+        arena.appendChild(grid);
+    },
+
+    finalizarJogo: function(vitoria, mensagem) {
+        clearInterval(this.timerInterval);
+        
+        const consoleUi = document.getElementById('console-g3j');
+        consoleUi.innerHTML = `
+            <div style="text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%;">
+                <span class="material-icons-round" style="font-size:6rem; color:${vitoria ? 'var(--cor-sucesso)' : 'var(--cor-alerta)'}; margin-bottom:1rem;">
+                    ${vitoria ? 'check_circle' : 'gpp_bad'}
+                </span>
+                <h1 style="color:${vitoria ? 'var(--cor-sucesso)' : 'var(--cor-alerta)'}; margin-bottom:10px;">${vitoria ? 'COMPETÊNCIA EXTRAÍDA' : 'EXTRAÇÃO FALHOU'}</h1>
+                <p style="color:var(--texto-suave); margin-bottom: 2rem;">${mensagem}</p>
+                <button class="btn btn-primario" id="btn-fechar-g3j">RETORNAR AO TERMINAL</button>
+            </div>
+        `;
+
+        document.getElementById('btn-fechar-g3j').onclick = () => {
+            consoleUi.remove();
+            if (vitoria) {
+                // Aqui você aciona a função existente de sucesso que libera a missão na árvore!
+                Autenticacao.processarG3Validacao({
+                    idMissao: this.estadoAtual.m, 
+                    expira: new Date().getTime() + 100000 
+                });
+            }
+        };
+    }
+};
 
         // ============================================================================
         // INICIALIZAÇÃO DO APLICATIVO
