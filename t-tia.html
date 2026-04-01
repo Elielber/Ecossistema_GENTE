@@ -223,6 +223,27 @@ header {
 
     </section>
     <header>
+		<div id="overlay-scanner-g3" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(10, 14, 23, 0.95); z-index: 5000; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+    
+    <div style="text-align: center; margin-bottom: 2rem;">
+        <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-sucesso);">qr_code_scanner</span>
+        <h2 style="color: var(--texto-puro); font-size: 1.2rem; margin-top: 10px; text-transform: uppercase; letter-spacing: 2px;">Protocolo G3</h2>
+        <p id="scanner-g3-instrucao" style="color: var(--texto-suave); font-size: 0.85rem;">Aponte para o Painel do Mestre</p>
+    </div>
+
+    <div style="width: 250px; height: 250px; border-radius: 20px; overflow: hidden; border: 3px solid var(--cor-sucesso); box-shadow: 0 0 30px rgba(74, 222, 128, 0.4); position: relative;">
+        <div id="leitor-universal" style="width: 100%; height: 100%; background: #000;"></div>
+        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: var(--cor-sucesso); box-shadow: 0 0 10px var(--cor-sucesso); animation: scanLaser 2s infinite linear;"></div>
+    </div>
+
+    <button class="btn" style="margin-top: 3rem; border-color: var(--cor-alerta); color: var(--cor-alerta); width: 200px;" onclick="ScannerG3.fechar()">
+        <span class="material-icons-round">close</span> CANCELAR
+    </button>
+</div>
+
+<style>
+    @keyframes scanLaser { 0% { top: 0; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+</style>
         <div class="avatar-container">JS</div>
         <div class="info-progresso">
             <div class="nome-aluno">João Silva</div>
@@ -823,17 +844,17 @@ processarCrachaQR: function(textoDecodificado) {
 
                 // Desenha a interface do Terminal (que será a ponte para o protocolo G3)
                 const container = document.querySelector('.malha-container');
-                container.innerHTML = `
-                    <div class="card-chefe">
-                        <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-alerta); margin-bottom: 1rem;">lock_outline</span>
-                        <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">TERMINAL DE DADOS BLOQUEADO</h3>
-                        <p style="font-size: 0.85rem; color: var(--texto-suave);">Para concluir a missão <strong>${missaoEncontrada.idMissao}</strong>, necessita extrair os dados contextuais das aulas.</p>
-                        
-                        <button class="btn btn-primario" style="margin-top: 20px; width: 100%;" onclick="alert('Motor G3 em Desenvolvimento!')">
-                            <span class="material-icons-round">qr_code_scanner</span> Ativar Recetor G3
-                        </button>
-                    </div>
-                `;
+          container.innerHTML = `
+              <div class="card-chefe">
+                  <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-alerta); margin-bottom: 1rem;">lock_outline</span>
+                  <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">TERMINAL BLOQUEADO</h3>
+                  <p style="font-size: 0.85rem; color: var(--texto-suave);">O acesso a este nó exige intervenção do Painel do Mestre.</p>
+        
+                  <button class="btn btn-primario" style="margin-top: 20px; width: 100%;" onclick="ScannerG3.abrir('JOGO', 'Capture o Cartucho do Professor')">
+                  <span class="material-icons-round">qr_code_scanner</span> INICIAR PROTOCOLO G3
+                  </button>
+              </div>
+           `;
             }
 			};
 			const GenteGameEngine = {
@@ -971,7 +992,65 @@ processarCrachaQR: function(textoDecodificado) {
         };
     }
 };
+const ScannerG3 = {
+    leitorHTML5: null,
+    contextoAtual: null, // Pode ser 'LOGIN' ou 'JOGO'
 
+    abrir: function(contexto, instrucao = "Aponte para o QR Code do Mestre") {
+        this.contextoAtual = contexto;
+        document.getElementById('scanner-g3-instrucao').innerText = instrucao;
+        document.getElementById('overlay-scanner-g3').style.display = 'flex';
+
+        if (!this.leitorHTML5) {
+            this.leitorHTML5 = new Html5Qrcode("leitor-universal");
+        }
+
+        this.leitorHTML5.start(
+            { facingMode: "environment" }, 
+            { fps: 10, qrbox: { width: 200, height: 200 } },
+            (textoDecodificado) => { this.processarLeitura(textoDecodificado); },
+            (errorMessage) => {}
+        ).catch((err) => {
+            alert("Erro ao acessar a câmera. Verifique as permissões.");
+            this.fechar();
+        });
+    },
+
+    fechar: function() {
+        document.getElementById('overlay-scanner-g3').style.display = 'none';
+        if (this.leitorHTML5) {
+            this.leitorHTML5.stop().then(() => {
+                this.leitorHTML5.clear();
+            }).catch(err => console.error("Erro ao parar câmera", err));
+        }
+    },
+
+    processarLeitura: function(textoDecodificado) {
+        try {
+            // Decodifica o JSON comprimido
+            let dados = JSON.parse(textoDecodificado);
+            
+            // Pausa/Fecha a câmera IMEDIATAMENTE após ler com sucesso
+            this.fechar();
+
+            // Roteia a ação dependendo do que foi lido
+            if (dados.tipo === "aTIA_LOGIN" || dados.tipo === "G3_VALIDACAO") {
+                Autenticacao.processarCrachaQR(textoDecodificado);
+            } 
+            else if (dados.t === "G3J" || dados.tipo === "G3J") {
+                GenteGameEngine.iniciarCartucho(dados);
+            } 
+            else {
+                alert("QR Code não reconhecido pelo protocolo G3.");
+            }
+
+        } catch (erro) {
+            console.error("ERRO QR:", erro);
+            alert("QR Code inválido ou corrompido.");
+            this.fechar();
+        }
+    }
+};
         // ============================================================================
         // INICIALIZAÇÃO DO APLICATIVO
         // ============================================================================
