@@ -961,7 +961,112 @@ processarCrachaQR: function(textoDecodificado) {
                 grid.appendChild(btn);
             });
         }
+// Engine 4: Triagem Binária (Aceitar ou Rejeitar)
+        else if (p.e === 4) {
+            this.estadoAtual.indexTriagem = 0;
+            
+            grid.style.gridTemplateColumns = `1fr 1fr`; // Dois botões embaixo
+            grid.style.gap = "20px";
+            
+            // Área de exibição do ícone central
+            const displayVisor = document.createElement('div');
+            displayVisor.id = "g3j-visor-triagem";
+            displayVisor.style = "grid-column: 1 / -1; background: rgba(0,0,0,0.5); border-radius: 20px; height: 150px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; border: 2px dashed #334155;";
+            displayVisor.innerHTML = `<span class="material-icons-round" style="font-size: 5rem; color: var(--texto-puro);">${p.d[0].i}</span>`;
+            
+            const renderizarProximo = () => {
+                const idx = this.estadoAtual.indexTriagem;
+                if(idx >= p.d.length) {
+                    this.finalizarJogo(true, "TRIAGEM CONCLUÍDA COM PRECISÃO");
+                    return;
+                }
+                displayVisor.innerHTML = `<span class="material-icons-round" style="font-size: 5rem; color: var(--texto-puro); animation: zoomInEnter 0.2s;">${p.d[idx].i}</span>`;
+            };
 
+            const avaliarTriagem = (escolhaAluno) => {
+                const itemAtual = p.d[this.estadoAtual.indexTriagem];
+                if (itemAtual.v === escolhaAluno) {
+                    this.estadoAtual.indexTriagem++;
+                    renderizarProximo();
+                } else {
+                    document.getElementById('console-g3j').style.animation = "glitchErro 0.3s";
+                    this.finalizarJogo(false, "FALHA DE CLASSIFICAÇÃO");
+                }
+            };
+
+            // Botões de Ação
+            const btnRejeitar = document.createElement('div');
+            btnRejeitar.className = 'g3j-item';
+            btnRejeitar.style = "border-color: var(--cor-alerta); color: var(--cor-alerta); padding: 1.5rem 0;";
+            btnRejeitar.innerHTML = `<span class="material-icons-round">close</span>`;
+            btnRejeitar.onclick = () => avaliarTriagem(1); // Considera 1 como o atributo do botão "Alerta/Rejeitar" (Ajustável)
+
+            const btnAceitar = document.createElement('div');
+            btnAceitar.className = 'g3j-item';
+            btnAceitar.style = "border-color: var(--cor-sucesso); color: var(--cor-sucesso); padding: 1.5rem 0;";
+            btnAceitar.innerHTML = `<span class="material-icons-round">check</span>`;
+            btnAceitar.onclick = () => avaliarTriagem(0); // Considera 0 como "Seguro/Aceitar"
+
+            grid.appendChild(displayVisor);
+            grid.appendChild(btnRejeitar);
+            grid.appendChild(btnAceitar);
+        }
+
+        // Engine 5: Retenção Tática (Memorização)
+        else if (p.e === 5) {
+            grid.style.gridTemplateColumns = `repeat(4, 1fr)`;
+            
+            const visorMemoria = document.createElement('div');
+            visorMemoria.id = "g3j-visor-memoria";
+            visorMemoria.style = "grid-column: 1 / -1; background: #000; border-radius: 12px; padding: 2rem; display: flex; justify-content: center; gap: 15px; margin-bottom: 20px;";
+            
+            // Fase 1: Mostrar a sequência
+            p.d.forEach(icone => {
+                visorMemoria.innerHTML += `<span class="material-icons-round" style="font-size: 2.5rem; color: var(--cor-primaria);">${icone}</span>`;
+            });
+            grid.appendChild(visorMemoria);
+
+            // Interface bloqueada durante a visualização
+            document.getElementById('ui-g3j-timer').innerText = "MEMORIZE";
+            document.getElementById('ui-g3j-timer').style.fontSize = "1.5rem";
+
+            // Fase 2: Ocultar e liberar teclado
+            setTimeout(() => {
+                visorMemoria.innerHTML = `<span style="color: var(--texto-suave); font-size: 0.9rem; letter-spacing: 2px;">INSIRA O PADRÃO</span>`;
+                document.getElementById('ui-g3j-timer').style.fontSize = "3rem";
+                document.getElementById('ui-g3j-timer').innerText = p.s; // Retorna o timer visual
+                
+                // Extrai ícones únicos para montar o teclado
+                const tecladoUnico = [...new Set(p.d)].sort();
+                
+                tecladoUnico.forEach(icone => {
+                    const btn = document.createElement('div');
+                    btn.className = 'g3j-item';
+                    btn.style = "padding: 1rem 0; font-size: 2rem;";
+                    btn.innerHTML = `<span class="material-icons-round">${icone}</span>`;
+                    
+                    btn.onclick = () => {
+                        this.estadoAtual.selecoes.push(icone);
+                        const toques = this.estadoAtual.selecoes.length;
+                        
+                        // Atualiza o visor com asteriscos para cada toque
+                        visorMemoria.innerHTML = `<span style="color: var(--cor-sucesso); font-size: 2rem; letter-spacing: 5px;">${'*'.repeat(toques)}</span>`;
+                        
+                        // Verifica erro imediato
+                        if (icone !== p.d[toques - 1]) {
+                            this.finalizarJogo(false, "QUEBRA DE PROTOCOLO DE ACESSO");
+                            return;
+                        }
+                        
+                        // Verifica vitória
+                        if (toques === p.d.length) {
+                            this.finalizarJogo(true, "ACESSO AUTORIZADO");
+                        }
+                    };
+                    grid.appendChild(btn);
+                });
+            }, 3000); // 3 segundos de memorização
+        }
         arena.appendChild(grid);
     },
 
