@@ -1113,7 +1113,78 @@ processarCrachaQR: function(textoDecodificado) {
             grid.appendChild(gridCestos);
             renderizarItemAtual();
         }
+// Engine 8: Associação Lógica (Colunas Esquerda e Direita)
+        else if (p.e === 8) {
+            grid.style.gridTemplateColumns = `1fr 1fr`;
+            grid.style.gap = "20px";
 
+            this.estadoAtual.selecionadoL = null; // Guarda o índice da esquerda clicado
+            this.estadoAtual.conexoesFeitas = 0;
+
+            const colunaL = document.createElement('div');
+            const colunaR = document.createElement('div');
+            colunaL.style = "display: flex; flex-direction: column; gap: 15px;";
+            colunaR.style = "display: flex; flex-direction: column; gap: 15px;";
+
+            // Renderiza a coluna da Esquerda
+            p.d.L.forEach((icone, index) => {
+                const btn = document.createElement('div');
+                btn.className = 'g3j-item';
+                btn.id = `m8-L-${index}`;
+                btn.innerHTML = `<span class="material-icons-round">${icone}</span>`;
+                
+                btn.onclick = () => {
+                    if (btn.classList.contains('resolvido')) return;
+                    // Limpa seleções anteriores da esquerda
+                    p.d.L.forEach((_, i) => { if(!document.getElementById(`m8-L-${i}`).classList.contains('resolvido')) document.getElementById(`m8-L-${i}`).style.borderColor = "#334155"; });
+                    
+                    btn.style.borderColor = "var(--cor-primaria)";
+                    this.estadoAtual.selecionadoL = index;
+                };
+                colunaL.appendChild(btn);
+            });
+
+            // Renderiza a coluna da Direita
+            p.d.R.forEach((icone, index) => {
+                const btn = document.createElement('div');
+                btn.className = 'g3j-item';
+                btn.id = `m8-R-${index}`;
+                btn.innerHTML = `<span class="material-icons-round">${icone}</span>`;
+                
+                btn.onclick = () => {
+                    if (btn.classList.contains('resolvido')) return;
+                    if (this.estadoAtual.selecionadoL === null) return; // Tem que clicar na esquerda primeiro
+
+                    const indexL = this.estadoAtual.selecionadoL;
+                    
+                    // Verifica se a conexão está correta baseada no array de respostas 'a'
+                    if (p.a[indexL] === index) {
+                        // Conexão correta!
+                        const btnL = document.getElementById(`m8-L-${indexL}`);
+                        btnL.style.borderColor = "var(--cor-sucesso)"; btnL.style.color = "var(--cor-sucesso)";
+                        btnL.classList.add('resolvido');
+                        
+                        btn.style.borderColor = "var(--cor-sucesso)"; btn.style.color = "var(--cor-sucesso)";
+                        btn.classList.add('resolvido');
+
+                        this.estadoAtual.selecionadoL = null;
+                        this.estadoAtual.conexoesFeitas++;
+
+                        if (this.estadoAtual.conexoesFeitas === p.d.L.length) {
+                            this.finalizarJogo(true, "MAPEAMENTO LÓGICO ESTABELECIDO");
+                        }
+                    } else {
+                        // Conexão errada: Morte súbita
+                        document.getElementById('console-g3j').style.animation = "glitchErro 0.3s";
+                        this.finalizarJogo(false, "CURTO-CIRCUITO DE LÓGICA");
+                    }
+                };
+                colunaR.appendChild(btn);
+            });
+
+            grid.appendChild(colunaL);
+            grid.appendChild(colunaR);
+        }
         // Engine 7: Interceptação / Radar (Foco Sustentado)
         else if (p.e === 7) {
             grid.style.gridTemplateColumns = `1fr`;
