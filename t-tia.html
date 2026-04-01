@@ -1185,6 +1185,140 @@ processarCrachaQR: function(textoDecodificado) {
             grid.appendChild(colunaL);
             grid.appendChild(colunaR);
         }
+			// Engine 9: Pensamento Computacional (Pathfinder / Algoritmo)
+        else if (p.e === 9) {
+            this.estadoAtual.comandos = [];
+            
+            // Desenha a Arena (Grid 3x3)
+            grid.style.gridTemplateColumns = `repeat(${Math.sqrt(p.d.g)}, 1fr)`;
+            grid.style.gap = "5px";
+            grid.style.marginBottom = "15px";
+
+            // Matriz visual
+            for(let i = 0; i < p.d.g; i++) {
+                const celula = document.createElement('div');
+                celula.className = 'g3j-item';
+                celula.style = "padding: 1rem 0; font-size: 2rem; border-radius: 8px; border-color: rgba(255,255,255,0.1); background: rgba(0,0,0,0.4);";
+                
+                if (i === p.d.s) celula.innerHTML = `<span class="material-icons-round" style="color: var(--cor-secundaria);">smart_toy</span>`; // Início (Drone)
+                else if (i === p.d.t) celula.innerHTML = `<span class="material-icons-round" style="color: var(--cor-sucesso);">flag</span>`; // Alvo
+                else if (p.d.o.includes(i)) celula.innerHTML = `<span class="material-icons-round" style="color: var(--cor-alerta);">local_fire_department</span>`; // Obstáculo
+                
+                grid.appendChild(celula);
+            }
+
+            // Visor de Comandos Digitados
+            const visorComandos = document.createElement('div');
+            visorComandos.style = "grid-column: 1 / -1; background: #000; border: 1px dashed var(--cor-primaria); height: 40px; border-radius: 8px; display: flex; align-items: center; padding: 0 10px; font-family: monospace; color: var(--cor-primaria); font-size: 1.2rem; overflow-x: auto; letter-spacing: 5px;";
+            grid.appendChild(visorComandos);
+
+            // Controles de Direção
+            const controles = document.createElement('div');
+            controles.style = "grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px;";
+            
+            const setas = [
+                { id: "U", icone: "arrow_upward" },
+                { id: "D", icone: "arrow_downward" },
+                { id: "L", icone: "arrow_back" },
+                { id: "R", icone: "arrow_forward" }
+            ];
+
+            setas.forEach(seta => {
+                const btn = document.createElement('div');
+                btn.className = 'g3j-item';
+                btn.style = "padding: 0.5rem 0;";
+                btn.innerHTML = `<span class="material-icons-round">${seta.icone}</span>`;
+                btn.onclick = () => {
+                    this.estadoAtual.comandos.push(seta.id);
+                    visorComandos.innerText = this.estadoAtual.comandos.join("");
+                };
+                controles.appendChild(btn);
+            });
+            grid.appendChild(controles);
+
+            // Botão Executar Algoritmo
+            const btnExecutar = document.createElement('button');
+            btnExecutar.className = 'btn btn-primario';
+            btnExecutar.style = "grid-column: 1 / -1; width: 100%; padding: 1rem; border-radius: 8px;";
+            btnExecutar.innerText = "EXECUTAR CÓDIGO";
+            btnExecutar.onclick = () => {
+                // Compara a string de comandos do aluno com o array correto do cartucho
+                if (JSON.stringify(this.estadoAtual.comandos) === JSON.stringify(p.a)) {
+                    this.finalizarJogo(true, "ALGORITMO VALIDADO COM SUCESSO");
+                } else {
+                    document.getElementById('console-g3j').style.animation = "glitchErro 0.3s";
+                    this.finalizarJogo(false, "FALHA DE LÓGICA (COLISÃO OU ROTA ERRADA)");
+                }
+            };
+            grid.appendChild(btnExecutar);
+        }
+
+        // Engine 10: Calibragem de Tolerância (Ponto de Equilíbrio)
+        else if (p.e === 10) {
+            grid.style.gridTemplateColumns = `1fr`;
+            grid.style.gap = "30px";
+
+            // Ícone Central Reativo
+            const reator = document.createElement('div');
+            reator.style = "display: flex; flex-direction: column; align-items: center; justify-content: center;";
+            reator.innerHTML = `
+                <span class="material-icons-round" id="icone-reator" style="font-size: 8rem; color: var(--cor-sucesso); transition: 0.2s;">science</span>
+                <div id="valor-leitura" style="font-family: monospace; font-size: 2rem; font-weight: bold; margin-top: 10px; color: var(--texto-puro);">${p.d.start}</div>
+            `;
+            grid.appendChild(reator);
+
+            // Controle Deslizante (Slider) Frugal
+            const controleContainer = document.createElement('div');
+            controleContainer.style = "background: rgba(0,0,0,0.5); padding: 1.5rem; border-radius: 12px; border: 1px solid #334155;";
+            
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.min = p.d.min;
+            slider.max = p.d.max;
+            slider.value = p.d.start;
+            slider.style = "width: 100%; accent-color: var(--cor-primaria); cursor: pointer;";
+            
+            // Reatividade visual ao mover o slider
+            slider.oninput = (e) => {
+                const val = e.target.value;
+                document.getElementById('valor-leitura').innerText = val;
+                
+                // Muda a cor do ícone dependendo da "pressão"
+                const icone = document.getElementById('icone-reator');
+                if (val > (p.d.max * 0.8)) {
+                    icone.style.color = "var(--cor-alerta)";
+                    icone.style.transform = `scale(${1 + (val/200)}) rotate(${Math.random()*10 - 5}deg)`; // Tremedeira
+                } else if (val < (p.d.max * 0.2)) {
+                    icone.style.color = "var(--cor-secundaria)";
+                    icone.style.transform = "scale(0.9)";
+                } else {
+                    icone.style.color = "var(--cor-sucesso)";
+                    icone.style.transform = "scale(1)";
+                }
+            };
+
+            controleContainer.appendChild(slider);
+            grid.appendChild(controleContainer);
+
+            // Botão de Confirmação
+            const btnEstabilizar = document.createElement('button');
+            btnEstabilizar.className = 'btn btn-primario';
+            btnEstabilizar.style = "width: 100%; padding: 1.5rem; border-radius: 12px; font-size: 1.2rem; font-weight: 900;";
+            btnEstabilizar.innerText = "TRAVAR PARÂMETROS";
+            btnEstabilizar.onclick = () => {
+                const valorFinal = parseInt(slider.value);
+                const minSeguro = p.a[0];
+                const maxSeguro = p.a[1];
+
+                if (valorFinal >= minSeguro && valorFinal <= maxSeguro) {
+                    this.finalizarJogo(true, "SISTEMA ESTABILIZADO NA ZONA SEGURA");
+                } else {
+                    document.getElementById('console-g3j').style.animation = "glitchErro 0.3s";
+                    this.finalizarJogo(false, "RUPTURA DO SISTEMA (FORA DOS PARÂMETROS)");
+                }
+            };
+            grid.appendChild(btnEstabilizar);
+        }
         // Engine 7: Interceptação / Radar (Foco Sustentado)
         else if (p.e === 7) {
             grid.style.gridTemplateColumns = `1fr`;
