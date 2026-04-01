@@ -391,28 +391,31 @@ processarCrachaQR: function(textoDecodificado) {
                     }
 
                     switch (dados.tipo) {
-                        case "aTIA_LOGIN":
-                            this.processarLogin(dados);
-                            break;
+                    case "aTIA_LOGIN":
+                     this.processarLogin(dados);
+                     break;
 
-                        case "G3_VALIDACAO": // <-- ALINHADO COM O MESTRE!
-                            this.processarG3Validacao(dados);
-                            break;
-							
-						case "G3J": // <--- NOVO: PROTOCOLO DE JOGO
-                            if (this.leitorHTML5) { this.leitorHTML5.pause(true); } // Pausa a câmera
-                            GenteGameEngine.iniciarCartucho(dados);
-                            break;
+                 case "G3_VALIDACAO": 
+                     this.processarG3Validacao(dados);
+                     break;
 
-                        default:
-                            throw new Error("Tipo de QR desconhecido");
-                    }
+                 // --- NOVA ROTA ADICIONADA PARA O JOGO ---
+                 case "G3J": // GENTE 3 Game
+                     console.log("Cartucho G3J detectado!", dados);
+                     if (this.leitorHTML5) { this.leitorHTML5.pause(true); } // Importante: pausa a câmera para não ler 2 vezes
+                     GenteGameEngine.iniciarCartucho(dados);
+                     break;
 
-                } catch (erro) {
-                    console.error("ERRO QR:", erro);
-                    alert("QR Code inválido ou mal formatado.");
-                }
-            },
+                 default:
+                     // Usa o "t" como tipo também, já que no JSON do jogo encurtamos a chave "tipo" para "t" para poupar espaço
+                     if (dados.t === "G3J") {
+                         console.log("Cartucho G3J detectado (chave curta)!", dados);
+                         if (this.leitorHTML5) { this.leitorHTML5.pause(true); }
+                         GenteGameEngine.iniciarCartucho(dados);
+                     } else {
+                         throw new Error("Tipo de QR desconhecido");
+                     }
+             }
 
             processarG3Validacao: async function(dados) {
                 console.log("[Protocolo G3] Recebendo chave de validação:", dados);
