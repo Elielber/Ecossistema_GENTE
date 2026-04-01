@@ -71,6 +71,9 @@
             <button id="nav-cofre" class="btn-aba" onclick="PainelMestre.mudarAba('cofre')">
                 <span class="material-icons-round">inventory_2</span> Cofre Pedagógico
             </button>
+            <button id="nav-laboratorio" class="btn-aba" onclick="PainelMestre.mudarAba('laboratorio')">
+                <span class="material-icons-round">gamepad</span> Laboratório G3J
+            </button>
         </div>
         
         <input type="file" id="upload-matriz" accept=".json" style="display: none;" onchange="PainelMestre.carregarMatriz(event)">
@@ -180,7 +183,49 @@
                 </section>
             </div>
         </div>
+<div id="aba-laboratorio" class="aba-conteudo">
+            <header>
+                <div>
+                    <h2>Laboratório de Cartuchos G3J</h2>
+                    <p style="font-size: 0.8rem; color: #64748b;">Gerador e Forja de Micro-Jogos Focados em Metodologias Ativas</p>
+                </div>
+            </header>
 
+            <div class="dashboard" style="grid-template-columns: 1fr 1fr;">
+                <section class="card" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <h3>Forja de Motores</h3>
+                    <p style="font-size: 0.8rem; color: var(--texto-suave);">Selecione um template base para editar:</p>
+                    
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <button class="btn" style="font-size: 0.75rem; padding: 6px 10px; border: 1px solid var(--borda); background: #0b0f19;" onclick="PainelMestre.carregarMotorLab(2)">M2: Sequência</button>
+                        <button class="btn" style="font-size: 0.75rem; padding: 6px 10px; border: 1px solid var(--borda); background: #0b0f19;" onclick="PainelMestre.carregarMotorLab(3)">M3: Anomalia</button>
+                        <button class="btn" style="font-size: 0.75rem; padding: 6px 10px; border: 1px solid var(--borda); background: #0b0f19;" onclick="PainelMestre.carregarMotorLab(4)">M4: Triagem</button>
+                        <button class="btn" style="font-size: 0.75rem; padding: 6px 10px; border: 1px solid var(--borda); background: #0b0f19;" onclick="PainelMestre.carregarMotorLab(5)">M5: Memória</button>
+                        <button class="btn" style="font-size: 0.75rem; padding: 6px 10px; border: 1px solid var(--borda); background: #0b0f19;" onclick="PainelMestre.carregarMotorLab(6)">M6: Taxonomia</button>
+                        <button class="btn" style="font-size: 0.75rem; padding: 6px 10px; border: 1px solid var(--borda); background: #0b0f19;" onclick="PainelMestre.carregarMotorLab(7)">M7: Radar</button>
+                        <button class="btn" style="font-size: 0.75rem; padding: 6px 10px; border: 1px solid var(--borda); background: #0b0f19;" onclick="PainelMestre.carregarMotorLab(8)">M8: Associação</button>
+                        <button class="btn" style="font-size: 0.75rem; padding: 6px 10px; border: 1px solid var(--borda); background: #0b0f19;" onclick="PainelMestre.carregarMotorLab(9)">M9: Algoritmo</button>
+                        <button class="btn" style="font-size: 0.75rem; padding: 6px 10px; border: 1px solid var(--borda); background: #0b0f19;" onclick="PainelMestre.carregarMotorLab(10)">M10: Calibragem</button>
+                    </div>
+
+                    <label style="font-size: 0.8rem; color: var(--texto-suave); font-weight: bold; margin-top: 10px;">CÓDIGO-FONTE DO CARTUCHO (JSON)</label>
+                    <textarea id="lab-json-input" style="flex: 1; min-height: 150px; font-family: monospace; font-size: 0.85rem; background: #05070a;"></textarea>
+                    
+                    <button class="btn btn-g3" onclick="PainelMestre.gerarCartuchoJogo()">
+                        <span class="material-icons-round">qr_code_scanner</span> FORJAR CARTUCHO (ATUALIZAR QR)
+                    </button>
+                </section>
+
+                <section class="card" style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+                    <div id="lab-qr-box" style="background: white; padding: 2.5rem; border-radius: 20px; display: inline-block; box-shadow: 0 0 40px rgba(168, 85, 247, 0.2);">
+                        <div id="lab-qrcode"></div>
+                    </div>
+                    <p id="lab-qr-status" style="color: var(--texto-suave); margin-top: 2rem; font-size: 0.9rem;">
+                        Selecione um motor para renderizar o cartucho óptico.
+                    </p>
+                </section>
+            </div>
+        </div>
         <div id="painel-projecao-g3" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.95); z-index: 1000; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; color: #fff;">
             <button class="btn" style="position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);" onclick="PainelMestre.fecharProjecao()">
                 <span class="material-icons-round">close</span> Encerrar Projeção
@@ -369,6 +414,69 @@
             fecharProjecao: function() {
                 document.getElementById('painel-projecao-g3').style.display = 'none';
                 if(this.leitorG3) this.leitorG3.clear();
+            }
+            // ==========================================
+            // MÓDULO LABORATÓRIO G3J (GERADOR DE JOGOS)
+            // ==========================================
+            leitorLabG3J: null,
+            labPayloads: {
+                2: `{"t":"G3J","m":"TESTE_SEQUENCIA","e":2,"c":"Ordene o protocolo","s":20,"d":[{"id":"A","icone":"warning","texto":"Isolar a area"},{"id":"B","icone":"security","texto":"Neutralizar ameaca"},{"id":"C","icone":"support_agent","texto":"Acionar reforco"}],"a":["A","C","B"]}`,
+                3: `{"t":"G3J","m":"TESTE_ANOMALIA","e":3,"c":"Identifique a falha no cluster","s":15,"d":["dns","dns","dns","dns","bug_report","dns","dns","dns","dns"],"a":4}`,
+                4: `{"t":"G3J","m":"T1_M04","e":4,"c":"Triagem: Risco de Seguranca?","s":15,"d":[{"i":"vpn_key","v":0},{"i":"bug_report","v":1},{"i":"security","v":0}]}`,
+                5: `{"t":"G3J","m":"T1_M05","e":5,"c":"Memorize o padrao de acesso","s":20,"d":["looks_one","looks_two","looks_3","looks_two"]}`,
+                6: `{"t":"G3J","m":"M06","e":6,"c":"Classifique os ativos","s":15,"d":{"c":["delete","recycling","warning"],"i":[{"x":"science","y":2},{"x":"description","y":1},{"x":"coronavirus","y":2}]}}`,
+                7: `{"t":"G3J","m":"M07","e":7,"c":"Isole a anomalia (Bug)","s":15,"d":{"a":"bug_report","v":350,"f":["dns","memory","api","settings"]}}`,
+                8: `{"t":"G3J","m":"M08","e":8,"c":"Ligue causa e efeito","s":25,"d":{"L":["sick","thermostat"],"R":["ac_unit","healing"]},"a":[1,0]}`,
+                9: `{"t":"G3J","m":"M09","e":9,"c":"Programe a rota (Evite o fogo)","s":30,"d":{"g":9,"s":0,"t":8,"o":[4]},"a":["R","R","D","D"]}`,
+                10: `{"t":"G3J","m":"M10","e":10,"c":"Estabilize a carga (33 a 50)","s":15,"d":{"min":0,"max":100,"start":10},"a":[33,50]}`
+            },
+
+            carregarMotorLab: function(engineId) {
+                document.getElementById('lab-json-input').value = this.labPayloads[engineId];
+                this.gerarCartuchoJogo();
+            },
+
+            gerarCartuchoJogo: function() {
+                const rawText = document.getElementById('lab-json-input').value.trim();
+                const container = document.getElementById("lab-qrcode");
+                const inputArea = document.getElementById('lab-json-input');
+                const statusText = document.getElementById('lab-qr-status');
+                
+                let compactJson = "";
+
+                // 1. Validação Sintática
+                try {
+                    compactJson = JSON.stringify(JSON.parse(rawText)); 
+                    inputArea.style.borderColor = "var(--borda)";
+                } catch (erro) {
+                    inputArea.style.borderColor = "#ef4444"; 
+                    container.innerHTML = "<div style='color: #ef4444; font-weight: bold; text-align: center; padding: 2rem;'>JSON INVÁLIDO<br><small>Verifique aspas e vírgulas.</small></div>";
+                    statusText.innerText = "Erro de Sintaxe. Correção necessária.";
+                    statusText.style.color = "#ef4444";
+                    return; 
+                }
+
+                // 2. Renderização Óptica
+                try {
+                    container.innerHTML = ""; 
+                    const textoCodificado = unescape(encodeURIComponent(compactJson));
+
+                    this.leitorLabG3J = new QRCode(container, {
+                        text: textoCodificado,
+                        width: 350, 
+                        height: 350, 
+                        colorDark: "#000000", 
+                        colorLight: "#ffffff", 
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                    
+                    statusText.innerText = "Cartucho Escaneável Pronto.";
+                    statusText.style.color = "var(--cor-sucesso)";
+                } catch (erro) {
+                    container.innerHTML = "<div style='color: #f59e0b; font-weight: bold; text-align: center; padding: 2rem;'>ERRO DE RENDERIZAÇÃO<br><small>Payload excessivo para a versão M.</small></div>";
+                    statusText.innerText = "Falha no Cartucho (Excesso de Bytes).";
+                    statusText.style.color = "#f59e0b";
+                }
             }
         };
 
