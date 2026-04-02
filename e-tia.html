@@ -149,10 +149,12 @@
 
     <div class="content-wrapper">
         <header>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <h2 style="font-size: 1.1rem; font-weight: 500;" id="titulo-modo-ativo">Design Estratégico (Simulador IMO)</h2>
-            </div>
             <div style="display: flex; gap: 10px;">
+                <input type="file" id="input-importar-json" style="display: none;" accept=".json" onchange="AppGENTE.importarJSON(event)">
+                
+                <button class="btn-primary" style="background: transparent; border: 1px solid var(--borda); padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="document.getElementById('input-importar-json').click()">
+                    <span class="material-icons-round" style="font-size: 16px;">upload_file</span> Importar Matriz
+                </button>
                 <button class="btn-primary" style="background: transparent; border: 1px solid var(--borda); padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="AppGENTE.salvarRascunho()">
                     <span class="material-icons-round" style="font-size: 16px;">save</span> Salvar Rascunho
                 </button>
@@ -1124,7 +1126,7 @@
             }
         },
 
-        exportarJSON: function() {
+       exportarJSON: function() {
             if(this.curriculo.territorios.length === 0) {
                 alert("Não há dados para exportar. Crie os territórios primeiro.");
                 return;
@@ -1141,8 +1143,50 @@
             
             downloadAnchorNode.click();
             downloadAnchorNode.remove();
+        }, // <--- ADICIONE ESTA VÍRGULA SE NÃO TIVER
+
+        // NOVO: IMPORTAÇÃO DE ARQUIVO FÍSICO
+        importarJSON: function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const jsonCarregado = JSON.parse(e.target.result);
+                    
+                    // Trava de segurança: verifica se é um arquivo gerado pelo nosso sistema
+                    if (!jsonCarregado.metadados || !jsonCarregado.territorios) {
+                        throw new Error("Formato inválido. O arquivo não possui a arquitetura do Ecossistema GENTE.");
+                    }
+
+                    // Sobrescreve a memória atual com o arquivo carregado
+                    this.curriculo = jsonCarregado;
+                    
+                    // Limpa o input file para permitir importar o mesmo arquivo novamente se necessário
+                    event.target.value = '';
+
+                    // Força a interface para o Modo Gênesis (O melhor visualizador estrutural)
+                    this.setModo('genesis');
+
+                    // Preenche os campos de contexto
+                    document.getElementById('genesis-nome').value = this.curriculo.metadados.nomeCurso || '';
+                    document.getElementById('genesis-cidade').value = this.curriculo.metadados.cidade || '';
+                    document.getElementById('genesis-vocacao').value = this.curriculo.metadados.vocacao || '';
+                    document.getElementById('genesis-perfil').value = this.curriculo.metadados.perfil || '';
+
+                    // Renderiza a arquitetura inteira na tela
+                    this.renderizarMacroGenesis();
+
+                    alert(`Sucesso! Matriz "${this.curriculo.metadados.nomeCurso}" carregada e pronta para ajustes.`);
+
+                } catch (error) {
+                    alert("Erro ao ler o arquivo: " + error.message);
+                    event.target.value = ''; 
+                }
+            };
+            reader.readAsText(file);
         }
-    }; 
 
     // ==========================================
     // INICIALIZAÇÃO E BINDINGS
