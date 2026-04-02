@@ -903,36 +903,8 @@ processarCrachaQR: function(textoDecodificado) {
         const grid = document.createElement('div');
         grid.className = 'g3j-grid';
 
-        // Engine 3: Problema Gráfico (Encontrar a Anomalia no Grid)
-        if (p.e === 3) {
-            // Define colunas dinamicamente baseado na quantidade de itens
-            grid.style.gridTemplateColumns = `repeat(${Math.ceil(Math.sqrt(p.d.length))}, 1fr)`;
-            
-            p.d.forEach((icone, index) => {
-                const btn = document.createElement('div');
-                btn.className = 'g3j-item';
-                btn.innerHTML = `<span class="material-icons-round">${icone}</span>`;
-                
-                btn.onclick = () => {
-                    // Se tocou no índice correto definido no payload ('a')
-                    if (index === p.a) {
-                        btn.style.borderColor = "var(--cor-sucesso)";
-                        btn.style.color = "var(--cor-sucesso)";
-                        this.finalizarJogo(true, "PADRÃO CORRIGIDO");
-                    } else {
-                        btn.style.borderColor = "var(--cor-alerta)";
-                        btn.style.color = "var(--cor-alerta)";
-                        document.getElementById('console-g3j').style.animation = "glitchErro 0.3s";
-                        setTimeout(() => document.getElementById('console-g3j').style.animation = "", 300);
-                        this.finalizarJogo(false, "FALHA CRÍTICA DE SISTEMA");
-                    }
-                };
-                grid.appendChild(btn);
-            });
-        }
-        
-        // Engine 2: Ordenação Lógica (Tocar na ordem certa)
-        else if (p.e === 2) {
+		// Engine 1: Ordenação Lógica (Tocar na ordem certa)
+        else if (p.e === 1) {
             grid.style.gridTemplateColumns = `1fr`; // Lista vertical
             
             p.d.forEach((passo, index) => {
@@ -961,8 +933,38 @@ processarCrachaQR: function(textoDecodificado) {
                 grid.appendChild(btn);
             });
         }
-// Engine 4: Triagem Binária (Aceitar ou Rejeitar)
-        else if (p.e === 4) {
+
+        // Engine 2: Problema Gráfico (Encontrar a Anomalia no Grid)
+        if (p.e === 2) {
+            // Define colunas dinamicamente baseado na quantidade de itens
+            grid.style.gridTemplateColumns = `repeat(${Math.ceil(Math.sqrt(p.d.length))}, 1fr)`;
+            
+            p.d.forEach((icone, index) => {
+                const btn = document.createElement('div');
+                btn.className = 'g3j-item';
+                btn.innerHTML = `<span class="material-icons-round">${icone}</span>`;
+                
+                btn.onclick = () => {
+                    // Se tocou no índice correto definido no payload ('a')
+                    if (index === p.a) {
+                        btn.style.borderColor = "var(--cor-sucesso)";
+                        btn.style.color = "var(--cor-sucesso)";
+                        this.finalizarJogo(true, "PADRÃO CORRIGIDO");
+                    } else {
+                        btn.style.borderColor = "var(--cor-alerta)";
+                        btn.style.color = "var(--cor-alerta)";
+                        document.getElementById('console-g3j').style.animation = "glitchErro 0.3s";
+                        setTimeout(() => document.getElementById('console-g3j').style.animation = "", 300);
+                        this.finalizarJogo(false, "FALHA CRÍTICA DE SISTEMA");
+                    }
+                };
+                grid.appendChild(btn);
+            });
+        }
+        
+        
+// Engine 3: Triagem Binária (Aceitar ou Rejeitar)
+        else if (p.e === 3) {
             this.estadoAtual.indexTriagem = 0;
             
             grid.style.gridTemplateColumns = `1fr 1fr`; // Dois botões embaixo
@@ -1012,8 +1014,8 @@ processarCrachaQR: function(textoDecodificado) {
             grid.appendChild(btnAceitar);
         }
 
-        // Engine 5: Retenção Tática (Memorização)
-        else if (p.e === 5) {
+        // Engine 4: Retenção Tática (Memorização)
+        else if (p.e === 4) {
             grid.style.gridTemplateColumns = `repeat(4, 1fr)`;
             
             const visorMemoria = document.createElement('div');
@@ -1067,8 +1069,8 @@ processarCrachaQR: function(textoDecodificado) {
                 });
             }, 3000); // 3 segundos de memorização
         }
-		// Engine 6: Taxonomia Dinâmica (Múltiplos Cestos)
-        else if (p.e === 6) {
+		// Engine 5: Taxonomia Dinâmica (Múltiplos Cestos)
+        else if (p.e === 5) {
             this.estadoAtual.indexItem = 0;
             
             // Área de exibição do item central
@@ -1113,8 +1115,73 @@ processarCrachaQR: function(textoDecodificado) {
             grid.appendChild(gridCestos);
             renderizarItemAtual();
         }
-// Engine 8: Associação Lógica (Colunas Esquerda e Direita)
-        else if (p.e === 8) {
+			        // Engine 6: Interceptação / Radar (Foco Sustentado)
+        else if (p.e === 6) {
+            grid.style.gridTemplateColumns = `1fr`;
+            
+            const radar = document.createElement('div');
+            radar.style = "background: radial-gradient(circle, rgba(74,222,128,0.2) 0%, rgba(0,0,0,0.8) 70%); border: 2px solid var(--cor-sucesso); border-radius: 50%; width: 200px; height: 200px; margin: 0 auto 30px auto; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;";
+            
+            const alvoIcone = document.createElement('span');
+            alvoIcone.className = 'material-icons-round';
+            alvoIcone.style = "font-size: 5rem; color: var(--cor-sucesso);";
+            radar.appendChild(alvoIcone);
+            
+            // Linha de scan do radar
+            radar.innerHTML += `<div style="position:absolute; top:50%; left:50%; width:100px; height:2px; background:var(--cor-sucesso); transform-origin: left center; animation: radarSpin 2s linear infinite;"></div>`;
+            
+            grid.appendChild(radar);
+
+            let iconeVisivelAtual = "";
+            let loopRadar;
+
+            // Motor de ciclo rápido
+            const iniciarRadar = () => {
+                loopRadar = setInterval(() => {
+                    // 20% de chance de aparecer o alvo, 80% de ser distração
+                    if (Math.random() < 0.2) {
+                        iconeVisivelAtual = p.d.a;
+                    } else {
+                        iconeVisivelAtual = p.d.f[Math.floor(Math.random() * p.d.f.length)];
+                    }
+                    radar.children[0].innerText = iconeVisivelAtual;
+                    radar.children[0].style.color = (iconeVisivelAtual === p.d.a) ? "var(--cor-alerta)" : "var(--cor-sucesso)";
+                }, p.d.v); // Velocidade definida no cartucho (ex: 350ms)
+            };
+
+            const btnInterceptar = document.createElement('button');
+            btnInterceptar.className = 'btn btn-primario';
+            btnInterceptar.style = "width: 100%; padding: 1.5rem; font-size: 1.5rem; letter-spacing: 2px; border-radius: 16px;";
+            btnInterceptar.innerText = "INTERCEPTAR";
+            
+            btnInterceptar.onclick = () => {
+                clearInterval(loopRadar); // Para o radar imediatamente
+                if (iconeVisivelAtual === p.d.a) {
+                    this.finalizarJogo(true, "ALVO INTERCEPTADO COM SUCESSO");
+                } else {
+                    radar.style.borderColor = "var(--cor-alerta)";
+                    radar.style.background = "rgba(239,68,68,0.3)";
+                    this.finalizarJogo(false, "ALVO INCORRETO ABATIDO. MISSÃO FALHOU.");
+                }
+            };
+
+            grid.appendChild(btnInterceptar);
+            
+            // Adiciona o CSS da animação do radar se não existir
+            if (!document.getElementById('style-radar')) {
+                const style = document.createElement('style');
+                style.id = 'style-radar';
+                style.innerHTML = `@keyframes radarSpin { 100% { transform: rotate(360deg); } }`;
+                document.head.appendChild(style);
+            }
+
+            iniciarRadar();
+            
+            // Salva a referência do intervalo para limpá-lo se o tempo geral acabar
+            this.estadoAtual.intervaloRadar = loopRadar; 
+        }
+// Engine 7: Associação Lógica (Colunas Esquerda e Direita)
+        else if (p.e === 7) {
             grid.style.gridTemplateColumns = `1fr 1fr`;
             grid.style.gap = "20px";
 
@@ -1185,8 +1252,8 @@ processarCrachaQR: function(textoDecodificado) {
             grid.appendChild(colunaL);
             grid.appendChild(colunaR);
         }
-			// Engine 9: Pensamento Computacional (Pathfinder / Algoritmo)
-        else if (p.e === 9) {
+			// Engine 8: Pensamento Computacional (Pathfinder / Algoritmo)
+        else if (p.e === 8) {
             this.estadoAtual.comandos = [];
             
             // Desenha a Arena (Grid 3x3)
@@ -1253,8 +1320,8 @@ processarCrachaQR: function(textoDecodificado) {
             grid.appendChild(btnExecutar);
         }
 
-        // Engine 10: Calibragem de Tolerância (Ponto de Equilíbrio)
-        else if (p.e === 10) {
+        // Engine 9: Calibragem de Tolerância (Ponto de Equilíbrio)
+        else if (p.e === 9) {
             grid.style.gridTemplateColumns = `1fr`;
             grid.style.gap = "30px";
 
@@ -1319,71 +1386,7 @@ processarCrachaQR: function(textoDecodificado) {
             };
             grid.appendChild(btnEstabilizar);
         }
-        // Engine 7: Interceptação / Radar (Foco Sustentado)
-        else if (p.e === 7) {
-            grid.style.gridTemplateColumns = `1fr`;
-            
-            const radar = document.createElement('div');
-            radar.style = "background: radial-gradient(circle, rgba(74,222,128,0.2) 0%, rgba(0,0,0,0.8) 70%); border: 2px solid var(--cor-sucesso); border-radius: 50%; width: 200px; height: 200px; margin: 0 auto 30px auto; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;";
-            
-            const alvoIcone = document.createElement('span');
-            alvoIcone.className = 'material-icons-round';
-            alvoIcone.style = "font-size: 5rem; color: var(--cor-sucesso);";
-            radar.appendChild(alvoIcone);
-            
-            // Linha de scan do radar
-            radar.innerHTML += `<div style="position:absolute; top:50%; left:50%; width:100px; height:2px; background:var(--cor-sucesso); transform-origin: left center; animation: radarSpin 2s linear infinite;"></div>`;
-            
-            grid.appendChild(radar);
 
-            let iconeVisivelAtual = "";
-            let loopRadar;
-
-            // Motor de ciclo rápido
-            const iniciarRadar = () => {
-                loopRadar = setInterval(() => {
-                    // 20% de chance de aparecer o alvo, 80% de ser distração
-                    if (Math.random() < 0.2) {
-                        iconeVisivelAtual = p.d.a;
-                    } else {
-                        iconeVisivelAtual = p.d.f[Math.floor(Math.random() * p.d.f.length)];
-                    }
-                    radar.children[0].innerText = iconeVisivelAtual;
-                    radar.children[0].style.color = (iconeVisivelAtual === p.d.a) ? "var(--cor-alerta)" : "var(--cor-sucesso)";
-                }, p.d.v); // Velocidade definida no cartucho (ex: 350ms)
-            };
-
-            const btnInterceptar = document.createElement('button');
-            btnInterceptar.className = 'btn btn-primario';
-            btnInterceptar.style = "width: 100%; padding: 1.5rem; font-size: 1.5rem; letter-spacing: 2px; border-radius: 16px;";
-            btnInterceptar.innerText = "INTERCEPTAR";
-            
-            btnInterceptar.onclick = () => {
-                clearInterval(loopRadar); // Para o radar imediatamente
-                if (iconeVisivelAtual === p.d.a) {
-                    this.finalizarJogo(true, "ALVO INTERCEPTADO COM SUCESSO");
-                } else {
-                    radar.style.borderColor = "var(--cor-alerta)";
-                    radar.style.background = "rgba(239,68,68,0.3)";
-                    this.finalizarJogo(false, "ALVO INCORRETO ABATIDO. MISSÃO FALHOU.");
-                }
-            };
-
-            grid.appendChild(btnInterceptar);
-            
-            // Adiciona o CSS da animação do radar se não existir
-            if (!document.getElementById('style-radar')) {
-                const style = document.createElement('style');
-                style.id = 'style-radar';
-                style.innerHTML = `@keyframes radarSpin { 100% { transform: rotate(360deg); } }`;
-                document.head.appendChild(style);
-            }
-
-            iniciarRadar();
-            
-            // Salva a referência do intervalo para limpá-lo se o tempo geral acabar
-            this.estadoAtual.intervaloRadar = loopRadar; 
-        }
         arena.appendChild(grid);
     },
 
