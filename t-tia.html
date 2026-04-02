@@ -416,18 +416,26 @@
                 });
             },
 			processarLogin: function(dados) {
-    if (!dados.alunoId || !dados.cursoId) {
-        throw new Error("Login inválido");
-    }
+                if (!dados.alunoId || !dados.cursoId) {
+                    throw new Error("Login inválido");
+                }
 
-    localStorage.setItem('aTIA_Cracha', JSON.stringify(dados));
-    this.cracha = dados;
+                // NOVO: Desliga a câmera física para libertar recursos do telemóvel
+                if (this.leitorHTML5) {
+                    this.leitorHTML5.stop().then(() => {
+                        this.leitorHTML5.clear();
+                        this.leitorHTML5 = null;
+                    }).catch(e => console.log("A aguardar encerramento da câmara."));
+                }
 
-    this.atualizarHUD();
-    this.desenharCracha(dados);
+                localStorage.setItem('aTIA_Cracha', JSON.stringify(dados));
+                this.cracha = dados;
 
-    setTimeout(() => aTIA_Core.iniciar(), 1500);
-},
+                this.atualizarHUD();
+                this.desenharCracha(dados);
+
+                setTimeout(() => aTIA_Core.iniciar(), 1500);
+            },
 
 processarCrachaQR: function(textoDecodificado) {
                 try {
