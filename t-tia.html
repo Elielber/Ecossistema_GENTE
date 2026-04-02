@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-   <title>a-TIA | Painel de Exploração</title>
+   <title>T-TIA | Tecnologia de Exploração</title>
 
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♾️</text></svg>">
 
@@ -13,15 +13,82 @@
     
     <style>
         /* --- VARIÁVEIS E ESTÉTICA GAMER / CYBERPUNK --- */
-        :root {
-            --bg-body: #0a0e17; --bg-card: #161c2c; 
-            --cor-primaria: #a855f7; /* Roxo Neon */
+        /* ============================================================================
+           MOTOR DE TEMAS CSS (THEME ENGINE)
+           ============================================================================ */
+        
+        /* TEMA 1: HOLO / CYBERPUNK (Tema Principal Padrão) */
+        :root, html[data-tema="holo"] {
+            --bg-body: #0a0e17; 
+            --bg-card: #161c2c;
+            --bg-header: rgba(10, 14, 23, 0.85);
+            
+            --cor-primaria: #a855f7;   /* Roxo Neon */
             --cor-secundaria: #3b82f6; /* Azul Elétrico */
-            --cor-sucesso: #4ade80; /* Verde Hacker */
-            --cor-alerta: #f59e0b; /* Laranja Alerta */
-            --texto-puro: #ffffff; --texto-suave: #94a3b8;
+            --cor-sucesso: #4ade80;    /* Verde Hacker */
+            --cor-alerta: #f59e0b;     /* Laranja Alerta */
+            
+            --texto-puro: #ffffff; 
+            --texto-suave: #94a3b8;
+            
             --borda-raio: 16px; 
+            --borda-cor: rgba(168, 85, 247, 0.2);
+            --sombra-primaria: 0 4px 15px rgba(168, 85, 247, 0.4);
+            
             --transicao: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* TEMA 2: EPT CLARO (A ser desenhado) */
+        html[data-tema="claro"] {
+            --bg-body: #f8fafc; 
+            --bg-card: #ffffff;
+            --bg-header: rgba(255, 255, 255, 0.9);
+            
+            --cor-primaria: #7e22ce;   /* Roxo Sólido Escuro */
+            --cor-secundaria: #2563eb; /* Azul Institucional */
+            --cor-sucesso: #16a34a;    /* Verde Escuro */
+            --cor-alerta: #d97706;     /* Laranja Escuro */
+            
+            --texto-puro: #0f172a; 
+            --texto-suave: #475569;
+            
+            --borda-cor: #e2e8f0;
+            --sombra-primaria: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        /* TEMA 3: ALTO CONTRASTE / ACESSIBILIDADE (A ser desenhado) */
+        html[data-tema="contraste"] {
+            --bg-body: #000000; 
+            --bg-card: #000000;
+            --bg-header: #000000;
+            
+            --cor-primaria: #ffff00;   /* Amarelo Puro */
+            --cor-secundaria: #00ffff; /* Ciano Puro */
+            --cor-sucesso: #00ff00;    /* Verde Puro */
+            --cor-alerta: #ff0000;     /* Vermelho Puro */
+            
+            --texto-puro: #ffffff; 
+            --texto-suave: #ffffff;
+            
+            --borda-cor: #ffffff;
+            --sombra-primaria: none;
+        }
+
+        /* Normalização Global */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg-body); 
+            color: var(--texto-puro);
+            height: 100vh; overflow: hidden; user-select: none; 
+            display: flex; flex-direction: column;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+
+        /* Garante que o gradiente do Tema 1 não quebre os outros temas */
+        html[data-tema="holo"] body {
+            background-image: radial-gradient(circle at 50% 0%, #1a1025 0%, #0a0e17 70%);
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,161 +101,114 @@
             background-image: radial-gradient(circle at 50% 0%, #1a1025 0%, #0a0e17 70%); /* Brilho de fundo */
         }
 
-        /* --- MECÂNICA DE ZOOM SEMÂNTICO --- */
-        .tela {
-    display: none; 
-    flex-direction: column; 
-    flex: 1; /* Faz a tela ocupar dinamicamente todo o espaço abaixo do header */
-    width: 100%;
-    overflow-y: auto; 
-    padding-bottom: 100px; 
-    position: relative; flex: 1; /* Removemos o 'absolute' e o 'top: 0' que causavam a sobreposição */
-}
-        .tela.ativa { display: flex; z-index: 10; }
-        .zoom-in-enter { animation: zoomInEnter 0.4s forwards ease-out; }
-        .zoom-out-enter { animation: zoomOutEnter 0.4s forwards ease-out; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'SF Pro Display', 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 
-        @keyframes zoomInEnter { from { opacity: 0; transform: scale(1.15); filter: blur(4px); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
-        @keyframes zoomOutEnter { from { opacity: 0; transform: scale(0.85); filter: blur(4px); } to { opacity: 1; transform: scale(1); filter: blur(0); } }
+    body { background-color: var(--bg-principal); color: var(--texto-puro); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
 
-        /* --- HUD GAMIFICADO (CABEÇALHO FIXO) --- */
-       /* --- HUD GAMIFICADO (CABEÇALHO FIXO) --- */
-header {
-    background-color: rgba(10, 14, 23, 0.85); 
-    padding: 1rem;
-    display: flex; 
-    align-items: center; 
-    gap: 1rem; 
-    backdrop-filter: blur(12px);
-    z-index: 100; 
-    border-bottom: 1px solid rgba(168, 85, 247, 0.2);
-    flex-shrink: 0;/* GARANTE QUE O CABEÇALHO NÃO SEJA ESMAGADO PELA TELA */
-}
-        .avatar-container { width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--cor-primaria); display: flex; align-items: center; justify-content: center; font-weight: bold; background: #161c2c; color: var(--cor-primaria); box-shadow: 0 0 10px rgba(168,85,247,0.3);}
-        .info-progresso { flex: 1; }
-        .nome-aluno { font-weight: bold; font-size: 0.95rem; }
-        .breadcrumbs { font-size: 0.7rem; color: var(--cor-sucesso); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px; display: flex; align-items: center; gap: 4px;}
+    /* Forçar Safe Area no iPhone (dynamic island) */
+    header { padding-top: calc(1rem + 25px); /* Ajuste para o notch/island */ }
 
-        /* --- A PRESENÇA DA a-TIA (Guia Flutuante) --- */
-        .assistente-tia {
-            background: linear-gradient(135deg, rgba(30, 58, 138, 0.6), rgba(88, 28, 135, 0.6));
-            border: 1px solid var(--cor-primaria); border-radius: 12px; padding: 1rem; margin: 1rem;
-            display: flex; gap: 1rem; align-items: center; box-shadow: 0 4px 20px rgba(168, 85, 247, 0.15);
-            backdrop-filter: blur(5px);
-        }
-        .tia-avatar {
-            width: 40px; height: 40px; background-color: var(--cor-primaria); border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            animation: flutuar 3s ease-in-out infinite; box-shadow: 0 0 15px rgba(168,85,247,0.5);
-        }
-        @keyframes flutuar { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    /* --- LAYOUT E TELAS GERAIS --- */
+    .tela { display: none; height: calc(100% - 70px); /* Tira o header */ width: 100%; position: absolute; top: 70px; left: 0; transition: var(--transicao); flex-direction: column; padding: 1.5rem; overflow-y: auto; }
+    .tela.ativa { display: flex; animation: fadeIn 0.4s ease-out; }
 
-        /* --- CAMADA 1: NÍVEL MACRO (MAPA HOLOGRÁFICO) --- */
-        .container-macro { padding: 2rem 1rem; display: flex; flex-direction: column; align-items: center; gap: 2rem; position: relative; }
-        /* A "órbita" que conecta os mundos */
-        .linha-orbita { position: absolute; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, var(--cor-sucesso) 0%, var(--cor-primaria) 50%, #1f2937 100%); z-index: 0; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .planeta-macro {
-            width: 90px; height: 90px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            background: radial-gradient(circle at 30% 30%, var(--bg-card), #05070a);
-            border: 2px solid transparent; z-index: 2; position: relative;
-            transition: var(--transicao); cursor: pointer;
-        }
-        .planeta-macro.concluido { border-color: var(--cor-sucesso); box-shadow: 0 0 25px rgba(74, 222, 128, 0.3); color: var(--cor-sucesso); }
-        .planeta-macro.ativo { border-color: var(--cor-primaria); box-shadow: 0 0 35px rgba(168, 85, 247, 0.6); color: var(--cor-primaria); animation: pulsarNeon 2s infinite; }
-        .planeta-macro.bloqueado { border-color: #1f2937; color: var(--texto-suave); background: #0a0e17; }
-        .planeta-macro span.icon { font-size: 2.5rem; }
-        
-        .rotulo-planeta {
-            position: absolute; left: 110px; white-space: nowrap;
-            background: rgba(22,28,44,0.9); padding: 8px 12px; border-radius: 8px;
-            border: 1px solid rgba(148,163,184,0.2); font-size: 0.85rem; font-weight: bold;
-        }
-
-        /* --- CAMADA 2: NÍVEL MESO (A SKILL TREE RAMIFICADA) --- */
-        .container-trilha { position: relative; padding: 1rem 0; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
-        .nivel-trilha { display: flex; flex-direction: column; align-items: center; width: 100%; z-index: 10; }
-        .ramificacao { display: flex; justify-content: center; gap: 1.5rem; width: 100%; position: relative; padding: 1rem 0; }
-        
-        .conector { width: 4px; height: 40px; background: linear-gradient(to bottom, var(--cor-sucesso), var(--cor-primaria)); border-radius: 2px; }
-        .ramificacao::before, .ramificacao::after { content: ''; position: absolute; width: 50%; height: 30px; border: 3px solid transparent; z-index: 0; }
-        .ramificacao::before { top: -15px; border-top-color: var(--cor-primaria); border-left-color: var(--cor-primaria); border-right-color: var(--cor-primaria); border-radius: 12px 12px 0 0; }
-        .ramificacao::after { bottom: -15px; border-bottom-color: #1f2937; border-left-color: #1f2937; border-right-color: #1f2937; border-radius: 0 0 12px 12px; }
-
-        .nodo-arvore { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.5rem; max-width: 120px; z-index: 2; position: relative;}
-        .nodo-icone { width: 60px; height: 60px; border-radius: 14px; background-color: var(--bg-card); border: 3px solid #1f2937; display: flex; align-items: center; justify-content: center; transform: rotate(45deg); transition: var(--transicao); }
-        .nodo-icone span { transform: rotate(-45deg); font-size: 1.8rem; }
-        .nodo-titulo { font-size: 0.75rem; font-weight: bold; background-color: rgba(22, 28, 44, 0.9); padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.2); }
-
-        .nodo-arvore.concluido .nodo-icone { border-color: var(--cor-sucesso); color: var(--cor-sucesso); box-shadow: 0 0 15px rgba(74, 222, 128, 0.3); }
-        .nodo-arvore.ativo .nodo-icone { border-color: var(--cor-primaria); color: var(--cor-primaria); box-shadow: 0 0 25px rgba(168, 85, 247, 0.6); animation: pulsarNeon 2s infinite; cursor: pointer; }
-        .nodo-arvore.bloqueado .nodo-icone { border-color: #1f2937; color: var(--texto-suave); opacity: 0.5; }
-
-        @keyframes pulsarNeon { 0% { box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); } 50% { box-shadow: 0 0 30px rgba(168, 85, 247, 0.8); } 100% { box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); } }
-
-        /* --- CAMADA 3: NÍVEL MICRO (MÓDULOS DE DADOS / CARDS) --- */
-        .malha-container { padding: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-
-        .card-modulo {
-            background: rgba(22, 28, 44, 0.7); border-radius: var(--borda-raio);
-            padding: 1rem; position: relative; overflow: hidden;
-            border: 1px solid rgba(148, 163, 184, 0.1); cursor: pointer;
-            backdrop-filter: blur(10px); display: flex; flex-direction: column; gap: 8px;
-        }
-        
-        /* O "Brilho" lateral indicando a dimensão da rúbrica */
-        .card-modulo::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
-        .card-modulo.tipo-contexto::before { background: var(--cor-sucesso); box-shadow: 0 0 10px var(--cor-sucesso); }
-        .card-modulo.tipo-cognitivo::before { background: var(--cor-primaria); box-shadow: 0 0 10px var(--cor-primaria); }
-        
-        .card-modulo.bloqueado { opacity: 0.6; cursor: not-allowed; border: 1px dashed #334155; }
-        .card-modulo.bloqueado::before { background: #334155; box-shadow: none; }
-
-        .modulo-header { display: flex; justify-content: space-between; align-items: center; }
-        .badge-dimensao { font-size: 0.65rem; text-transform: uppercase; font-weight: bold; letter-spacing: 1px; }
-        .tipo-contexto .badge-dimensao { color: var(--cor-sucesso); }
-        .tipo-cognitivo .badge-dimensao { color: var(--cor-primaria); }
-
-        .modulo-titulo { font-size: 0.85rem; line-height: 1.4; color: var(--texto-puro); }
-        
-        /* O Card Chefe (Execução Técnica) ocupa a linha toda */
-        .card-chefe { grid-column: 1 / -1; background: rgba(10, 14, 23, 0.8); border: 1px solid var(--cor-alerta); text-align: center; padding: 1.5rem; }
-        .card-chefe::before { display: none; } /* Remove barra lateral */
-
-        /* --- BOTÕES INFERIORES --- */
-        .area-acoes-fixa { position: fixed; bottom: 0; left: 0; width: 100%; background-color: rgba(10, 14, 23, 0.95); backdrop-filter: blur(10px); padding: 1rem; display: flex; gap: 1rem; border-top: 1px solid rgba(148, 163, 184, 0.1); z-index: 90; }
-        .btn { flex: 1; padding: 1rem; border: none; border-radius: 12px; font-size: 0.9rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; color: white; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); transition: var(--transicao); text-transform: uppercase; }
-        .btn:active { transform: scale(0.96); background: rgba(255,255,255,0.1); }
-        .btn-primario { background: linear-gradient(135deg, var(--cor-primaria), #7e22ce); border: none; box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4); }
+    /* O Header HUD (Ajuste Visual) */
+    header { background: rgba(5, 7, 10, 0.85); backdrop-filter: blur(10px); color: white; display: flex; align-items: center; justify-content: space-between; position: fixed; top: 0; left: 0; width: 100%; height: 70px; z-index: 100; border-bottom: 1px solid var(--borda); }
     
-	/* --- TIA GAME ENGINE (OVERLAY) --- */
-#console-g3j {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: radial-gradient(circle at 50% 50%, #1a1025 0%, #05070a 80%);
-    z-index: 9999; display: flex; flex-direction: column;
-    color: var(--texto-puro); padding: 2rem 1.5rem; backdrop-filter: blur(10px);
-}
-.g3j-header { text-align: center; margin-bottom: 2rem; }
-.g3j-comando { font-size: 1.2rem; font-weight: bold; color: var(--cor-sucesso); text-transform: uppercase; letter-spacing: 1px; margin-top: 10px; }
-.g3j-timer { font-family: monospace; font-size: 3rem; font-weight: 900; color: var(--texto-puro); text-shadow: 0 0 15px rgba(255,255,255,0.5); }
-.g3j-timer.urgente { color: var(--cor-alerta); text-shadow: 0 0 20px rgba(245, 158, 11, 0.8); animation: pulsarUrgente 0.5s infinite; }
+    .hud-header { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 0 1.5rem; }
+    
+    .info-header { text-transform: uppercase; letter-spacing: 1px; font-weight: bold; font-size: 0.85rem; }
+    
+    .logo-gente { color: var(--cor-primaria); font-size: 1.2rem; font-weight: 900; }
+    .avatar-container { width: 35px; height: 35px; border-radius: 50%; background: var(--borda); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9rem; color: var(--cor-primaria); }
 
-/* Grid Responsivo para Jogos Gráficos */
-.g3j-arena { flex: 1; display: flex; align-items: center; justify-content: center; width: 100%; }
-.g3j-grid { display: grid; gap: 15px; width: 100%; max-width: 350px; }
-.g3j-item { 
-    background: rgba(22, 28, 44, 0.8); border: 2px solid #334155; border-radius: 16px;
-    display: flex; align-items: center; justify-content: center; padding: 2rem 0;
-    font-size: 3rem; cursor: pointer; transition: var(--transicao); color: var(--texto-suave);
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-}
-.g3j-item:active { transform: scale(0.9); }
-.g3j-item.selecionado { border-color: var(--cor-primaria); color: var(--cor-primaria); box-shadow: 0 0 20px rgba(168, 85, 247, 0.5); }
+    /* Aponte a câmera (HUD do assistente) */
+    .assistente-tia { display: flex; gap: 10px; align-items: center; background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.3); padding: 10px 15px; border-radius: var(--raio-medio); color: var(--texto-suave); font-size: 0.9rem; margin-bottom: 1rem; }
+    .tia-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--cor-primaria); display: flex; align-items: center; justify-content: center; }
 
-@keyframes pulsarUrgente { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-@keyframes glitchErro { 0% { transform: translate(0) } 20% { transform: translate(-5px, 5px) } 40% { transform: translate(-5px, -5px) } 60% { transform: translate(5px, 5px) } 80% { transform: translate(5px, -5px) } 100% { transform: translate(0) } }
-	</style>
+    /* --- ESTILOS DE COMPONENTES ÚNICOS (BOTÕES E INPUTS) --- */
+    .btn { padding: 12px 20px; border-radius: var(--raio-medio); border: none; font-weight: bold; font-size: 0.95rem; cursor: pointer; transition: var(--transicao); display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+    .btn:active { transform: scale(0.97); }
+    
+    .btn-primario { background: var(--cor-primaria); color: #fff; }
+    .btn-primario:hover { background: #9333ea; }
+    
+    .btn-alerta { background: var(--cor-alerta); color: #000; }
+    
+    input { background: #111827; border: 2px solid var(--borda); border-radius: var(--raio-medio); padding: 15px; color: var(--texto-puro); font-size: 1rem; transition: var(--transicao); }
+    input:focus { outline: none; border-color: var(--cor-primaria); background: #1f2937; }
+
+    /* --- CAMADA MACRO (image_6cd42f.png -> ARREDONDAR TUDO) --- */
+    .painel-macro { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1.5rem; padding-bottom: 2rem; }
+    
+    .planeta-macro { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem; border-radius: 50%; /* Faz um Círculo! */ aspect-ratio: 1 / 1; width: 150px; cursor: pointer; transition: var(--transicao); border: 2px solid transparent; background: radial-gradient(circle at center, #1a253a 0%, #0f172a 100%); position: relative; }
+    
+    .planeta-macro:hover { transform: scale(1.05); border-color: rgba(168, 85, 247, 0.5); box-shadow: 0 0 30px rgba(168, 85, 247, 0.4); }
+    
+    .sigla-planeta { font-size: 2.5rem; font-weight: 900; color: var(--texto-puro); }
+    .id-planeta { font-size: 0.7rem; color: var(--texto-suave); text-transform: uppercase; margin-top: -5px; }
+    
+    /* Indicador de Status no Planeta */
+    .status-planeta { position: absolute; bottom: 15px; font-weight: bold; font-size: 0.8rem; }
+    .planeta-macro.ativo .status-planeta { color: var(--cor-sucesso); }
+    .planeta-macro.bloqueado .status-planeta { color: var(--texto-suave); }
+    
+    .nome-curso-selecionado { font-size: 1.2rem; font-weight: bold; color: var(--texto-puro); text-align: center; }
+
+    /* --- CAMADA MESO (image_6cd485.png -> A ÁRVORE RAMIFICADA) --- */
+    .container-trilha { flex: 1; overflow-y: auto; padding-top: 1rem; padding-bottom: 80px; }
+    
+    /* Nível (Contém as missões e as linhas) */
+    .nivel-trilha { display: flex; justify-content: center; align-items: center; margin-bottom: 2.5rem; position: relative; }
+    
+    /* Linha conetora (A Fibra Ótica) */
+    .nivel-trilha:after { content: ''; position: absolute; bottom: -2.5rem; width: 4px; height: 2.5rem; background: var(--borda); }
+    .nivel-trilha:last-child:after { display: none; }
+    
+    /* O Losango Gamificado (O Nó) */
+    .nodo-arvore { display: flex; flex-direction: column; justify-content: center; align-items: center; border: 2px solid transparent; border-radius: 16px; /* Arredondado mas ainda losango-esque */ padding: 1rem; width: 100px; height: 100px; cursor: pointer; transition: var(--transicao); position: relative; box-shadow: var(--sombras); }
+    
+    /* Nodos Lado a Lado (Cria a ramificação) */
+    .trilha-ramificada { display: flex; gap: 1rem; justify-content: center; }
+
+    /* Estilos de Status dos Nodos */
+    .nodo-arvore.ativo { background: radial-gradient(circle at center, #1e293b 0%, #0a0e17 100%); border-color: var(--cor-primaria); }
+    .nodo-arvore.ativo:hover { box-shadow: 0 0 25px rgba(168, 85, 247, 0.5); transform: translateY(-5px); }
+    
+    .nodo-arvore.concluido { background: rgba(74, 222, 128, 0.1); border-color: rgba(74, 222, 128, 0.3); color: var(--cor-sucesso); }
+    .nodo-arvore.concluido span { color: var(--cor-sucesso); }
+    
+    .nodo-arvore.bloqueado { background: #0b0f19; opacity: 0.5; cursor: not-allowed; border: 2px dashed var(--borda); }
+    
+    .icone-missao { font-size: 2.2rem; color: var(--texto-puro); margin-bottom: 5px; }
+    .sigla-missao { font-size: 0.75rem; color: var(--texto-suave); font-weight: bold; }
+    
+    /* Area de ação fixa inferior */
+    .area-acoes-fixa { position: fixed; bottom: 0; left: 0; width: 100%; padding: 1rem; background: linear-gradient(0deg, rgba(5,7,10,1) 0%, rgba(5,7,10,0) 100%); pointer-events: none; z-index: 90; display: flex; justify-content: center; }
+    .area-acoes-fixa .btn { pointer-events: auto; width: 100%; max-width: 300px; }
+
+    /* --- CAMADA MICRO (O Terminal -> image_6cd485.png popup) --- */
+    #tela-micro { background: var(--bg-principal); padding: 2rem; position: fixed; top: 70px; left: 0; width: 100%; height: calc(100% - 70px); z-index: 101; display: none; flex-direction: column; align-items: center; gap: 1.5rem; animation: slideUp 0.3s ease-out; }
+    #tela-micro.ativa { display: flex; }
+
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+    .micro-header { text-align: center; }
+    .micro-titulo { font-size: 1.3rem; font-weight: 800; color: var(--cor-primaria); margin-bottom: 5px; }
+    .micro-subtitulo { font-size: 0.85rem; color: var(--texto-suave); }
+
+    .card-terminal { background: rgba(22, 28, 44, 0.8); border: 2px solid var(--cor-secundaria); border-radius: var(--raio-medio); padding: 1.5rem; width: 100%; flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); position: relative; }
+    
+    .card-terminal:before { content: ''; position: absolute; top: 10px; left: 10px; width: 10px; height: 10px; background: rgba(59, 130, 246, 0.5); border-radius: 50%; }
+
+    /* --- TELA DE LOGIN (image_6cd3ea.png) --- */
+    #tela-login { background: var(--bg-principal); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem; gap: 2rem; text-align: center; }
+    
+    .gente-mestre-logo { display: flex; flex-direction: column; align-items: center; color: var(--texto-puro); font-size: 2.5rem; font-weight: 900; letter-spacing: -2px; line-height: 1; }
+    .logo-mestre { color: var(--cor-primaria); font-size: 1rem; text-transform: uppercase; letter-spacing: 4px; font-weight: normal; margin-top: 5px; }
+		</style>
 </head>
 <body>
 <script src="https://unpkg.com/html5-qrcode"></script>
@@ -251,6 +271,9 @@ header {
                 <span class="material-icons-round" style="font-size: 14px;">public</span> MAPA GLOBAL
             </div>
         </div>
+		<button onclick="TemaCore.alternar()" style="background: transparent; border: none; color: var(--cor-primaria); cursor: pointer; padding: 5px;">
+            <span class="material-icons-round" style="font-size: 24px;">palette</span>
+        </button>
     </header>
 
     <section id="tela-macro" class="tela">
@@ -258,7 +281,7 @@ header {
         <div class="assistente-tia">
             <div class="tia-avatar"><span class="material-icons-round" style="color: white;">smart_toy</span></div>
             <div>
-                <p style="font-size: 0.8rem; color: var(--cor-sucesso); font-weight: bold;">a-TIA ONLINE</p>
+                <p style="font-size: 0.8rem; color: var(--cor-sucesso); font-weight: bold;">T-TIA ON!</p>
                 <p id="mensagem-assistente-macro" style="font-size: 0.85rem;">A analisar a matriz curricular e a sincronizar os dados do território...</p>
             </div>
         </div>
@@ -749,24 +772,19 @@ processarCrachaQR: function(textoDecodificado) {
                 console.log("[Renderização] Mapa Macro gerado com sucesso.");
             },
 
+            // --- NOVO RENDERIZADOR MESO PARA O NOVO DESIGN ---
             renderizarArvoreMeso: function(idTerritorio) {
-                console.log("[Renderização] A desenhar Árvore Meso para:", idTerritorio);
+                console.log("[Renderização] Desenhando design Meso holográfico para:", idTerritorio);
                 
                 const territorio = this.mapaCurricular.territorios.find(t => t.idTerritorio === idTerritorio);
                 const container = document.getElementById('mapa-meso-dinamico');
 
                 if (!territorio || !container) return;
 
-                // 1. Limpa o estado anterior para não sobrepor desenhos
+                // Limpa o estado anterior
                 container.innerHTML = '';
 
-                // 2. Atualiza a comunicação da Assistente a-TIA no HUD
-                const assistenteMsg = document.querySelector('#tela-meso .assistente-tia p:nth-child(2)');
-                if(assistenteMsg) {
-                    assistenteMsg.innerText = `Território acessado. Identifiquei ${territorio.missoes.length} nós de missão nesta ramificação.`;
-                }
-
-                // 3. Constrói a Árvore de Cima para Baixo
+                // Constrói a árvore de cima para baixo
                 territorio.missoes.forEach((missao, index) => {
                     
                     // Lógica de Desbloqueio Sequencial
@@ -776,10 +794,9 @@ processarCrachaQR: function(textoDecodificado) {
                     if (historico && historico.status === "concluida") {
                         status = "concluido";
                     } else if (index === 0) {
-                        // A primeira missão do território está sempre disponível
-                        status = "ativo";
+                        status = "ativo"; // Primeira está sempre disponível
                     } else {
-                        // Verifica se a missão imediatamente acima já foi concluída
+                        // Verifica se a anterior foi concluída
                         const missaoAnterior = territorio.missoes[index - 1];
                         const histAnterior = this.diarioDeBordo.find(m => m.idMissao === missaoAnterior.idMissao);
                         if (histAnterior && histAnterior.status === "concluida") {
@@ -787,39 +804,21 @@ processarCrachaQR: function(textoDecodificado) {
                         }
                     }
 
-                    // Motor de Renderização Semântica (Lê os dados gerados pelo AP-TIA)
-                    let icone = "memory"; // Padrão
-                    if (missao.dimensaoPredominante === "tecnica") icone = "code";
-                    if (missao.dimensaoPredominante === "analitica") icone = "analytics";
-                    if (missao.dimensaoPredominante === "contexto") icone = "menu_book";
-                    if (missao.dimensaoPredominante === "socio") icone = "groups";
-
                     const nivelDiv = document.createElement('div');
                     nivelDiv.className = 'nivel-trilha';
 
-                    // Se a missão estiver ativa, preparamos o gatilho para a Camada Micro
+                    // Gatilho para Camada Micro
                     const acaoClique = (status === 'ativo' || status === 'concluido') 
-                        ? `onclick="aTIA_Core.renderizarMalhaMicro('${missao.idMissao}'); Navegador.zoomIn('tela-micro', 'M: ${missao.idMissao}')"` 
+                        ? `onclick="aTIA_Core.renderizarMalhaMicro('${missao.idMissao}')"` 
                         : '';
 
-                    let htmlConteudo = `
+                    nivelDiv.innerHTML = `
                         <div class="nodo-arvore ${status}" ${acaoClique}>
-                            <div class="nodo-icone" title="Dimensão: ${missao.dimensaoPredominante}">
-                                <span class="material-icons-round">${icone}</span>
-                            </div>
-                            <div class="nodo-titulo" style="max-width: 180px; white-space: normal;">
-                                <span style="color: var(--cor-destaque);">${missao.idMissao}</span><br>
-                                ${missao.titulo}
-                            </div>
+                            <span class="material-icons-round icone-missao">memory</span>
+                            <span class="sigla-missao">${missao.idMissao}</span>
                         </div>
                     `;
 
-                    // Desenha o cabo de fibra ótica para conectar à próxima missão
-                    if (index < territorio.missoes.length - 1) {
-                        htmlConteudo += `<div class="conector"></div>`;
-                    }
-
-                    nivelDiv.innerHTML = htmlConteudo;
                     container.appendChild(nivelDiv);
                 });
             },
@@ -1476,13 +1475,43 @@ const ScannerG3 = {
         }
     }
 };
+// ----------------------------------------------------------------------------
+        // MÓDULO UI: MOTOR DE TEMAS (DESIGN SYSTEM)
+        // ----------------------------------------------------------------------------
+        const TemaCore = {
+            lista: ['holo', 'claro', 'contraste'],
+            indiceAtual: 0,
+
+            iniciar: function() {
+                // Tenta carregar o tema salvo pelo aluno na última sessão
+                const temaSalvo = localStorage.getItem('aTIA_Tema');
+                if (temaSalvo && this.lista.includes(temaSalvo)) {
+                    this.indiceAtual = this.lista.indexOf(temaSalvo);
+                }
+                this.aplicar();
+            },
+
+            alternar: function() {
+                this.indiceAtual = (this.indiceAtual + 1) % this.lista.length;
+                this.aplicar();
+            },
+
+            aplicar: function() {
+                const temaSelecionado = this.lista[this.indiceAtual];
+                document.documentElement.setAttribute('data-tema', temaSelecionado);
+                localStorage.setItem('aTIA_Tema', temaSelecionado);
+                console.log("[Design System] Tema alterado para:", temaSelecionado);
+            }
+        };
+
         // ============================================================================
         // INICIALIZAÇÃO DO APLICATIVO
         // ============================================================================
         document.addEventListener('DOMContentLoaded', () => {
-    document.querySelector('header').style.display = 'none'; // Adicione esta linha
-    Autenticacao.verificarAcesso();
-});
+            TemaCore.iniciar(); // Inicia o motor de temas
+            document.querySelector('header').style.display = 'none'; 
+            Autenticacao.verificarAcesso();
+        });
     </script>
     
 </body>
