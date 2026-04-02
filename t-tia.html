@@ -772,19 +772,24 @@ processarCrachaQR: function(textoDecodificado) {
                 console.log("[Renderização] Mapa Macro gerado com sucesso.");
             },
 
-            // --- NOVO RENDERIZADOR MESO PARA O NOVO DESIGN ---
             renderizarArvoreMeso: function(idTerritorio) {
-                console.log("[Renderização] Desenhando design Meso holográfico para:", idTerritorio);
+                console.log("[Renderização] A desenhar Árvore Meso para:", idTerritorio);
                 
                 const territorio = this.mapaCurricular.territorios.find(t => t.idTerritorio === idTerritorio);
                 const container = document.getElementById('mapa-meso-dinamico');
 
                 if (!territorio || !container) return;
 
-                // Limpa o estado anterior
+                // 1. Limpa o estado anterior para não sobrepor desenhos
                 container.innerHTML = '';
 
-                // Constrói a árvore de cima para baixo
+                // 2. Atualiza a comunicação da Assistente a-TIA no HUD
+                const assistenteMsg = document.querySelector('#tela-meso .assistente-tia p:nth-child(2)');
+                if(assistenteMsg) {
+                    assistenteMsg.innerText = `Território acessado. Identifiquei ${territorio.missoes.length} nós de missão nesta ramificação.`;
+                }
+
+                // 3. Constrói a Árvore de Cima para Baixo
                 territorio.missoes.forEach((missao, index) => {
                     
                     // Lógica de Desbloqueio Sequencial
@@ -794,9 +799,10 @@ processarCrachaQR: function(textoDecodificado) {
                     if (historico && historico.status === "concluida") {
                         status = "concluido";
                     } else if (index === 0) {
-                        status = "ativo"; // Primeira está sempre disponível
+                        // A primeira missão do território está sempre disponível
+                        status = "ativo";
                     } else {
-                        // Verifica se a anterior foi concluída
+                        // Verifica se a missão imediatamente acima já foi concluída
                         const missaoAnterior = territorio.missoes[index - 1];
                         const histAnterior = this.diarioDeBordo.find(m => m.idMissao === missaoAnterior.idMissao);
                         if (histAnterior && histAnterior.status === "concluida") {
@@ -804,21 +810,39 @@ processarCrachaQR: function(textoDecodificado) {
                         }
                     }
 
+                    // Motor de Renderização Semântica (Lê os dados gerados pelo AP-TIA)
+                    let icone = "memory"; // Padrão
+                    if (missao.dimensaoPredominante === "tecnica") icone = "code";
+                    if (missao.dimensaoPredominante === "analitica") icone = "analytics";
+                    if (missao.dimensaoPredominante === "contexto") icone = "menu_book";
+                    if (missao.dimensaoPredominante === "socio") icone = "groups";
+
                     const nivelDiv = document.createElement('div');
                     nivelDiv.className = 'nivel-trilha';
 
-                    // Gatilho para Camada Micro
+                    // Se a missão estiver ativa, preparamos o gatilho para a Camada Micro
                     const acaoClique = (status === 'ativo' || status === 'concluido') 
-                        ? `onclick="aTIA_Core.renderizarMalhaMicro('${missao.idMissao}')"` 
+                        ? `onclick="aTIA_Core.renderizarMalhaMicro('${missao.idMissao}'); Navegador.zoomIn('tela-micro', 'M: ${missao.idMissao}')"` 
                         : '';
 
-                    nivelDiv.innerHTML = `
+                    let htmlConteudo = `
                         <div class="nodo-arvore ${status}" ${acaoClique}>
-                            <span class="material-icons-round icone-missao">memory</span>
-                            <span class="sigla-missao">${missao.idMissao}</span>
+                            <div class="nodo-icone" title="Dimensão: ${missao.dimensaoPredominante}">
+                                <span class="material-icons-round">${icone}</span>
+                            </div>
+                            <div class="nodo-titulo" style="max-width: 180px; white-space: normal;">
+                                <span style="color: var(--cor-destaque);">${missao.idMissao}</span><br>
+                                ${missao.titulo}
+                            </div>
                         </div>
                     `;
 
+                    // Desenha o cabo de fibra ótica para conectar à próxima missão
+                    if (index < territorio.missoes.length - 1) {
+                        htmlConteudo += `<div class="conector"></div>`;
+                    }
+
+                    nivelDiv.innerHTML = htmlConteudo;
                     container.appendChild(nivelDiv);
                 });
             },
