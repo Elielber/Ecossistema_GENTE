@@ -310,7 +310,38 @@
                         <div><label style="font-size: 0.8rem; color: var(--texto-suave);">Município / Região</label><input type="text" id="genesis-cidade" class="text-field"></div>
                         <div><label style="font-size: 0.8rem; color: var(--texto-suave);">Vocação Econômica</label><textarea id="genesis-vocacao" class="text-area" style="height: 60px;"></textarea></div>
                         <div><label style="font-size: 0.8rem; color: var(--texto-suave);">Perfil do Egresso</label><textarea id="genesis-perfil" class="text-area" style="height: 60px;"></textarea></div>
+                   <div style="background: rgba(16, 185, 129, 0.05); padding: 1.5rem; border: 1px solid var(--cor-sucesso); border-radius: 8px; display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
+                        <h3 style="color: var(--cor-sucesso); font-size: 1rem; margin-bottom: 5px; display: flex; align-items: center; gap: 8px;">
+                            <span class="material-icons-round" style="font-size: 18px;">request_quote</span> Grade Horária & Custos
+                        </h3>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <div style="flex: 1;">
+                                <label style="font-size: 0.8rem; color: var(--texto-suave);">Valor Hora-Aula (R$)</label>
+                                <input type="number" id="genesis-valor-hora" class="text-field" value="50" oninput="AppGENTE.calcularCustos()">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="font-size: 0.8rem; color: var(--texto-suave);">Horas p/ Semana</label>
+                                <input type="number" id="genesis-horas-semana" class="text-field" value="20" oninput="AppGENTE.calcularCustos()">
+                            </div>
+                        </div>
+
+                        <div style="background: #05070a; padding: 1rem; border-radius: 8px; border: 1px dashed var(--cor-sucesso);">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span style="font-size: 0.85rem; color: var(--texto-suave);">Carga Horária Total:</span>
+                                <strong id="visor-ch-total" style="color: var(--texto-puro);">0h</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span style="font-size: 0.85rem; color: var(--texto-suave);">Duração Estimada:</span>
+                                <strong id="visor-duracao" style="color: var(--texto-puro);">0 semanas</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; border-top: 1px solid var(--borda); padding-top: 8px; margin-top: 8px;">
+                                <span style="font-size: 0.85rem; color: var(--texto-suave);">Custo Base Docente:</span>
+                                <strong id="visor-custo" style="color: var(--cor-sucesso); font-size: 1.1rem;">R$ 0,00</strong>
+                            </div>
+                        </div>
                     </div>
+					</div>
                     <button class="btn-primary" onclick="AppGENTE.adicionarTerritorioGenesis()"><span class="material-icons-round">add_circle</span> Adicionar Território</button>
                 </div>
 
@@ -837,6 +868,8 @@
                     </div>
                 `;
             });
+			// Garante que o painel inicie com os cálculos corretos
+            this.calcularCustos();
         },
 
         simularImoGenesis: function(index, dimensao, valor) {
@@ -883,6 +916,38 @@
             barra.children[1].style.width = `${t.imo.pCognitiva}%`;
             barra.children[2].style.width = `${t.imo.pContextual}%`;
             barra.children[3].style.width = `${t.imo.pSocial}%`;
+			// Recalcula o custo global do curso sempre que uma meta mudar
+            this.calcularCustos();
+        },
+		calcularCustos: function() {
+            if (!this.curriculo.metadados) this.curriculo.metadados = {};
+            
+            let valorHora = parseFloat(document.getElementById('genesis-valor-hora').value) || 0;
+            let horasSemana = parseInt(document.getElementById('genesis-horas-semana').value) || 1;
+            
+            // Salva os parâmetros no JSON
+            this.curriculo.metadados.valorHora = valorHora;
+            this.curriculo.metadados.horasSemana = horasSemana;
+
+            // Varre a matriz somando a carga horária de todos os territórios
+            let chTotal = 0;
+            this.curriculo.territorios.forEach(t => {
+                if(t.metasCH) {
+                    chTotal += (t.metasCH.tecnica || 0) + (t.metasCH.cognitiva || 0) + (t.metasCH.contextual || 0) + (t.metasCH.social || 0);
+                }
+            });
+
+            this.curriculo.metadados.chTotal = chTotal;
+            
+            // Fórmulas de negócio
+            let semanas = Math.ceil(chTotal / horasSemana);
+            let meses = (semanas / 4).toFixed(1);
+            let custo = chTotal * valorHora;
+
+            // Atualiza os visores em tempo real
+            document.getElementById('visor-ch-total').innerText = chTotal + "h";
+            document.getElementById('visor-duracao').innerText = `${semanas} semanas (~${meses} meses)`;
+            document.getElementById('visor-custo').innerText = custo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         },
 
         // ==========================================
