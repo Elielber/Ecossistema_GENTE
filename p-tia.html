@@ -225,14 +225,60 @@
         </div>
 		<div id="aba-matricula" class="aba-conteudo">
             <header>
-                <div><h2>Gestão de Matrículas</h2><p style="font-size: 0.8rem; color: #64748b;">Vinculação de alunos às Trilhas e Turmas</p></div>
+                <div><h2>Gestão de Matrículas e Identidade</h2><p style="font-size: 0.8rem; color: #64748b;">Emissão de Crachás GENTE e Vínculo Institucional</p></div>
             </header>
-            <div class="dashboard">
-                <section class="card" style="text-align: center; padding: 4rem;">
-                    <span class="material-icons-round" style="font-size: 4rem; color: var(--texto-suave); opacity: 0.3;">badge</span>
-                    <h3 style="margin-top: 1rem; color: var(--texto-suave);">Módulo de Secretaria em Desenvolvimento</h3>
-                    <p style="font-size: 0.9rem; color: #64748b; margin-top: 10px;">Aqui o administrativo fará a leitura da base de dados e a emissão do QR Code de Login Inicial (Crachá) para o a-TIA dos alunos.</p>
+            
+            <div class="dashboard" style="grid-template-columns: 1fr 1fr;">
+                
+                <section class="card" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <h3 style="color: var(--cor-professor); margin-bottom: 10px;">Forja de Identidade (Crachá)</h3>
+
+                    <div><label style="font-size:0.8rem; color:var(--texto-suave); font-weight: bold;">NOME COMPLETO</label>
+                    <input type="text" id="sec-nome" class="text-field" placeholder="Digite o nome do usuário"></div>
+
+                    <div><label style="font-size:0.8rem; color:var(--texto-suave); font-weight: bold;">CARGO / FUNÇÃO INSTITUCIONAL</label>
+                    <select id="sec-cargo" class="text-field" onchange="PainelMestre.atualizarFormularioSecretaria()">
+                        <option value="">Selecione um cargo...</option>
+                        <option value="Aluno">Aluno (Acesso ao a-TIA)</option>
+                        <option value="Professor">Professor (Acesso ao Mestre)</option>
+                        <option value="Secretaria">Secretaria (Acesso Administrativo)</option>
+                    </select></div>
+
+                    <div id="sec-grupo-aluno" style="display:none; flex-direction: column; gap: 1rem; padding-top: 10px; border-top: 1px dashed var(--borda);">
+                        <div><label style="font-size:0.8rem; color:var(--texto-suave);">ID Aluno (Matrícula)</label><input type="text" id="sec-aluno-id" class="text-field" placeholder="Ex: ALU-2026"></div>
+                        <div><label style="font-size:0.8rem; color:var(--texto-suave);">Matriz do Curso (ID do Arquivo JSON)</label><input type="text" id="sec-aluno-curso" class="text-field" placeholder="Ex: TecnicoIA.json"></div>
+                    </div>
+
+                    <div id="sec-grupo-staff" style="display:none; flex-direction: column; gap: 1rem; padding-top: 10px; border-top: 1px dashed var(--borda);">
+                        <div><label style="font-size:0.8rem; color:var(--texto-suave);">ID Funcional (Matrícula)</label><input type="text" id="sec-staff-id" class="text-field" placeholder="Ex: PROF-001 ou SEC-001"></div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button class="btn btn-primary" style="flex: 1; justify-content: center; background: #8b5cf6;" onclick="PainelMestre.gerarCrachaSecretaria()">
+                            <span class="material-icons-round">qr_code_2</span> GERAR CRACHÁ
+                        </button>
+                        <button class="btn btn-primary" style="flex: 1; justify-content: center; background: var(--cor-sucesso); color: black;" onclick="PainelMestre.salvarPlanilhaSecretaria()">
+                            <span class="material-icons-round">cloud_upload</span> GRAVAR
+                        </button>
+                    </div>
+                    <p id="sec-status-msg" style="text-align: center; font-size: 0.8rem; font-weight: bold; margin-top: 5px;"></p>
                 </section>
+
+                <section class="card" style="display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; background: #0b0f19;">
+                    <div id="cracha-box" style="background: white; color: #0f172a; padding: 2rem; border-radius: 16px; width: 320px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.8);">
+                        <div style="border-bottom: 2px solid #e2e8f0; width: 100%; padding-bottom: 1rem; margin-bottom: 1rem;">
+                            <h3 id="display-nome" style="font-size: 1.4rem; font-weight: 900; margin: 0; color: #1e293b;">NOME DO USUÁRIO</h3>
+                            <p id="display-cargo" style="font-size: 0.9rem; color: #64748b; margin-top: 0.3rem; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">CARGO</p>
+                        </div>
+                        <div id="display-dados" style="text-align: left; width: 100%; font-size: 0.85rem; color: #334155; margin-bottom: 1rem; font-weight: bold; line-height: 1.5;">
+                            Preencha os dados ao lado para renderizar o código óptico.
+                        </div>
+                        <div id="sec-qrcode" style="padding: 10px; border: 2px solid #cbd5e1; border-radius: 12px; width: 220px; height: 220px; display: flex; align-items: center; justify-content: center; background: #f8fafc;">
+                            <span class="material-icons-round" style="font-size: 4rem; color: #cbd5e1;">qr_code</span>
+                        </div>
+                    </div>
+                </section>
+
             </div>
         </div>
 <div id="aba-laboratorio" class="aba-conteudo">
@@ -447,12 +493,116 @@
             }
         };
         // MOTOR CENTRAL DO PAINEL DO MESTRE
+
         const PainelMestre = {
             turmaAtual: [],
             matrizAtiva: null,
             leitorG3: null,
             missaoSelecionadaNoCofre: null,
+            
+            // ==========================================
+            // MÓDULO SECRETARIA (FORJA DE IDENTIDADE)
+            // ==========================================
+            dadosCrachaAtual: {},
+            SCRIPT_URL: "SUA_URL_DO_WEB_APP_AQUI", // Insira seu link do Google Apps Script aqui
 
+            atualizarFormularioSecretaria: function() {
+                const cargo = document.getElementById("sec-cargo").value;
+                document.getElementById('sec-grupo-aluno').style.display = 'none';
+                document.getElementById('sec-grupo-staff').style.display = 'none';
+
+                if (cargo === 'Aluno') {
+                    document.getElementById('sec-grupo-aluno').style.display = 'flex';
+                } else if (cargo === 'Professor' || cargo === 'Secretaria') {
+                    document.getElementById('sec-grupo-staff').style.display = 'flex';
+                }
+            },
+
+            gerarCrachaSecretaria: function() {
+                const nome = document.getElementById("sec-nome").value.trim();
+                const cargo = document.getElementById("sec-cargo").value;
+                const containerQR = document.getElementById("sec-qrcode");
+                const divDados = document.getElementById("display-dados");
+
+                if (!nome || !cargo) { alert("Nome e Cargo são obrigatórios."); return; }
+
+                document.getElementById("display-nome").innerText = nome;
+                document.getElementById("display-cargo").innerText = cargo;
+                
+                let payload = {};
+                let detalhes = "";
+
+                // Inteligência: Gera o Payload correto baseado no ecossistema
+                if (cargo === 'Aluno') {
+                    const id = document.getElementById('sec-aluno-id').value.trim() || 'ALU-' + Math.floor(Math.random()*1000);
+                    const curso = document.getElementById('sec-aluno-curso').value.trim() || 'TecnicoIA.json';
+                    payload = { tipo: "aTIA_LOGIN", alunoId: id, cursoId: curso, nome: nome };
+                    detalhes = `MATRÍCULA: <span style="color:#3b82f6">${id}</span><br>ARQUIVO MATRIZ: <span style="color:#3b82f6">${curso}</span>`;
+                } else {
+                    const id = document.getElementById('sec-staff-id').value.trim() || (cargo==='Professor'?'PROF-':'SEC-') + Math.floor(Math.random()*1000);
+                    const tipoPerfil = cargo === 'Professor' ? 'professor' : 'secretaria';
+                    payload = { t: "LOGIN_PTIA", p: tipoPerfil, id: id, n: nome };
+                    detalhes = `ID FUNCIONAL: <span style="color:#f59e0b">${id}</span>`;
+                }
+
+                divDados.innerHTML = detalhes;
+                this.dadosCrachaAtual = { n: nome, c: cargo, p: payload };
+                containerQR.innerHTML = "";
+
+                try {
+                    const payloadString = JSON.stringify(payload);
+                    let textoCodificado = unescape(encodeURIComponent(payloadString));
+                    textoCodificado = textoCodificado.padEnd(200, " "); // Bypass p/ estabilidade do canvas
+
+                    new QRCode(containerQR, {
+                        text: textoCodificado,
+                        width: 200, height: 200,
+                        colorDark: "#000000", colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+
+                    // Estiliza o canvas/imagem gerado para caber perfeitamente na div
+                    setTimeout(() => {
+                        const img = containerQR.querySelector("img") || containerQR.querySelector("canvas");
+                        if(img) { img.style.width = "100%"; img.style.height = "100%"; img.style.borderRadius = "8px"; }
+                    }, 50);
+
+                } catch (erro) {
+                    console.error("Falha no renderizador QR:", erro);
+                    alert("Erro ao processar dados para o QR Code.");
+                }
+            },
+
+            salvarPlanilhaSecretaria: async function() {
+                if (!this.dadosCrachaAtual.n) { alert("Gere o crachá primeiro antes de salvar."); return; }
+                const msg = document.getElementById("sec-status-msg");
+
+                if(this.SCRIPT_URL === "SUA_URL_DO_WEB_APP_AQUI"){
+                    msg.style.color = "var(--cor-alerta)";
+                    msg.innerText = "Link do banco de dados (Apps Script) não configurado.";
+                    // Efeito visual de simulação para manter a PoC rodando
+                    setTimeout(() => { msg.style.color = "var(--cor-sucesso)"; msg.innerText = "[Simulação] Dados salvos com sucesso!"; }, 1500);
+                    return;
+                }
+
+                msg.style.color = "var(--cor-g3)"; msg.innerText = "Enviando dados para a nuvem...";
+
+                try {
+                    const resposta = await fetch(this.SCRIPT_URL, {
+                        method: "POST",
+                        body: JSON.stringify({ nome: this.dadosCrachaAtual.n, cargo: this.dadosCrachaAtual.c, dadosExtras: JSON.stringify(this.dadosCrachaAtual.p) })
+                    });
+                    const resultado = await resposta.json();
+                    
+                    if (resultado.status === "sucesso") {
+                        msg.style.color = "var(--cor-sucesso)"; msg.innerText = "Registrado na planilha com sucesso!";
+                    } else throw new Error("Erro do servidor");
+                } catch (erro) {
+                    msg.style.color = "var(--cor-alerta)"; msg.innerText = "Falha de rede ao gravar dados.";
+                }
+            },
+
+            // --- NAVEGAÇÃO DE ABAS (Onde seu código continua normalmente...) ---
             iniciarRelogio: function() {
                 setInterval(() => {
                     document.getElementById('relogio').innerText = new Date().toLocaleTimeString();
