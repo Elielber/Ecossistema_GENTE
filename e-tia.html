@@ -119,6 +119,21 @@
         #view-simulador .tag-dimensao.contextual { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
         #view-simulador .tag-dimensao.social { background: rgba(168, 85, 247, 0.15); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.3); }
 	
+	/* ========================================== */
+        /* TELA DE SELEÇÃO DE PERFIL (WORKFLOW)       */
+        /* ========================================== */
+        .tela-foco { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-principal); height: 100vh; width: 100vw; position: absolute; top: 0; left: 0; z-index: 100; transition: opacity 0.5s ease; }
+        
+        .grid-perfis { display: flex; gap: 2rem; width: 100%; max-width: 900px; margin-top: 2rem; }
+        
+        .card-perfil { background: var(--bg-painel); border: 1px solid var(--borda); border-radius: 12px; padding: 2.5rem 1.5rem; text-align: center; cursor: pointer; transition: 0.3s; flex: 1; display: flex; flex-direction: column; gap: 15px; }
+        .card-perfil:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .card-perfil .icone-perfil { font-size: 3.5rem; margin-bottom: 0.5rem; }
+        
+        /* Cores específicas de cada perfil no hover */
+        .card-perfil.dir:hover { border-color: var(--cor-destaque); }
+        .card-perfil.esp:hover { border-color: var(--dim-tecnica); }
+        .card-perfil.ped:hover { border-color: var(--dim-cognitiva); }
 	</style>
 </head>
 <body>
@@ -195,7 +210,33 @@
         </div>
 
         <main class="workspace">
-            
+            <section id="view-selecao-perfil" class="tela-foco">
+                <div style="text-align: center; max-width: 600px;">
+                    <span style="font-size: 4rem; line-height: 1;">🧭</span>
+                    <h1 style="font-size: 2.5rem; margin-top: 15px; color: var(--texto-puro);">Ecossistema GENTE</h1>
+                    <p style="color: var(--texto-suave); font-size: 1.1rem; margin-top: 10px;">Selecione o seu perfil de atuação para carregar o seu ambiente de trabalho (E-TIA).</p>
+                </div>
+                
+                <div class="grid-perfis">
+                    <div class="card-perfil dir" onclick="AppGENTE.selecionarPerfil('diretor')">
+                        <div class="icone-perfil">👔</div>
+                        <h3 style="color: var(--cor-destaque);">Sou Diretor</h3>
+                        <p style="font-size: 0.85rem; color: var(--texto-suave);">Inicio novos projetos, defino a vocação regional, aprovo custos e homologo o currículo final.</p>
+                    </div>
+                    
+                    <div class="card-perfil esp" onclick="AppGENTE.selecionarPerfil('especialista')">
+                        <div class="icone-perfil">🛠️</div>
+                        <h3 style="color: var(--dim-tecnica);">Sou Especialista</h3>
+                        <p style="font-size: 0.85rem; color: var(--texto-suave);">Realizo a ingestão de dados técnicos (PPCs/Manuais) e quebro o conteúdo em tópicos modulares.</p>
+                    </div>
+                    
+                    <div class="card-perfil ped" onclick="AppGENTE.selecionarPerfil('pedagogo')">
+                        <div class="icone-perfil">📚</div>
+                        <h3 style="color: var(--dim-cognitiva);">Sou Pedagogo</h3>
+                        <p style="font-size: 0.85rem; color: var(--texto-suave);">Balanceio o Índice de Maturidade (IMO), defino as metodologias e travo as atividades gamificadas.</p>
+                    </div>
+                </div>
+            </section>
             <section id="view-macro-genesis" class="view-section active">
                 <div class="panel-input" style="flex: 1;">
                     <div style="background: rgba(255,255,255,0.02); padding: 1.5rem; border: 1px solid var(--borda); border-radius: 8px; display: flex; flex-direction: column; gap: 1rem;">
@@ -320,6 +361,38 @@
         territorioAtivoIndex: null,
         missaoAtivaIndex: null,
         modoAtivo: 'genesis',
+        perfilAtivo: null, // NOVO: Guarda quem está operando o sistema
+
+        // ========================================================================
+        // GESTÃO DE ACESSO E PERFIS (WORKFLOW)
+        // ========================================================================
+        selecionarPerfil: function(perfil) {
+            this.perfilAtivo = perfil;
+            
+            // 1. Esconde a tela de boas-vindas
+            const telaFoco = document.getElementById('view-selecao-perfil');
+            telaFoco.style.opacity = '0';
+            setTimeout(() => { telaFoco.style.display = 'none'; }, 500);
+
+            // 2. Revela a interface principal
+            document.querySelector('.sidebar').style.display = 'flex';
+            document.querySelector('.content-wrapper').style.display = 'flex';
+
+            // 3. Molda o E-TIA de acordo com a função
+            if(perfil === 'diretor') {
+                this.setModo('genesis');
+                alert("Bem-vindo, Diretor. \nInicie um projeto preenchendo os dados do curso ou importe uma matriz para Homologação Final.");
+            } else if(perfil === 'especialista') {
+                this.setModo('digitalizacao');
+                // O especialista geralmente só mexe na tela de digitalização
+                document.getElementById('btn-menu-genesis').style.display = 'none'; 
+                document.getElementById('btn-menu-simulador').style.display = 'none';
+                alert("Bem-vindo, Especialista. \nImporte o arquivo do Diretor e utilize o Decodificador para extrair a matriz técnica.");
+            } else if(perfil === 'pedagogo') {
+                this.setModo('genesis');
+                alert("Bem-vindo, Pedagogo. \nImporte a matriz enviada pelo Especialista e acesse as Camadas Meso/Micro para balancear o IMO.");
+            }
+        },
 
         // ========================================================================
         // CONTROLE DE INTERFACE (MENU LATERAL)
@@ -1195,12 +1268,14 @@
             reader.readAsText(file);
         }
 };
-    // ==========================================
+   // ==========================================
     // INICIALIZAÇÃO E BINDINGS
     // ==========================================
-    // Inicia o sistema no modo Gênesis
+    // Inicia o sistema bloqueado na tela de perfis
     document.addEventListener("DOMContentLoaded", () => {
-        AppGENTE.setModo('genesis');
+        // Esconde a interface principal no boot
+        document.querySelector('.sidebar').style.display = 'none';
+        document.querySelector('.content-wrapper').style.display = 'none';
     });
 
     // Eventos passivos anexados nas funções para garantir fluxo reverso
