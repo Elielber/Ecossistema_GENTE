@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>GENTE | Gerador de Crachás</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode_js@1.0.0/qrcode.min.js"></script>
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: sans-serif; display: flex; padding: 2rem; gap: 2rem; }
+        .painel-controle { flex: 1; display: flex; flex-direction: column; gap: 1rem; background: #1e293b; padding: 2rem; border-radius: 12px; }
+        .painel-cracha { flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+        
+        /* Estilos do Formulário */
+        .form-group { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+        label { font-weight: bold; color: #94a3b8; font-size: 0.9rem; }
+        input, select { background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 0.8rem; border-radius: 6px; font-size: 1rem; }
+        input:focus, select:focus { outline: none; border-color: #4ade80; }
+        
+        .oculto { display: none !important; }
+        
+        /* Botões */
+        .btn-acao { background: #8b5cf6; color: white; border: none; padding: 1rem; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; margin-top: 1rem;}
+        .btn-acao:hover { background: #7c3aed; }
+        .btn-salvar { background: #10b981; }
+        .btn-salvar:hover { background: #059669; }
+
+        /* Design do Crachá Físico */
+        #cracha-box { background: white; color: #0f172a; padding: 2rem; border-radius: 16px; width: 300px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center; }
+        .cracha-header { border-bottom: 2px solid #e2e8f0; width: 100%; padding-bottom: 1rem; margin-bottom: 1rem; }
+        .cracha-nome { font-size: 1.5rem; font-weight: bold; margin: 0; color: #1e293b; }
+        .cracha-cargo { font-size: 1rem; color: #64748b; margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 1px;}
+        .cracha-dados { text-align: left; width: 100%; margin-top: 1rem; font-size: 0.9rem; color: #334155; }
+        .cracha-dados p { margin: 0.3rem 0; }
+        #qrcode { margin-top: 1.5rem; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
+    </style>
+</head>
+<body>
+
+    <div class="painel-controle">
+        <h2>Cadastro de Crachá</h2>
+        
+        <div class="form-group">
+            <label for="nome">Nome Completo</label>
+            <input type="text" id="nome" placeholder="Digite o nome">
+        </div>
+
+        <div class="form-group">
+            <label for="cargo">Cargo / Função</label>
+            <select id="cargo" onchange="atualizarInterface()">
+                <option value="">Selecione um cargo...</option>
+                <option value="Aluno">Aluno</option>
+                <option value="Professor">Professor</option>
+                <option value="Secretário">Secretário</option>
+                <option value="Pedagogo">Pedagogo</option>
+                <option value="Especialista">Especialista</option>
+                <option value="Gestor">Gestor</option>
+            </select>
+        </div>
+
+        <div class="form-group oculto" id="grupo-turma">
+            <label for="turma">Turma</label>
+            <input type="text" id="turma" placeholder="Ex: 301">
+        </div>
+        <div class="form-group oculto" id="grupo-serie">
+            <label for="serie">Série</label>
+            <input type="text" id="serie" placeholder="Ex: 3º Ano">
+        </div>
+        <div class="form-group oculto" id="grupo-curso">
+            <label for="curso">Curso</label>
+            <input type="text" id="curso" placeholder="Ex: Informática">
+        </div>
+        <div class="form-group oculto" id="grupo-materias">
+            <label for="materias">Matérias (separadas por vírgula)</label>
+            <input type="text" id="materias" placeholder="Ex: Matemática, Física">
+        </div>
+        <div class="form-group oculto" id="grupo-escola">
+            <label for="escola">Escola</label>
+            <input type="text" id="escola" placeholder="Ex: Colégio GENTE">
+        </div>
+
+        <button class="btn-acao" onclick="gerarCracha()">GERAR CRACHÁ E QR CODE</button>
+        <button class="btn-acao btn-salvar" onclick="salvarNaPlanilha()">GRAVAR NA PLANILHA</button>
+        <p id="status-msg" style="text-align: center; font-size: 0.9rem; margin-top: 1rem;"></p>
+    </div>
+    
+    <div class="painel-cracha">
+        <div id="cracha-box">
+            <div class="cracha-header">
+                <h3 class="cracha-nome" id="display-nome">NOME</h3>
+                <p class="cracha-cargo" id="display-cargo">CARGO</p>
+            </div>
+            <div class="cracha-dados" id="display-dados">
+                </div>
+            <div id="qrcode"></div>
+        </div>
+    </div>
+
+    <script>
+        // URL gerada pelo Google Apps Script (Você deve substituir após publicar o script da etapa 2)
+        const SCRIPT_URL = "SUA_URL_DO_WEB_APP_AQUI";
+        
+        let dadosCrachaAtual = {}; // Armazena o estado atual para envio à planilha
+
+        // Mapeamento de quais campos aparecem para cada cargo
+        const regrasCampos = {
+            "Aluno": ["turma", "serie", "curso"],
+            "Professor": ["curso", "materias"],
+            "Secretário": ["escola"],
+            "Pedagogo": ["escola", "curso"],
+            "Especialista": ["escola", "curso"],
+            "Gestor": ["escola", "curso"]
+        };
+
+        function atualizarInterface() {
+            const cargo = document.getElementById("cargo").value;
+            const todosCampos = ["turma", "serie", "curso", "materias", "escola"];
+            
+            // Oculta todos os campos dinâmicos e limpa seus valores
+            todosCampos.forEach(campo => {
+                document.getElementById(`grupo-${campo}`).classList.add("oculto");
+            });
+
+            // Exibe apenas os campos relevantes para o cargo selecionado
+            if (regrasCampos[cargo]) {
+                regrasCampos[cargo].forEach(campo => {
+                    document.getElementById(`grupo-${campo}`).classList.remove("oculto");
+                });
+            }
+        }
+
+        function gerarCracha() {
+            const nome = document.getElementById("nome").value.trim();
+            const cargo = document.getElementById("cargo").value;
+            const containerQR = document.getElementById("qrcode");
+            const divDados = document.getElementById("display-dados");
+
+            if (!nome || !cargo) {
+                alert("Nome e Cargo são obrigatórios.");
+                return;
+            }
+
+            // 1. Atualizar visualização do texto no crachá
+            document.getElementById("display-nome").innerText = nome;
+            document.getElementById("display-cargo").innerText = cargo;
+            
+            divDados.innerHTML = ""; // Limpa dados anteriores
+            
+            // Objeto que formará o payload JSON do QR Code e o envio para a planilha
+            dadosCrachaAtual = { n: nome, c: cargo, d: {} };
+
+            // 2. Coletar dados dinâmicos e montar visualização
+            regrasCampos[cargo].forEach(campo => {
+                const valor = document.getElementById(campo).value.trim();
+                if (valor) {
+                    dadosCrachaAtual.d[campo] = valor; // Adiciona ao payload
+                    
+                    // Adiciona visualmente ao crachá
+                    const p = document.createElement("p");
+                    p.innerHTML = `<strong>${campo.charAt(0).toUpperCase() + campo.slice(1)}:</strong> ${valor}`;
+                    divDados.appendChild(p);
+                }
+            });
+
+            // 3. Gerar o QR Code com o JSON codificado e blindado
+            containerQR.innerHTML = "";
+            try {
+                const payloadString = JSON.stringify(dadosCrachaAtual);
+                const textoCodificado = unescape(encodeURIComponent(payloadString));
+                
+                new QRCode(containerQR, {
+                    text: textoCodificado,
+                    width: 150,
+                    height: 150,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            } catch (erro) {
+                console.error("Falha ao gerar QR:", erro);
+                alert("Erro ao processar dados para o QR Code.");
+            }
+        }
+
+        async function salvarNaPlanilha() {
+            if (!dadosCrachaAtual.n) {
+                alert("Gere o crachá primeiro antes de salvar.");
+                return;
+            }
+
+            if(SCRIPT_URL === "SUA_URL_DO_WEB_APP_AQUI"){
+                alert("ERRO DE ARQUITETURA: Você precisa configurar o SCRIPT_URL no código com a URL do seu Google Apps Script.");
+                return;
+            }
+
+            const msg = document.getElementById("status-msg");
+            msg.style.color = "#fbbf24";
+            msg.innerText = "Enviando dados para a planilha...";
+
+            // Prepara os dados. A Data/Hora será gerada com precisão no servidor (Backend)
+            const payload = {
+                nome: dadosCrachaAtual.n,
+                cargo: dadosCrachaAtual.c,
+                dadosExtras: JSON.stringify(dadosCrachaAtual.d) // Transforma os dados flexíveis em string para caber numa célula
+            };
+
+            try {
+                const resposta = await fetch(SCRIPT_URL, {
+                    method: "POST",
+                    body: JSON.stringify(payload)
+                });
+                
+                const resultado = await resposta.json();
+                
+                if (resultado.status === "sucesso") {
+                    msg.style.color = "#4ade80";
+                    msg.innerText = "Registrado na planilha com sucesso!";
+                } else {
+                    throw new Error("Erro retornado pelo servidor");
+                }
+            } catch (erro) {
+                console.error("Erro de rede/CORS:", erro);
+                msg.style.color = "#ef4444";
+                msg.innerText = "Falha ao gravar. Verifique o console ou a configuração do Apps Script.";
+            }
+        }
+    </script>
+</body>
+</html>
