@@ -375,39 +375,44 @@
                 });
             },
 
-            processarCrachaQR: function(textoDecodificado) {
+           processarCrachaQR: function(textoBruto) {
                 try {
-                    // 1. Escudo de Sanitização (O mesmo usado no a-TIA)
-                    const decodificarHTML = (texto) => {
-                        const txt = document.createElement("textarea");
-                        txt.innerHTML = texto;
-                        return txt.value;
-                    };
+                    // 1. Limpeza Nível 2: Busca APENAS o que estiver dentro de chaves { }
+                    let textoExtraido = textoBruto;
+                    const matchJson = textoBruto.match(/\{.*\}/s);
+                    if (matchJson) {
+                        textoExtraido = matchJson[0];
+                    }
 
-                    let textoLimpo = decodificarHTML(textoDecodificado)
-                        .trim()
+                    // 2. Higienização Agressiva de Aspas
+                    let textoLimpo = textoExtraido
                         .replace(/[\u200B-\u200D\uFEFF]/g, "") // Remove espaços invisíveis
-                        .replace(/[\u201C\u201D]/g, '"')       // Troca aspas curvas por retas
-                        .replace(/[\u2018\u2019]/g, "'");
+                        .replace(/[\u201C\u201D\u2018\u2019´`']/g, '"'); // Converte QUALQUER aspa simples/curva para aspa dupla
 
-                    // 2. Tenta ler como JSON (Padrão Ouro de Segurança)
+                    // 3. Tenta o Parse
                     const dados = JSON.parse(textoLimpo);
                     
                     if (dados.t === "LOGIN_PTIA" && dados.p) {
-                        this.iniciarSessao(dados.p); // O perfil ('p') diz se é secretaria ou professor
+                        this.iniciarSessao(dados.p);
                     } else {
-                        alert("Acesso Negado: Crachá inválido para este terminal.");
+                        alert("Acesso Negado: O crachá foi lido, mas não tem permissão para este Painel.");
                     }
+                    
                 } catch (erro) {
-                    // Fallback (Plano B): Se o sistema externo gerar apenas um texto puro como "PROF-1234"
-                    const idTexto = textoDecodificado.toUpperCase();
-                    if (idTexto.startsWith('SEC')) {
+                    // PLANO B (Varredura Bruta): Se o JSON estiver quebrado, vamos procurar o ID no texto
+                    const textoMaiusculo = textoBruto.toUpperCase();
+                    
+                    // Usamos includes() em vez de startsWith() para achar o ID no meio da string
+                    if (textoMaiusculo.includes('SEC-')) {
+                        console.warn("Login via Fallback: Secretaria");
                         this.iniciarSessao('secretaria');
-                    } else if (idTexto.startsWith('PROF')) {
+                    } else if (textoMaiusculo.includes('PROF-')) {
+                        console.warn("Login via Fallback: Professor");
                         this.iniciarSessao('professor');
                     } else {
-                        console.error("Falha no Parser:", erro, "Texto lido:", textoDecodificado);
-                        alert("Acesso Negado: Formato de crachá desconhecido.");
+                        // O Espelho de Debug: Mostra o que a câmera realmente leu
+                        console.error("Falha no Parser:", erro);
+                        alert("Falha Crítica na Leitura.\nO que a câmera enxergou foi:\n\n" + textoBruto);
                     }
                 }
             },
