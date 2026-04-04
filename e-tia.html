@@ -176,6 +176,48 @@
         
 
         <div style="font-size: 0.75rem; color: var(--texto-suave); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">Motores de Ingestão</div>
+		<div style="font-size: 0.75rem; color: var(--texto-suave); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">Área de Trabalho</div>
+        
+        <div class="menu-btn active" id="btn-menu-dashboard" onclick="AppGENTE.setModo('dashboard')">
+            <span class="material-icons-round">dashboard</span> Painel de Controle
+        </div>
+
+        <div style="font-size: 0.75rem; color: var(--texto-suave); margin-top: 15px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">Motores de Ingestão</div>
+        
+        <div class="menu-btn" id="btn-menu-genesis" onclick="AppGENTE.setModo('genesis')">
+            <span class="material-icons-round">architecture</span> Modo Gênesis
+        </div>
+        ```
+
+---
+
+### PASSO 2: A Tela do Dashboard (View)
+Agora, localize a sua `<main class="workspace">`. Logo na abertura dela (como a primeiríssima `section`), vamos colar a estrutura que vai abrigar os cards de projetos pendentes.
+
+**Adicione este bloco logo abaixo de `<main class="workspace">` e ANTES do `<section id="view-macro-genesis">`:**
+
+```html
+            <section id="view-dashboard" class="view-section active">
+                <div style="width: 100%; max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 2rem;">
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid var(--borda); padding-bottom: 1rem;">
+                        <div>
+                            <h2 id="dash-titulo-papel" style="font-size: 1.8rem; color: var(--cor-destaque);">Área do Diretor</h2>
+                            <p id="dash-desc-papel" style="color: var(--texto-suave);">Gestão de projetos e homologação.</p>
+                        </div>
+                        <button id="btn-novo-projeto" class="btn-success" onclick="AppGENTE.setModo('genesis')" style="display: none; padding: 0.8rem 1.2rem;">
+                            <span class="material-icons-round">add</span> Iniciar Novo Projeto
+                        </button>
+                    </div>
+                    
+                    <div>
+                        <h3 style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--texto-puro);">Tarefas Pendentes</h3>
+                        <div id="grid-projetos-dashboard" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
+                            </div>
+                    </div>
+                    
+                </div>
+            </section>
         
         <div class="menu-btn active" id="btn-menu-genesis" onclick="AppGENTE.setModo('genesis')">
             <span class="material-icons-round">architecture</span> Modo Gênesis
@@ -366,74 +408,140 @@
         // ========================================================================
         // GESTÃO DE ACESSO E PERFIS (WORKFLOW)
         // ========================================================================
+
         selecionarPerfil: function(perfil) {
             this.perfilAtivo = perfil;
             
-            // 1. Esconde a tela de boas-vindas
             const telaFoco = document.getElementById('view-selecao-perfil');
             telaFoco.style.opacity = '0';
             setTimeout(() => { telaFoco.style.display = 'none'; }, 500);
 
-            // 2. Revela a interface principal
             document.querySelector('.sidebar').style.display = 'flex';
             document.querySelector('.content-wrapper').style.display = 'flex';
 
-            // 3. Molda o E-TIA de acordo com a função
-            if(perfil === 'diretor') {
-                this.setModo('genesis');
-                alert("Bem-vindo, Diretor. \nInicie um projeto preenchendo os dados do curso ou importe uma matriz para Homologação Final.");
-            } else if(perfil === 'especialista') {
-                this.setModo('digitalizacao');
-                // O especialista geralmente só mexe na tela de digitalização
+            // Bloqueia menus que o perfil não deveria usar
+            if(perfil === 'especialista') {
                 document.getElementById('btn-menu-genesis').style.display = 'none'; 
                 document.getElementById('btn-menu-simulador').style.display = 'none';
-                alert("Bem-vindo, Especialista. \nImporte o arquivo do Diretor e utilize o Decodificador para extrair a matriz técnica.");
             } else if(perfil === 'pedagogo') {
-                this.setModo('genesis');
-                alert("Bem-vindo, Pedagogo. \nImporte a matriz enviada pelo Especialista e acesse as Camadas Meso/Micro para balancear o IMO.");
+                document.getElementById('btn-menu-digitalizacao').style.display = 'none'; 
             }
+
+            // O redirecionamento inicial agora é SEMPRE para a Caixa de Entrada
+            this.setModo('dashboard');
         },
 
         // ========================================================================
-        // CONTROLE DE INTERFACE (MENU LATERAL)
+        // CONTROLE DE INTERFACE (MENU LATERAL E VIEWS)
         // ========================================================================
         setModo: function(modo) {
             this.modoAtivo = modo;
             
-            // Controle visual do Menu Lateral
-            document.getElementById('btn-menu-genesis').classList.remove('active');
-            document.getElementById('btn-menu-digitalizacao').classList.remove('active');
-            document.getElementById('btn-menu-simulador').classList.remove('active');
-            document.getElementById(`btn-menu-${modo}`).classList.add('active');
+            // Gerencia botões ativos no menu
+            document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active'));
+            const btnMenu = document.getElementById(`btn-menu-${modo}`);
+            if(btnMenu) btnMenu.classList.add('active');
 
             // Troca de Título no Header
             const titulos = {
+                'dashboard': 'Painel de Controle Pessoal',
                 'genesis': 'Design Estratégico (Simulador IMO)',
                 'digitalizacao': 'Decodificador de Matriz (PPC Legado)',
                 'simulador': 'Simulador da Experiência do Aluno'
             };
-            document.getElementById('titulo-modo-ativo').innerText = titulos[modo];
+            document.getElementById('titulo-modo-ativo').innerText = titulos[modo] || '';
 
-            // Oculta TODAS as views primeiro
-            document.getElementById('view-macro-genesis').classList.remove('active');
-            document.getElementById('view-macro-digitalizacao').classList.remove('active');
-            document.getElementById('view-meso').classList.remove('active');
-            document.getElementById('view-micro').classList.remove('active');
-            document.getElementById('view-simulador').classList.remove('active');
+            // Oculta TODAS as views
+            document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
 
-            // Lógica de exibição com base no modo
-            if(modo === 'simulador') {
-                document.querySelector('.wizard-container').style.display = 'none'; // Esconde a barra de progresso (Wizard)
-                document.getElementById('view-simulador').classList.add('active');
-                this.renderizarSimulador(); // Puxa os dados para o celular
+            // Lógica Específica
+            if(modo === 'dashboard' || modo === 'simulador') {
+                document.querySelector('.wizard-container').style.display = 'none'; // Sem barra de progresso
+                document.getElementById(`view-${modo}`).classList.add('active');
+                if (modo === 'dashboard') this.renderizarDashboard();
+                if (modo === 'simulador') this.renderizarSimulador();
             } else {
-                document.querySelector('.wizard-container').style.display = 'block'; // Mostra a barra de progresso
+                document.querySelector('.wizard-container').style.display = 'block'; 
                 document.getElementById(`view-macro-${modo}`).classList.add('active');
                 
-                // Reseta o Wizard para o Passo 1
                 document.getElementById('step-2').classList.remove('active', 'completed');
                 document.getElementById('step-3').classList.remove('active', 'completed');
                 document.getElementById('step-1').classList.add('active');
+            }
+        },
+
+        // ========================================================================
+        // RENDERIZAÇÃO DA CAIXA DE ENTRADA (MOCKUP PARA O TCC)
+        // ========================================================================
+        renderizarDashboard: function() {
+            const config = {
+                'diretor': { titulo: 'Área do Diretor', desc: 'Inicie projetos ou homologue matrizes concluídas.', mostrarNovo: true },
+                'especialista': { titulo: 'Área do Especialista', desc: 'Ingestão de dados e quebra de conteúdo técnico (N-Grams).', mostrarNovo: false },
+                'pedagogo': { titulo: 'Área do Pedagogo', desc: 'Engenharia curricular, cálculo IMO e gamificação.', mostrarNovo: false }
+            };
+            
+            const conf = config[this.perfilAtivo] || config['diretor'];
+            document.getElementById('dash-titulo-papel').innerText = conf.titulo;
+            document.getElementById('dash-desc-papel').innerText = conf.desc;
+            document.getElementById('btn-novo-projeto').style.display = conf.mostrarNovo ? 'flex' : 'none';
+
+            // MOCKUP DA PLANILHA DO GOOGLE SHEETS
+            const mockProjetos = [
+                { id: 'PRJ-001', nome: 'Técnico em Energias Renováveis', status: 'AGUARDANDO_ESPECIALISTA', data: 'Atrasado 2 dias' },
+                { id: 'PRJ-002', nome: 'Especialização em Inteligência Artificial', status: 'AGUARDANDO_PEDAGOGO', data: 'Hoje' },
+                { id: 'PRJ-003', nome: 'Formação de Sargentos (Segurança Pública)', status: 'AGUARDANDO_HOMOLOGACAO', data: 'Hoje' }
+            ];
+
+            const grid = document.getElementById('grid-projetos-dashboard');
+            grid.innerHTML = '';
+            let temProjeto = false;
+
+            mockProjetos.forEach(p => {
+                // A Máquina de Estados decide quem vê o quê!
+                let deveMostrar = false;
+                let acaoBtn = '';
+                let corStatus = '';
+                let proximaTela = '';
+
+                if(this.perfilAtivo === 'diretor' && p.status === 'AGUARDANDO_HOMOLOGACAO') { 
+                    deveMostrar = true; acaoBtn = 'Homologar Curso'; corStatus = 'var(--cor-sucesso)'; proximaTela = 'simulador'; 
+                }
+                if(this.perfilAtivo === 'especialista' && p.status === 'AGUARDANDO_ESPECIALISTA') { 
+                    deveMostrar = true; acaoBtn = 'Decodificar (N-Grams)'; corStatus = 'var(--dim-tecnica)'; proximaTela = 'digitalizacao'; 
+                }
+                if(this.perfilAtivo === 'pedagogo' && p.status === 'AGUARDANDO_PEDAGOGO') { 
+                    deveMostrar = true; acaoBtn = 'Balancear IMO e Tempos'; corStatus = 'var(--dim-cognitiva)'; proximaTela = 'genesis'; 
+                }
+
+                if(deveMostrar) {
+                    temProjeto = true;
+                    grid.innerHTML += `
+                        <div style="background: var(--bg-painel); border: 1px solid var(--borda); border-top: 4px solid ${corStatus}; border-radius: 8px; padding: 1.5rem; display: flex; flex-direction: column; gap: 10px; transition: transform 0.2s;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 0.7rem; font-family: monospace; background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px;">${p.id}</span>
+                                <span style="font-size: 0.75rem; color: ${p.data.includes('Atrasado') ? 'var(--cor-alerta)' : 'var(--texto-suave)'};"><span class="material-icons-round" style="font-size:12px; vertical-align:text-bottom;">schedule</span> ${p.data}</span>
+                            </div>
+                            <h4 style="font-size: 1.1rem; color: var(--texto-puro); margin-top: 5px;">${p.nome}</h4>
+                            <p style="font-size: 0.8rem; color: ${corStatus}; font-weight: bold; margin-bottom: 10px;">${p.status.replace(/_/g, ' ')}</p>
+                            
+                            <button class="btn-primary" style="margin-top: auto; font-size: 0.85rem; padding: 0.8rem; border: 1px solid ${corStatus}; background: transparent; color: var(--texto-puro);" 
+                                onclick="AppGENTE.setModo('${proximaTela}'); alert('Simulando carregamento da Nuvem: O JSON do ${p.id} seria importado agora.')">
+                                <span class="material-icons-round" style="font-size: 16px;">cloud_download</span> ${acaoBtn}
+                            </button>
+                        </div>
+                    `;
+                }
+            });
+
+            // Se o perfil não tiver tarefas, exibe a lixeira vazia (Inbox Zero)
+            if(!temProjeto) {
+                grid.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 4rem 2rem; border: 2px dashed rgba(255,255,255,0.1); border-radius: 12px; color: var(--texto-suave); background: rgba(0,0,0,0.2);">
+                        <span class="material-icons-round" style="font-size: 4rem; opacity: 0.3; margin-bottom: 10px;">task_alt</span>
+                        <h3 style="color: var(--texto-puro); margin-bottom: 5px;">Inbox Zero</h3>
+                        <p style="font-size: 0.9rem;">Nenhum projeto requer sua ação no momento.</p>
+                    </div>
+                `;
             }
         },
 
