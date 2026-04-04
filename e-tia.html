@@ -547,14 +547,28 @@
             grid.innerHTML = '';
             let temProjeto = false;
 
+           // MOCKUP DA PLANILHA DO GOOGLE SHEETS ENRIQUECIDO
+            const mockProjetos = [
+                { id: 'PRJ-001', nome: 'Técnico em Energias Renováveis', status: 'AGUARDANDO_ESPECIALISTA', data: 'Atrasado 2 dias' },
+                { id: 'PRJ-002', nome: 'Especialização em Inteligência Artificial', status: 'AGUARDANDO_PEDAGOGO', data: 'Hoje' },
+                { 
+                  id: 'PRJ-003', nome: 'Formação de Sargentos (Segurança Pública)', status: 'AGUARDANDO_HOMOLOGACAO', data: 'Hoje',
+                  // O Pedagogo já fez o trabalho dele, então a planilha devolve essas métricas calculadas:
+                  metricas: { custo: 'R$ 18.000,00', tempo: '360h (18 sem)', imo: 'T:40% C:30% X:15% S:15%' } 
+                }
+            ];
+
+            const grid = document.getElementById('grid-projetos-dashboard');
+            grid.innerHTML = '';
+            let temProjeto = false;
+
             mockProjetos.forEach(p => {
-                // A Máquina de Estados decide quem vê o quê!
                 let deveMostrar = false;
                 let acaoBtn = '';
                 let corStatus = '';
                 let proximaTela = '';
 
-                if(this.perfilAtivo === 'gestor' && p.status === 'AGUARDANDO_HOMOLOGACAO') { 
+                if(this.perfilAtivo === 'diretor' && p.status === 'AGUARDANDO_HOMOLOGACAO') { 
                     deveMostrar = true; acaoBtn = 'Homologar Curso'; corStatus = 'var(--cor-sucesso)'; proximaTela = 'simulador'; 
                 }
                 if(this.perfilAtivo === 'especialista' && p.status === 'AGUARDANDO_ESPECIALISTA') { 
@@ -566,18 +580,41 @@
 
                 if(deveMostrar) {
                     temProjeto = true;
+                    
+                    // Monta o mini-dashboard de métricas apenas se elas existirem no projeto E for a visão do Diretor
+                    let htmlMetricas = '';
+                    if(p.metricas && this.perfilAtivo === 'diretor') {
+                        htmlMetricas = `
+                            <div style="background: rgba(0,0,0,0.3); border-radius: 6px; padding: 12px; margin-bottom: 15px; margin-top: 5px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 6px; border: 1px dashed var(--cor-sucesso);">
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--texto-suave);">Custo Previsto:</span>
+                                    <strong style="color: var(--cor-sucesso); font-size: 0.95rem;">${p.metricas.custo}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: var(--texto-suave);">Carga / Duração:</span>
+                                    <strong style="color: var(--texto-puro);">${p.metricas.tempo}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; margin-top: 2px;">
+                                    <span style="color: var(--texto-suave);">Balanço IMO:</span>
+                                    <strong style="color: var(--dim-cognitiva); font-family: monospace;">${p.metricas.imo}</strong>
+                                </div>
+                            </div>
+                        `;
+                    }
+
                     grid.innerHTML += `
                         <div style="background: var(--bg-painel); border: 1px solid var(--borda); border-top: 4px solid ${corStatus}; border-radius: 8px; padding: 1.5rem; display: flex; flex-direction: column; gap: 10px; transition: transform 0.2s;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <span style="font-size: 0.7rem; font-family: monospace; background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 4px;">${p.id}</span>
                                 <span style="font-size: 0.75rem; color: ${p.data.includes('Atrasado') ? 'var(--cor-alerta)' : 'var(--texto-suave)'};"><span class="material-icons-round" style="font-size:12px; vertical-align:text-bottom;">schedule</span> ${p.data}</span>
                             </div>
-                            <h4 style="font-size: 1.1rem; color: var(--texto-puro); margin-top: 5px;">${p.nome}</h4>
-                            <p style="font-size: 0.8rem; color: ${corStatus}; font-weight: bold; margin-bottom: 10px;">${p.status.replace(/_/g, ' ')}</p>
+                            <h4 style="font-size: 1.1rem; color: var(--texto-puro); margin-top: 5px; margin-bottom: ${htmlMetricas ? '5px' : '15px'};">${p.nome}</h4>
                             
-                            <button class="btn-primary" style="margin-top: auto; font-size: 0.85rem; padding: 0.8rem; border: 1px solid ${corStatus}; background: transparent; color: var(--texto-puro);" 
+                            ${htmlMetricas} <p style="font-size: 0.8rem; color: ${corStatus}; font-weight: bold; margin-bottom: 10px; margin-top: auto;">${p.status.replace(/_/g, ' ')}</p>
+                            
+                            <button class="btn-primary" style="font-size: 0.85rem; padding: 0.8rem; border: 1px solid ${corStatus}; background: transparent; color: var(--texto-puro);" 
                                 onclick="AppGENTE.setModo('${proximaTela}'); alert('Simulando carregamento da Nuvem: O JSON do ${p.id} seria importado agora.')">
-                                <span class="material-icons-round" style="font-size: 16px;">cloud_download</span> ${acaoBtn}
+                                <span class="material-icons-round" style="font-size: 16px;">task_alt</span> ${acaoBtn}
                             </button>
                         </div>
                     `;
