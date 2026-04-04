@@ -428,26 +428,39 @@
                     </div>
                 </div>
             </section>
-               <section id="view-simulador" class="view-section" style="justify-content: center; background: #000;">
-                
-                <div style="width: 100%; max-width: 400px; background: #1e293b; border-radius: 30px; border: 8px solid #334155; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.8); display: flex; flex-direction: column;">
+             <section id="view-simulador" class="view-section">
+                <div style="display: flex; justify-content: center; align-items: center; padding: 2rem; height: 100%; gap: 4rem;">
                     
-                    <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 120px; height: 20px; background: #334155; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; z-index: 10;"></div>
-
-                    <div class="tela-smartphone" style="flex: 1; height: 100%; margin-top: 10px; margin-bottom: 5px;">
+                    <div style="position: relative; width: 360px; height: 740px; border: 14px solid #1a1c23; border-radius: 40px; background: #000; box-shadow: 0 25px 60px rgba(0,0,0,0.8), inset 0 0 10px rgba(255,255,255,0.1); overflow: hidden;">
                         
-                        <div style="text-align: center; margin-bottom: 2rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; padding-top: 1rem;">
-                            <span style="font-size: 2rem; display: block; margin-bottom: 5px;">♾️</span>
-                            <h2 style="color: #f8fafc; font-size: 1.2rem; font-weight: 800; letter-spacing: 1px;">MALHA NEURAL</h2>
-                            <p style="color: #3b82f6; font-size: 0.8rem; font-weight: bold;" id="simulador-nome-curso">Carregando...</p>
+                        <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 140px; height: 30px; background: #1a1c23; border-bottom-left-radius: 20px; border-bottom-right-radius: 20px; z-index: 10; display: flex; justify-content: center; align-items: center; gap: 15px;">
+                            <div style="width: 45px; height: 5px; background: #2a2d38; border-radius: 3px;"></div>
+                            <div style="width: 10px; height: 10px; background: #0f0f13; border-radius: 50%; border: 1px solid #333; box-shadow: inset 0 0 2px rgba(255,255,255,0.2);"></div>
                         </div>
 
-                        <div id="trilha-aluno-container" style="display: flex; flex-direction: column;">
-                            </div>
-
+                        <iframe src="t-tia.html" frameborder="0" style="width: 100%; height: 100%; border: none; background: #121214;"></iframe>
+                        
                     </div>
-                </div>
 
+                    <div style="max-width: 400px; display: flex; flex-direction: column; gap: 1.5rem;">
+                        <div>
+                            <h2 style="color: var(--cor-destaque); font-size: 2rem; margin-bottom: 10px;">Homologação Final</h2>
+                            <p style="color: var(--texto-suave); font-size: 1.1rem;">Visão real da experiência do aluno rodando no dispositivo móvel.</p>
+                        </div>
+                        
+                        <div style="background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 12px; border: 1px dashed var(--borda);">
+                            <h4 style="color: var(--texto-puro); margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                                <span class="material-icons-round" style="color: var(--cor-alerta);">phonelink_ring</span>
+                                Auditoria de UI/UX
+                            </h4>
+                            <p style="color: var(--texto-suave); font-size: 0.9rem; line-height: 1.6;">
+                                O simulador ao lado está rodando uma instância nativa do <strong>T-TIA</strong>. 
+                                Faça login com o crachá do aluno e importe a matriz recém-aprovada para validar se a gamificação, travas do Protocolo G3 e responsividade estão em conformidade com as diretrizes do Ecossistema GENTE antes da publicação na nuvem.
+                            </p>
+                        </div>
+                    </div>
+
+                </div>
             </section>
         </main>
     </div>
@@ -625,88 +638,15 @@
         // ========================================================================
         // O MOTOR DO APLICATIVO DO ALUNO (RENDERIZAÇÃO)
         // ========================================================================
-        renderizarSimulador: function() {
-            document.getElementById('simulador-nome-curso').innerText = (this.curriculo.metadados.nomeCurso || "Matriz em Construção").toUpperCase();
-            const container = document.getElementById('trilha-aluno-container');
-            container.innerHTML = '';
-
-            if(!this.curriculo.territorios || this.curriculo.territorios.length === 0) {
-                container.innerHTML = `<div style="text-align:center; color: #cbd5e1; padding: 2rem; font-size: 0.9rem;">A malha neural está vazia.<br>Projete no Gênesis.</div>`;
-                return;
+       renderizarSimulador: function() {
+            console.log("[E-TIA] Simulador ativado. Iframe carregando o T-TIA real.");
+            
+            // Opcional para o futuro: Podemos usar localStorage aqui para passar o JSON 
+            // direto do E-TIA para o T-TIA sem precisar baixar/subir arquivo!
+            if(this.curriculo && this.curriculo.metadados) {
+                localStorage.setItem('matrizHomologadaTemporaria', JSON.stringify(this.curriculo));
             }
-
-            this.curriculo.territorios.forEach(t => {
-                // 1. Calcula o Total de XP do Território
-                let xpTotalTerritorio = 0;
-                let qtdMissoes = t.missoes ? t.missoes.length : 0;
-                if(t.missoes) {
-                    t.missoes.forEach(m => m.cards.forEach(c => xpTotalTerritorio += (c.tempo * 10)));
-                }
-
-                // 2. Renderiza o Card do Território (Trilha Macro)
-                let html = `
-                    <div class="card-trilha">
-                        <h3 style="color: #f8fafc; font-size: 1.1rem; margin-bottom: 5px; text-transform: uppercase;">${t.id}: ${t.titulo}</h3>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #cbd5e1; margin-bottom: 12px; font-weight: bold;">
-                            <span>${qtdMissoes} NÓS (MISSÕES)</span>
-                            <span style="color: #a855f7;">${xpTotalTerritorio} XP</span>
-                        </div>
-                        <div style="height: 6px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
-                            <div style="height: 100%; width: 0%; background: #a855f7;"></div>
-                        </div>
-                `;
-
-                // 3. Renderiza as Missões e Cards (Malha Micro)
-                if(qtdMissoes > 0) {
-                    t.missoes.forEach(m => {
-                        html += `
-                            <div class="card-missao-sim">
-                                <h4 style="color: #f8fafc; font-size: 0.95rem; margin-bottom: 5px;">${m.titulo}</h4>
-                        `;
-                        
-                        m.cards.forEach(c => {
-                            const xp = c.tempo * 10;
-                            const isAula = c.acesso === 'aula';
-                            // Ícones e cores baseados no modelo aTIA
-                            const icone = isAula ? 'lock_outline' : 'play_arrow';
-                            const corIcone = isAula ? '#ef4444' : '#4ade80'; 
-                            const labelDesbloqueio = isAula ? 'Exige G3' : 'Livre';
-                            
-                            // Traduz a dimensão para o rótulo do aluno
-                            const dimMap = { 'tecnica': 'Ação Material', 'cognitiva': 'Saber Elaborado', 'contextual': 'Território', 'social': 'Ética/Intervenção' };
-                            const nomeDimensao = dimMap[c.dimensao] || c.dimensao;
-                            const textoCard = c.texto_editado || 'Decodificando nó de dados...';
-
-                            html += `
-                                <div class="tarefa-row">
-                                    <div style="flex: 1; padding-right: 10px;">
-                                        <span class="tag-dimensao ${c.dimensao}">${nomeDimensao}</span>
-                                        <div style="font-size: 0.8rem; color: #cbd5e1; line-height: 1.3;">
-                                            ${textoCard.length > 60 ? textoCard.substring(0, 60) + '...' : textoCard}
-                                        </div>
-                                    </div>
-                                    
-                                    <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; min-width: 65px;">
-                                        <div style="color: #f59e0b; font-weight: 900; font-size: 0.85rem; margin-bottom: 6px;">+${xp} XP</div>
-                                        <div style="display: flex; align-items: center; gap: 4px; font-size: 0.65rem; font-weight: bold; color: ${corIcone}; background: rgba(255,255,255,0.05); padding: 4px 6px; border-radius: 4px; border: 1px solid ${corIcone}40;">
-                                            <span class="material-icons-round" style="font-size: 12px;">${icone}</span>
-                                            ${labelDesbloqueio}
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-                        });
-                        html += `</div>`; // Fecha card-missao-sim
-                    });
-                } else {
-                    html += `<div style="margin-top: 15px; font-size: 0.8rem; color: #64748b; font-style: italic;">Nenhum nó de missão projetado.</div>`;
-                }
-                
-                html += `</div>`; // Fecha card-trilha
-                container.innerHTML += html;
-            });
         },
-
         // ==========================================
         // 1. DICIONÁRIOS EXAUSTIVOS (N-GRAMS + PMDF)
         // ==========================================
