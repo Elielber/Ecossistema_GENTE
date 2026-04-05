@@ -842,7 +842,7 @@
                 document.getElementById('resumo-efetividade').style.color = "var(--cor-sucesso)";
             },
 
-            // --- PROTOCOLO G3 E QR CODE ---
+          // --- PROTOCOLO G3 E QR CODE ---
             gerarChaveG3: function() {
                 const select = document.getElementById('select-missao');
                 const missaoId = select.value;
@@ -869,15 +869,32 @@
                     resumo: resumoAula // O conhecimento viaja aqui!
                 };
 
-                document.getElementById('container-qr-gigante').innerHTML = '';
-                this.leitorG3 = new QRCode(document.getElementById('container-qr-gigante'), {
-                    text: JSON.stringify(payload), width: 450, height: 450, colorDark : "#000000", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.H
-                });
+                const container = document.getElementById('container-qr-gigante');
+                container.innerHTML = '';
+                
+                try {
+                    const payloadString = JSON.stringify(payload);
+                    
+                    // A VACINA UTF-8: Evita o estouro de memória com acentos do idioma português
+                    let textoCodificado = unescape(encodeURIComponent(payloadString));
 
-                document.getElementById('info-missao-g3').innerText = `Validando Efetividade: ${nomeMissao}`;
-                document.getElementById('painel-projecao-g3').style.display = 'flex';
+                    this.leitorG3 = new QRCode(container, {
+                        text: textoCodificado, 
+                        width: 450, 
+                        height: 450, 
+                        colorDark : "#000000", 
+                        colorLight : "#ffffff", 
+                        // MUDANÇA CRÍTICA: De 'H' para 'M'. Libera espaço para o resumo caber!
+                        correctLevel : QRCode.CorrectLevel.M 
+                    });
+
+                    document.getElementById('info-missao-g3').innerText = `Validando Efetividade: ${nomeMissao}`;
+                    document.getElementById('painel-projecao-g3').style.display = 'flex';
+                } catch (erro) {
+                    console.error("Erro Crítico de Overflow no QR:", erro);
+                    alert("O resumo tático ultrapassou o limite físico do QR Code. Por favor, remova alguns caracteres e tente novamente.");
+                }
             },
-
             fecharProjecao: function() {
                 document.getElementById('painel-projecao-g3').style.display = 'none';
                 if(this.leitorG3) this.leitorG3.clear();
