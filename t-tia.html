@@ -10,6 +10,7 @@
     <meta name="theme-color" content="#0a0e17"> 
         
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     
     <style>
         /* --- VARIÁVEIS E ESTÉTICA GAMER / CYBERPUNK --- */
@@ -478,7 +479,39 @@
     </section>
 
     <script>
-
+// ==========================================
+        // PROTOCOLO DE COMPRESSÃO: G3-FUSION (G3-F)
+        // Tokenização Semântica (ASTIA) + LZW Base64
+        // ==========================================
+        const G3Fusion = {
+            dicionario: {
+                " de ": "~", " que ": "^", " para ": "|", " com ": "`",
+                " uma ": "@", " um ": "*", " os ": "=", " as ": "+",
+                " em ": "<", " na ": ">", " no ": "$", " da ": "{", 
+                " do ": "}", " dos ": "[", " das ": "]",
+                "ção": "_", "ções": "#", "mente": "\\"
+            },
+            
+            // 1º Corta a entropia do idioma, 2º Esmaga o JSON
+            comprimir: function(jsonString) {
+                let txt = jsonString;
+                for (let [palavra, simbolo] of Object.entries(this.dicionario)) {
+                    txt = txt.split(palavra).join(simbolo);
+                }
+                return LZString.compressToBase64(txt);
+            },
+            
+            // 1º Descompacta o LZW, 2º Restaura o idioma humano
+            descomprimir: function(base64String) {
+                let txt = LZString.decompressFromBase64(base64String);
+                if (!txt) throw new Error("Falha na descompressão LZW");
+                
+                for (let [palavra, simbolo] of Object.entries(this.dicionario)) {
+                    txt = txt.split(simbolo).join(palavra);
+                }
+                return txt;
+            }
+        };
         /**
          * ============================================================================
          * a-TIA | SISTEMA OPERACIONAL PRINCIPAL
@@ -1633,19 +1666,32 @@ const ScannerG3 = {
         }
     },
 
-    processarLeitura: function(textoDecodificado) {
+   processarLeitura: function(textoDecodificado) {
         try {
-            // Decodifica o JSON comprimido
-            let dados = JSON.parse(textoDecodificado);
+            let dados;
+            let stringFinalParaRoteamento = textoDecodificado.trim();
+
+            // 1. INTERCEPTAÇÃO G3-FUSION (Alta Densidade)
+            if (stringFinalParaRoteamento.startsWith("G3F!")) {
+                // Remove a assinatura "G3F!" (os 4 primeiros caracteres) e descompacta
+                stringFinalParaRoteamento = G3Fusion.descomprimir(stringFinalParaRoteamento.substring(4));
+                dados = JSON.parse(stringFinalParaRoteamento);
+            } 
+            // 2. FALLBACK DE SEGURANÇA (Para QR Codes normais, como o crachá da Secretaria)
+            else {
+                dados = JSON.parse(stringFinalParaRoteamento);
+            }
             
             // Pausa/Fecha a câmera IMEDIATAMENTE após ler com sucesso
             this.fechar();
 
             // Roteia a ação dependendo do que foi lido
             if (dados.tipo === "aTIA_LOGIN" || dados.tipo === "G3_VALIDACAO") {
-                Autenticacao.processarCrachaQR(textoDecodificado);
+                // ATENÇÃO: Passamos a string já DESCOMPACTADA para a Autenticação!
+                Autenticacao.processarCrachaQR(stringFinalParaRoteamento);
             } 
             else if (dados.t === "G3J" || dados.tipo === "G3J") {
+                // O Motor de Jogos recebe o objeto JSON já pronto
                 GenteGameEngine.iniciarCartucho(dados);
             } 
             else {
@@ -1654,7 +1700,7 @@ const ScannerG3 = {
 
         } catch (erro) {
             console.error("ERRO QR:", erro);
-            alert("QR Code inválido ou corrompido.");
+            alert("QR Code inválido, corrompido ou formato não suportado.");
             this.fechar();
         }
     }
