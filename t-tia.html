@@ -1672,21 +1672,32 @@ const ScannerG3 = {
             this.leitorHTML5 = new Html5Qrcode("leitor-universal");
         }
 
-        // FORÇA A CÂMERA A ABRIR EM FULL HD (1080p) E MODO MACRO
-        const restricoesHardware = {
+       const restricoesHardware = {
             facingMode: "environment",
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            advanced: [{ focusMode: "continuous" }]
+            // Removemos o "advanced" que costuma quebrar no Moto G10
+            video: {
+                width: { min: 640, ideal: 1280, max: 1920 },
+                height: { min: 480, ideal: 720, max: 1080 }
+            }
         };
 
-        // CONFIGURAÇÕES DO ALGORITMO DE LEITURA
+       // FORÇA A CÂMERA A BUSCAR A MELHOR RESOLUÇÃO SEM TRAVAR (Elástico)
+        const restricoesHardware = {
+            facingMode: "environment",
+            // Removemos o "advanced" que costuma quebrar no Moto G10
+            video: {
+                width: { min: 640, ideal: 1280, max: 1920 },
+                height: { min: 480, ideal: 720, max: 1080 }
+            }
+        };
+
+        // CONFIGURAÇÕES DO ALGORITMO DE LEITURA (Lente Macro Ativada)
         const configuracaoLeitor = {
-            fps: 5, // Reduzimos os frames (dá tempo para a CPU analisar a imagem pesada)
-            qrbox: { width: 300, height: 300 }, // A LENTE MACRO: Processa só o centro em altíssima resolução
+            fps: 10, // Aumentamos para 10 para evitar congelamentos na tela
+            qrbox: { width: 300, height: 300 }, // A LENTE MACRO
             aspectRatio: 1.0,
             experimentalFeatures: {
-                useBarCodeDetectorIfSupported: true // O SEGREDO: Pede pro Chrome usar a IA nativa do celular!
+                useBarCodeDetectorIfSupported: true // Tenta usar a IA nativa do Android
             }
         };
 
@@ -1696,19 +1707,18 @@ const ScannerG3 = {
             (textoDecodificado) => { this.processarLeitura(textoDecodificado); },
             (errorMessage) => { /* Ignora erros de frame vazio */ }
         ).catch((err) => {
-            alert("Erro ao acessar a câmera em alta definição. Verifique as permissões.");
+            // MUDANÇA CRÍTICA: Agora o erro real será impresso no console!
+            console.error("FALHA NA CÂMERA:", err.name, err.message);
+            
+            if (err.name === "NotAllowedError") {
+                alert("O navegador bloqueou a câmera. Verifique se o site tem 'https://' ou dê permissão nas configurações do Chrome.");
+            } else if (err.name === "OverconstrainedError") {
+                alert("A resolução pedida não é suportada por esta câmera.");
+            } else {
+                alert("Erro ao acessar a câmera: " + err.message);
+            }
             this.fechar();
         });
-    },
-
-    fechar: function() {
-        document.getElementById('overlay-scanner-g3').style.display = 'none';
-        if (this.leitorHTML5) {
-            this.leitorHTML5.stop().then(() => {
-                this.leitorHTML5.clear();
-            }).catch(err => console.error("Erro ao parar câmera", err));
-        }
-    },
 
    processarLeitura: function(textoDecodificado) {
         try {
