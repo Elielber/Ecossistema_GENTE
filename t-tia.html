@@ -608,10 +608,11 @@ processarCrachaQR: function(textoDecodificado) {
                 const idMissaoConcluida = dados.idMissao;
 
                 // 3. Salva no Banco de Dados Offline (IndexedDB)
-                const registroMissao = {
-                    idMissao: idMissaoConcluida,
+               const registroMissao = {
+                    idMissao: dados.idMissao,
                     status: "concluida",
-                    dataConclusao: new Date().toISOString()
+                    dataConclusao: new Date().toISOString(),
+                    resumo: dados.resumo || "" 
                 };
                 
                 await DB.salvarProgresso(registroMissao);
@@ -974,7 +975,7 @@ processarCrachaQR: function(textoDecodificado) {
                 });
             },
 
-            renderizarMalhaMicro: function(idMissao) {
+           renderizarMalhaMicro: function(idMissao) {
                 console.log("[Renderização] A desenhar Malha Micro para:", idMissao);
                 
                 // Encontra os dados completos da Missão clicada
@@ -992,19 +993,51 @@ processarCrachaQR: function(textoDecodificado) {
                     assistenteMsg.innerText = `A iniciar extração tática para: ${missaoEncontrada.titulo}`;
                 }
 
-                // Desenha a interface do Terminal (que será a ponte para o protocolo G3)
+                // --- INÍCIO DA NOVA LÓGICA DE DADOS OFFLINE ---
                 const container = document.querySelector('.malha-container');
-          container.innerHTML = `
-              <div class="card-chefe">
-                  <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-alerta); margin-bottom: 1rem;">lock_outline</span>
-                  <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">TERMINAL BLOQUEADO</h3>
-                  <p style="font-size: 0.85rem; color: var(--texto-suave);">O acesso a este nó exige intervenção do Painel do Mestre.</p>
-        
-                  <button class="btn btn-primario" style="margin-top: 20px; width: 100%;" onclick="ScannerG3.abrir('JOGO', 'Capture o Cartucho do Professor')">
-                  <span class="material-icons-round">qr_code_scanner</span> INICIAR PROTOCOLO G3
-                  </button>
-              </div>
-           `;
+                const historico = this.diarioDeBordo.find(m => m.idMissao === idMissao);
+                let htmlCards = '';
+
+                // 1. Injeta a Cápsula de Conhecimento (Resumo do Professor) se existir
+                if (historico && historico.resumo) {
+                    htmlCards += `
+                        <div class="card-chefe" style="background: rgba(74, 222, 128, 0.05); border-color: var(--cor-sucesso); text-align: left; margin-bottom: 10px;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: var(--cor-sucesso);">
+                                <span class="material-icons-round">auto_stories</span>
+                                <strong style="font-size: 0.8rem; letter-spacing: 1px;">CÁPSULA DE CONHECIMENTO</strong>
+                            </div>
+                            <p style="font-size: 0.9rem; color: var(--texto-puro); line-height: 1.6; font-style: italic;">
+                                "${historico.resumo}"
+                            </p>
+                        </div>
+                    `;
+                }
+
+                // 2. Altera o estado do Terminal (Resolvido vs Bloqueado)
+                if (historico && historico.status === "concluida") {
+                    htmlCards += `
+                        <div class="card-chefe" style="border-color: var(--cor-sucesso);">
+                            <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-sucesso); margin-bottom: 1rem;">check_circle</span>
+                            <h3 style="color: var(--cor-sucesso); margin-bottom: 10px;">CONEXÃO ESTABELECIDA</h3>
+                            <p style="font-size: 0.85rem; color: var(--texto-suave);">Os dados desta aula foram extraídos e validados pelo professor.</p>
+                        </div>
+                    `;
+                } else {
+                    htmlCards += `
+                        <div class="card-chefe">
+                            <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-alerta); margin-bottom: 1rem;">lock_outline</span>
+                            <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">TERMINAL BLOQUEADO</h3>
+                            <p style="font-size: 0.85rem; color: var(--texto-suave);">O acesso a este nó exige intervenção do Painel do Mestre.</p>
+            
+                            <button class="btn btn-primario" style="margin-top: 20px; width: 100%;" onclick="ScannerG3.abrir('JOGO', 'Capture o Cartucho do Professor')">
+                                <span class="material-icons-round">qr_code_scanner</span> INICIAR PROTOCOLO G3
+                            </button>
+                        </div>
+                    `;
+                }
+
+                // Renderiza o HTML final na tela do aluno
+                container.innerHTML = htmlCards;
             }
 			};
 			const GenteGameEngine = {
