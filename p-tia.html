@@ -614,70 +614,59 @@
             },
 
             gerarCrachaSecretaria: function() {
-                const nome = document.getElementById("sec-nome").value.trim();
-                const cargo = document.getElementById("sec-cargo").value;
-                const containerQR = document.getElementById("sec-qrcode");
-                const divDados = document.getElementById("display-dados");
+    const nome = document.getElementById("sec-nome").value.trim();
+    const cargo = document.getElementById("sec-cargo").value;
+    const containerQR = document.getElementById("sec-qrcode");
+    const divDados = document.getElementById("display-dados");
 
-                if (!nome || !cargo) { alert("Nome e Cargo são obrigatórios."); return; }
+    if (!nome || !cargo) { alert("Nome e Cargo são obrigatórios."); return; }
 
-                document.getElementById("display-nome").innerText = nome;
-                document.getElementById("display-cargo").innerText = cargo;
-                
-                let payload = {};
-                let detalhes = "";
-
-                // Inteligência: Gera o Payload correto baseado no ecossistema
-                // No P-TIA, substitua a lógica de payload dentro de gerarCrachaSecretaria:
-if (cargo === 'Aluno') {
-    const id = document.getElementById('sec-aluno-id').value.trim() || 'ALU-' + Math.floor(Math.random()*1000);
-    const curso = document.getElementById('sec-aluno-curso').value.trim() || 'TecnicoIA.json';
+    document.getElementById("display-nome").innerText = nome;
+    document.getElementById("display-cargo").innerText = cargo;
     
-    // FORMATO PADRÃO IDENTIDADE (JSON PURO)
-    payload = { 
-        tipo: "aTIA_LOGIN", 
-        alunoId: id, 
-        cursoId: curso, 
-        nome: nome 
-    };
-    detalhes = `MATRÍCULA: <span style="color:#3b82f6">${id}</span><br>ARQUIVO: <span style="color:#3b82f6">${curso}</span>`;
-}
-                    payload = { tipo: "aTIA_LOGIN", alunoId: id, cursoId: curso, nome: nome };
-                    detalhes = `MATRÍCULA: <span style="color:#3b82f6">${id}</span><br>ARQUIVO MATRIZ: <span style="color:#3b82f6">${curso}</span>`;
-                } else {
-                    const id = document.getElementById('sec-staff-id').value.trim() || (cargo==='Professor'?'PROF-':'SEC-') + Math.floor(Math.random()*1000);
-                    const tipoPerfil = cargo === 'Professor' ? 'professor' : 'secretaria';
-                    payload = { t: "LOGIN_PTIA", p: tipoPerfil, id: id, n: nome };
-                    detalhes = `ID FUNCIONAL: <span style="color:#f59e0b">${id}</span>`;
-                }
+    let payload = {};
+    let detalhes = "";
 
-                divDados.innerHTML = detalhes;
-                this.dadosCrachaAtual = { n: nome, c: cargo, p: payload };
-                containerQR.innerHTML = "";
+    if (cargo === 'Aluno') {
+        const id = document.getElementById('sec-aluno-id').value.trim() || 'ALU-' + Math.floor(Math.random()*1000);
+        const curso = document.getElementById('sec-aluno-curso').value.trim() || 'TecnicoIA.json';
+        
+        payload = { tipo: "aTIA_LOGIN", alunoId: id, cursoId: curso, nome: nome };
+        detalhes = `MATRÍCULA: <span style="color:#3b82f6">${id}</span><br>ARQUIVO: <span style="color:#3b82f6">${curso}</span>`;
+    } else {
+        const id = document.getElementById('sec-staff-id').value.trim() || (cargo==='Professor'?'PROF-':'SEC-') + Math.floor(Math.random()*1000);
+        const tipoPerfil = cargo === 'Professor' ? 'professor' : 'secretaria';
+        
+        payload = { t: "LOGIN_PTIA", p: tipoPerfil, id: id, n: nome };
+        detalhes = `ID FUNCIONAL: <span style="color:#f59e0b">${id}</span>`;
+    }
 
-                try {
-                    const payloadString = JSON.stringify(payload);
-                    let textoCodificado = unescape(encodeURIComponent(payloadString));
-                    textoCodificado = textoCodificado.padEnd(200, " "); // Bypass p/ estabilidade do canvas
+    divDados.innerHTML = detalhes;
+    this.dadosCrachaAtual = { n: nome, c: cargo, p: payload };
+    containerQR.innerHTML = "";
 
-                    new QRCode(containerQR, {
-                        text: textoCodificado,
-                        width: 200, height: 200,
-                        colorDark: "#000000", colorLight: "#ffffff",
-                        correctLevel: QRCode.CorrectLevel.M
-                    });
+    try {
+        const payloadString = JSON.stringify(payload);
+        let textoCodificado = unescape(encodeURIComponent(payloadString));
+        textoCodificado = textoCodificado.padEnd(200, " "); 
 
-                    // Estiliza o canvas/imagem gerado para caber perfeitamente na div
-                    setTimeout(() => {
-                        const img = containerQR.querySelector("img") || containerQR.querySelector("canvas");
-                        if(img) { img.style.width = "100%"; img.style.height = "100%"; img.style.borderRadius = "8px"; }
-                    }, 50);
+        new QRCode(containerQR, {
+            text: textoCodificado,
+            width: 200, height: 200,
+            colorDark: "#000000", colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.M
+        });
 
-                } catch (erro) {
-                    console.error("Falha no renderizador QR:", erro);
-                    alert("Erro ao processar dados para o QR Code.");
-                }
-            },
+        setTimeout(() => {
+            const img = containerQR.querySelector("img") || containerQR.querySelector("canvas");
+            if(img) { img.style.width = "100%"; img.style.height = "100%"; img.style.borderRadius = "8px"; }
+        }, 50);
+
+    } catch (erro) {
+        console.error("Falha no renderizador QR:", erro);
+        alert("Erro ao processar dados para o QR Code.");
+    }
+},
 
             salvarPlanilhaSecretaria: async function() {
                 if (!this.dadosCrachaAtual.n) { alert("Gere o crachá primeiro antes de salvar."); return; }
