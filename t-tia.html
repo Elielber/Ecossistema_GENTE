@@ -1663,7 +1663,7 @@ const ScannerG3 = {
     leitorHTML5: null,
     contextoAtual: null, // Pode ser 'LOGIN' ou 'JOGO'
 
-    abrir: function(contexto, instrucao = "Aponte para o QR Code do Mestre") {
+   abrir: function(contexto, instrucao = "Aponte para o QR Code do Mestre") {
         this.contextoAtual = contexto;
         document.getElementById('scanner-g3-instrucao').innerText = instrucao;
         document.getElementById('overlay-scanner-g3').style.display = 'flex';
@@ -1672,43 +1672,46 @@ const ScannerG3 = {
             this.leitorHTML5 = new Html5Qrcode("leitor-universal");
         }
 
-        // Passamos os objetos DIRETAMENTE nos parâmetros para evitar conflitos de variáveis (SyntaxError)
         this.leitorHTML5.start(
-            // 1. Restrições de Hardware
-            {
-                facingMode: "environment",
-                video: {
-                    width: { min: 640, ideal: 1280, max: 1920 },
-                    height: { min: 480, ideal: 720, max: 1080 }
-                }
-            }, 
-            // 2. Configuração do Leitor e Lente Macro (IA do celular)
+            // 1. Identificador simples da câmera traseira (Sem objetos aninhados aqui)
+            { facingMode: "environment" }, 
+            
+            // 2. Configurações da Lente e Resolução (A biblioteca espera o videoConstraints AQUI)
             {
                 fps: 10,
                 qrbox: { width: 300, height: 300 },
-                aspectRatio: 1.0,
+                videoConstraints: {
+                    width: { ideal: 1280 }, // Pede HD, mas aceita menos se o celular não aguentar
+                    height: { ideal: 720 }
+                },
                 experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true 
+                    useBarCodeDetectorIfSupported: true // O motor nativo de IA
                 }
             },
+            
             // 3. Callback de Sucesso
             (textoDecodificado) => { this.processarLeitura(textoDecodificado); },
-            // 4. Callback de Erro de Frame (Silenciado)
-            (errorMessage) => { /* Ignora erros de frame vazio */ }
-        ).catch((err) => {
-            console.error("FALHA NA CÂMERA:", err.name, err.message);
             
+            // 4. Callback de Erro de Frame (Silenciado)
+            (errorMessage) => { /* Ignora frames vazios */ }
+            
+        ).catch((err) => {
+            console.error("FALHA NA CÂMERA:", err);
+            
+            // Identificação cirúrgica do problema
+            let msgErro = err.message || err;
             if (err.name === "NotAllowedError") {
-                alert("O navegador bloqueou a câmera. Verifique se o site possui 'https://' ou dê permissão nas configurações do navegador.");
+                msgErro = "Permissão negada ou o site não está em HTTPS.";
+            } else if (err.name === "NotReadableError") {
+                msgErro = "A lente está ocupada! Feche o app de Câmera nativo do seu celular e tente novamente.";
             } else if (err.name === "OverconstrainedError") {
-                alert("A resolução pedida não é suportada por esta câmera.");
-            } else {
-                alert("Erro ao acessar a câmera: " + err.message);
+                msgErro = "O hardware deste celular rejeitou o formato de vídeo pedido.";
             }
+            
+            alert("Falha no Scanner: " + msgErro);
             this.fechar();
         });
     },
-
    processarLeitura: function(textoDecodificado) {
         try {
             let dados;
