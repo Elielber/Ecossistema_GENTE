@@ -11,6 +11,7 @@
         
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+	
     
     <style>
         /* --- VARIÁVEIS E ESTÉTICA GAMER / CYBERPUNK --- */
@@ -1681,27 +1682,18 @@ const ScannerG3 = {
     },
 
     fechar: function() {
-        // 1. Esconde a tela cinza IMEDIATAMENTE, garantindo a UX do aluno
-        const overlay = document.getElementById('overlay-scanner-g3');
-        if (overlay) overlay.style.display = 'none';
+    const overlay = document.getElementById('overlay-scanner-g3');
+    if (overlay) overlay.style.display = 'none';
 
-        // 2. Tenta parar a câmera com segurança
-        if (this.leitorHTML5) {
-            try {
-                // A CORREÇÃO: Só manda parar se realmente estiver rodando!
-                if (this.leitorHTML5.isScanning) {
-                    this.leitorHTML5.stop().then(() => {
-                        this.leitorHTML5.clear();
-                    }).catch(e => console.warn("Aviso ao parar câmera:", e));
-                } else {
-                    this.leitorHTML5.clear(); // Apenas limpa a div se não estava rodando
-                }
-            } catch (erro) {
-                console.warn("Limpeza forçada da lente executada.", erro);
-            }
+    if (this.leitorHTML5) {
+        // Verifica se o estado é de scanning antes de tentar parar
+        if (this.leitorHTML5.getState() > 1) { // 1 é o estado 'IDLE'
+            this.leitorHTML5.stop().then(() => {
+                this.leitorHTML5.clear();
+            }).catch(e => console.warn("Erro ao parar:", e));
         }
-    },
-
+    }
+},
     processarLeitura: function(textoDecodificado) {
         try {
             // Leitura direta e pura
