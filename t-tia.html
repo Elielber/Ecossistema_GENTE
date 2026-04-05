@@ -1672,46 +1672,34 @@ const ScannerG3 = {
             this.leitorHTML5 = new Html5Qrcode("leitor-universal");
         }
 
-       const restricoesHardware = {
-            facingMode: "environment",
-            // Removemos o "advanced" que costuma quebrar no Moto G10
-            video: {
-                width: { min: 640, ideal: 1280, max: 1920 },
-                height: { min: 480, ideal: 720, max: 1080 }
-            }
-        };
-
-       // FORÇA A CÂMERA A BUSCAR A MELHOR RESOLUÇÃO SEM TRAVAR (Elástico)
-        const restricoesHardware = {
-            facingMode: "environment",
-            // Removemos o "advanced" que costuma quebrar no Moto G10
-            video: {
-                width: { min: 640, ideal: 1280, max: 1920 },
-                height: { min: 480, ideal: 720, max: 1080 }
-            }
-        };
-
-        // CONFIGURAÇÕES DO ALGORITMO DE LEITURA (Lente Macro Ativada)
-        const configuracaoLeitor = {
-            fps: 10, // Aumentamos para 10 para evitar congelamentos na tela
-            qrbox: { width: 300, height: 300 }, // A LENTE MACRO
-            aspectRatio: 1.0,
-            experimentalFeatures: {
-                useBarCodeDetectorIfSupported: true // Tenta usar a IA nativa do Android
-            }
-        };
-
+        // Passamos os objetos DIRETAMENTE nos parâmetros para evitar conflitos de variáveis (SyntaxError)
         this.leitorHTML5.start(
-            restricoesHardware, 
-            configuracaoLeitor,
+            // 1. Restrições de Hardware
+            {
+                facingMode: "environment",
+                video: {
+                    width: { min: 640, ideal: 1280, max: 1920 },
+                    height: { min: 480, ideal: 720, max: 1080 }
+                }
+            }, 
+            // 2. Configuração do Leitor e Lente Macro (IA do celular)
+            {
+                fps: 10,
+                qrbox: { width: 300, height: 300 },
+                aspectRatio: 1.0,
+                experimentalFeatures: {
+                    useBarCodeDetectorIfSupported: true 
+                }
+            },
+            // 3. Callback de Sucesso
             (textoDecodificado) => { this.processarLeitura(textoDecodificado); },
+            // 4. Callback de Erro de Frame (Silenciado)
             (errorMessage) => { /* Ignora erros de frame vazio */ }
         ).catch((err) => {
-            // MUDANÇA CRÍTICA: Agora o erro real será impresso no console!
             console.error("FALHA NA CÂMERA:", err.name, err.message);
             
             if (err.name === "NotAllowedError") {
-                alert("O navegador bloqueou a câmera. Verifique se o site tem 'https://' ou dê permissão nas configurações do Chrome.");
+                alert("O navegador bloqueou a câmera. Verifique se o site possui 'https://' ou dê permissão nas configurações do navegador.");
             } else if (err.name === "OverconstrainedError") {
                 alert("A resolução pedida não é suportada por esta câmera.");
             } else {
@@ -1719,6 +1707,7 @@ const ScannerG3 = {
             }
             this.fechar();
         });
+    },
 
    processarLeitura: function(textoDecodificado) {
         try {
