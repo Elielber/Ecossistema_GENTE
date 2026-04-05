@@ -1663,7 +1663,7 @@ const ScannerG3 = {
     leitorHTML5: null,
     contextoAtual: null, // Pode ser 'LOGIN' ou 'JOGO'
 
-   abrir: function(contexto, instrucao = "Aponte para o QR Code do Mestre") {
+  abrir: function(contexto, instrucao = "Aponte para o QR Code do Mestre") {
         this.contextoAtual = contexto;
         document.getElementById('scanner-g3-instrucao').innerText = instrucao;
         document.getElementById('overlay-scanner-g3').style.display = 'flex';
@@ -1673,42 +1673,32 @@ const ScannerG3 = {
         }
 
         this.leitorHTML5.start(
-            // 1. Identificador simples da câmera traseira (Sem objetos aninhados aqui)
+            // 1. Identificador Primário
             { facingMode: "environment" }, 
             
-            // 2. Configurações da Lente e Resolução (A biblioteca espera o videoConstraints AQUI)
+            // 2. Configurações Avançadas da Lente
             {
                 fps: 10,
-                qrbox: { width: 300, height: 300 },
+                qrbox: { width: 300, height: 300 }, // Nossa Lente Macro
                 videoConstraints: {
-                    width: { ideal: 1280 }, // Pede HD, mas aceita menos se o celular não aguentar
+                    facingMode: "environment", // CORREÇÃO CRÍTICA: Repetimos aqui para forçar a traseira!
+                    width: { ideal: 1280 },
                     height: { ideal: 720 }
                 },
                 experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true // O motor nativo de IA
+                    useBarCodeDetectorIfSupported: true // Mantém a IA do Android ativada
                 }
             },
             
             // 3. Callback de Sucesso
             (textoDecodificado) => { this.processarLeitura(textoDecodificado); },
             
-            // 4. Callback de Erro de Frame (Silenciado)
-            (errorMessage) => { /* Ignora frames vazios */ }
+            // 4. Callback de Erro
+            (errorMessage) => { /* Silenciado */ }
             
         ).catch((err) => {
             console.error("FALHA NA CÂMERA:", err);
-            
-            // Identificação cirúrgica do problema
-            let msgErro = err.message || err;
-            if (err.name === "NotAllowedError") {
-                msgErro = "Permissão negada ou o site não está em HTTPS.";
-            } else if (err.name === "NotReadableError") {
-                msgErro = "A lente está ocupada! Feche o app de Câmera nativo do seu celular e tente novamente.";
-            } else if (err.name === "OverconstrainedError") {
-                msgErro = "O hardware deste celular rejeitou o formato de vídeo pedido.";
-            }
-            
-            alert("Falha no Scanner: " + msgErro);
+            alert("Falha no Scanner: " + (err.name || err.message || err));
             this.fechar();
         });
     },
