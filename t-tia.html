@@ -559,20 +559,18 @@
             iniciarCamera: function() {
                 if (this.leitorHTML5) return; 
 
-                // Usando a API pura para não gerar aquele menu feio
                 this.leitorHTML5 = new Html5Qrcode("leitor-qr-login");
-               this.leitorHTML5.start(
-            { facingMode: "environment" }, 
-            { 
-                fps: 10, 
-                // Removemos o 'qrbox' para que ele leia a tela inteira.
-                // O aluno agora pode chegar com o celular "na cara" da tela do professor!
-                videoConstraints: { 
-                    width: { ideal: 1280 }, // Força a câmera a usar resolução HD
-                    height: { ideal: 720 },
-                    focusMode: "continuous" // Ajuda a focar em telas iluminadas
-                }
-            },
+                this.leitorHTML5.start(
+                    { facingMode: "environment" }, 
+                    { 
+                        fps: 10, 
+                        videoConstraints: { 
+                            width: { ideal: 1280 }, 
+                            height: { ideal: 720 },
+                            facingMode: "environment", 
+                            focusMode: "continuous" 
+                        }
+                    },
                     (textoDecodificado) => { this.processarCrachaQR(textoDecodificado); },
                     (errorMessage) => {}
                 ).catch((err) => {
@@ -584,7 +582,7 @@
                     throw new Error("Login inválido");
                 }
 
-                // NOVO: Desliga a câmera física para libertar recursos do telemóvel
+                
                 if (this.leitorHTML5) {
                     this.leitorHTML5.stop().then(() => {
                         this.leitorHTML5.clear();
@@ -838,11 +836,35 @@ processarCrachaQR: function(textoDecodificado) {
                 const arquivoDoCurso = Autenticacao.cracha.cursoId;
                 console.log(`[Boot] Baixando a matriz do curso: ${arquivoDoCurso}`);
                 
-                const resposta = await fetch(`./${arquivoDoCurso}`);
-                if (!resposta.ok) {
-                    throw new Error(`Falha HTTP ao buscar o currículo: ${resposta.status}`);
+                try {
+                    const resposta = await fetch(`./${arquivoDoCurso}`);
+                    if (!resposta.ok) {
+                        throw new Error(`Arquivo não encontrado (Erro ${resposta.status})`);
+                    }
+                    this.mapaCurricular = await resposta.json();
+                } catch (erro) {
+                    console.warn(`[Aviso] Falha ao baixar ${arquivoDoCurso}. Carregando Matriz de Simulação para evitar travamento.`);
+                    
+                    // MATRIZ DE SEGURANÇA: Garante que o app abre mesmo sem internet ou sem o JSON na pasta
+                    this.mapaCurricular = {
+                        metadados: { nomeCurso: "Trilha de Simulação T-TIA" },
+                        territorios: [
+                            {
+                                idTerritorio: "T1", titulo: "Fundamentos G3", ordem: 1,
+                                missoes: [
+                                    { idMissao: "M01", titulo: "Inicialização de Sistema", dimensaoPredominante: "tecnica" },
+                                    { idMissao: "M02", titulo: "Calibragem de Radar", dimensaoPredominante: "analitica" }
+                                ]
+                            },
+                            {
+                                idTerritorio: "T2", titulo: "Modelagem Lógica", ordem: 2,
+                                missoes: [
+                                    { idMissao: "M03", titulo: "Estruturas de Decisão", dimensaoPredominante: "tecnica" }
+                                ]
+                            }
+                        ]
+                    };
                 }
-                this.mapaCurricular = await resposta.json();
             },
 
             sincronizarEstado: function() {
