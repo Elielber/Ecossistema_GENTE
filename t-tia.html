@@ -1672,13 +1672,31 @@ const ScannerG3 = {
             this.leitorHTML5 = new Html5Qrcode("leitor-universal");
         }
 
+        // FORÇA A CÂMERA A ABRIR EM FULL HD (1080p) E MODO MACRO
+        const restricoesHardware = {
+            facingMode: "environment",
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            advanced: [{ focusMode: "continuous" }]
+        };
+
+        // CONFIGURAÇÕES DO ALGORITMO DE LEITURA
+        const configuracaoLeitor = {
+            fps: 5, // Reduzimos os frames (dá tempo para a CPU analisar a imagem pesada)
+            qrbox: { width: 300, height: 300 }, // A LENTE MACRO: Processa só o centro em altíssima resolução
+            aspectRatio: 1.0,
+            experimentalFeatures: {
+                useBarCodeDetectorIfSupported: true // O SEGREDO: Pede pro Chrome usar a IA nativa do celular!
+            }
+        };
+
         this.leitorHTML5.start(
-            { facingMode: "environment" }, 
-            { fps: 10, qrbox: { width: 200, height: 200 } },
+            restricoesHardware, 
+            configuracaoLeitor,
             (textoDecodificado) => { this.processarLeitura(textoDecodificado); },
-            (errorMessage) => {}
+            (errorMessage) => { /* Ignora erros de frame vazio */ }
         ).catch((err) => {
-            alert("Erro ao acessar a câmera. Verifique as permissões.");
+            alert("Erro ao acessar a câmera em alta definição. Verifique as permissões.");
             this.fechar();
         });
     },
