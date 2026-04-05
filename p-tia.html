@@ -464,16 +464,19 @@
         // PROTOCOLO DE COMPRESSÃO: G3-FUSION (G3-F)
         // Tokenização Semântica (ASTIA) + LZW Base64
         // ==========================================
-        const G3Fusion = {
+       const G3Fusion = {
             dicionario: {
                 " de ": "~", " que ": "^", " para ": "|", " com ": "`",
                 " uma ": "@", " um ": "*", " os ": "=", " as ": "+",
-                " em ": "<", " na ": ">", " no ": "$", " da ": "{", 
-                " do ": "}", " dos ": "[", " das ": "]",
-                "ção": "_", "ções": "#", "mente": "\\"
+                " em ": "<", " na ": ">", " no ": "$", 
+                " da ": "§", // Trocado para não destruir chaves JSON
+                " do ": "£", // Trocado para não destruir chaves JSON
+                " dos ": "¢", // Trocado para não destruir arrays JSON
+                " das ": "¥", // Trocado para não destruir arrays JSON
+                "ção": "_", "ções": "#", 
+                "mente": "µ"  // Trocado para não gerar barras de escape
             },
             
-            // 1º Corta a entropia do idioma, 2º Esmaga o JSON
             comprimir: function(jsonString) {
                 let txt = jsonString;
                 for (let [palavra, simbolo] of Object.entries(this.dicionario)) {
@@ -482,7 +485,6 @@
                 return LZString.compressToBase64(txt);
             },
             
-            // 1º Descompacta o LZW, 2º Restaura o idioma humano
             descomprimir: function(base64String) {
                 let txt = LZString.decompressFromBase64(base64String);
                 if (!txt) throw new Error("Falha na descompressão LZW");
