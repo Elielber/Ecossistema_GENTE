@@ -607,19 +607,20 @@ processarCrachaQR: function(textoDecodificado) {
         // Verificação de Protocolo Comprimido (G3-Fusion)
         if (textoDecodificado.startsWith("G3!")) {
             const extraido = textoDecodificado.substring(3);
-            const descompactado = LZString.decompressFromBase64(extraido);
-            dados = JSON.parse(descompactado);
+            // CORREÇÃO AQUI: Usa o G3Fusion para restaurar todo o texto
+            const stringRestaurada = G3Fusion.descomprimir(extraido);
+            dados = JSON.parse(stringRestaurada);
         } else {
             // Fallback para QRs Legados ou Crachás simples
             dados = JSON.parse(textoDecodificado);
         }
 
         // Mapeamento de chaves curtas para o estado do App
-        if (dados.t === "G3_V") {
+        if (dados.t === "G3_V" || dados.tipo === "G3_VALIDACAO") {
             this.processarG3Validacao({
-                idMissao: dados.id,
-                expira: dados.e,
-                resumo: dados.r // Aqui o texto de 500+ chars é restaurado
+                idMissao: dados.id || dados.idMissao,
+                expira: dados.e || dados.expira,
+                resumo: dados.r || dados.resumo
             });
             return;
         }
@@ -628,7 +629,6 @@ processarCrachaQR: function(textoDecodificado) {
         if (dados.tipo === "aTIA_LOGIN") {
             this.processarLogin(dados);
         }
-        // ... restante da lógica para G3J (Jogos)
         
     } catch (erro) {
         console.error("Erro na descompressão/leitura:", erro);
@@ -1718,37 +1718,39 @@ const ScannerG3 = {
 },
     processarLeitura: function(textoDecodificado) {
         try {
-            // Fecha a câmera imediatamente para poupar o processador do Moto G10
+            // Fecha a câmera imediatamente para poupar processamento
             this.fechar();
 
             let stringFinal = textoDecodificado;
 
-            // MÁGICA: Se o QR Code não começar por "{" (não é JSON puro), tenta descomprimir o LZ-String
-            if (textoDecodificado.length > 0 && textoDecodificado[0] !== '{') {
+            // 1. Tratamento do Protocolo Oficial G3-Fusion (Remove prefixo e restaura dicionário)
+            if (textoDecodificado.startsWith("G3!")) {
+                const extraido = textoDecodificado.substring(3); // Corta o 'G3!' fora
+                stringFinal = G3Fusion.descomprimir(extraido);   // Descomprime E restaura palavras
+                console.log("[G3] Protocolo G3-Fusion decodificado com sucesso!");
+            } 
+            // 2. Fallback para cartuchos não comprimidos
+            else if (textoDecodificado.length > 0 && textoDecodificado[0] !== '{') {
                 try {
                     const descompactado = LZString.decompressFromBase64(textoDecodificado);
-                    if (descompactado) {
-                        stringFinal = descompactado;
-                        console.log("[G3] Crachá comprimido lido e decodificado com sucesso!");
-                    }
+                    if (descompactado) stringFinal = descompactado;
                 } catch (e) {
-                    console.log("[G3] Tentativa de descompressão ignorada. A ler formato nativo.");
+                    console.log("[G3] Tentativa de descompressão ignorada.");
                 }
             }
 
-            // Agora sim, converte a string descompactada em Objeto
+            // Agora sim, converte a string final restaurada em Objeto
             let dados = JSON.parse(stringFinal);
             
-            // Roteia a ação
-            if (dados.tipo === "aTIA_LOGIN" || dados.tipo === "G3_VALIDACAO") {
-                // IMPORTANTE: Envie a 'stringFinal' (descomprimida) para a Autenticação, não a original
+            // Roteia a ação para o destino correto
+            if (dados.tipo === "aTIA_LOGIN" || dados.tipo === "G3_VALIDACAO" || dados.t === "G3_V") {
                 Autenticacao.processarCrachaQR(stringFinal);
             } 
             else if (dados.t === "G3J" || dados.tipo === "G3J" || dados.e) {
                 GenteGameEngine.iniciarCartucho(dados);
             } 
             else {
-                alert("QR Code não reconhecido pelo protocolo G3.");
+                alert("Protocolo G3 não reconheceu a assinatura do código.");
             }
 
         } catch (erro) {
