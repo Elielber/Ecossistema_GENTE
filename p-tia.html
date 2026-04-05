@@ -885,83 +885,81 @@
                 document.getElementById('resumo-efetividade').style.color = "var(--cor-sucesso)";
             },
 
-          // --- PROTOCOLO G3 E QR CODE ---
-            gerarChaveG3: function() {
-                const select = document.getElementById('select-missao');
-                const missaoId = select.value;
-                const nomeMissao = select.options[select.selectedIndex]?.text || "";
+// --- PROTOCOLO G3 E QR CODE ---
+gerarChaveG3: function() {
+    const select = document.getElementById('select-missao');
+    const missaoId = select.value;
+    const nomeMissao = select.options[select.selectedIndex]?.text || "";
 
-                if (!missaoId) {
-                    alert("Atenção: Selecione a missão da aula no menu suspenso.");
-                    return;
-                }
+    if (!missaoId) {
+        alert("Atenção: Selecione a missão da aula no menu suspenso.");
+        return;
+    }
 
-                const validadeTimestamp = new Date().getTime() + (10 * 60 * 1000); 
-                
-                // Busca o resumo tático escrito pelo professor no plano de aula
-                let resumoAula = "";
-                const campoResumo = document.getElementById('plano-resumo');
-                if (campoResumo && campoResumo.value.trim().length > 0) {
-                    resumoAula = campoResumo.value.trim();
-                }
+    const validadeTimestamp = new Date().getTime() + (10 * 60 * 1000); 
+    
+    let resumoAula = "";
+    const campoResumo = document.getElementById('plano-resumo');
+    if (campoResumo && campoResumo.value.trim().length > 0) {
+        resumoAula = campoResumo.value.trim();
+    }
 
-                const payload = { 
-                    tipo: "G3_VALIDACAO", 
-                    idMissao: missaoId, 
-                    expira: validadeTimestamp,
-                    resumo: resumoAula // O conhecimento viaja aqui
-                };
+    const payload = { 
+        tipo: "G3_VALIDACAO", 
+        idMissao: missaoId, 
+        expira: validadeTimestamp,
+        resumo: resumoAula
+    };
 
-                const container = document.getElementById('container-qr-gigante');
-                container.innerHTML = '';
-                
-                try {
-                    const payloadString = JSON.stringify(payload);
-                    
-                    // A MATRIZ PURA (Sem G3-Fusion): Apenas a vacina UTF-8 para acentos
-                    let textoCodificado = unescape(encodeURIComponent(payloadString));
+    const container = document.getElementById('container-qr-gigante');
+    container.innerHTML = '';
+    
+    try {
+        const payloadString = JSON.stringify(payload);
+        let textoCodificado = unescape(encodeURIComponent(payloadString));
 
-                    this.leitorG3 = new QRCode(container, {
-                        text: textoCodificado, 
-                        width: 650, 
-                        height: 650, 
-                        colorDark : "#000000", 
-                        colorLight : "#ffffff", 
-                        correctLevel : QRCode.CorrectLevel.L // Nível L para quadradinhos gigantes
-                    });
+        this.leitorG3 = new QRCode(container, {
+            text: textoCodificado, 
+            width: 650, 
+            height: 650, 
+            colorDark : "#000000", 
+            colorLight : "#ffffff", 
+            correctLevel : QRCode.CorrectLevel.L
+        });
 
-                    document.getElementById('info-missao-g3').innerText = `Validando Efetividade: ${nomeMissao}`;
-                    document.getElementById('painel-projecao-g3').style.display = 'flex';
-                } catch (erro) {
-                    console.error("Erro Crítico no Gerador:", erro);
-                    alert("Limite óptico atingido. Reduza o texto do resumo.");
-                }
-            },
-            },
-            fecharProjecao: function() {
-                document.getElementById('painel-projecao-g3').style.display = 'none';
-                if(this.leitorG3) this.leitorG3.clear();
-            },
-            // ==========================================
-            // MÓDULO LABORATÓRIO G3J (GERADOR DE JOGOS)
-            // ==========================================
-            leitorLabG3J: null,
-            labPayloads: {
-                1: `{"t":"G3J","m":"M01","e":1,"c":"Ordene o protocolo","s":20,"d":[{"id":"A","icone":"warning","texto":"Isolar a area"},{"id":"B","icone":"security","texto":"Neutralizar ameaca"},{"id":"C","icone":"support_agent","texto":"Acionar reforco"}],"a":["A","C","B"]}`,
-                2: `{"t":"G3J","m":"M02","e":2,"c":"Identifique a falha no cluster","s":15,"d":["dns","dns","dns","dns","bug_report","dns","dns","dns","dns"],"a":4}`,
-                3: `{"t":"G3J","m":"M03","e":3,"c":"Triagem: Risco de Seguranca?","s":15,"d":[{"i":"vpn_key","v":0},{"i":"bug_report","v":1},{"i":"security","v":0}]}`,
-                4: `{"t":"G3J","m":"M04","e":4,"c":"Memorize o padrao de acesso","s":20,"d":["looks_one","looks_two","looks_3","looks_two"]}`,
-                5: `{"t":"G3J","m":"M05","e":5,"c":"Classifique os ativos","s":15,"d":{"c":["delete","recycling","warning"],"i":[{"x":"science","y":2},{"x":"description","y":1},{"x":"coronavirus","y":2}]}}`,
-                6: `{"t":"G3J","m":"M06","e":6,"c":"Isole a anomalia (Bug)","s":15,"d":{"a":"bug_report","v":350,"f":["dns","memory","api","settings"]}}`,
-                7: `{"t":"G3J","m":"M07","e":7,"c":"Ligue causa e efeito","s":25,"d":{"L":["sick","thermostat"],"R":["ac_unit","healing"]},"a":[1,0]}`,
-                8: `{"t":"G3J","m":"M08","e":8,"c":"Programe a rota (Evite o fogo)","s":30,"d":{"g":9,"s":0,"t":8,"o":[4]},"a":["R","R","D","D"]}`,
-                9: `{"t":"G3J","m":"M09","e":9,"c":"Estabilize a carga (33 a 50)","s":15,"d":{"min":0,"max":100,"start":10},"a":[33,50]}`
-            },
+        document.getElementById('info-missao-g3').innerText = `Validando Efetividade: ${nomeMissao}`;
+        document.getElementById('painel-projecao-g3').style.display = 'flex';
+    } catch (erro) {
+        console.error("Erro Crítico no Gerador:", erro);
+        alert("Limite óptico atingido. Reduza o texto do resumo.");
+    }
+},  // <-- VÍRGULA para separar métodos
 
-            carregarMotorLab: function(engineId) {
-                document.getElementById('lab-json-input').value = this.labPayloads[engineId];
-                this.gerarCartuchoJogo();
-            },
+fecharProjecao: function() {
+    document.getElementById('painel-projecao-g3').style.display = 'none';
+    if(this.leitorG3) this.leitorG3.clear();
+},
+
+// ==========================================
+// MÓDULO LABORATÓRIO G3J (GERADOR DE JOGOS)
+// ==========================================
+leitorLabG3J: null,
+labPayloads: {
+    1: `{"t":"G3J","m":"M01","e":1,"c":"Ordene o protocolo","s":20,"d":[{"id":"A","icone":"warning","texto":"Isolar a area"},{"id":"B","icone":"security","texto":"Neutralizar ameaca"},{"id":"C","icone":"support_agent","texto":"Acionar reforco"}],"a":["A","C","B"]}`,
+    2: `{"t":"G3J","m":"M02","e":2,"c":"Identifique a falha no cluster","s":15,"d":["dns","dns","dns","dns","bug_report","dns","dns","dns","dns"],"a":4}`,
+    3: `{"t":"G3J","m":"M03","e":3,"c":"Triagem: Risco de Seguranca?","s":15,"d":[{"i":"vpn_key","v":0},{"i":"bug_report","v":1},{"i":"security","v":0}]}`,
+    4: `{"t":"G3J","m":"M04","e":4,"c":"Memorize o padrao de acesso","s":20,"d":["looks_one","looks_two","looks_3","looks_two"]}`,
+    5: `{"t":"G3J","m":"M05","e":5,"c":"Classifique os ativos","s":15,"d":{"c":["delete","recycling","warning"],"i":[{"x":"science","y":2},{"x":"description","y":1},{"x":"coronavirus","y":2}]}}`,
+    6: `{"t":"G3J","m":"M06","e":6,"c":"Isole a anomalia (Bug)","s":15,"d":{"a":"bug_report","v":350,"f":["dns","memory","api","settings"]}}`,
+    7: `{"t":"G3J","m":"M07","e":7,"c":"Ligue causa e efeito","s":25,"d":{"L":["sick","thermostat"],"R":["ac_unit","healing"]},"a":[1,0]}`,
+    8: `{"t":"G3J","m":"M08","e":8,"c":"Programe a rota (Evite o fogo)","s":30,"d":{"g":9,"s":0,"t":8,"o":[4]},"a":["R","R","D","D"]}`,
+    9: `{"t":"G3J","m":"M09","e":9,"c":"Estabilize a carga (33 a 50)","s":15,"d":{"min":0,"max":100,"start":10},"a":[33,50]}`
+},
+
+carregarMotorLab: function(engineId) {
+    document.getElementById('lab-json-input').value = this.labPayloads[engineId];
+    this.gerarCartuchoJogo();
+},
 
             gerarCartuchoJogo: function() {
                 const rawText = document.getElementById('lab-json-input').value.trim();
