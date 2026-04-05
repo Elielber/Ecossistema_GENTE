@@ -885,55 +885,50 @@
                 document.getElementById('resumo-efetividade').style.color = "var(--cor-sucesso)";
             },
 
-// --- PROTOCOLO G3 E QR CODE ---
+// Localize a função gerarChaveG3 e substitua por esta versão otimizada:
 gerarChaveG3: function() {
     const select = document.getElementById('select-missao');
     const missaoId = select.value;
     const nomeMissao = select.options[select.selectedIndex]?.text || "";
 
     if (!missaoId) {
-        alert("Atenção: Selecione a missão da aula no menu suspenso.");
+        alert("Selecione a missão da aula.");
         return;
     }
 
-    const validadeTimestamp = new Date().getTime() + (10 * 60 * 1000); 
-    
-    let resumoAula = "";
-    const campoResumo = document.getElementById('plano-resumo');
-    if (campoResumo && campoResumo.value.trim().length > 0) {
-        resumoAula = campoResumo.value.trim();
-    }
-
-    const payload = { 
-        tipo: "G3_VALIDACAO", 
-        idMissao: missaoId, 
-        expira: validadeTimestamp,
-        resumo: resumoAula
+    // 1. Minificação do Payload (Remoção de chaves longas)
+    // t: tipo, id: idMissao, e: expira, r: resumo
+    const payloadBruto = { 
+        t: "G3_V", 
+        id: missaoId, 
+        e: new Date().getTime() + (10 * 60 * 1000),
+        r: document.getElementById('plano-resumo').value.trim()
     };
+
+    // 2. Compressão G3-Fusion (Baseada no Forense/LZ-String)
+    // O segredo para os 500+ chars é não enviar JSON puro
+    const jsonString = JSON.stringify(payloadBruto);
+    const payloadComprimido = "G3!" + LZString.compressToBase64(jsonString);
 
     const container = document.getElementById('container-qr-gigante');
     container.innerHTML = '';
     
     try {
-        const payloadString = JSON.stringify(payload);
-        let textoCodificado = unescape(encodeURIComponent(payloadString));
-
         this.leitorG3 = new QRCode(container, {
-            text: textoCodificado, 
-            width: 500, 
-            height: 500, 
+            text: payloadComprimido, 
+            width: 600, // Aumentado para melhor definição em projeção
+            height: 600, 
             colorDark : "#000000", 
             colorLight : "#ffffff", 
-            correctLevel : QRCode.CorrectLevel.L
+            correctLevel : QRCode.CorrectLevel.L // Nível L permite mais dados e menos redundância
         });
 
-        document.getElementById('info-missao-g3').innerText = `Validando Efetividade: ${nomeMissao}`;
+        document.getElementById('info-missao-g3').innerText = `Protocolo de Extração: ${nomeMissao}`;
         document.getElementById('painel-projecao-g3').style.display = 'flex';
     } catch (erro) {
-        console.error("Erro Crítico no Gerador:", erro);
-        alert("Limite óptico atingido. Reduza o texto do resumo.");
+        alert("Erro: O resumo é muito longo para a densidade óptica atual.");
     }
-},  // <-- VÍRGULA para separar métodos
+}
 
 fecharProjecao: function() {
     document.getElementById('painel-projecao-g3').style.display = 'none';
