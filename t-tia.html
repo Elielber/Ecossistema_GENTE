@@ -600,58 +600,42 @@
                 setTimeout(() => aTIA_Core.iniciar(), 1500);
             },
 
+// Localize o método processarCrachaQR e atualize a lógica de interceptação:
 processarCrachaQR: function(textoDecodificado) {
-                try {
-                    const decodificarHTML = (texto) => {
-                        const txt = document.createElement("textarea");
-                        txt.innerHTML = texto;
-                        return txt.value;
-                    };
+    try {
+        let dados;
+        
+        // Verificação de Protocolo Comprimido (G3-Fusion)
+        if (textoDecodificado.startsWith("G3!")) {
+            const extraido = textoDecodificado.substring(3);
+            const descompactado = LZString.decompressFromBase64(extraido);
+            dados = JSON.parse(descompactado);
+        } else {
+            // Fallback para QRs Legados ou Crachás simples
+            dados = JSON.parse(textoDecodificado);
+        }
 
-                    let textoLimpo = decodificarHTML(textoDecodificado)
-                        .trim()
-                        .replace(/[\u200B-\u200D\uFEFF]/g, "")
-                        .replace(/[\u201C\u201D]/g, '"') 
-                        .replace(/[\u2018\u2019]/g, "'");
+        // Mapeamento de chaves curtas para o estado do App
+        if (dados.t === "G3_V") {
+            this.processarG3Validacao({
+                idMissao: dados.id,
+                expira: dados.e,
+                resumo: dados.r // Aqui o texto de 500+ chars é restaurado
+            });
+            return;
+        }
 
-                    let dados = JSON.parse(textoLimpo);
-
-                    if (!dados.tipo) {
-                        throw new Error("QR sem tipo definido");
-                    }
-
-                    switch (dados.tipo) {
-                    case "aTIA_LOGIN":
-                     this.processarLogin(dados);
-                     break;
-
-                 case "G3_VALIDACAO": 
-                     this.processarG3Validacao(dados);
-                     break;
-
-                 // --- NOVA ROTA ADICIONADA PARA O JOGO ---
-                 case "G3J": // GENTE 3 Game
-                     console.log("Cartucho G3J detectado!", dados);
-                     if (this.leitorHTML5) { this.leitorHTML5.pause(true); } // Importante: pausa a câmera para não ler 2 vezes
-                     GenteGameEngine.iniciarCartucho(dados);
-                     break;
-
-                 default:
-                     // Usa o "t" como tipo também, já que no JSON do jogo encurtamos a chave "tipo" para "t" para poupar espaço
-                     if (dados.t === "G3J") {
-                         console.log("Cartucho G3J detectado (chave curta)!", dados);
-                         if (this.leitorHTML5) { this.leitorHTML5.pause(true); }
-                         GenteGameEngine.iniciarCartucho(dados);
-                     } else {
-                         throw new Error("Tipo de QR desconhecido");
-                     }
-             }
-					 } catch (erro) {
-                    console.error("ERRO QR:", erro);
-                    alert("QR Code inválido ou mal formatado.");
-                }
-            },
-
+        // Lógica de Login (Crachá)
+        if (dados.tipo === "aTIA_LOGIN") {
+            this.processarLogin(dados);
+        }
+        // ... restante da lógica para G3J (Jogos)
+        
+    } catch (erro) {
+        console.error("Erro na descompressão/leitura:", erro);
+        alert("Falha no Protocolo G3: Dados corrompidos ou incompatíveis.");
+    }
+}
             processarG3Validacao: async function(dados) {
                 console.log("[Protocolo G3] Recebendo chave de validação:", dados);
 
