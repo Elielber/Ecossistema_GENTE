@@ -1663,7 +1663,7 @@ const ScannerG3 = {
     leitorHTML5: null,
     contextoAtual: null, // Pode ser 'LOGIN' ou 'JOGO'
 
-  abrir: function(contexto, instrucao = "Aponte para o QR Code do Mestre") {
+ abrir: function(contexto, instrucao = "Aponte para o QR Code do Mestre") {
         this.contextoAtual = contexto;
         document.getElementById('scanner-g3-instrucao').innerText = instrucao;
         document.getElementById('overlay-scanner-g3').style.display = 'flex';
@@ -1672,33 +1672,18 @@ const ScannerG3 = {
             this.leitorHTML5 = new Html5Qrcode("leitor-universal");
         }
 
+        // CONFIGURAÇÃO ESTÁVEL E LEVE PARA QUALQUER CELULAR
         this.leitorHTML5.start(
-            // 1. Identificador Primário
-            { facingMode: "environment" }, 
-            
-            // 2. Configurações Avançadas da Lente
+            { facingMode: "environment" }, // Apenas pede a câmera traseira, sem forçar resolução
             {
                 fps: 10,
-                qrbox: { width: 300, height: 300 }, // Nossa Lente Macro
-                videoConstraints: {
-                    facingMode: "environment", // CORREÇÃO CRÍTICA: Repetimos aqui para forçar a traseira!
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                },
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true // Mantém a IA do Android ativada
-                }
+                qrbox: { width: 250, height: 250 } // A caixa de mira confortável
             },
-            
-            // 3. Callback de Sucesso
             (textoDecodificado) => { this.processarLeitura(textoDecodificado); },
-            
-            // 4. Callback de Erro
             (errorMessage) => { /* Silenciado */ }
-            
         ).catch((err) => {
             console.error("FALHA NA CÂMERA:", err);
-            alert("Falha no Scanner: " + (err.name || err.message || err));
+            alert("Erro ao ligar a câmera. Verifique as permissões do navegador.");
             this.fechar();
         });
     },
@@ -1779,35 +1764,22 @@ const ScannerG3 = {
             Autenticacao.verificarAcesso();
         });
     </script>
-           <div id="overlay-scanner-g3" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999;">
+         <div id="overlay-scanner-g3" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.95); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
         
-        <div id="leitor-universal" style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; overflow: hidden; background: #000;">
-        </div>
-        
-        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 2rem 1.5rem; pointer-events: none;">
+        <div style="width: 90%; max-width: 380px; background: #1e293b; padding: 20px; border-radius: 20px; border: 1px solid var(--cor-destaque); text-align: center; box-shadow: 0 25px 50px rgba(0,0,0,0.8);">
             
-            <div style="text-align: center; background: rgba(15, 23, 42, 0.85); padding: 15px; border-radius: 16px; backdrop-filter: blur(8px); border: 1px solid var(--cor-destaque); pointer-events: auto; max-width: 400px; margin: 0 auto; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-                <h3 style="color: var(--texto-puro); margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 10px;">
-                    <span class="material-icons-round" style="color: var(--cor-destaque);">qr_code_scanner</span>
-                    PROTOCOLO G3
-                </h3>
-                <p id="scanner-g3-instrucao" style="font-size: 0.85rem; color: var(--texto-suave); margin: 0;">Aproxime-se para calibrar a leitura...</p>
+            <h3 style="color: var(--texto-puro); margin-bottom: 5px; display: flex; align-items: center; justify-content: center; gap: 10px;">
+                <span class="material-icons-round" style="color: var(--cor-destaque);">qr_code_scanner</span>
+                PROTOCOLO G3
+            </h3>
+            <p id="scanner-g3-instrucao" style="font-size: 0.85rem; color: var(--texto-suave); margin-bottom: 20px;">Enquadre o código na mira central</p>
+            
+            <div id="leitor-universal" style="width: 100%; height: 350px; border-radius: 12px; overflow: hidden; background: #000; position: relative; border: 2px dashed var(--borda);">
             </div>
             
-            <div style="flex-grow: 1; display: flex; justify-content: center; align-items: center;">
-                <div style="width: 250px; height: 250px; border: 2px solid rgba(139, 92, 246, 0.2); border-radius: 20px; position: relative;">
-                    <div style="position: absolute; top: -2px; left: -2px; width: 40px; height: 40px; border-top: 4px solid var(--cor-destaque); border-left: 4px solid var(--cor-destaque); border-top-left-radius: 20px;"></div>
-                    <div style="position: absolute; top: -2px; right: -2px; width: 40px; height: 40px; border-top: 4px solid var(--cor-destaque); border-right: 4px solid var(--cor-destaque); border-top-right-radius: 20px;"></div>
-                    <div style="position: absolute; bottom: -2px; left: -2px; width: 40px; height: 40px; border-bottom: 4px solid var(--cor-destaque); border-left: 4px solid var(--cor-destaque); border-bottom-left-radius: 20px;"></div>
-                    <div style="position: absolute; bottom: -2px; right: -2px; width: 40px; height: 40px; border-bottom: 4px solid var(--cor-destaque); border-right: 4px solid var(--cor-destaque); border-bottom-right-radius: 20px;"></div>
-                </div>
-            </div>
-
-            <div style="pointer-events: auto; max-width: 400px; margin: 0 auto; width: 100%;">
-                <button class="btn" style="width: 100%; justify-content: center; background: rgba(15, 23, 42, 0.9); border: 1px solid var(--cor-alerta); color: var(--cor-alerta); padding: 1.2rem; border-radius: 16px; backdrop-filter: blur(8px); font-size: 1rem;" onclick="ScannerG3.fechar()">
-                    <span class="material-icons-round">close</span> CANCELAR EXTRAÇÃO
-                </button>
-            </div>
+            <button class="btn" style="margin-top: 20px; width: 100%; justify-content: center; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--cor-alerta); color: var(--cor-alerta); padding: 12px; font-weight: bold; border-radius: 12px;" onclick="ScannerG3.fechar()">
+                <span class="material-icons-round">close</span> CANCELAR LEITURA
+            </button>
         </div>
     </div>
 
