@@ -370,6 +370,17 @@
                     <div>
                         <label style="font-size: 0.8rem; font-weight: bold; color: var(--texto-suave);">SITUAÇÃO GERADORA DE APRENDIZAGEM (SGA)</label>
                         <textarea placeholder="Descreva o problema real que os alunos tentarão resolver..." style="margin-top: 5px; height: 80px;"></textarea>
+						<div style="background: rgba(59, 130, 246, 0.05); padding: 1rem; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2); margin-top: 5px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                            <label style="font-size: 0.8rem; font-weight: bold; color: var(--cor-professor);">RESUMO TÁTICO (CÁPSULA OFFLINE PARA O ALUNO)</label>
+                            <span id="contador-resumo" style="font-size: 0.75rem; font-weight: bold; color: var(--cor-sucesso); background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 12px;">0 / 500 bytes</span>
+                        </div>
+                        <textarea id="plano-resumo" oninput="PainelMestre.atualizarContadorResumo()" placeholder="Escreva os conceitos-chave da aula em tópicos curtos. Este texto viajará dentro do QR Code de conclusão para o celular do aluno..." style="margin-top: 10px; height: 100px; border-color: var(--cor-professor);"></textarea>
+                        <p style="font-size: 0.7rem; color: var(--texto-suave); margin-top: 8px;">
+                            <span class="material-icons-round" style="font-size: 14px; vertical-align: middle;">info</span> 
+                            Mantenha a objetividade. Excesso de caracteres torna o QR Code ilegível para as câmeras dos alunos.
+                        </p>
+                    </div>
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
@@ -665,6 +676,39 @@
                 document.getElementById(`nav-${idAba}`).classList.add('ativa');
                 document.getElementById(`aba-${idAba}`).classList.add('ativa');
             },
+			// --- CONTROLE DA CÁPSULA DE CONHECIMENTO (RESUMO) ---
+            atualizarContadorResumo: function() {
+                const maxChars = 500; // O teto óptico seguro para o Moto G10
+                const textarea = document.getElementById('plano-resumo');
+                const contador = document.getElementById('contador-resumo');
+                
+                // Opcional: Se quiser precisão de bytes (contando acentos como 2 bytes), 
+                // use: new Blob([textarea.value]).size;
+                // Mas para o professor, contagem visual de caracteres gera menos atrito cognitivo.
+                const atual = textarea.value.length;
+
+                contador.innerText = `${atual} / ${maxChars} chars`;
+
+                if (atual < (maxChars * 0.7)) {
+                    contador.style.color = "var(--cor-sucesso)"; 
+                    textarea.style.borderColor = "var(--cor-professor)";
+                } else if (atual < maxChars) {
+                    // Zona de Alerta (Amarelo)
+                    contador.style.color = "var(--cor-alerta)"; 
+                    textarea.style.borderColor = "var(--cor-alerta)";
+                } else {
+                    // Ponto de Ruptura (Vermelho) - Bloqueia a digitação
+                    contador.style.color = "#ef4444"; 
+                    textarea.style.borderColor = "#ef4444";
+                    textarea.value = textarea.value.substring(0, maxChars); // Corta o texto excedente
+                    contador.innerText = `LIMITE ATINGIDO (${maxChars} chars)`;
+                    
+                    // Tremedeira visual para avisar o professor
+                    textarea.style.transform = "translateX(5px)";
+                    setTimeout(() => textarea.style.transform = "translateX(-5px)", 50);
+                    setTimeout(() => textarea.style.transform = "translateX(0)", 100);
+                }
+            },
 
             // --- INGESTÃO DA MATRIZ DO COORDENADOR ---
             carregarMatriz: function(evento) {
@@ -810,7 +854,20 @@
                 }
 
                 const validadeTimestamp = new Date().getTime() + (10 * 60 * 1000); 
-                const payload = { tipo: "G3_VALIDACAO", idMissao: missaoId, expira: validadeTimestamp };
+                
+                // Busca o resumo tático escrito pelo professor no plano de aula
+                let resumoAula = "";
+                const campoResumo = document.getElementById('plano-resumo');
+                if (campoResumo && campoResumo.value.trim().length > 0) {
+                    resumoAula = campoResumo.value.trim();
+                }
+
+                const payload = { 
+                    tipo: "G3_VALIDACAO", 
+                    idMissao: missaoId, 
+                    expira: validadeTimestamp,
+                    resumo: resumoAula // O conhecimento viaja aqui!
+                };
 
                 document.getElementById('container-qr-gigante').innerHTML = '';
                 this.leitorG3 = new QRCode(document.getElementById('container-qr-gigante'), {
