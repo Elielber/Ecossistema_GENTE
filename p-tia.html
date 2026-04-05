@@ -628,9 +628,20 @@
                 let detalhes = "";
 
                 // Inteligência: Gera o Payload correto baseado no ecossistema
-                if (cargo === 'Aluno') {
-                    const id = document.getElementById('sec-aluno-id').value.trim() || 'ALU-' + Math.floor(Math.random()*1000);
-                    const curso = document.getElementById('sec-aluno-curso').value.trim() || 'TecnicoIA.json';
+                // No P-TIA, substitua a lógica de payload dentro de gerarCrachaSecretaria:
+if (cargo === 'Aluno') {
+    const id = document.getElementById('sec-aluno-id').value.trim() || 'ALU-' + Math.floor(Math.random()*1000);
+    const curso = document.getElementById('sec-aluno-curso').value.trim() || 'TecnicoIA.json';
+    
+    // FORMATO PADRÃO IDENTIDADE (JSON PURO)
+    payload = { 
+        tipo: "aTIA_LOGIN", 
+        alunoId: id, 
+        cursoId: curso, 
+        nome: nome 
+    };
+    detalhes = `MATRÍCULA: <span style="color:#3b82f6">${id}</span><br>ARQUIVO: <span style="color:#3b82f6">${curso}</span>`;
+}
                     payload = { tipo: "aTIA_LOGIN", alunoId: id, cursoId: curso, nome: nome };
                     detalhes = `MATRÍCULA: <span style="color:#3b82f6">${id}</span><br>ARQUIVO MATRIZ: <span style="color:#3b82f6">${curso}</span>`;
                 } else {
@@ -889,46 +900,38 @@
 gerarChaveG3: function() {
     const select = document.getElementById('select-missao');
     const missaoId = select.value;
-    const nomeMissao = select.options[select.selectedIndex]?.text || "";
+    if (!missaoId) { alert("Selecione a missão da aula."); return; }
 
-    if (!missaoId) {
-        alert("Selecione a missão da aula.");
-        return;
-    }
+    const validadeTimestamp = new Date().getTime() + (10 * 60 * 1000); 
+    let resumoAula = document.getElementById('plano-resumo')?.value.trim() || "";
 
-    // 1. Minificação do Payload (Remoção de chaves longas)
-    // t: tipo, id: idMissao, e: expira, r: resumo
-    const payloadBruto = { 
-        t: "G3_V", 
+    // 1. Monta o JSON com chaves curtas (Otimização de Espaço)
+    const payloadBruto = JSON.stringify({ 
+        t: "G3_V",    // Tipo: G3 Validação
         id: missaoId, 
-        e: new Date().getTime() + (10 * 60 * 1000),
-        r: document.getElementById('plano-resumo').value.trim()
-    };
+        e: validadeTimestamp, 
+        r: resumoAula 
+    });
 
-    // 2. Compressão G3-Fusion (Baseada no Forense/LZ-String)
-    // O segredo para os 500+ chars é não enviar JSON puro
-    const jsonString = JSON.stringify(payloadBruto);
-    const payloadComprimido = "G3!" + LZString.compressToBase64(jsonString);
+    // 2. Aplica Protocolo G3-Fusion (Compressão + Prefixo)
+    const payloadFinal = "G3!" + G3Fusion.comprimir(payloadBruto);
 
     const container = document.getElementById('container-qr-gigante');
     container.innerHTML = '';
     
     try {
         this.leitorG3 = new QRCode(container, {
-            text: payloadComprimido, 
-            width: 600, // Aumentado para melhor definição em projeção
-            height: 600, 
-            colorDark : "#000000", 
-            colorLight : "#ffffff", 
-            correctLevel : QRCode.CorrectLevel.L // Nível L permite mais dados e menos redundância
+            text: payloadFinal, 
+            width: 450, 
+            height: 450, 
+            correctLevel : QRCode.CorrectLevel.L // Nível L aumenta a capacidade para textos longos
         });
 
-        document.getElementById('info-missao-g3').innerText = `Protocolo de Extração: ${nomeMissao}`;
         document.getElementById('painel-projecao-g3').style.display = 'flex';
     } catch (erro) {
-        alert("Erro: O resumo é muito longo para a densidade óptica atual.");
+        alert("Erro: O resumo ainda é muito grande para o QR Code. Reduza o texto.");
     }
-},
+}
 
 fecharProjecao: function() {
     document.getElementById('painel-projecao-g3').style.display = 'none';
@@ -998,6 +1001,8 @@ carregarMotorLab: function(engineId) {
                     statusText.style.color = "#f59e0b";
                 }
             },
+
+		
 			// --- CONTROLE DE MODO DA BANCADA ---
             alternarModoLab: function(modo) {
                 const btnVis = document.getElementById('btn-modo-visual');
