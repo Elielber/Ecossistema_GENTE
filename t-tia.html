@@ -501,16 +501,19 @@
         // PROTOCOLO DE COMPRESSÃO: G3-FUSION (G3-F)
         // Tokenização Semântica (ASTIA) + LZW Base64
         // ==========================================
-        const G3Fusion = {
+       const G3Fusion = {
             dicionario: {
                 " de ": "~", " que ": "^", " para ": "|", " com ": "`",
                 " uma ": "@", " um ": "*", " os ": "=", " as ": "+",
-                " em ": "<", " na ": ">", " no ": "$", " da ": "{", 
-                " do ": "}", " dos ": "[", " das ": "]",
-                "ção": "_", "ções": "#", "mente": "\\"
+                " em ": "<", " na ": ">", " no ": "$", 
+                " da ": "§", // Trocado para não destruir chaves JSON
+                " do ": "£", // Trocado para não destruir chaves JSON
+                " dos ": "¢", // Trocado para não destruir arrays JSON
+                " das ": "¥", // Trocado para não destruir arrays JSON
+                "ção": "_", "ções": "#", 
+                "mente": "µ"  // Trocado para não gerar barras de escape
             },
             
-            // 1º Corta a entropia do idioma, 2º Esmaga o JSON
             comprimir: function(jsonString) {
                 let txt = jsonString;
                 for (let [palavra, simbolo] of Object.entries(this.dicionario)) {
@@ -519,7 +522,6 @@
                 return LZString.compressToBase64(txt);
             },
             
-            // 1º Descompacta o LZW, 2º Restaura o idioma humano
             descomprimir: function(base64String) {
                 let txt = LZString.decompressFromBase64(base64String);
                 if (!txt) throw new Error("Falha na descompressão LZW");
@@ -601,40 +603,36 @@
 
 // Localize o método processarCrachaQR e atualize a lógica de interceptação:
 processarCrachaQR: function(textoDecodificado) {
-    try {
-        let dados;
-        
-        // Verificação de Protocolo Comprimido (G3-Fusion)
-        if (textoDecodificado.startsWith("G3!")) {
-            const extraido = textoDecodificado.substring(3);
-            // CORREÇÃO AQUI: Usa o G3Fusion para restaurar todo o texto
-            const stringRestaurada = G3Fusion.descomprimir(extraido);
-            dados = JSON.parse(stringRestaurada);
-        } else {
-            // Fallback para QRs Legados ou Crachás simples
-            dados = JSON.parse(textoDecodificado);
-        }
+            try {
+                let dados;
+                
+                // Verificação de Protocolo Comprimido (G3-Fusion)
+                if (textoDecodificado.startsWith("G3!")) {
+                    const extraido = textoDecodificado.substring(3).replace(/[\r\n\s]+/g, '');
+                    const stringRestaurada = G3Fusion.descomprimir(extraido);
+                    dados = JSON.parse(stringRestaurada);
+                } else {
+                    dados = JSON.parse(textoDecodificado);
+                }
 
-        // Mapeamento de chaves curtas para o estado do App
-        if (dados.t === "G3_V" || dados.tipo === "G3_VALIDACAO") {
-            this.processarG3Validacao({
-                idMissao: dados.id || dados.idMissao,
-                expira: dados.e || dados.expira,
-                resumo: dados.r || dados.resumo
-            });
-            return;
-        }
+                if (dados.t === "G3_V" || dados.tipo === "G3_VALIDACAO") {
+                    this.processarG3Validacao({
+                        idMissao: dados.id || dados.idMissao,
+                        expira: dados.e || dados.expira,
+                        resumo: dados.r || dados.resumo
+                    });
+                    return;
+                }
 
-        // Lógica de Login (Crachá)
-        if (dados.tipo === "aTIA_LOGIN") {
-            this.processarLogin(dados);
-        }
-        
-    } catch (erro) {
-        console.error("Erro na descompressão/leitura:", erro);
-        alert("Falha no Protocolo G3: Dados corrompidos ou incompatíveis.");
-    }
-},
+                if (dados.tipo === "aTIA_LOGIN") {
+                    this.processarLogin(dados);
+                }
+                
+            } catch (erro) {
+                console.error("Erro na descompressão/leitura:", erro);
+                alert("Falha no Protocolo G3: Dados corrompidos ou incompatíveis.");
+            }
+        },
             processarG3Validacao: async function(dados) {
                 console.log("[Protocolo G3] Recebendo chave de validação:", dados);
 
@@ -1718,31 +1716,29 @@ const ScannerG3 = {
 },
     processarLeitura: function(textoDecodificado) {
         try {
-            // Fecha a câmera imediatamente para poupar processamento
             this.fechar();
-
             let stringFinal = textoDecodificado;
 
-            // 1. Tratamento do Protocolo Oficial G3-Fusion (Remove prefixo e restaura dicionário)
+            // 1. Tratamento do Protocolo Oficial G3-Fusion
             if (textoDecodificado.startsWith("G3!")) {
-                const extraido = textoDecodificado.substring(3); // Corta o 'G3!' fora
-                stringFinal = G3Fusion.descomprimir(extraido);   // Descomprime E restaura palavras
-                console.log("[G3] Protocolo G3-Fusion decodificado com sucesso!");
+                // A CORREÇÃO: Arranca qualquer quebra de linha ou espaço sujo que a câmera colocou
+                const extraido = textoDecodificado.substring(3).replace(/[\r\n\s]+/g, ''); 
+                stringFinal = G3Fusion.descomprimir(extraido);
             } 
             // 2. Fallback para cartuchos não comprimidos
             else if (textoDecodificado.length > 0 && textoDecodificado[0] !== '{') {
                 try {
-                    const descompactado = LZString.decompressFromBase64(textoDecodificado);
+                    const cleanBase64 = textoDecodificado.replace(/[\r\n\s]+/g, '');
+                    const descompactado = LZString.decompressFromBase64(cleanBase64);
                     if (descompactado) stringFinal = descompactado;
                 } catch (e) {
                     console.log("[G3] Tentativa de descompressão ignorada.");
                 }
             }
 
-            // Agora sim, converte a string final restaurada em Objeto
+            // O JSON agora está são e salvo para ser parseado!
             let dados = JSON.parse(stringFinal);
             
-            // Roteia a ação para o destino correto
             if (dados.tipo === "aTIA_LOGIN" || dados.tipo === "G3_VALIDACAO" || dados.t === "G3_V") {
                 Autenticacao.processarCrachaQR(stringFinal);
             } 
