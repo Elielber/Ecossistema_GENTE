@@ -1696,17 +1696,33 @@ const ScannerG3 = {
 },
     processarLeitura: function(textoDecodificado) {
         try {
-            // Leitura direta e pura
-            let dados = JSON.parse(textoDecodificado);
-            
-            // Fecha a câmera imediatamente
+            // Fecha a câmera imediatamente para poupar o processador do Moto G10
             this.fechar();
 
+            let stringFinal = textoDecodificado;
+
+            // MÁGICA: Se o QR Code não começar por "{" (não é JSON puro), tenta descomprimir o LZ-String
+            if (textoDecodificado.length > 0 && textoDecodificado[0] !== '{') {
+                try {
+                    const descompactado = LZString.decompressFromBase64(textoDecodificado);
+                    if (descompactado) {
+                        stringFinal = descompactado;
+                        console.log("[G3] Crachá comprimido lido e decodificado com sucesso!");
+                    }
+                } catch (e) {
+                    console.log("[G3] Tentativa de descompressão ignorada. A ler formato nativo.");
+                }
+            }
+
+            // Agora sim, converte a string descompactada em Objeto
+            let dados = JSON.parse(stringFinal);
+            
             // Roteia a ação
             if (dados.tipo === "aTIA_LOGIN" || dados.tipo === "G3_VALIDACAO") {
-                Autenticacao.processarCrachaQR(textoDecodificado);
+                // IMPORTANTE: Envie a 'stringFinal' (descomprimida) para a Autenticação, não a original
+                Autenticacao.processarCrachaQR(stringFinal);
             } 
-            else if (dados.t === "G3J" || dados.tipo === "G3J") {
+            else if (dados.t === "G3J" || dados.tipo === "G3J" || dados.e) {
                 GenteGameEngine.iniciarCartucho(dados);
             } 
             else {
@@ -1715,11 +1731,10 @@ const ScannerG3 = {
 
         } catch (erro) {
             console.error("ERRO QR:", erro);
-            alert("QR Code inválido ou formato não suportado.");
-            this.fechar();
+            alert("QR Code inválido ou corrompido. Certifique-se de que é um crachá oficial.");
         }
     }
-};
+		},
 // ----------------------------------------------------------------------------
         // MÓDULO UI: MOTOR DE TEMAS (DESIGN SYSTEM)
         // ----------------------------------------------------------------------------
