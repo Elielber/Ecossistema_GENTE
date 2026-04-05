@@ -1661,12 +1661,16 @@ processarCrachaQR: function(textoDecodificado) {
 };
 const ScannerG3 = {
     leitorHTML5: null,
-    contextoAtual: null, // Pode ser 'LOGIN' ou 'JOGO'
+    contextoAtual: null,
 
-abrir: function(contexto, instrucao = "Aponte para o QR Code do Mestre") {
+    abrir: function(contexto, instrucao = "Aponte para o QR Code da lousa") {
         this.contextoAtual = contexto;
-        document.getElementById('scanner-g3-instrucao').innerText = instrucao;
-        document.getElementById('overlay-scanner-g3').style.display = 'flex';
+        
+        const overlay = document.getElementById('overlay-scanner-g3');
+        const instrucaoEl = document.getElementById('scanner-g3-instrucao');
+        
+        if (instrucaoEl) instrucaoEl.innerText = instrucao;
+        if (overlay) overlay.style.display = 'flex';
 
         if (!this.leitorHTML5) {
             this.leitorHTML5 = new Html5Qrcode("leitor-universal");
@@ -1676,9 +1680,9 @@ abrir: function(contexto, instrucao = "Aponte para o QR Code do Mestre") {
             { facingMode: "environment" }, 
             {
                 fps: 10,
-                // SEM QRBOX: A câmera inteira passa a ser a área de captura!
+                // Mantemos o HD dinâmico que não trava o Moto G10
                 videoConstraints: {
-                    width: { ideal: 1280 }, // Pede HD educadamente
+                    width: { ideal: 1280 },
                     height: { ideal: 720 },
                     facingMode: "environment"
                 }
@@ -1687,16 +1691,39 @@ abrir: function(contexto, instrucao = "Aponte para o QR Code do Mestre") {
             (errorMessage) => { /* Silenciado */ }
         ).catch((err) => {
             console.error("FALHA NA CÂMERA:", err);
-            alert("Erro ao ligar a câmera. Verifique as permissões do navegador.");
+            alert("Erro ao ligar a câmera: " + (err.name || err));
             this.fechar();
         });
     },
-   processarLeitura: function(textoDecodificado) {
+
+    fechar: function() {
+        // 1. Esconde a tela cinza IMEDIATAMENTE, garantindo a UX do aluno
+        const overlay = document.getElementById('overlay-scanner-g3');
+        if (overlay) overlay.style.display = 'none';
+
+        // 2. Tenta parar a câmera com segurança
+        if (this.leitorHTML5) {
+            try {
+                // A CORREÇÃO: Só manda parar se realmente estiver rodando!
+                if (this.leitorHTML5.isScanning) {
+                    this.leitorHTML5.stop().then(() => {
+                        this.leitorHTML5.clear();
+                    }).catch(e => console.warn("Aviso ao parar câmera:", e));
+                } else {
+                    this.leitorHTML5.clear(); // Apenas limpa a div se não estava rodando
+                }
+            } catch (erro) {
+                console.warn("Limpeza forçada da lente executada.", erro);
+            }
+        }
+    },
+
+    processarLeitura: function(textoDecodificado) {
         try {
-            // Leitura direta e pura (O JSON já chega pronto, sem Base64)
+            // Leitura direta e pura
             let dados = JSON.parse(textoDecodificado);
             
-            // Pausa/Fecha a câmera IMEDIATAMENTE após ler com sucesso
+            // Fecha a câmera imediatamente
             this.fechar();
 
             // Roteia a ação
