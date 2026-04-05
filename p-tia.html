@@ -905,12 +905,11 @@
                 const container = document.getElementById('container-qr-gigante');
                 container.innerHTML = '';
                 
-                try {
+               try {
                     const payloadString = JSON.stringify(payload);
                     
-                    // A MÁGICA ACONTECE AQUI: Chamamos o G3-Fusion
-                    // Removemos o unescape/encode, pois o Base64 já é blindado contra acentos!
-                    let textoCodificado = "G3F!" + G3Fusion.comprimir(payloadString);
+                    // A MATRIZ PURA (Sem G3-Fusion): Apenas a vacina UTF-8 para acentos
+                    let textoCodificado = unescape(encodeURIComponent(payloadString));
 
                     this.leitorG3 = new QRCode(container, {
                         text: textoCodificado, 
@@ -918,12 +917,17 @@
                         height: 650, 
                         colorDark : "#000000", 
                         colorLight : "#ffffff", 
-                        correctLevel : QRCode.CorrectLevel.L 
+                        correctLevel : QRCode.CorrectLevel.L // O nível L aqui fará os quadrados ficarem gigantes!
                     });
 
                     document.getElementById('info-missao-g3').innerText = `Validando Efetividade: ${nomeMissao}`;
                     document.getElementById('painel-projecao-g3').style.display = 'flex';
                 } catch (erro) {
+                    console.error("Erro Crítico no Gerador:", erro);
+                    alert("Limite óptico atingido. Reduza o texto do resumo.");
+                }
+				
+				catch (erro) {
                     console.error("Erro Crítico no G3-Fusion:", erro);
                     alert("A cápsula atingiu o limite absoluto de engenharia. Reduza o texto do resumo.");
                 }
