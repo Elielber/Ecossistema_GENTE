@@ -670,8 +670,10 @@
             linhas.forEach(linha => {
                 const match = linha.match(regexTerritorio);
                 if (match) {
+                    const novoId = "T" + (this.curriculo.territorios.length + 1);
                     this.curriculo.territorios.push({
-                        id: "T" + (this.curriculo.territorios.length + 1),
+                        id: novoId,
+                        idTerritorio: novoId,
                         titulo: match[1].trim(),
                         fluxo: "rede",
                         metasCH: { tecnica: 0, cognitiva: 0, contextual: 0, social: 0 },
@@ -733,29 +735,32 @@
         // 2B. MODO GÊNESIS E SIMULADOR IMO 
         // ==========================================
         adicionarTerritorioGenesis: function() {
-            document.getElementById('macro-vazio-genesis').style.display = 'none';
-            
-            if (!this.curriculo.metadados) { this.curriculo.metadados = {}; }
-            if (!this.curriculo.territorios) { this.curriculo.territorios = []; }
+    document.getElementById('macro-vazio-genesis').style.display = 'none';
+    
+    if (!this.curriculo.metadados) { this.curriculo.metadados = {}; }
+    if (!this.curriculo.territorios) { this.curriculo.territorios = []; }
 
-            this.curriculo.metadados.nomeCurso = document.getElementById('genesis-nome').value || "Curso em Planejamento";
-            this.curriculo.metadados.cidade = document.getElementById('genesis-cidade').value;
-            this.curriculo.metadados.vocacao = document.getElementById('genesis-vocacao').value;
-            this.curriculo.metadados.perfil = document.getElementById('genesis-perfil').value;
+    this.curriculo.metadados.nomeCurso = document.getElementById('genesis-nome').value || "Curso em Planejamento";
+    this.curriculo.metadados.cidade = document.getElementById('genesis-cidade').value;
+    this.curriculo.metadados.vocacao = document.getElementById('genesis-vocacao').value;
+    this.curriculo.metadados.perfil = document.getElementById('genesis-perfil').value;
 
-            const novoIndex = this.curriculo.territorios.length;
-            this.curriculo.territorios.push({
-                id: "T" + (novoIndex + 1),
-                titulo: "Novo Território Temático",
-                fluxo: "rede",
-                metasCH: { tecnica: 0, cognitiva: 0, contextual: 0, social: 0 },
-                diretrizes: { tecnica: "", cognitiva: "", contextual: "", social: "" },
-                missoes: [],
-                imo: { nota: 0, classificacao: "Aguardando Metas", cor: "var(--texto-suave)", pTecnica: 0, pCognitiva: 0, pContextual: 0, pSocial: 0 }
-            });
+    const novoIndex = this.curriculo.territorios.length;  // ← DEFINA AQUI!
+    const novoId = "T" + (novoIndex + 1);
+    
+    this.curriculo.territorios.push({
+        id: novoId,
+        idTerritorio: novoId,
+        titulo: "Novo Território Temático",
+        fluxo: "rede",
+        metasCH: { tecnica: 0, cognitiva: 0, contextual: 0, social: 0 },
+        diretrizes: { tecnica: "", cognitiva: "", contextual: "", social: "" },
+        missoes: [],
+        imo: { nota: 0, classificacao: "Aguardando Metas", cor: "var(--texto-suave)", pTecnica: 0, pCognitiva: 0, pContextual: 0, pSocial: 0 }
+    });
 
-            this.renderizarMacroGenesis();
-        },
+    this.renderizarMacroGenesis();
+},
 
         renderizarMacroGenesis: function() {
             const lista = document.getElementById('lista-territorios-genesis');
@@ -950,11 +955,15 @@
                         });
                     });
 
-                    territorio.missoes.push({
-                        id: `${territorio.id}_M${territorio.missoes.length + 1}`,
-                        titulo: linhaLimpa.length > 60 ? linhaLimpa.substring(0, 57) + "..." : linhaLimpa,
+                    const missaoId = `${territorio.id}_M${territorio.missoes.length + 1}`;
+                    const novaMissao = {
+                        id: missaoId,
+                        idMissao: missaoId,
+                        titulo: linhaLimpa.substring(0, 57) + "...",
                         cards: cards
-                    });
+                        };
+                        this.recalcularDimensaoPredominanteMissao(novaMissao);  
+                        territorio.missoes.push(novaMissao);
                 }
             });
 
@@ -1148,33 +1157,35 @@
         },
 
         adicionarCardMicro: function() {
-            this.salvarEstadoMicroTemp(); 
-            
-            const missao = this.curriculo.territorios[this.territorioAtivoIndex].missoes[this.missaoAtivaIndex];
-            missao.cards.push({
-                dimensao: 'tecnica', 
-                verbos: [],
-                texto_editado: "",
-                tempo: 15,
-                criticidade: 'complementar',
-                acesso: 'exploracao' // Novo card nasce como exploração
-            });
-            
-            this.abrirMicro(this.missaoAtivaIndex); 
-        },
+    this.salvarEstadoMicroTemp(); 
+    
+    const missao = this.curriculo.territorios[this.territorioAtivoIndex].missoes[this.missaoAtivaIndex];
+    missao.cards.push({
+        dimensao: 'tecnica', 
+        verbos: [],
+        texto_editado: "",
+        tempo: 15,
+        criticidade: 'complementar',
+        acesso: 'exploracao'
+    });
+      this.recalcularDimensaoPredominanteMissao(missao);  
+    this.abrirMicro(this.missaoAtivaIndex); 
+},
 
         removerCardMicro: function(index) {
-            if(!confirm("Tem certeza que deseja excluir esta atividade da missão?")) return;
-            
-            this.salvarEstadoMicroTemp();
-            const missao = this.curriculo.territorios[this.territorioAtivoIndex].missoes[this.missaoAtivaIndex];
-            
-            missao.cards.splice(index, 1); 
-            this.abrirMicro(this.missaoAtivaIndex); 
-        },
+    if(!confirm("Tem certeza que deseja excluir esta atividade da missão?")) return;
+    
+    this.salvarEstadoMicroTemp();
+    const missao = this.curriculo.territorios[this.territorioAtivoIndex].missoes[this.missaoAtivaIndex];
+    
+    missao.cards.splice(index, 1); 
+   
+    this.recalcularDimensaoPredominanteMissao(missao); 
+    this.abrirMicro(this.missaoAtivaIndex); 
+},
 
         salvarPrataxisMicro: function() {
-            this.salvarEstadoMicroTemp(); 
+			this.recalcularDimensaoPredominanteMissao(missaoAtual);
             this.calcularIMOTerritorio(); 
             this.abrirMeso(this.territorioAtivoIndex); 
         },
@@ -1223,6 +1234,27 @@
 
             this.atualizarVisorIMO();
         },
+		
+		recalcularDimensaoPredominanteMissao: function(missao) {
+    if (!missao.cards || missao.cards.length === 0) {
+        missao.dimensaoPredominante = "tecnica";
+        return;
+    }
+    const freq = {};
+    missao.cards.forEach(card => {
+        const dim = card.dimensao || "tecnica";
+        freq[dim] = (freq[dim] || 0) + 1;
+    });
+    let maxCount = 0;
+    let pred = "tecnica";
+    for (let [dim, count] of Object.entries(freq)) {
+        if (count > maxCount) {
+            maxCount = count;
+            pred = dim;
+        }
+    }
+    missao.dimensaoPredominante = pred;
+},
 
         atualizarVisorIMO: function() {
             let imo = this.curriculo.territorios[this.territorioAtivoIndex].imo;
@@ -1339,66 +1371,136 @@
         },
 
        exportarJSON: function() {
-            if(this.curriculo.territorios.length === 0) {
-                alert("Não há dados para exportar. Crie os territórios primeiro.");
-                return;
+    if(this.curriculo.territorios.length === 0) {
+        alert("Não há dados para exportar. Crie os territórios primeiro.");
+        return;
+    }
+
+    // Cria uma cópia profunda para não modificar o original durante a exportação
+    const copia = JSON.parse(JSON.stringify(this.curriculo));
+
+    copia.territorios.forEach(terr => {
+        // Garante idTerritorio
+        if (!terr.idTerritorio) terr.idTerritorio = terr.id;
+        // Garante que cada missão tenha idMissao e dimensaoPredominante
+        if (terr.missoes) {
+            terr.missoes.forEach(missao => {
+                if (!missao.idMissao) missao.idMissao = missao.id;
+                if (!missao.dimensaoPredominante || missao.dimensaoPredominante === "") {
+                    // recalcula na hora
+                    const freq = {};
+                    (missao.cards || []).forEach(card => {
+                        const dim = card.dimensao || "tecnica";
+                        freq[dim] = (freq[dim] || 0) + 1;
+                    });
+                    let max = 0, pred = "tecnica";
+                    for (let [d, c] of Object.entries(freq)) {
+                        if (c > max) { max = c; pred = d; }
+                    }
+                    missao.dimensaoPredominante = pred;
+                }
+            });
+        }
+    });
+
+    const nomeSeguro = (copia.metadados.nomeCurso || "curso_gente").normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const jsonString = JSON.stringify(copia, null, 4);
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonString);
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", `matriz_gente_${nomeSeguro}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+},
+
+        
+        importarJSON: function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            let jsonCarregado = JSON.parse(e.target.result);
+            
+            // Trava de segurança: verifica se é uma matriz válida
+            if (!jsonCarregado.metadados || !jsonCarregado.territorios) {
+                throw new Error("Formato inválido. O arquivo não possui a arquitetura do Ecossistema GENTE.");
             }
 
-            const nomeSeguro = (this.curriculo.metadados.nomeCurso || "curso_gente").normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const jsonString = JSON.stringify(this.curriculo, null, 4);
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonString);
-            
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", `matriz_gente_${nomeSeguro}.json`);
-            document.body.appendChild(downloadAnchorNode); 
-            
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
-        }, // <--- ADICIONE ESTA VÍRGULA SE NÃO TIVER
-
-        // NOVO: IMPORTAÇÃO DE ARQUIVO FÍSICO
-        importarJSON: function(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const jsonCarregado = JSON.parse(e.target.result);
-                    
-                    // Trava de segurança: verifica se é um arquivo gerado pelo nosso sistema
-                    if (!jsonCarregado.metadados || !jsonCarregado.territorios) {
-                        throw new Error("Formato inválido. O arquivo não possui a arquitetura do Ecossistema GENTE.");
-                    }
-
-                    // Sobrescreve a memória atual com o arquivo carregado
-                    this.curriculo = jsonCarregado;
-                    
-                    // Limpa o input file para permitir importar o mesmo arquivo novamente se necessário
-                    event.target.value = '';
-
-                    // Força a interface para o Modo Gênesis (O melhor visualizador estrutural)
-                    this.setModo('genesis');
-
-                    // Preenche os campos de contexto
-                    document.getElementById('genesis-nome').value = this.curriculo.metadados.nomeCurso || '';
-                    document.getElementById('genesis-cidade').value = this.curriculo.metadados.cidade || '';
-                    document.getElementById('genesis-vocacao').value = this.curriculo.metadados.vocacao || '';
-                    document.getElementById('genesis-perfil').value = this.curriculo.metadados.perfil || '';
-
-                    // Renderiza a arquitetura inteira na tela
-                    this.renderizarMacroGenesis();
-
-                    alert(`Sucesso! Matriz "${this.curriculo.metadados.nomeCurso}" carregada e pronta para ajustes.`);
-
-                } catch (error) {
-                    alert("Erro ao ler o arquivo: " + error.message);
-                    event.target.value = ''; 
+            // =============================================
+            // NORMALIZAÇÃO PARA COMPATIBILIDADE RETROATIVA
+            // =============================================
+            jsonCarregado.territorios.forEach(territorio => {
+                // 1. Garante idTerritorio (cópia de id)
+                if (!territorio.idTerritorio && territorio.id) {
+                    territorio.idTerritorio = territorio.id;
+                } else if (!territorio.idTerritorio) {
+                    territorio.idTerritorio = territorio.id || ("T" + (Math.random() * 1000).toFixed(0));
                 }
-            };
-            reader.readAsText(file);
+
+                // 2. Garante que cada missão tenha idMissao e dimensaoPredominante
+                if (territorio.missoes) {
+                    territorio.missoes.forEach(missao => {
+                        // idMissao
+                        if (!missao.idMissao && missao.id) {
+                            missao.idMissao = missao.id;
+                        } else if (!missao.idMissao) {
+                            missao.idMissao = missao.id || (`${territorio.id}_M${Math.random() * 1000}`);
+                        }
+
+                        // dimensaoPredominante (calcula a partir dos cards)
+                        if (!missao.dimensaoPredominante && missao.cards && missao.cards.length > 0) {
+                            const freq = {};
+                            missao.cards.forEach(card => {
+                                const dim = card.dimensao || "tecnica";
+                                freq[dim] = (freq[dim] || 0) + 1;
+                            });
+                            let maxCount = 0;
+                            let pred = "tecnica";
+                            for (let [dim, count] of Object.entries(freq)) {
+                                if (count > maxCount) {
+                                    maxCount = count;
+                                    pred = dim;
+                                }
+                            }
+                            missao.dimensaoPredominante = pred;
+                        } else if (!missao.dimensaoPredominante) {
+                            missao.dimensaoPredominante = "tecnica"; // fallback seguro
+                        }
+                    });
+                }
+            });
+            // =============================================
+
+            // Sobrescreve a memória atual com o arquivo carregado (já normalizado)
+            this.curriculo = jsonCarregado;
+            
+            // Limpa o input file para permitir importar o mesmo arquivo novamente
+            event.target.value = '';
+
+            // Força a interface para o Modo Gênesis
+            this.setModo('genesis');
+
+            // Preenche os campos de contexto
+            document.getElementById('genesis-nome').value = this.curriculo.metadados.nomeCurso || '';
+            document.getElementById('genesis-cidade').value = this.curriculo.metadados.cidade || '';
+            document.getElementById('genesis-vocacao').value = this.curriculo.metadados.vocacao || '';
+            document.getElementById('genesis-perfil').value = this.curriculo.metadados.perfil || '';
+
+            // Renderiza a arquitetura inteira na tela
+            this.renderizarMacroGenesis();
+
+            alert(`Sucesso! Matriz "${this.curriculo.metadados.nomeCurso}" carregada e normalizada.`);
+
+        } catch (error) {
+            alert("Erro ao ler o arquivo: " + error.message);
+            event.target.value = '';
         }
+    };
+    reader.readAsText(file);
+}
 };
 		// ========================================================================
     // MÓDULO DE AUTENTICAÇÃO (CRACHÁ DIGITAL)
