@@ -327,20 +327,19 @@
 
         <!-- SVG para desenhar as conexões (será preenchido dinamicamente) -->
         <svg class="diagram-svg" id="flowSvg"></svg>
-
-        <div class="legend">
-            <span><span style="color:#8b5cf6;">⬤</span> E-TIA → PEC (saveMatriz)</span>
-            <span><span style="color:#3b82f6;">⬤</span> P-TIA ↔ PEC (planos, matriz)</span>
-            <span><span style="color:#10b981;">⬤</span> T-TIA ↔ POC (progresso, validação)</span>
-            <span><span style="color:#f59e0b;">⬤</span> P-TIA → POC (chaves G3, turmas)</span>
-            <span><span style="color:#c084fc;">⬤</span> Crachá digital autentica todos</span>
-        </div>
+<div class="legend">
+    <span><span style="color:#3b82f6;">⬤</span> Leitura (consulta dados)</span>
+    <span><span style="color:#10b981;">⬤</span> Leitura + Gravação (consulta e escreve)</span>
+    <span><span style="color:#f59e0b;">⬤</span> Gravação (envia dados)</span>
+    <span><span style="color:#c084fc;">⬤</span> Autenticação (crachá digital)</span>
+</div>
     </div>
 </div>
 <footer>ASTIA · Arquitetura de Suporte às Trilhas Interativas · Clique nos elementos para detalhes</footer>
 
 <script>
     let flowLines = [];
+    let connections = [];
     // Base de dados completa para todos os elementos (atores, artefatos, planilhas)
     const knowledgeBase = {
         gestor: { competencias: "Homologar matrizes, validar versões de curso, aprovar indicadores IMO", valor: "Garante qualidade estratégica e alinhamento institucional.", fluxo: "Acessa E-TIA → publica matriz na PEC. Consulta relatórios da POC via P-TIA." },
@@ -364,13 +363,57 @@ function getArtifactLink(id) {
     };
     return links[id] || null;
 }
+
+    function getRelatedOperations(elementId) {
+    const related = [];
+    // Usa o mesmo mapeamento de conexões (global)
+    if (typeof connections === 'undefined') return related;
+    connections.forEach(conn => {
+        if (conn.from === elementId) {
+            related.push({ com: conn.to, operacao: conn.operacao, direcao: 'saída' });
+        } else if (conn.to === elementId) {
+            related.push({ com: conn.from, operacao: conn.operacao, direcao: 'entrada' });
+        }
+    });
+    // Remove duplicatas (caso haja bidirecional)
+    const unique = [];
+    const map = new Map();
+    for (const item of related) {
+        const key = `${item.com}-${item.operacao}`;
+        if (!map.has(key)) {
+            map.set(key, item);
+            unique.push(item);
+        }
+    }
+    return unique;
+}
     // Atualiza o painel lateral com os dados do elemento clicado
     function updateSidePanel(elementId) {
     const data = knowledgeBase[elementId];
     if (!data) return;
     const panel = document.getElementById('dynamicDetails');
     
-    // Verifica se o elemento é um artefato e obtém o link correspondente
+    // Obtém os relacionamentos do elemento selecionado
+    const relacionamentos = getRelatedOperations(elementId);
+    let relacionamentosHtml = '';
+    if (relacionamentos.length > 0) {
+        relacionamentosHtml = `
+            <div class="detail-card" style="border-left-color: #c084fc;">
+                <h4>🔗 Relacionamentos</h4>
+                <ul style="margin:0; padding-left:1.2rem;">
+                    ${relacionamentos.map(rel => `<li><strong>${rel.com.toUpperCase()}</strong>: ${rel.operacao} (${rel.direcao === 'saída' ? '→' : '←'})</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    } else {
+        relacionamentosHtml = `
+            <div class="detail-card" style="border-left-color: #cbd5e1;">
+                <h4>🔗 Relacionamentos</h4>
+                <p>Nenhum relacionamento direto mapeado.</p>
+            </div>
+        `;
+    }
+    
     const artifactLink = getArtifactLink(elementId);
     const buttonHtml = artifactLink ? `
         <div style="margin-top: 1rem; text-align: center;">
@@ -393,6 +436,7 @@ function getArtifactLink(id) {
             <h4>🔄 Fluxo de Informação</h4>
             <p>${data.fluxo}</p>
         </div>
+        ${relacionamentosHtml}
         ${buttonHtml}
     `;
     highlightConnections(elementId);
@@ -407,6 +451,7 @@ function getArtifactLink(id) {
     svg.setAttribute('height', rect.height);
     svg.innerHTML = '';
     flowLines = [];  // limpa as linhas anteriores
+    connections = [ /* o array definido acima */ ];
 
     // Mapear posições dos elementos
     const elements = document.querySelectorAll('.artifact-card, .sheet-node, .actor-node');
@@ -424,19 +469,24 @@ function getArtifactLink(id) {
 
     // Definição das conexões (cores conforme legenda)
     const connections = [
-        { from: 'e-tia', to: 'pec', color: '#8b5cf6', dash: '5,4' },
-        { from: 'pec', to: 'p-tia', color: '#3b82f6', dash: '5,4' },
-        { from: 'p-tia', to: 'poc', color: '#f59e0b', dash: '5,4' },
-        { from: 'poc', to: 't-tia', color: '#10b981', dash: '5,4' },
-        { from: 't-tia', to: 'poc', color: '#10b981', dash: '5,4' },
-        { from: 'p-tia', to: 'pec', color: '#3b82f6', dash: '5,4' },
-        { from: 'professor', to: 'p-tia', color: '#3b82f6', dash: '2,4' },
-        { from: 'secretaria', to: 'p-tia', color: '#f59e0b', dash: '2,4' },
-        { from: 'aluno', to: 't-tia', color: '#22c55e', dash: '2,4' },
-        { from: 'gestor', to: 'e-tia', color: '#8b5cf6', dash: '2,4' },
-        { from: 'especialista', to: 'e-tia', color: '#10b981', dash: '2,4' },
-        { from: 'pedagogo', to: 'e-tia', color: '#3b82f6', dash: '2,4' }
-    ];
+    // E-TIA → PEC: apenas gravação (salva matriz)
+    { from: 'e-tia', to: 'pec', color: '#f59e0b', dash: '5,4', operacao: 'Gravação' },
+    // P-TIA ↔ PEC: leitura + gravação (busca matriz, salva planos)
+    { from: 'pec', to: 'p-tia', color: '#10b981', dash: '5,4', operacao: 'Leitura+Gravação' },
+    { from: 'p-tia', to: 'pec', color: '#10b981', dash: '5,4', operacao: 'Leitura+Gravação' },
+    // P-TIA → POC: gravação (chaves G3, turmas)
+    { from: 'p-tia', to: 'poc', color: '#f59e0b', dash: '5,4', operacao: 'Gravação' },
+    // T-TIA ↔ POC: leitura + gravação (envia progresso, consulta validação)
+    { from: 'poc', to: 't-tia', color: '#10b981', dash: '5,4', operacao: 'Leitura+Gravação' },
+    { from: 't-tia', to: 'poc', color: '#10b981', dash: '5,4', operacao: 'Leitura+Gravação' },
+    // Atores → Artefatos: autenticação via crachá (leitura simbólica)
+    { from: 'gestor', to: 'e-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
+    { from: 'especialista', to: 'e-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
+    { from: 'pedagogo', to: 'e-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
+    { from: 'secretaria', to: 'p-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
+    { from: 'professor', to: 'p-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
+    { from: 'aluno', to: 't-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' }
+];
 
     connections.forEach(conn => {
         const fromPos = positions[conn.from];
