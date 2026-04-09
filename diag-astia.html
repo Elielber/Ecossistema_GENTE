@@ -239,6 +239,16 @@
             .dashboard { flex-direction: column; }
             .side-panel { position: static; }
         }
+        .flow-arrow-line.highlight {
+    filter: drop-shadow(0 0 4px currentColor);
+    animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.7; stroke-width: 3; }
+    50% { opacity: 1; stroke-width: 4; }
+    100% { opacity: 0.7; stroke-width: 3; }
+}
     </style>
 </head>
 <body>
@@ -448,33 +458,62 @@ function getArtifactLink(id) {
 
     // Realçar conexões relacionadas ao elemento clicado (efeito visual)
     function highlightConnections(elementId) {
-        const svg = document.getElementById('flowSvg');
-        const lines = svg.querySelectorAll('line');
-        const related = new Set();
-        // Definição de quais conexões envolvem o elemento
-        const relations = {
-            'e-tia': ['pec'], 'pec': ['e-tia','p-tia'], 'p-tia': ['pec','poc'], 'poc': ['p-tia','t-tia'], 't-tia': ['poc'],
-            'professor': ['p-tia'], 'secretaria': ['p-tia'], 'aluno': ['t-tia'], 'gestor': ['e-tia'], 'especialista': ['e-tia'], 'pedagogo': ['e-tia']
-        };
-        const connected = relations[elementId] || [];
-        lines.forEach(line => {
-            line.classList.remove('highlight');
-            // Verifica se a linha conecta o elemento atual (simplificado: pela cor? melhor checar posição? faremos pelo atributo)
-            // Para não complicar, usaremos um data-set nas linhas? Mas não temos. Vamos apenas reaplicar o desenho com destaque?
-            // Como é um efeito extra, faremos uma busca simples pelos vizinhos.
-            if (connected.length > 0) {
-                // Apenas para demonstração: linhas cuja cor corresponde ao elemento podem ser destacadas
-                // mas o ideal é que todas as linhas que saem ou chegam no elemento sejam destacadas.
-                // Vamos realçar todas as linhas que tenham a mesma cor do elemento (por simplicidade)
-                const colorMap = { 'e-tia':'#8b5cf6','pec':'#eab308','p-tia':'#3b82f6','poc':'#f59e0b','t-tia':'#10b981','professor':'#3b82f6','aluno':'#22c55e' };
-                const targetColor = colorMap[elementId];
-                if (targetColor && line.getAttribute('stroke') === targetColor) {
-                    line.classList.add('highlight');
-                }
-            }
-        });
-    }
+    // Remove destaque de todas as linhas (volta ao estilo normal)
+    flowLines.forEach(line => {
+        line.classList.remove('highlight');
+        line.setAttribute('stroke-width', '2');
+        // restaura o tracejado original (armazenado em data-dash)
+        const originalDash = line.getAttribute('data-original-dash');
+        if (originalDash) line.setAttribute('stroke-dasharray', originalDash);
+    });
 
+    // Mapeamento de quais conexões são relevantes para cada ator/artefato
+    // Cada entrada é um array de pares [origem, destino]
+    const relevantConnections = {
+        'gestor': [['gestor', 'e-tia']],
+        'especialista': [['especialista', 'e-tia']],
+        'pedagogo': [['pedagogo', 'e-tia']],
+        'secretaria': [
+            ['secretaria', 'p-tia'],   // atuação direta
+            ['p-tia', 'poc'],          // matrícula -> POC
+            ['poc', 't-tia']           // gera credenciais para aluno (via crachá)
+        ],
+        'professor': [
+            ['professor', 'p-tia'],
+            ['p-tia', 'pec'],
+            ['p-tia', 'poc']
+        ],
+        'aluno': [
+            ['aluno', 't-tia'],
+            ['t-tia', 'poc']           // validação e progresso
+        ],
+        'e-tia': [['e-tia', 'pec']],
+        'p-tia': [['p-tia', 'pec'], ['p-tia', 'poc']],
+        't-tia': [['t-tia', 'poc']],
+        'pec': [['e-tia', 'pec'], ['pec', 'p-tia']],
+        'poc': [['p-tia', 'poc'], ['poc', 't-tia']]
+    };
+
+    const connectionsToHighlight = relevantConnections[elementId] || [];
+    
+    // Para cada linha, verificar se ela corresponde a algum dos pares (em qualquer ordem)
+    flowLines.forEach(line => {
+        const from = line.getAttribute('data-from');
+        const to = line.getAttribute('data-to');
+        const matches = connectionsToHighlight.some(pair => 
+            (from === pair[0] && to === pair[1]) || (from === pair[1] && to === pair[0])
+        );
+        if (matches) {
+            line.classList.add('highlight');
+            line.setAttribute('stroke-width', '3.5');
+            // Armazena o tracejado original se ainda não foi salvo
+            if (!line.getAttribute('data-original-dash')) {
+                line.setAttribute('data-original-dash', line.getAttribute('stroke-dasharray') || '5,4');
+            }
+            line.setAttribute('stroke-dasharray', 'none'); // linha contínua
+        }
+    });
+}
     // Adicionar eventos de clique a todos os elementos interativos
     function bindEvents() {
         const selectors = ['.actor-node', '.artifact-card', '.sheet-node'];
