@@ -340,6 +340,7 @@
 <footer>ASTIA · Arquitetura de Suporte às Trilhas Interativas · Clique nos elementos para detalhes</footer>
 
 <script>
+    let flowLines = [];
     // Base de dados completa para todos os elementos (atores, artefatos, planilhas)
     const knowledgeBase = {
         gestor: { competencias: "Homologar matrizes, validar versões de curso, aprovar indicadores IMO", valor: "Garante qualidade estratégica e alinhamento institucional.", fluxo: "Acessa E-TIA → publica matriz na PEC. Consulta relatórios da POC via P-TIA." },
@@ -399,76 +400,78 @@ function getArtifactLink(id) {
 
     // Desenha as setas de fluxo entre os elementos (estático, mas pode ser realçado)
     function drawFlows() {
-        const svg = document.getElementById('flowSvg');
-        const container = document.getElementById('diagramArea');
-        const rect = container.getBoundingClientRect();
-        svg.setAttribute('width', rect.width);
-        svg.setAttribute('height', rect.height);
-        svg.innerHTML = '';
+    const svg = document.getElementById('flowSvg');
+    const container = document.getElementById('diagramArea');
+    const rect = container.getBoundingClientRect();
+    svg.setAttribute('width', rect.width);
+    svg.setAttribute('height', rect.height);
+    svg.innerHTML = '';
+    flowLines = [];  // limpa as linhas anteriores
 
-        // Mapear posições dos elementos importantes (getBoundingClientRect relativo ao container)
-        const elements = document.querySelectorAll('.artifact-card, .sheet-node, .actor-node');
-        const positions = {};
-        elements.forEach(el => {
-            const id = el.getAttribute('data-id') || el.closest('.artifact-card')?.getAttribute('data-id') || 
-                        (el.classList.contains('sheet-node') ? el.getAttribute('data-id') : 
-                        (el.classList.contains('actor-node') ? el.getAttribute('data-id') : null));
-            if (!id) return;
-            const rectEl = el.getBoundingClientRect();
-            const containerRect = container.getBoundingClientRect();
-            positions[id] = {
-                x: rectEl.left + rectEl.width/2 - containerRect.left,
-                y: rectEl.top + rectEl.height/2 - containerRect.top
-            };
-        });
+    // Mapear posições dos elementos
+    const elements = document.querySelectorAll('.artifact-card, .sheet-node, .actor-node');
+    const positions = {};
+    elements.forEach(el => {
+        const id = el.getAttribute('data-id');
+        if (!id) return;
+        const rectEl = el.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        positions[id] = {
+            x: rectEl.left + rectEl.width/2 - containerRect.left,
+            y: rectEl.top + rectEl.height/2 - containerRect.top
+        };
+    });
 
-        // Definição das conexões (origem, destino, cor, legenda)
-        const connections = [
-            { from: 'e-tia', to: 'pec', color: '#8b5cf6', dash: '5,4' },
-            { from: 'pec', to: 'p-tia', color: '#3b82f6', dash: '5,4' },
-            { from: 'p-tia', to: 'poc', color: '#f59e0b', dash: '5,4' },
-            { from: 'poc', to: 't-tia', color: '#10b981', dash: '5,4' },
-            { from: 't-tia', to: 'poc', color: '#10b981', dash: '5,4' },
-            { from: 'p-tia', to: 'pec', color: '#3b82f6', dash: '5,4' },
-            { from: 'professor', to: 'p-tia', color: '#3b82f6', dash: '2,4' },
-            { from: 'secretaria', to: 'p-tia', color: '#f59e0b', dash: '2,4' },
-            { from: 'aluno', to: 't-tia', color: '#22c55e', dash: '2,4' },
-            { from: 'gestor', to: 'e-tia', color: '#8b5cf6', dash: '2,4' },
-            { from: 'especialista', to: 'e-tia', color: '#10b981', dash: '2,4' },
-            { from: 'pedagogo', to: 'e-tia', color: '#3b82f6', dash: '2,4' }
-        ];
+    // Definição das conexões (cores conforme legenda)
+    const connections = [
+        { from: 'e-tia', to: 'pec', color: '#8b5cf6', dash: '5,4' },
+        { from: 'pec', to: 'p-tia', color: '#3b82f6', dash: '5,4' },
+        { from: 'p-tia', to: 'poc', color: '#f59e0b', dash: '5,4' },
+        { from: 'poc', to: 't-tia', color: '#10b981', dash: '5,4' },
+        { from: 't-tia', to: 'poc', color: '#10b981', dash: '5,4' },
+        { from: 'p-tia', to: 'pec', color: '#3b82f6', dash: '5,4' },
+        { from: 'professor', to: 'p-tia', color: '#3b82f6', dash: '2,4' },
+        { from: 'secretaria', to: 'p-tia', color: '#f59e0b', dash: '2,4' },
+        { from: 'aluno', to: 't-tia', color: '#22c55e', dash: '2,4' },
+        { from: 'gestor', to: 'e-tia', color: '#8b5cf6', dash: '2,4' },
+        { from: 'especialista', to: 'e-tia', color: '#10b981', dash: '2,4' },
+        { from: 'pedagogo', to: 'e-tia', color: '#3b82f6', dash: '2,4' }
+    ];
 
-        connections.forEach(conn => {
-            const fromPos = positions[conn.from];
-            const toPos = positions[conn.to];
-            if (fromPos && toPos) {
-                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-                line.setAttribute('x1', fromPos.x);
-                line.setAttribute('y1', fromPos.y);
-                line.setAttribute('x2', toPos.x);
-                line.setAttribute('y2', toPos.y);
-                line.setAttribute('stroke', conn.color);
-                line.setAttribute('stroke-width', '2');
-                line.setAttribute('stroke-dasharray', conn.dash);
-                line.setAttribute('class', 'flow-arrow-line');
-                svg.appendChild(line);
-            }
-        });
-    }
-
+    connections.forEach(conn => {
+        const fromPos = positions[conn.from];
+        const toPos = positions[conn.to];
+        if (fromPos && toPos) {
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute('x1', fromPos.x);
+            line.setAttribute('y1', fromPos.y);
+            line.setAttribute('x2', toPos.x);
+            line.setAttribute('y2', toPos.y);
+            line.setAttribute('stroke', conn.color);
+            line.setAttribute('stroke-width', '2');
+            line.setAttribute('stroke-dasharray', conn.dash);
+            line.classList.add('flow-arrow-line');
+            // Armazena os identificadores de origem e destino
+            line.setAttribute('data-from', conn.from);
+            line.setAttribute('data-to', conn.to);
+            // Armazena o tracejado original para restaurar depois
+            line.setAttribute('data-original-dash', conn.dash);
+            svg.appendChild(line);
+            flowLines.push(line);
+        }
+    });
+}
     // Realçar conexões relacionadas ao elemento clicado (efeito visual)
     function highlightConnections(elementId) {
-    // Remove destaque de todas as linhas (volta ao estilo normal)
+    // Remove destaque de todas as linhas e restaura aparência original
     flowLines.forEach(line => {
         line.classList.remove('highlight');
         line.setAttribute('stroke-width', '2');
-        // restaura o tracejado original (armazenado em data-dash)
         const originalDash = line.getAttribute('data-original-dash');
         if (originalDash) line.setAttribute('stroke-dasharray', originalDash);
     });
 
-    // Mapeamento de quais conexões são relevantes para cada ator/artefato
-    // Cada entrada é um array de pares [origem, destino]
+    // Mapeamento de quais conexões (pares origem-destino) são relevantes para cada elemento
     const relevantConnections = {
         'gestor': [['gestor', 'e-tia']],
         'especialista': [['especialista', 'e-tia']],
@@ -476,7 +479,7 @@ function getArtifactLink(id) {
         'secretaria': [
             ['secretaria', 'p-tia'],   // atuação direta
             ['p-tia', 'poc'],          // matrícula -> POC
-            ['poc', 't-tia']           // gera credenciais para aluno (via crachá)
+            ['poc', 't-tia']           // gera credenciais para aluno (crachá)
         ],
         'professor': [
             ['professor', 'p-tia'],
@@ -494,22 +497,18 @@ function getArtifactLink(id) {
         'poc': [['p-tia', 'poc'], ['poc', 't-tia']]
     };
 
-    const connectionsToHighlight = relevantConnections[elementId] || [];
+    const pairsToHighlight = relevantConnections[elementId] || [];
     
-    // Para cada linha, verificar se ela corresponde a algum dos pares (em qualquer ordem)
+    // Percorre todas as linhas e destaca aquelas que correspondem a algum dos pares (em qualquer ordem)
     flowLines.forEach(line => {
         const from = line.getAttribute('data-from');
         const to = line.getAttribute('data-to');
-        const matches = connectionsToHighlight.some(pair => 
+        const matches = pairsToHighlight.some(pair => 
             (from === pair[0] && to === pair[1]) || (from === pair[1] && to === pair[0])
         );
         if (matches) {
             line.classList.add('highlight');
             line.setAttribute('stroke-width', '3.5');
-            // Armazena o tracejado original se ainda não foi salvo
-            if (!line.getAttribute('data-original-dash')) {
-                line.setAttribute('data-original-dash', line.getAttribute('stroke-dasharray') || '5,4');
-            }
             line.setAttribute('stroke-dasharray', 'none'); // linha contínua
         }
     });
