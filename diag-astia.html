@@ -366,16 +366,15 @@ function getArtifactLink(id) {
 
     function getRelatedOperations(elementId) {
     const related = [];
-    // Usa o mesmo mapeamento de conexões (global)
-    if (typeof connections === 'undefined') return related;
-    connections.forEach(conn => {
+    if (!window.connectionsData) return related;
+    window.connectionsData.forEach(conn => {
         if (conn.from === elementId) {
             related.push({ com: conn.to, operacao: conn.operacao, direcao: 'saída' });
         } else if (conn.to === elementId) {
             related.push({ com: conn.from, operacao: conn.operacao, direcao: 'entrada' });
         }
     });
-    // Remove duplicatas (caso haja bidirecional)
+    // Remove duplicatas
     const unique = [];
     const map = new Map();
     for (const item of related) {
@@ -446,70 +445,70 @@ function getArtifactLink(id) {
     function drawFlows() {
     const svg = document.getElementById('flowSvg');
     const container = document.getElementById('diagramArea');
-    const rect = container.getBoundingClientRect();
-    svg.setAttribute('width', rect.width);
-    svg.setAttribute('height', rect.height);
-    svg.innerHTML = '';
-    flowLines = [];  // limpa as linhas anteriores
-    connections = [ /* o array definido acima */ ];
+    if (!svg || !container) return;
+    
+    // Aguarda o layout estar pronto
+    setTimeout(() => {
+        const rect = container.getBoundingClientRect();
+        svg.setAttribute('width', rect.width);
+        svg.setAttribute('height', rect.height);
+        svg.innerHTML = '';
+        flowLines = [];
 
-    // Mapear posições dos elementos
-    const elements = document.querySelectorAll('.artifact-card, .sheet-node, .actor-node');
-    const positions = {};
-    elements.forEach(el => {
-        const id = el.getAttribute('data-id');
-        if (!id) return;
-        const rectEl = el.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-        positions[id] = {
-            x: rectEl.left + rectEl.width/2 - containerRect.left,
-            y: rectEl.top + rectEl.height/2 - containerRect.top
-        };
-    });
+        // Mapear posições dos elementos
+        const elements = document.querySelectorAll('.artifact-card, .sheet-node, .actor-node');
+        const positions = {};
+        elements.forEach(el => {
+            const id = el.getAttribute('data-id');
+            if (!id) return;
+            const rectEl = el.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            positions[id] = {
+                x: rectEl.left + rectEl.width/2 - containerRect.left,
+                y: rectEl.top + rectEl.height/2 - containerRect.top
+            };
+        });
 
-    // Definição das conexões (cores conforme legenda)
-    const connections = [
-    // E-TIA → PEC: apenas gravação (salva matriz)
-    { from: 'e-tia', to: 'pec', color: '#f59e0b', dash: '5,4', operacao: 'Gravação' },
-    // P-TIA ↔ PEC: leitura + gravação (busca matriz, salva planos)
-    { from: 'pec', to: 'p-tia', color: '#10b981', dash: '5,4', operacao: 'Leitura+Gravação' },
-    { from: 'p-tia', to: 'pec', color: '#10b981', dash: '5,4', operacao: 'Leitura+Gravação' },
-    // P-TIA → POC: gravação (chaves G3, turmas)
-    { from: 'p-tia', to: 'poc', color: '#f59e0b', dash: '5,4', operacao: 'Gravação' },
-    // T-TIA ↔ POC: leitura + gravação (envia progresso, consulta validação)
-    { from: 'poc', to: 't-tia', color: '#10b981', dash: '5,4', operacao: 'Leitura+Gravação' },
-    { from: 't-tia', to: 'poc', color: '#10b981', dash: '5,4', operacao: 'Leitura+Gravação' },
-    // Atores → Artefatos: autenticação via crachá (leitura simbólica)
-    { from: 'gestor', to: 'e-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
-    { from: 'especialista', to: 'e-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
-    { from: 'pedagogo', to: 'e-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
-    { from: 'secretaria', to: 'p-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
-    { from: 'professor', to: 'p-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
-    { from: 'aluno', to: 't-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' }
-];
+        // Definição das conexões (cores conforme legenda)
+        const connectionsData = [
+            { from: 'e-tia', to: 'pec', color: '#f59e0b', dash: '5,4', operacao: 'Gravação' },
+            { from: 'pec', to: 'p-tia', color: '#10b981', dash: '5,4', operacao: 'Leitura+Gravação' },
+            { from: 'p-tia', to: 'pec', color: '#10b981', dash: '5,4', operacao: 'Leitura+Gravação' },
+            { from: 'p-tia', to: 'poc', color: '#f59e0b', dash: '5,4', operacao: 'Gravação' },
+            { from: 'poc', to: 't-tia', color: '#10b981', dash: '5,4', operacao: 'Leitura+Gravação' },
+            { from: 't-tia', to: 'poc', color: '#10b981', dash: '5,4', operacao: 'Leitura+Gravação' },
+            { from: 'gestor', to: 'e-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
+            { from: 'especialista', to: 'e-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
+            { from: 'pedagogo', to: 'e-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
+            { from: 'secretaria', to: 'p-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
+            { from: 'professor', to: 'p-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' },
+            { from: 'aluno', to: 't-tia', color: '#c084fc', dash: '2,4', operacao: 'Autenticação' }
+        ];
 
-    connections.forEach(conn => {
-        const fromPos = positions[conn.from];
-        const toPos = positions[conn.to];
-        if (fromPos && toPos) {
-            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-            line.setAttribute('x1', fromPos.x);
-            line.setAttribute('y1', fromPos.y);
-            line.setAttribute('x2', toPos.x);
-            line.setAttribute('y2', toPos.y);
-            line.setAttribute('stroke', conn.color);
-            line.setAttribute('stroke-width', '2');
-            line.setAttribute('stroke-dasharray', conn.dash);
-            line.classList.add('flow-arrow-line');
-            // Armazena os identificadores de origem e destino
-            line.setAttribute('data-from', conn.from);
-            line.setAttribute('data-to', conn.to);
-            // Armazena o tracejado original para restaurar depois
-            line.setAttribute('data-original-dash', conn.dash);
-            svg.appendChild(line);
-            flowLines.push(line);
-        }
-    });
+        // Salva no escopo global para outras funções
+        window.connectionsData = connectionsData;
+
+        connectionsData.forEach(conn => {
+            const fromPos = positions[conn.from];
+            const toPos = positions[conn.to];
+            if (fromPos && toPos) {
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute('x1', fromPos.x);
+                line.setAttribute('y1', fromPos.y);
+                line.setAttribute('x2', toPos.x);
+                line.setAttribute('y2', toPos.y);
+                line.setAttribute('stroke', conn.color);
+                line.setAttribute('stroke-width', '2');
+                line.setAttribute('stroke-dasharray', conn.dash);
+                line.classList.add('flow-arrow-line');
+                line.setAttribute('data-from', conn.from);
+                line.setAttribute('data-to', conn.to);
+                line.setAttribute('data-original-dash', conn.dash);
+                svg.appendChild(line);
+                flowLines.push(line);
+            }
+        });
+    }, 100);
 }
     // Realçar conexões relacionadas ao elemento clicado (efeito visual)
     function highlightConnections(elementId) {
@@ -523,29 +522,18 @@ function getArtifactLink(id) {
 
     // Mapeamento de quais conexões (pares origem-destino) são relevantes para cada elemento
     const relevantConnections = {
-        'gestor': [['gestor', 'e-tia']],
-        'especialista': [['especialista', 'e-tia']],
-        'pedagogo': [['pedagogo', 'e-tia']],
-        'secretaria': [
-            ['secretaria', 'p-tia'],   // atuação direta
-            ['p-tia', 'poc'],          // matrícula -> POC
-            ['poc', 't-tia']           // gera credenciais para aluno (crachá)
-        ],
-        'professor': [
-            ['professor', 'p-tia'],
-            ['p-tia', 'pec'],
-            ['p-tia', 'poc']
-        ],
-        'aluno': [
-            ['aluno', 't-tia'],
-            ['t-tia', 'poc']           // validação e progresso
-        ],
-        'e-tia': [['e-tia', 'pec']],
-        'p-tia': [['p-tia', 'pec'], ['p-tia', 'poc']],
-        't-tia': [['t-tia', 'poc']],
-        'pec': [['e-tia', 'pec'], ['pec', 'p-tia']],
-        'poc': [['p-tia', 'poc'], ['poc', 't-tia']]
-    };
+    'gestor': [['gestor', 'e-tia']],
+    'especialista': [['especialista', 'e-tia']],
+    'pedagogo': [['pedagogo', 'e-tia']],
+    'secretaria': [['secretaria', 'p-tia'], ['p-tia', 'poc'], ['poc', 't-tia']],
+    'professor': [['professor', 'p-tia'], ['p-tia', 'pec'], ['p-tia', 'poc']],
+    'aluno': [['aluno', 't-tia'], ['t-tia', 'poc']],
+    'e-tia': [['e-tia', 'pec']],
+    'p-tia': [['p-tia', 'pec'], ['p-tia', 'poc']],
+    't-tia': [['t-tia', 'poc']],
+    'pec': [['e-tia', 'pec'], ['pec', 'p-tia']],
+    'poc': [['p-tia', 'poc'], ['poc', 't-tia']]
+};
 
     const pairsToHighlight = relevantConnections[elementId] || [];
     
