@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>ASTIA · Diagrama Interativo da Arquitetura</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #eef2f5;
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        /* Container principal com duas colunas */
+        .dashboard {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem;
+            max-width: 1400px;
+            width: 100%;
+            background: #ffffff;
+            border-radius: 2rem;
+            box-shadow: 0 20px 35px -10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            padding: 1.5rem;
+        }
+
+        /* PAINEL LATERAL (ESQUERDO) – FIXO EM TAMANHO MENOR */
+        .side-panel {
+            flex: 1.2;
+            min-width: 280px;
+            background: #f8fafc;
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            height: fit-content;
+            position: sticky;
+            top: 1rem;
+        }
+
+        .side-panel h3 {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #1e293b;
+            border-bottom: 2px solid #cbd5e1;
+            padding-bottom: 0.5rem;
+        }
+
+        .detail-card {
+            background: white;
+            border-radius: 1rem;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+        }
+
+        .detail-card h4 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+            margin-bottom: 0.6rem;
+            color: #475569;
+        }
+
+        .detail-card p, .detail-card ul {
+            font-size: 0.85rem;
+            color: #1e293b;
+            line-height: 1.5;
+        }
+        .detail-card ul { padding-left: 1.2rem; margin-top: 0.2rem; }
+
+        /* ÁREA DO DIAGRAMA (DIREITA) */
+        .diagram-area {
+            flex: 3;
+            min-width: 500px;
+            background: #ffffff;
+            border-radius: 1.5rem;
+            border: 1px solid #e2e8f0;
+            padding: 1.5rem;
+            position: relative;
+        }
+
+        .diagram-title {
+            text-align: center;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.3px;
+        }
+
+        /* ELEMENTOS DO DIAGRAMA (POSICIONADOS COM GRID) */
+        .diagram-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Camada de atores */
+        .actors-row {
+            background: #f1f5f9;
+            border-radius: 1.5rem;
+            padding: 1rem;
+            border: 1px solid #cbd5e1;
+        }
+        .actors-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.8rem;
+            margin-top: 0.5rem;
+        }
+        .actor-node {
+            background: white;
+            border-radius: 2rem;
+            padding: 0.4rem 1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            border-left: 4px solid;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .actor-node:hover { transform: translateY(-2px); background: #fefce8; }
+
+        /* Artefatos e planilhas */
+        .artifacts-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1.5rem;
+            margin: 1rem 0;
+        }
+        .artifact-card {
+            background: white;
+            border-radius: 1.2rem;
+            width: 200px;
+            padding: 1rem;
+            text-align: center;
+            border: 1px solid #cbd5e1;
+            transition: 0.2s;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.02);
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        .artifact-card:hover { transform: translateY(-5px); border-color: #8b5cf6; background: #faf5ff; }
+        .artifact-icon { font-size: 2rem; margin-bottom: 0.3rem; }
+        .artifact-card h4 { font-size: 1rem; font-weight: 700; margin: 0.3rem 0; }
+        .badge { font-size: 0.7rem; background: #eef2ff; padding: 0.2rem 0.6rem; border-radius: 20px; display: inline-block; margin-top: 4px; }
+
+        .sheets-row {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin: 1rem 0;
+        }
+        .sheet-node {
+            background: #fef9e3;
+            border: 1px solid #fde047;
+            border-radius: 1rem;
+            padding: 0.6rem 1rem;
+            width: 180px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .sheet-node:hover { background: #fef08a; transform: scale(1.02); }
+
+        /* SVG para as conexões (sobreposto) */
+        .diagram-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .diagram-area { position: relative; }
+        .diagram-grid { position: relative; z-index: 3; }
+
+        .flow-arrow-line {
+            stroke: #64748b;
+            stroke-width: 2;
+            stroke-dasharray: 5 4;
+            fill: none;
+            transition: all 0.3s;
+        }
+        .flow-arrow-line.highlight {
+            stroke: #8b5cf6;
+            stroke-width: 3;
+            stroke-dasharray: none;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            font-size: 0.7rem;
+            background: #f8fafc;
+            padding: 0.6rem;
+            border-radius: 2rem;
+            border: 1px solid #e2e8f0;
+        }
+        footer {
+            text-align: center;
+            margin-top: 2rem;
+            font-size: 0.7rem;
+            color: #475569;
+        }
+        @media (max-width: 900px) {
+            .dashboard { flex-direction: column; }
+            .side-panel { position: static; }
+        }
+    </style>
+</head>
+<body>
+<div class="dashboard">
+    <!-- PAINEL LATERAL (COMPETÊNCIA, VALOR, FLUXO) -->
+    <div class="side-panel" id="sidePanel">
+        <h3><span class="material-icons-round">insights</span> Detalhamento Dinâmico</h3>
+        <div id="dynamicDetails">
+            <div class="detail-card" style="border-left-color: #8b5cf6;">
+                <h4>🧠 Competências</h4>
+                <p>Clique em qualquer elemento do diagrama para ver as competências relacionadas.</p>
+            </div>
+            <div class="detail-card" style="border-left-color: #10b981;">
+                <h4>💎 Valor Agregado</h4>
+                <p>O papel de cada ator e artefato na arquitetura ASTIA.</p>
+            </div>
+            <div class="detail-card" style="border-left-color: #3b82f6;">
+                <h4>🔄 Fluxo de Informação</h4>
+                <p>Como os dados trafegam entre planilhas, artefatos e atores.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ÁREA DO DIAGRAMA INTERATIVO -->
+    <div class="diagram-area" id="diagramArea">
+        <div class="diagram-title">🗺️ Arquitetura ASTIA · Fluxos e Competências</div>
+        <div class="diagram-grid" id="diagramGrid">
+            <!-- Atores -->
+            <div class="actors-row">
+                <div style="font-size:0.75rem; text-align:center; color:#475569;">🎭 ATORES INSTITUCIONAIS</div>
+                <div class="actors-container" id="actorsContainer">
+                    <div class="actor-node" data-id="gestor" style="border-left-color:#8b5cf6;"><span>👔</span> Gestor</div>
+                    <div class="actor-node" data-id="especialista" style="border-left-color:#10b981;"><span>🛠️</span> Especialista</div>
+                    <div class="actor-node" data-id="pedagogo" style="border-left-color:#3b82f6;"><span>📚</span> Pedagogo</div>
+                    <div class="actor-node" data-id="secretaria" style="border-left-color:#f59e0b;"><span>🗄️</span> Secretaria</div>
+                    <div class="actor-node" data-id="professor" style="border-left-color:#3b82f6;"><span>👨‍🏫</span> Professor</div>
+                    <div class="actor-node" data-id="aluno" style="border-left-color:#22c55e;"><span>🎓</span> Aluno</div>
+                </div>
+            </div>
+
+            <!-- Artefatos (com links) -->
+            <div class="artifacts-row">
+               <div class="artifact-card" data-id="e-tia" data-link="e-tia.html">
+    <div class="artifact-icon">🗺️</div>
+    <h4>E-TIA</h4>
+    <div class="badge">Design Estratégico</div>
+</div>
+<div class="artifact-card" data-id="p-tia" data-link="p-tia.html">
+    <div class="artifact-icon">📋</div>
+    <h4>P-TIA</h4>
+    <div class="badge">Profissional de Trilha</div>
+</div>
+<div class="artifact-card" data-id="t-tia" data-link="t-tia.html">
+    <div class="artifact-icon">📱</div>
+    <h4>T-TIA</h4>
+    <div class="badge">Tecnologia de Exploração</div>
+</div>
+            </div>
+
+            <!-- Planilhas + Apps Script -->
+            <div class="sheets-row">
+                <div class="sheet-node" data-id="pec">
+                    <span class="material-icons-round" style="color:#eab308;">table_chart</span>
+                    <div><strong>Planilha PEC</strong></div>
+                    <div style="font-size:0.7rem;">Estratégia do Curso</div>
+                    <div style="font-size:0.6rem; background:#f1f5f9; border-radius:12px; margin-top:4px;">Apps Script (PEC)</div>
+                </div>
+                <div class="sheet-node" data-id="poc">
+                    <span class="material-icons-round" style="color:#eab308;">storage</span>
+                    <div><strong>Planilha POC</strong></div>
+                    <div style="font-size:0.7rem;">Operacional do Curso</div>
+                    <div style="font-size:0.6rem; background:#f1f5f9; border-radius:12px; margin-top:4px;">Apps Script (POC)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SVG para desenhar as conexões (será preenchido dinamicamente) -->
+        <svg class="diagram-svg" id="flowSvg"></svg>
+
+        <div class="legend">
+            <span><span style="color:#8b5cf6;">⬤</span> E-TIA → PEC (saveMatriz)</span>
+            <span><span style="color:#3b82f6;">⬤</span> P-TIA ↔ PEC (planos, matriz)</span>
+            <span><span style="color:#10b981;">⬤</span> T-TIA ↔ POC (progresso, validação)</span>
+            <span><span style="color:#f59e0b;">⬤</span> P-TIA → POC (chaves G3, turmas)</span>
+            <span><span style="color:#c084fc;">⬤</span> Crachá digital autentica todos</span>
+        </div>
+    </div>
+</div>
+<footer>ASTIA · Arquitetura de Suporte às Trilhas Interativas · Clique nos elementos para detalhes</footer>
+
+<script>
+    // Base de dados completa para todos os elementos (atores, artefatos, planilhas)
+    const knowledgeBase = {
+        gestor: { competencias: "Homologar matrizes, validar versões de curso, aprovar indicadores IMO", valor: "Garante qualidade estratégica e alinhamento institucional.", fluxo: "Acessa E-TIA → publica matriz na PEC. Consulta relatórios da POC via P-TIA." },
+        especialista: { competencias: "Ingerir PPCs legados, extrair n-grams e verbos de competência.", valor: "Acelera criação de matrizes a partir de documentos existentes.", fluxo: "Utiliza E-TIA (digitalização) → salva matriz na PEC." },
+        pedagogo: { competencias: "Calibrar IMO, distribuir cargas horárias por dimensão, projetar territórios.", valor: "Assegura omnilateralidade e equilíbrio curricular.", fluxo: "Opera E-TIA (Gênesis) → sincroniza com PEC." },
+        secretaria: { competencias: "Matricular alunos, emitir crachás QR Code, gerenciar turmas.", valor: "Centraliza gestão de identidade e base operacional da POC.", fluxo: "Utiliza P-TIA → matricula alunos (POC) → gera credenciais para T-TIA." },
+        professor: { competencias: "Gerar chaves G3, registrar planos de aula na PEC, acompanhar progresso na POC.", valor: "Media validação presencial e conecta planejamento à execução.", fluxo: "P-TIA ↔ PEC (planos) e P-TIA → POC (chaves G3, turmas). Consulta progresso na POC." },
+        aluno: { competencias: "Explorar trilhas no T-TIA, escanear QR Code G3, consumir conteúdo offline.", valor: "Protagonismo com autonomia e feedback imediato.", fluxo: "T-TIA ↔ POC (progresso, validação). Autenticação via crachá." },
+        "e-tia": { competencias: "Design macro/meso/micro, simulação IMO, exportar matriz para PEC.", valor: "Ferramenta de engenharia curricular.", fluxo: "← PEC (carrega matrizes) → PEC (publica nova versão)." },
+        "p-tia": { competencias: "Gestão de turmas, planos de aula, geração G3, laboratório G3J.", valor: "Central do professor para mediação e gamificação.", fluxo: "↔ PEC (planos, matriz) → POC (chaves, turmas) ← POC (dados alunos)." },
+        "t-tia": { competencias: "Trilha interativa, persistência offline, leitor G3, execução de jogos.", valor: "Experiência imersiva com validação docente.", fluxo: "↔ POC (envia progresso, valida chaves) ← PEC (via POC, recebe matriz)." },
+        pec: { competencias: "Armazenar matrizes JSON, versionar cursos, registrar planos de aula.", valor: "Fonte única da verdade do design pedagógico.", fluxo: "Recebe dados do E-TIA e P-TIA. Fornece matriz para P-TIA." },
+        poc: { competencias: "Registrar turmas, alunos, progresso, gerenciar chaves G3.", valor: "Gerencia execução do curso e rastreabilidade.", fluxo: "Recebe progresso do T-TIA e chaves do P-TIA. Consultada por P-TIA e T-TIA." }
+    };
+// Função auxiliar para obter o link do artefato (se existir)
+function getArtifactLink(id) {
+    const links = {
+        'e-tia': 'e-tia.html',
+        'p-tia': 'p-tia.html',
+        't-tia': 't-tia.html'
+    };
+    return links[id] || null;
+}
+    // Atualiza o painel lateral com os dados do elemento clicado
+    function updateSidePanel(elementId) {
+    const data = knowledgeBase[elementId];
+    if (!data) return;
+    const panel = document.getElementById('dynamicDetails');
+    
+    // Verifica se o elemento é um artefato e obtém o link correspondente
+    const artifactLink = getArtifactLink(elementId);
+    const buttonHtml = artifactLink ? `
+        <div style="margin-top: 1rem; text-align: center;">
+            <a href="${artifactLink}" target="_blank" class="open-artifact-btn" style="background: #8b5cf6; color: white; padding: 0.5rem 1rem; border-radius: 2rem; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 500;">
+                <span class="material-icons-round">open_in_new</span> Abrir ${data.titulo || elementId.toUpperCase()}
+            </a>
+        </div>
+    ` : '';
+    
+    panel.innerHTML = `
+        <div class="detail-card" style="border-left-color: #8b5cf6;">
+            <h4>🧠 Competências</h4>
+            <p>${data.competencias}</p>
+        </div>
+        <div class="detail-card" style="border-left-color: #10b981;">
+            <h4>💎 Valor Agregado</h4>
+            <p>${data.valor}</p>
+        </div>
+        <div class="detail-card" style="border-left-color: #3b82f6;">
+            <h4>🔄 Fluxo de Informação</h4>
+            <p>${data.fluxo}</p>
+        </div>
+        ${buttonHtml}
+    `;
+    highlightConnections(elementId);
+}
+
+    // Desenha as setas de fluxo entre os elementos (estático, mas pode ser realçado)
+    function drawFlows() {
+        const svg = document.getElementById('flowSvg');
+        const container = document.getElementById('diagramArea');
+        const rect = container.getBoundingClientRect();
+        svg.setAttribute('width', rect.width);
+        svg.setAttribute('height', rect.height);
+        svg.innerHTML = '';
+
+        // Mapear posições dos elementos importantes (getBoundingClientRect relativo ao container)
+        const elements = document.querySelectorAll('.artifact-card, .sheet-node, .actor-node');
+        const positions = {};
+        elements.forEach(el => {
+            const id = el.getAttribute('data-id') || el.closest('.artifact-card')?.getAttribute('data-id') || 
+                        (el.classList.contains('sheet-node') ? el.getAttribute('data-id') : 
+                        (el.classList.contains('actor-node') ? el.getAttribute('data-id') : null));
+            if (!id) return;
+            const rectEl = el.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            positions[id] = {
+                x: rectEl.left + rectEl.width/2 - containerRect.left,
+                y: rectEl.top + rectEl.height/2 - containerRect.top
+            };
+        });
+
+        // Definição das conexões (origem, destino, cor, legenda)
+        const connections = [
+            { from: 'e-tia', to: 'pec', color: '#8b5cf6', dash: '5,4' },
+            { from: 'pec', to: 'p-tia', color: '#3b82f6', dash: '5,4' },
+            { from: 'p-tia', to: 'poc', color: '#f59e0b', dash: '5,4' },
+            { from: 'poc', to: 't-tia', color: '#10b981', dash: '5,4' },
+            { from: 't-tia', to: 'poc', color: '#10b981', dash: '5,4' },
+            { from: 'p-tia', to: 'pec', color: '#3b82f6', dash: '5,4' },
+            { from: 'professor', to: 'p-tia', color: '#3b82f6', dash: '2,4' },
+            { from: 'secretaria', to: 'p-tia', color: '#f59e0b', dash: '2,4' },
+            { from: 'aluno', to: 't-tia', color: '#22c55e', dash: '2,4' },
+            { from: 'gestor', to: 'e-tia', color: '#8b5cf6', dash: '2,4' },
+            { from: 'especialista', to: 'e-tia', color: '#10b981', dash: '2,4' },
+            { from: 'pedagogo', to: 'e-tia', color: '#3b82f6', dash: '2,4' }
+        ];
+
+        connections.forEach(conn => {
+            const fromPos = positions[conn.from];
+            const toPos = positions[conn.to];
+            if (fromPos && toPos) {
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute('x1', fromPos.x);
+                line.setAttribute('y1', fromPos.y);
+                line.setAttribute('x2', toPos.x);
+                line.setAttribute('y2', toPos.y);
+                line.setAttribute('stroke', conn.color);
+                line.setAttribute('stroke-width', '2');
+                line.setAttribute('stroke-dasharray', conn.dash);
+                line.setAttribute('class', 'flow-arrow-line');
+                svg.appendChild(line);
+            }
+        });
+    }
+
+    // Realçar conexões relacionadas ao elemento clicado (efeito visual)
+    function highlightConnections(elementId) {
+        const svg = document.getElementById('flowSvg');
+        const lines = svg.querySelectorAll('line');
+        const related = new Set();
+        // Definição de quais conexões envolvem o elemento
+        const relations = {
+            'e-tia': ['pec'], 'pec': ['e-tia','p-tia'], 'p-tia': ['pec','poc'], 'poc': ['p-tia','t-tia'], 't-tia': ['poc'],
+            'professor': ['p-tia'], 'secretaria': ['p-tia'], 'aluno': ['t-tia'], 'gestor': ['e-tia'], 'especialista': ['e-tia'], 'pedagogo': ['e-tia']
+        };
+        const connected = relations[elementId] || [];
+        lines.forEach(line => {
+            line.classList.remove('highlight');
+            // Verifica se a linha conecta o elemento atual (simplificado: pela cor? melhor checar posição? faremos pelo atributo)
+            // Para não complicar, usaremos um data-set nas linhas? Mas não temos. Vamos apenas reaplicar o desenho com destaque?
+            // Como é um efeito extra, faremos uma busca simples pelos vizinhos.
+            if (connected.length > 0) {
+                // Apenas para demonstração: linhas cuja cor corresponde ao elemento podem ser destacadas
+                // mas o ideal é que todas as linhas que saem ou chegam no elemento sejam destacadas.
+                // Vamos realçar todas as linhas que tenham a mesma cor do elemento (por simplicidade)
+                const colorMap = { 'e-tia':'#8b5cf6','pec':'#eab308','p-tia':'#3b82f6','poc':'#f59e0b','t-tia':'#10b981','professor':'#3b82f6','aluno':'#22c55e' };
+                const targetColor = colorMap[elementId];
+                if (targetColor && line.getAttribute('stroke') === targetColor) {
+                    line.classList.add('highlight');
+                }
+            }
+        });
+    }
+
+    // Adicionar eventos de clique a todos os elementos interativos
+    function bindEvents() {
+        const selectors = ['.actor-node', '.artifact-card', '.sheet-node'];
+        selectors.forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => {
+                el.addEventListener('click', (e) => {
+                    // Se for artifact-card, o link já redirecionará; mas também queremos mostrar detalhes.
+                    // Para não conflitar com o link, interceptamos e depois permitimos navegação.
+                    e.preventDefault();
+                    let id = el.getAttribute('data-id');
+                    if (!id && el.classList.contains('artifact-card')) id = el.getAttribute('data-id');
+                    if (id) {
+                        updateSidePanel(id);
+                        highlightConnections(id);
+                    }
+                    // Se for link, redireciona após breve delay
+                    if (el.tagName === 'A') {
+                        setTimeout(() => { window.location.href = el.href; }, 200);
+                    }
+                });
+            });
+        });
+    }
+
+    window.addEventListener('load', () => {
+        drawFlows();
+        bindEvents();
+        // Atualizar desenho ao redimensionar
+        window.addEventListener('resize', () => { drawFlows(); });
+        // Mostrar detalhes do Gestor por padrão
+        updateSidePanel('gestor');
+    });
+</script>
+</body>
+</html>
