@@ -461,20 +461,22 @@ function getArtifactLink(id) {
         };
     });
 
-    // Verificar se todas as posições necessárias existem
+    // IDs necessários para todas as conexões
     const requiredIds = ['e-tia', 'pec', 'p-tia', 'poc', 't-tia', 'gestor', 'especialista', 'pedagogo', 'secretaria', 'professor', 'aluno'];
     const missing = requiredIds.filter(id => !positions[id]);
-    if (missing.length > 0 && retryCount < 10) {
-        console.log(`Aguardando posições de: ${missing.join(', ')}. Tentativa ${retryCount + 1} de 10`);
-        setTimeout(() => drawFlows(retryCount + 1), 200);
+
+    // Se ainda faltam elementos e não ultrapassamos 20 tentativas, tenta novamente
+    if (missing.length > 0 && retryCount < 20) {
+        console.log(`⏳ Aguardando posições de: ${missing.join(', ')}. Tentativa ${retryCount + 1} de 20`);
+        setTimeout(() => drawFlows(retryCount + 1), 300);
         return;
     }
 
-    // Se ainda faltam elementos, desenha mesmo assim (algumas linhas podem ficar invisíveis)
     if (missing.length > 0) {
-        console.warn(`Não foi possível encontrar os elementos: ${missing.join(', ')}`);
+        console.warn(`⚠️ Não foi possível encontrar os elementos: ${missing.join(', ')}. As linhas correspondentes ficarão invisíveis.`);
     }
 
+    // Limpa e redesenha o SVG
     const rect = container.getBoundingClientRect();
     svg.setAttribute('width', rect.width);
     svg.setAttribute('height', rect.height);
@@ -499,6 +501,7 @@ function getArtifactLink(id) {
 
     window.connectionsData = connectionsData;
 
+    let linhasDesenhadas = 0;
     connectionsData.forEach(conn => {
         const fromPos = positions[conn.from];
         const toPos = positions[conn.to];
@@ -517,10 +520,12 @@ function getArtifactLink(id) {
             line.setAttribute('data-original-dash', conn.dash);
             svg.appendChild(line);
             flowLines.push(line);
+            linhasDesenhadas++;
         } else {
-            console.warn(`Não foi possível desenhar conexão de ${conn.from} para ${conn.to}`);
+            console.warn(`❌ Conexão não desenhada: ${conn.from} → ${conn.to} (elemento ausente)`);
         }
     });
+    console.log(`✅ ${linhasDesenhadas} linhas desenhadas.`);
 }
     // Realçar conexões relacionadas ao elemento clicado (efeito visual)
     function highlightConnections(elementId) {
@@ -587,14 +592,17 @@ function getArtifactLink(id) {
         });
     }
 
-    window.addEventListener('load', () => {
+window.addEventListener('load', () => {
+    drawFlows();
+    bindEvents();
+    window.addEventListener('resize', () => { drawFlows(); });
+    // Força um redesenho adicional após 1 segundo (para garantir)
+    setTimeout(() => {
+        console.log('🔄 Redesenho de segurança após 1 segundo');
         drawFlows();
-        bindEvents();
-        // Atualizar desenho ao redimensionar
-        window.addEventListener('resize', () => { drawFlows(); });
-        // Mostrar detalhes do Gestor por padrão
-        updateSidePanel('gestor');
-    });
+    }, 1000);
+    updateSidePanel('gestor');
+});
 </script>
 </body>
 </html>
