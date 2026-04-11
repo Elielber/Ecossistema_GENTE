@@ -187,7 +187,7 @@
                 <div class="form-group"><label>Dependências (IDs vírgula)</label><input type="text" id="dependencias" placeholder="ex: api, crm"></div>
                 <div class="form-group">
                     <label>Relacionamentos</label>
-                    <div style="display:flex; gap:0.3rem;"><input type="text" id="relDestino" placeholder="ID destino" style="flex:2;"><select id="relTipo" style="flex:1;"><option>Autenticação</option><option>Leitura</option><option>Gravação</option><option>Leitura+Gravação</option><option>Fluxo de Valor (dados)</option><option>Fluxo de Valor (financeiro)</option><option>Feedback (melhoria)</option><option>Regulamentação</option><option>Interação direta</option></select><button id="addRelBtn">➕</button></div>
+                    <div style="display:flex; gap:0.3rem;"><input type="text" id="relDestino" placeholder="ID destino" style="flex:2;"><button id="ativarModoCliqueBtn" style="background:#f97316; font-size:0.7rem; margin-top:0.3rem;">🔘 Clique no diagrama para definir destino</button><select id="relTipo" style="flex:1;"><option>Autenticação</option><option>Leitura</option><option>Gravação</option><option>Leitura+Gravação</option><option>Fluxo de Valor (dados)</option><option>Fluxo de Valor (financeiro)</option><option>Feedback (melhoria)</option><option>Regulamentação</option><option>Interação direta</option></select><button id="addRelBtn">➕</button></div>
                     <ul id="relList" class="rel-list"></ul>
                 </div>
                 <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem;">
@@ -233,6 +233,18 @@
     let network = null;
     let currentFilter = 'all';
     let currentSelectedId = null;
+    let modoEdicaoRelacionamento = false;
+    
+    function getConnectedIdsFromText(elemento) {
+    const ids = new Set();
+    const text = `${elemento.fluxo || ''} ${(elemento.relacionamentos || []).map(r => r.com).join(' ')}`.toLowerCase();
+    elementos.forEach(el => {
+        if (text.includes(el.id.toLowerCase())) {
+            ids.add(el.id);
+        }
+    });
+    return ids;
+}
 
     // Mapeamentos visuais
     const tipoIcone = { ator: '👤', servico: '⚙️', armazenamento: '🗄️', touchpoint: '📱', fator_externo: '🌍', feedback_loop: '🔄' };
@@ -374,38 +386,63 @@
     }
 
     function exportarJSON() {
-        const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim() || "Ecossistema";
-        const dadosCompletos = { nome_ecossistema: nomeEcossistema, elementos: elementos };
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dadosCompletos, null, 2));
-        const a = document.createElement('a');
-        a.href = dataStr;
-        a.download = "ecossistema.json";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+    const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim() || "Ecossistema";
+    // Capturar posições atuais dos nós (se o network existir)
+    let posicoes = {};
+    if (network) {
+        const positions = network.getPositions();
+        Object.keys(positions).forEach(id => {
+            posicoes[id] = { x: positions[id].x, y: positions[id].y };
+        });
     }
+    const dadosCompletos = {
+        nome_ecossistema: nomeEcossistema,
+        elementos: elementos,
+        posicoes: posicoes
+    };
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dadosCompletos, null, 2));
+    const a = document.createElement('a');
+    a.href = dataStr;
+    a.download = "ecossistema.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
 
     function importarJSON(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const dados = JSON.parse(e.target.result);
-                if (Array.isArray(dados)) {
-                    elementos = dados;
-                    document.getElementById('nomeEcossistema').value = "";
-                } else {
-                    document.getElementById('nomeEcossistema').value = dados.nome_ecossistema || "";
-                    elementos = dados.elementos || [];
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const dados = JSON.parse(e.target.result);
+            let posicoesImportadas = {};
+            if (Array.isArray(dados)) {
+                elementos = dados;
+                document.getElementById('nomeEcossistema').value = "";
+            } else {
+                document.getElementById('nomeEcossistema').value = dados.nome_ecossistema || "";
+                elementos = dados.elementos || [];
+                posicoesImportadas = dados.posicoes || {};
+            }
+            atualizarListaElementos();
+            gerarJSONPreview();
+            // Renderiza o diagrama e depois aplica as posições
+            renderizarDiagrama();
+            // Aguarda o network ser criado e estabilizado
+            setTimeout(() => {
+                if (network && Object.keys(posicoesImportadas).length > 0) {
+                    network.moveNode(posicoesImportadas);
+                    Object.keys(posicoesImportadas).forEach(id => {
+                        network.setOptions({ nodes: { fixed: true } }); // fixa todos
+                    });
+                    network.fit();
                 }
-                atualizarListaElementos();
-                gerarJSONPreview();
-                renderizarDiagrama();
-                if (elementos.length) mostrarDetalhes(elementos[0].id);
-                alert("Importado com sucesso!");
-            } catch (erro) { alert("JSON inválido."); }
-        };
-        reader.readAsText(file);
-    }
+            }, 500);
+            if (elementos.length) mostrarDetalhes(elementos[0].id);
+            alert("Importado com sucesso!");
+        } catch (erro) { alert("JSON inválido."); }
+    };
+    reader.readAsText(file);
+}
 
     // ==================== DIAGRAMA COM ÍCONES DENTRO DOS CÍRCULOS ====================
  function renderizarDiagrama() {
@@ -492,50 +529,68 @@
     if (network) network.destroy();
 
     const options = {
-        nodes: { shape: 'icon', size: 40, font: { size: 11, color: '#1a202c' } },
-        edges: { smooth: { type: 'continuous', roundness: 0 }, font: { size: 0 } },
-        physics: {
-            enabled: true,
-            stabilization: { iterations: 150, fit: true },
-            solver: 'forceAtlas2Based',
-            forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 120, springConstant: 0.08 }
-        },
-        interaction: { hover: true, tooltipDelay: 100, navigationButtons: false },
-        layout: { randomSeed: 42 }
-    };
+    nodes: { shape: 'icon', size: 40, font: { size: 11, color: '#1a202c' } },
+    edges: {
+        smooth: { type: 'continuous', roundness: 0 },
+        font: { size: 0 },
+        selectionWidth: 0,        // desativa o aumento de espessura automático
+        hoverWidth: 0,            // desativa o aumento de espessura no hover
+        color: { inherit: false } // impede herança de cor do nó
+    },
+    physics: {
+        enabled: true,
+        stabilization: { iterations: 150, fit: true },
+        solver: 'forceAtlas2Based',
+        forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 120, springConstant: 0.08 }
+    },
+    interaction: {
+        hover: false,             // desativa hover (evita mudança de cor)
+        tooltipDelay: 100,
+        navigationButtons: false,
+        selectable: true,
+        multiselect: false
+    },
+    layout: { randomSeed: 42 }
+};
 
     network = new vis.Network(container, data, options);
 
     // Clique: destaca arestas conectadas
     network.on('click', (params) => {
-        if (params.nodes.length) {
-            const id = params.nodes[0];
-            currentSelectedId = id;
-            mostrarDetalhes(id);
-            const allEdges = data.edges.get();
-            allEdges.forEach(edge => {
-                const isConnected = (edge.from === id || edge.to === id);
-                const originalColor = edge.originalColor || edge.color;
-                data.edges.update({
-                    id: edge.id,
-                    width: isConnected ? 2.5 : (edge.dashes ? 0.8 : 1.0),
-                    color: { color: originalColor, opacity: isConnected ? 1 : 0.5 }
-                });
+    if (params.nodes.length) {
+        const id = params.nodes[0];
+        currentSelectedId = id;
+        mostrarDetalhes(id);
+        const elementoSelecionado = elementos.find(e => e.id === id);
+        const textoIds = elementoSelecionado ? getConnectedIdsFromText(elementoSelecionado) : new Set();
+        const allEdges = data.edges.get();
+        allEdges.forEach(edge => {
+            const isConnected = (edge.from === id || edge.to === id) || textoIds.has(edge.from) || textoIds.has(edge.to);
+            const originalColor = edge.originalColor || edge.color;
+            data.edges.update({
+                id: edge.id,
+                width: isConnected ? 2.5 : (edge.dashes ? 0.8 : 1.0),
+                color: {
+                    color: originalColor,
+                    opacity: 1
+                }
             });
-            network.selectNodes([id]);
-        } else {
-            const allEdges = data.edges.get();
-            allEdges.forEach(edge => {
-                const originalColor = edge.originalColor || edge.color;
-                data.edges.update({
-                    id: edge.id,
-                    width: (edge.dashes ? 0.8 : (edge.originalWidth || 1.0)),
-                    color: { color: originalColor, opacity: 0.8 }
-                });
+        });
+        network.setSelection({ nodes: [id] }, { highlightEdges: false });
+    } else {
+        const allEdges = data.edges.get();
+        allEdges.forEach(edge => {
+            const originalColor = edge.originalColor || edge.color;
+            data.edges.update({
+                id: edge.id,
+                width: (edge.dashes ? 0.8 : (edge.originalWidth || 1.0)),
+                color: { color: originalColor, opacity: 1 }
             });
-            network.unselectAll();
-        }
-    });
+        });
+        network.unselectAll();
+        mostrarDetalhes();
+    }
+});
 
     network.on('stabilized', () => { network.fit(); });
 
@@ -562,23 +617,79 @@
         `;
         legendDiv.style.display = 'flex';
     }
+    // Adiciona eventos de filtro nos itens da legenda
+setTimeout(() => {
+    const legendSpans = document.querySelectorAll('#legend span');
+    legendSpans.forEach(span => {
+        span.style.cursor = 'pointer';
+        span.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const tipoRel = span.innerText.split('➜')[0].trim();
+            const allEdges = data.edges.get();
+            let hasMatch = false;
+            allEdges.forEach(edge => {
+                // Verifica se o tipo da aresta corresponde ao clicado
+                let edgeType = edge.label || '';
+                if (edge.dashes && !edge.label) edgeType = 'Dependência';
+                const isMatch = edgeType === tipoRel || (tipoRel === 'Dependência' && edge.dashes);
+                if (isMatch) hasMatch = true;
+                data.edges.update({
+                    id: edge.id,
+                    color: { color: edge.originalColor, opacity: isMatch ? 1 : 0.15 }
+                });
+            });
+            if (!hasMatch) {
+                // Se nenhuma aresta corresponde, restaura todas
+                allEdges.forEach(edge => {
+                    data.edges.update({
+                        id: edge.id,
+                        color: { color: edge.originalColor, opacity: 1 }
+                    });
+                });
+            }
+            // Feedback visual
+            span.style.transform = 'scale(1.05)';
+            setTimeout(() => { span.style.transform = ''; }, 200);
+        });
+    });
+}, 100);
 }
 
-    function mostrarDetalhes(id) {
-        const el = elementos.find(e => e.id === id);
-        if (!el) return;
-        const panel = document.getElementById('dynamicDetails');
-        const relHtml = (el.relacionamentos || []).map(r => `<li><strong>${r.com}</strong>: ${r.tipo}</li>`).join('');
-        const depHtml = (el.dependencias || []).map(d => `<li>${d}</li>`).join('');
+    function mostrarDetalhes(id = null) {
+    const panel = document.getElementById('dynamicDetails');
+    if (!id) {
+        // Visão geral do ecossistema
+        const nomeEcossistema = document.getElementById('nomeEcossistema').value || 'Ecossistema sem nome';
+        const totalElementos = elementos.length;
+        const tipos = {};
+        elementos.forEach(el => { tipos[el.tipo] = (tipos[el.tipo] || 0) + 1; });
+        const relCount = {};
+        elementos.forEach(el => {
+            (el.relacionamentos || []).forEach(r => { relCount[r.tipo] = (relCount[r.tipo] || 0) + 1; });
+        });
         panel.innerHTML = `
-            <div class="detail-card" style="border-left-color: #8b5cf6;"><h4>🧠 Competências</h4><p>${el.competencia || 'Não informado'}</p></div>
-            <div class="detail-card" style="border-left-color: #10b981;"><h4>💎 Valor Agregado</h4><p>${el.valor || 'Não informado'}</p></div>
-            <div class="detail-card" style="border-left-color: #3b82f6;"><h4>🔄 Fluxo de Informação</h4><p>${el.fluxo || 'Não informado'}</p></div>
-            <div class="detail-card" style="border-left-color: #c084fc;"><h4>🔗 Relacionamentos</h4><ul>${relHtml || '<li>Nenhum</li>'}</ul></div>
-            <div class="detail-card" style="border-left-color: #ef4444;"><h4>📌 Dependências</h4><ul>${depHtml || '<li>Nenhuma</li>'}</ul></div>
+            <div class="detail-card" style="border-left-color: #8b5cf6;">
+                <h4>📊 Visão Geral do Ecossistema</h4>
+                <p><strong>${nomeEcossistema}</strong></p>
+                <p>📌 Total de elementos: ${totalElementos}</p>
+                <p>🔹 Distribuição: ${Object.entries(tipos).map(([t, c]) => `${t}: ${c}`).join(', ')}</p>
+                <p>🔸 Relacionamentos: ${Object.entries(relCount).map(([t, c]) => `${t}: ${c}`).join(', ')}</p>
+            </div>
         `;
+        return;
     }
-
+    const el = elementos.find(e => e.id === id);
+    if (!el) return;
+    const relHtml = (el.relacionamentos || []).map(r => `<li><strong>${r.com}</strong>: ${r.tipo}</li>`).join('');
+    const depHtml = (el.dependencias || []).map(d => `<li>${d}</li>`).join('');
+    panel.innerHTML = `
+        <div class="detail-card" style="border-left-color: #8b5cf6;"><h4>🧠 Competências</h4><p>${el.competencia || 'Não informado'}</p></div>
+        <div class="detail-card" style="border-left-color: #10b981;"><h4>💎 Valor Agregado</h4><p>${el.valor || 'Não informado'}</p></div>
+        <div class="detail-card" style="border-left-color: #3b82f6;"><h4>🔄 Fluxo de Informação</h4><p>${el.fluxo || 'Não informado'}</p></div>
+        <div class="detail-card" style="border-left-color: #c084fc;"><h4>🔗 Relacionamentos</h4><ul>${relHtml || '<li>Nenhum</li>'}</ul></div>
+        <div class="detail-card" style="border-left-color: #ef4444;"><h4>📌 Dependências</h4><ul>${depHtml || '<li>Nenhuma</li>'}</ul></div>
+    `;
+}
     function aplicarFiltro(tipo) {
         currentFilter = tipo;
         document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -649,6 +760,11 @@
     document.getElementById('elemTipo').addEventListener('change', preencherTemplate);
     window.addEventListener('resize', () => { if (network) network.redraw(); });
     init();
+    document.getElementById('ativarModoCliqueBtn').addEventListener('click', () => {
+    modoEdicaoRelacionamento = true;
+    alert('Clique em um nó no diagrama para definir o destino do relacionamento.');
+    document.getElementById('network').style.cursor = 'crosshair';
+});
 </script>
 </body>
 </html>
