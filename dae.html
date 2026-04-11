@@ -212,6 +212,7 @@
         <div class="diagram-header">
             <div class="diagram-title" id="diagramTitle">🌐 Ecossistema Interativo</div>
             <div class="filters" id="filterContainer">
+                
                 <button class="filter-btn active" data-filter="all">Todos</button>
                 <button class="filter-btn" data-filter="ator">Atores</button>
                 <button class="filter-btn" data-filter="servico">Serviços</button>
@@ -219,6 +220,7 @@
                 <button class="filter-btn" data-filter="touchpoint">Touchpoints</button>
                 <button class="filter-btn" data-filter="frontstage">Frontstage</button>
                 <button class="filter-btn" data-filter="backstage">Backstage</button>
+                <button id="togglePhysicsBtn" class="filter-btn" style="background:#10b981;">🔒 Travar Layout</button>
             </div>
         </div>
         <div id="network"></div>
@@ -234,6 +236,7 @@
     let currentFilter = 'all';
     let currentSelectedId = null;
     let modoEdicaoRelacionamento = false;
+    let physicsEnabled = true; 
     
     function getConnectedIdsFromText(elemento) {
     const ids = new Set();
@@ -387,18 +390,18 @@
 
     function exportarJSON() {
     const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim() || "Ecossistema";
-    // Capturar posições atuais dos nós (se o network existir)
-    let posicoes = {};
+    // Captura posições atuais dos nós
+    const positions = {};
     if (network) {
-        const positions = network.getPositions();
-        Object.keys(positions).forEach(id => {
-            posicoes[id] = { x: positions[id].x, y: positions[id].y };
+        const nodePositions = network.getPositions();
+        Object.keys(nodePositions).forEach(id => {
+            positions[id] = { x: nodePositions[id].x, y: nodePositions[id].y };
         });
     }
-    const dadosCompletos = {
-        nome_ecossistema: nomeEcossistema,
+    const dadosCompletos = { 
+        nome_ecossistema: nomeEcossistema, 
         elementos: elementos,
-        posicoes: posicoes
+        positions: positions  // salva as posições
     };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dadosCompletos, null, 2));
     const a = document.createElement('a');
@@ -414,36 +417,24 @@
     reader.onload = (e) => {
         try {
             const dados = JSON.parse(e.target.result);
-            let posicoesImportadas = {};
             if (Array.isArray(dados)) {
                 elementos = dados;
                 document.getElementById('nomeEcossistema').value = "";
             } else {
                 document.getElementById('nomeEcossistema').value = dados.nome_ecossistema || "";
                 elementos = dados.elementos || [];
-                posicoesImportadas = dados.posicoes || {};
+                // Se houver posições salvas, guarda para restaurar depois do network ser criado
+                window.savedPositions = dados.positions || {};
             }
             atualizarListaElementos();
             gerarJSONPreview();
-            // Renderiza o diagrama e depois aplica as posições
             renderizarDiagrama();
-            // Aguarda o network ser criado e estabilizado
-            setTimeout(() => {
-                if (network && Object.keys(posicoesImportadas).length > 0) {
-                    network.moveNode(posicoesImportadas);
-                    Object.keys(posicoesImportadas).forEach(id => {
-                        network.setOptions({ nodes: { fixed: true } }); // fixa todos
-                    });
-                    network.fit();
-                }
-            }, 500);
             if (elementos.length) mostrarDetalhes(elementos[0].id);
             alert("Importado com sucesso!");
         } catch (erro) { alert("JSON inválido."); }
     };
     reader.readAsText(file);
 }
-
     // ==================== DIAGRAMA COM ÍCONES DENTRO DOS CÍRCULOS ====================
  function renderizarDiagrama() {
     if (!document.getElementById('network')) return;
@@ -554,6 +545,38 @@
 };
 
     network = new vis.Network(container, data, options);
+    
+if (window.savedPositions) {
+    network.setPositions(window.savedPositions);
+    window.savedPositions = null;
+    if (!physicsEnabled) {
+        network.setOptions({ physics: { enabled: false } });
+    }
+}
+    
+
+// Botão para alternar física
+// Configuração do botão de física (garantindo evento único)
+if (!window.physicsBtnListenerAdded) {
+    const toggleBtn = document.getElementById('togglePhysicsBtn');
+    const newToggleBtn = toggleBtn.cloneNode(true);
+    toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
+    newToggleBtn.addEventListener('click', () => {
+        physicsEnabled = !physicsEnabled;
+        network.setOptions({ physics: { enabled: physicsEnabled } });
+        if (physicsEnabled) {
+            newToggleBtn.innerHTML = '🔒 Travar Layout';
+            newToggleBtn.style.background = '#10b981';
+            network.startSimulation();
+            setTimeout(() => network.stopSimulation(), 1000);
+        } else {
+            newToggleBtn.innerHTML = '🌐 Ativar Física';
+            newToggleBtn.style.background = '#f59e0b';
+            network.stopSimulation();
+        }
+    });
+    window.physicsBtnListenerAdded = true;
+}
 
     // Clique: destaca arestas conectadas
     network.on('click', (params) => {
