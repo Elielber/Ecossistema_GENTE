@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>DAE · Diagrama de Arquitetura de Ecossistemas</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #e0e7ff 0%, #f1f5f9 100%);
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            padding: 1rem;
+        }
+        .dashboard {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            max-width: 1600px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(2px);
+            border-radius: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            padding: 1.5rem;
+        }
+        .side-panel {
+            flex: 1.2;
+            min-width: 320px;
+            background: #ffffff;
+            border-radius: 1.5rem;
+            padding: 1.2rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+        }
+        .panel-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.2rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        .tab-btn {
+            background: transparent;
+            border: none;
+            padding: 0.5rem 1.2rem;
+            border-radius: 2rem;
+            font-weight: 600;
+            color: #475569;
+            cursor: pointer;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .tab-btn.active {
+            background: #8b5cf6;
+            color: white;
+            box-shadow: 0 4px 10px rgba(139,92,246,0.3);
+        }
+        .panel-content { display: none; }
+        .panel-content.active { display: block; }
+        .form-group { margin-bottom: 0.8rem; }
+        label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: #334155; display: block; margin-bottom: 0.2rem; }
+        input, select, textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.6rem;
+            font-size: 0.85rem;
+        }
+        button {
+            background: #8b5cf6;
+            color: white;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 2rem;
+            cursor: pointer;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: 0.2s;
+        }
+        button:hover { transform: translateY(-1px); filter: brightness(0.95); }
+        button.secondary { background: #3b82f6; }
+        .rel-list { background: #f8fafc; border-radius: 0.6rem; padding: 0.5rem; list-style: none; font-size: 0.8rem; max-height: 100px; overflow-y: auto; }
+        .element-list { max-height: 280px; overflow-y: auto; margin: 1rem 0; display: flex; flex-direction: column; gap: 0.6rem; }
+        .element-card { background: #f8fafc; border-radius: 1rem; padding: 0.6rem; border-left: 4px solid; transition: 0.1s; }
+        .json-output { background: #0f172a; color: #a5f3fc; padding: 0.6rem; border-radius: 0.8rem; font-family: monospace; font-size: 0.7rem; white-space: pre-wrap; max-height: 180px; overflow: auto; }
+        .diagram-area {
+            flex: 3;
+            min-width: 500px;
+            background: #ffffff;
+            border-radius: 1.5rem;
+            border: 1px solid #e2e8f0;
+            padding: 1rem;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        .diagram-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .diagram-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #4f46e5, #8b5cf6);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        .filters { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+        .filter-btn { background: #e2e8f0; color: #1e293b; padding: 0.2rem 0.8rem; font-size: 0.7rem; border-radius: 20px; cursor: pointer; }
+        .filter-btn.active { background: #8b5cf6; color: white; }
+        #network {
+            width: 100%;
+            height: 65vh;
+            border: 1px solid #e2e8f0;
+            border-radius: 1rem;
+            background: #fefefe;
+        }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1rem;
+            font-size: 0.65rem;
+            background: #f8fafc;
+            padding: 0.5rem;
+            border-radius: 2rem;
+        }
+        .detail-card {
+            background: white;
+            border-radius: 1rem;
+            padding: 0.8rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        }
+        .detail-card h4 { font-size: 0.8rem; text-transform: uppercase; font-weight: 700; margin-bottom: 0.4rem; color: #334155; }
+        hr { margin: 0.8rem 0; }
+        .layer-marker {
+            position: absolute;
+            top: 10px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #334155;
+            padding: 2px 10px;
+            border-radius: 20px;
+            background: rgba(0,0,0,0.03);
+            backdrop-filter: blur(2px);
+            z-index: 100;
+            pointer-events: none;
+            white-space: nowrap;
+            border: 1px dashed #cbd5e1;
+        }
+        @media (max-width: 900px) { .dashboard { flex-direction: column; } #network { height: 50vh; } .layer-marker { font-size: 8px; top: 5px; } }
+    </style>
+</head>
+<body>
+<div class="dashboard">
+    <div class="side-panel">
+        <div class="panel-tabs">
+            <button id="tabEditorBtn" class="tab-btn active">✏️ Editor</button>
+            <button id="tabVisualizacaoBtn" class="tab-btn">👁️ Visualização</button>
+        </div>
+        <div id="editorPanel" class="panel-content active">
+            <div class="form-group"><label>🏷️ Nome do Ecossistema</label><input type="text" id="nomeEcossistema" placeholder="Ex: ASTIA - Educação"></div>
+            <hr>
+            <div style="background:#f1f5f9; border-radius:1rem; padding:0.8rem; margin-bottom:1rem;">
+                <h4>➕ Adicionar/Editar Elemento</h4>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+                    <div><label>ID (único)</label><input type="text" id="elemId" placeholder="ex: gestor"></div>
+                    <div><label>Nome</label><input type="text" id="elemNome" placeholder="Gestor"></div>
+                    <div><label>Tipo</label><select id="elemTipo"><option value="ator">Ator</option><option value="servico">Serviço</option><option value="armazenamento">Armazenamento</option><option value="touchpoint">Touchpoint</option><option value="fator_externo">Fator Externo</option><option value="feedback_loop">Feedback Loop</option></select></div>
+                    <div><label>Camada</label><select id="elemCamada"><option value="frontstage">Frontstage</option><option value="backstage">Backstage</option><option value="none">Nenhuma</option></select></div>
+                </div>
+                <div class="form-group"><label>Competências</label><textarea id="elemComp" rows="2"></textarea></div>
+                <div class="form-group"><label>Valor Agregado</label><textarea id="elemValor" rows="2"></textarea></div>
+                <div class="form-group"><label>Fluxo de Informação</label><textarea id="elemFluxo" rows="2"></textarea></div>
+                <div class="form-group"><label>Dependências (IDs vírgula)</label><input type="text" id="dependencias" placeholder="ex: api, crm"></div>
+                <div class="form-group">
+                    <label>Relacionamentos</label>
+                    <div style="display:flex; gap:0.3rem;"><input type="text" id="relDestino" placeholder="ID destino" style="flex:2;"><select id="relTipo" style="flex:1;"><option>Autenticação</option><option>Leitura</option><option>Gravação</option><option>Leitura+Gravação</option><option>Fluxo de Valor (dados)</option><option>Fluxo de Valor (financeiro)</option><option>Feedback (melhoria)</option><option>Regulamentação</option><option>Interação direta</option></select><button id="addRelBtn">➕</button></div>
+                    <ul id="relList" class="rel-list"></ul>
+                </div>
+                <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem;">
+                    <button id="saveElemBtn" class="secondary">💾 Salvar</button>
+                    <button id="cancelEditBtn">✖️ Cancelar</button>
+                </div>
+            </div>
+            <h4>📋 Elementos</h4>
+            <div id="elementList" class="element-list"></div>
+            <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem;">
+                <button id="exportJsonBtn" style="background:#10b981;">📤 Exportar JSON</button>
+                <button id="importJsonBtn" class="secondary">📂 Importar JSON</button>
+                <input type="file" id="importFile" accept=".json" style="display:none;">
+            </div>
+            <div class="json-output" id="jsonOutput"></div>
+        </div>
+        <div id="visualizacaoPanel" class="panel-content">
+            <div id="dynamicDetails">Selecione um elemento no diagrama.</div>
+        </div>
+    </div>
+    <div class="diagram-area">
+        <div class="diagram-header">
+            <div class="diagram-title" id="diagramTitle">🌐 Ecossistema Interativo</div>
+            <div class="filters" id="filterContainer">
+                <button class="filter-btn active" data-filter="all">Todos</button>
+                <button class="filter-btn" data-filter="ator">Atores</button>
+                <button class="filter-btn" data-filter="servico">Serviços</button>
+                <button class="filter-btn" data-filter="armazenamento">Armazenamento</button>
+                <button class="filter-btn" data-filter="touchpoint">Touchpoints</button>
+                <button class="filter-btn" data-filter="frontstage">Frontstage</button>
+                <button class="filter-btn" data-filter="backstage">Backstage</button>
+            </div>
+        </div>
+        <div id="network"></div>
+        <div class="legend" id="legend"></div>
+    </div>
+</div>
+<script>
+    // ==================== DADOS GLOBAIS ====================
+    let elementos = [];
+    let editandoIndex = null;
+    let relacoesTemp = [];
+    let network = null;
+    let currentFilter = 'all';
+    let currentSelectedId = null;
+
+    // Mapeamentos visuais
+    const tipoIcone = { ator: '👤', servico: '⚙️', armazenamento: '🗄️', touchpoint: '📱', fator_externo: '🌍', feedback_loop: '🔄' };
+    const tipoCor = { ator: '#3b82f6', servico: '#10b981', armazenamento: '#f59e0b', touchpoint: '#f97316', fator_externo: '#6b7280', feedback_loop: '#ec489a' };
+    const relTipoCor = { "Autenticação": "#c084fc", "Leitura": "#3b82f6", "Gravação": "#f59e0b", "Leitura+Gravação": "#10b981", "Fluxo de Valor (dados)": "#14b8a6", "Fluxo de Valor (financeiro)": "#f43f5e", "Feedback (melhoria)": "#ec489a", "Regulamentação": "#94a3b8", "Interação direta": "#a855f7" };
+    const relTipoLabel = { "Autenticação": "Autenticação", "Leitura": "Leitura", "Gravação": "Gravação", "Leitura+Gravação": "Leitura+Gravação", "Fluxo de Valor (dados)": "Fluxo de Dados", "Fluxo de Valor (financeiro)": "Fluxo Financeiro", "Feedback (melhoria)": "Feedback", "Regulamentação": "Regulamentação", "Interação direta": "Interação" };
+
+    // Mapeamento de ícones Material Icons (códigos Unicode) para cada tipo
+    const materialIconCode = {
+        ator: '\ue7fd',      // person
+        servico: '\ue8b8',   // settings
+        armazenamento: '\ue1e4', // storage
+        touchpoint: '\ue913',    // touch_app
+        fator_externo: '\ue80b', // public
+        feedback_loop: '\ue022'  // loop
+    };
+
+    // Templates
+    const templatesPorTipo = {
+        ator: { competencia: "Papel e responsabilidades do ator.", valor: "Valor que este ator agrega ao ecossistema.", fluxo: "Interage com serviços via autenticação." },
+        servico: { competencia: "Função técnica, APIs, capacidade.", valor: "Valor funcional e de negócio.", fluxo: "Troca de dados com outros serviços e armazenamentos." },
+        armazenamento: { competencia: "Persistência, estrutura de dados.", valor: "Disponibilidade e integridade.", fluxo: "Recebe e fornece dados para serviços autorizados." },
+        touchpoint: { competencia: "Canal de interação com o usuário.", valor: "Experiência do usuário.", fluxo: "Conecta atores aos serviços backend." },
+        fator_externo: { competencia: "Elemento fora do controle direto.", valor: "Influencia estratégia.", fluxo: "Impacta serviços e decisões." },
+        feedback_loop: { competencia: "Ciclo de melhoria contínua.", valor: "Aprendizado e adaptação.", fluxo: "Conecta saídas a entradas de melhoria." }
+    };
+    function preencherTemplate() {
+        const tipo = document.getElementById('elemTipo').value;
+        const tpl = templatesPorTipo[tipo] || {};
+        document.getElementById('elemComp').value = tpl.competencia || '';
+        document.getElementById('elemValor').value = tpl.valor || '';
+        document.getElementById('elemFluxo').value = tpl.fluxo || '';
+    }
+
+    // ==================== AUXILIARES UI ====================
+    function atualizarListaElementos() {
+        const container = document.getElementById('elementList');
+        container.innerHTML = '';
+        elementos.forEach((el, idx) => {
+            const card = document.createElement('div');
+            card.className = 'element-card';
+            card.style.borderLeftColor = tipoCor[el.tipo] || '#8b5cf6';
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between;">
+                    <strong>${el.nome}</strong> <span class="badge" style="background:#e2e8f0; border-radius:12px; padding:0 6px; font-size:0.7rem;">${el.tipo}</span>
+                    <div><button class="editElemBtn" data-idx="${idx}" style="background:#3b82f6; padding:0.1rem 0.5rem;">✏️</button>
+                    <button class="deleteElemBtn" data-idx="${idx}" style="background:#ef4444; padding:0.1rem 0.5rem;">🗑️</button></div>
+                </div>
+                <div style="font-size:0.75rem;">${el.competencia?.substring(0,80)}</div>
+                <div style="font-size:0.7rem;">Rel: ${(el.relacionamentos || []).map(r => `${r.com} (${r.tipo})`).join(', ')}</div>
+            `;
+            container.appendChild(card);
+        });
+        document.querySelectorAll('.editElemBtn').forEach(btn => {
+            btn.addEventListener('click', () => carregarParaEdicao(parseInt(btn.getAttribute('data-idx'))));
+        });
+        document.querySelectorAll('.deleteElemBtn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                elementos.splice(parseInt(btn.getAttribute('data-idx')), 1);
+                atualizarListaElementos();
+                gerarJSONPreview();
+                renderizarDiagrama();
+            });
+        });
+    }
+
+    function carregarParaEdicao(idx) {
+        const el = elementos[idx];
+        editandoIndex = idx;
+        document.getElementById('elemId').value = el.id;
+        document.getElementById('elemNome').value = el.nome;
+        document.getElementById('elemTipo').value = el.tipo;
+        document.getElementById('elemCamada').value = el.camada || 'frontstage';
+        document.getElementById('elemComp').value = el.competencia || '';
+        document.getElementById('elemValor').value = el.valor || '';
+        document.getElementById('elemFluxo').value = el.fluxo || '';
+        document.getElementById('dependencias').value = (el.dependencias || []).join(', ');
+        relacoesTemp = [...(el.relacionamentos || [])];
+        atualizarListaRelacoes();
+    }
+
+    function atualizarListaRelacoes() {
+        const ul = document.getElementById('relList');
+        ul.innerHTML = '';
+        relacoesTemp.forEach((rel, idx) => {
+            const li = document.createElement('li');
+            li.style.display = 'flex'; li.style.justifyContent = 'space-between'; li.style.marginBottom = '4px';
+            li.innerHTML = `<span>${rel.com} → ${rel.tipo}</span> <button class="removeRelBtn" data-idx="${idx}" style="background:transparent; color:#ef4444;">❌</button>`;
+            ul.appendChild(li);
+        });
+        document.querySelectorAll('.removeRelBtn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                relacoesTemp.splice(parseInt(btn.getAttribute('data-idx')), 1);
+                atualizarListaRelacoes();
+            });
+        });
+    }
+
+    function salvarElemento() {
+        const id = document.getElementById('elemId').value.trim();
+        const nome = document.getElementById('elemNome').value.trim();
+        const tipo = document.getElementById('elemTipo').value;
+        const camada = document.getElementById('elemCamada').value;
+        const competencia = document.getElementById('elemComp').value.trim();
+        const valor = document.getElementById('elemValor').value.trim();
+        const fluxo = document.getElementById('elemFluxo').value.trim();
+        const dependenciasStr = document.getElementById('dependencias').value.trim();
+        const dependencias = dependenciasStr ? dependenciasStr.split(',').map(s => s.trim()) : [];
+        if (!id || !nome) { alert("ID e Nome obrigatórios."); return; }
+        const novoElemento = { id, nome, tipo, camada, competencia, valor, fluxo, dependencias, relacionamentos: relacoesTemp };
+        if (editandoIndex !== null) elementos[editandoIndex] = novoElemento;
+        else elementos.push(novoElemento);
+        limparFormulario();
+        atualizarListaElementos();
+        gerarJSONPreview();
+        renderizarDiagrama();
+        if (currentSelectedId === id) mostrarDetalhes(id);
+    }
+
+    function limparFormulario() {
+        document.getElementById('elemId').value = '';
+        document.getElementById('elemNome').value = '';
+        document.getElementById('elemTipo').value = 'ator';
+        document.getElementById('elemCamada').value = 'frontstage';
+        document.getElementById('elemComp').value = '';
+        document.getElementById('elemValor').value = '';
+        document.getElementById('elemFluxo').value = '';
+        document.getElementById('dependencias').value = '';
+        relacoesTemp = [];
+        atualizarListaRelacoes();
+        editandoIndex = null;
+        preencherTemplate();
+    }
+
+    function gerarJSONPreview() {
+        const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim();
+        const dadosCompletos = { nome_ecossistema: nomeEcossistema, elementos: elementos };
+        document.getElementById('jsonOutput').innerText = JSON.stringify(dadosCompletos, null, 2);
+    }
+
+    function exportarJSON() {
+        const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim() || "Ecossistema";
+        const dadosCompletos = { nome_ecossistema: nomeEcossistema, elementos: elementos };
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dadosCompletos, null, 2));
+        const a = document.createElement('a');
+        a.href = dataStr;
+        a.download = "ecossistema.json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    }
+
+    function importarJSON(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const dados = JSON.parse(e.target.result);
+                if (Array.isArray(dados)) {
+                    elementos = dados;
+                    document.getElementById('nomeEcossistema').value = "";
+                } else {
+                    document.getElementById('nomeEcossistema').value = dados.nome_ecossistema || "";
+                    elementos = dados.elementos || [];
+                }
+                atualizarListaElementos();
+                gerarJSONPreview();
+                renderizarDiagrama();
+                if (elementos.length) mostrarDetalhes(elementos[0].id);
+                alert("Importado com sucesso!");
+            } catch (erro) { alert("JSON inválido."); }
+        };
+        reader.readAsText(file);
+    }
+
+    // ==================== DIAGRAMA COM ÍCONES DENTRO DOS CÍRCULOS ====================
+ function renderizarDiagrama() {
+    if (!document.getElementById('network')) return;
+
+    let elementosFiltrados = elementos;
+    if (currentFilter !== 'all') {
+        if (currentFilter === 'frontstage') elementosFiltrados = elementos.filter(e => e.camada === 'frontstage');
+        else if (currentFilter === 'backstage') elementosFiltrados = elementos.filter(e => e.camada === 'backstage');
+        else elementosFiltrados = elementos.filter(e => e.tipo === currentFilter);
+    }
+
+    // Mapeamento de emojis para cada tipo
+    const emojiMap = {
+        ator: '👤',
+        servico: '⚙️',
+        armazenamento: '🗄️',
+        touchpoint: '📱',
+        fator_externo: '🌍',
+        feedback_loop: '🔄'
+    };
+
+    const nodes = elementosFiltrados.map(el => ({
+        id: el.id,
+        label: el.nome,
+        title: `${el.nome}\n${el.competencia?.substring(0,80) || ''}`,
+        color: { background: tipoCor[el.tipo] || '#8b5cf6', border: '#2d3748', highlight: { background: tipoCor[el.tipo], border: '#f59e0b' } },
+        shape: 'icon',
+        icon: {
+            face: 'Arial',
+            code: emojiMap[el.tipo] || '❓',
+            size: 28,
+            color: '#ffffff'
+        },
+        size: 42,
+        font: { size: 11, color: '#1a202c', face: 'Inter', background: 'rgba(255,255,255,0.7)' },
+        borderWidth: 2,
+        borderWidthSelected: 4,
+        group: el.tipo
+    }));
+
+    const edges = [];
+    elementosFiltrados.forEach(el => {
+        (el.relacionamentos || []).forEach(rel => {
+            const targetExists = elementosFiltrados.some(e => e.id === rel.com);
+            if (targetExists) {
+                let width = 1.0;
+                let dashes = false;
+                if (rel.tipo === 'Dependência' || rel.tipo === 'Regulamentação') { width = 0.8; dashes = true; }
+                if (rel.tipo === 'Fluxo de Valor (financeiro)') width = 1.2;
+                edges.push({ 
+                    from: el.id, 
+                    to: rel.com,
+                    color: { color: relTipoCor[rel.tipo] || '#94a3b8' }, 
+                    originalColor: relTipoCor[rel.tipo] || '#94a3b8', 
+                    originalWidth: width,
+                    arrows: 'to',
+                    width: width,
+                    dashes: dashes,
+                    smooth: { type: 'continuous', roundness: 0 }
+                });
+            }
+        });
+        (el.dependencias || []).forEach(depId => {
+            const targetExists = elementosFiltrados.some(e => e.id === depId);
+            if (targetExists) {
+                edges.push({ 
+                    from: el.id, 
+                    to: depId,
+                    color: { color: '#ef4444' }, 
+                    originalColor: '#ef4444', 
+                    originalWidth: 0.8,
+                    dashes: true,
+                    arrows: 'to',
+                    width: 0.8,
+                    smooth: { type: 'continuous', roundness: 0 }
+                });
+            }
+        });
+    });
+
+    const container = document.getElementById('network');
+    const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+    if (network) network.destroy();
+
+    const options = {
+        nodes: { shape: 'icon', size: 40, font: { size: 11, color: '#1a202c' } },
+        edges: { smooth: { type: 'continuous', roundness: 0 }, font: { size: 0 } },
+        physics: {
+            enabled: true,
+            stabilization: { iterations: 150, fit: true },
+            solver: 'forceAtlas2Based',
+            forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 120, springConstant: 0.08 }
+        },
+        interaction: { hover: true, tooltipDelay: 100, navigationButtons: false },
+        layout: { randomSeed: 42 }
+    };
+
+    network = new vis.Network(container, data, options);
+
+    // Clique: destaca arestas conectadas
+    network.on('click', (params) => {
+        if (params.nodes.length) {
+            const id = params.nodes[0];
+            currentSelectedId = id;
+            mostrarDetalhes(id);
+            const allEdges = data.edges.get();
+            allEdges.forEach(edge => {
+                const isConnected = (edge.from === id || edge.to === id);
+                const originalColor = edge.originalColor || edge.color;
+                data.edges.update({
+                    id: edge.id,
+                    width: isConnected ? 2.5 : (edge.dashes ? 0.8 : 1.0),
+                    color: { color: originalColor, opacity: isConnected ? 1 : 0.5 }
+                });
+            });
+            network.selectNodes([id]);
+        } else {
+            const allEdges = data.edges.get();
+            allEdges.forEach(edge => {
+                const originalColor = edge.originalColor || edge.color;
+                data.edges.update({
+                    id: edge.id,
+                    width: (edge.dashes ? 0.8 : (edge.originalWidth || 1.0)),
+                    color: { color: originalColor, opacity: 0.8 }
+                });
+            });
+            network.unselectAll();
+        }
+    });
+
+    network.on('stabilized', () => { network.fit(); });
+
+    // Legenda
+    const legendDiv = document.getElementById('legend');
+    if (legendDiv) {
+        legendDiv.innerHTML = `
+            <div style="display:flex; flex-wrap:wrap; gap:0.8rem; justify-content:center;">
+                <span><span style="font-size:1.1rem;">👤</span> Ator</span>
+                <span><span style="font-size:1.1rem;">⚙️</span> Serviço</span>
+                <span><span style="font-size:1.1rem;">🗄️</span> Armazenamento</span>
+                <span><span style="font-size:1.1rem;">📱</span> Touchpoint</span>
+                <span><span style="font-size:1.1rem;">🌍</span> Fator Externo</span>
+                <span><span style="font-size:1.1rem;">🔄</span> Feedback</span>
+            </div>
+            <hr style="margin:8px 0; width:100%;">
+            <div style="display:flex; flex-wrap:wrap; gap:0.8rem; justify-content:center;">
+                <span><span style="border:2px solid #ef4444; width:12px; height:2px; background:#ef4444;"></span> Dependência</span>
+                <span><span style="border:2px solid #14b8a6; width:12px; height:2px; background:#14b8a6;"></span> Fluxo de Dados</span>
+                <span><span style="border:3px solid #f43f5e; width:12px; height:2px; background:#f43f5e;"></span> Fluxo Financeiro</span>
+                <span><span style="border:2px dashed #ec489a; width:12px; height:2px; background:#ec489a;"></span> Feedback</span>
+                <span><span style="border:2px solid #c084fc; width:12px; height:2px; background:#c084fc;"></span> Autenticação</span>
+            </div>
+        `;
+        legendDiv.style.display = 'flex';
+    }
+}
+
+    function mostrarDetalhes(id) {
+        const el = elementos.find(e => e.id === id);
+        if (!el) return;
+        const panel = document.getElementById('dynamicDetails');
+        const relHtml = (el.relacionamentos || []).map(r => `<li><strong>${r.com}</strong>: ${r.tipo}</li>`).join('');
+        const depHtml = (el.dependencias || []).map(d => `<li>${d}</li>`).join('');
+        panel.innerHTML = `
+            <div class="detail-card" style="border-left-color: #8b5cf6;"><h4>🧠 Competências</h4><p>${el.competencia || 'Não informado'}</p></div>
+            <div class="detail-card" style="border-left-color: #10b981;"><h4>💎 Valor Agregado</h4><p>${el.valor || 'Não informado'}</p></div>
+            <div class="detail-card" style="border-left-color: #3b82f6;"><h4>🔄 Fluxo de Informação</h4><p>${el.fluxo || 'Não informado'}</p></div>
+            <div class="detail-card" style="border-left-color: #c084fc;"><h4>🔗 Relacionamentos</h4><ul>${relHtml || '<li>Nenhum</li>'}</ul></div>
+            <div class="detail-card" style="border-left-color: #ef4444;"><h4>📌 Dependências</h4><ul>${depHtml || '<li>Nenhuma</li>'}</ul></div>
+        `;
+    }
+
+    function aplicarFiltro(tipo) {
+        currentFilter = tipo;
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            if (btn.getAttribute('data-filter') === tipo) btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+        renderizarDiagrama();
+    }
+
+    // ==================== ABAS ====================
+    const tabEditor = document.getElementById('tabEditorBtn');
+    const tabVisualizacao = document.getElementById('tabVisualizacaoBtn');
+    const editorPanel = document.getElementById('editorPanel');
+    const visualizacaoPanel = document.getElementById('visualizacaoPanel');
+    function setActiveTab(tab) {
+        tabEditor.classList.remove('active'); tabVisualizacao.classList.remove('active');
+        editorPanel.classList.remove('active'); visualizacaoPanel.classList.remove('active');
+        if (tab === 'editor') { tabEditor.classList.add('active'); editorPanel.classList.add('active'); }
+        else { tabVisualizacao.classList.add('active'); visualizacaoPanel.classList.add('active');
+            if (currentSelectedId) mostrarDetalhes(currentSelectedId);
+            else if (elementos.length) mostrarDetalhes(elementos[0].id);
+        }
+    }
+    tabEditor.addEventListener('click', () => setActiveTab('editor'));
+    tabVisualizacao.addEventListener('click', () => setActiveTab('visualizacao'));
+
+    // ==================== INICIALIZAÇÃO ====================
+    function init() {
+        elementos = [
+            { id: "gestor", nome: "Gestor", tipo: "ator", camada: "backstage", competencia: "Homologar matrizes", valor: "Garante qualidade estratégica", fluxo: "Acessa E-TIA → publica matriz na PEC", dependencias: [], relacionamentos: [{ com: "e-tia", tipo: "Autenticação" }] },
+            { id: "professor", nome: "Professor", tipo: "ator", camada: "frontstage", competencia: "Gerar chaves G3", valor: "Media validação", fluxo: "P-TIA ↔ PEC e POC", dependencias: [], relacionamentos: [{ com: "p-tia", tipo: "Autenticação" }] },
+            { id: "aluno", nome: "Aluno", tipo: "ator", camada: "frontstage", competencia: "Explorar trilhas", valor: "Protagonismo", fluxo: "T-TIA ↔ POC", dependencias: [], relacionamentos: [{ com: "t-tia", tipo: "Autenticação" }] },
+            { id: "e-tia", nome: "E-TIA", tipo: "servico", camada: "backstage", competencia: "Design curricular", valor: "Engenharia curricular", fluxo: "← PEC → PEC", dependencias: ["pec"], relacionamentos: [{ com: "pec", tipo: "Gravação" }] },
+            { id: "p-tia", nome: "P-TIA", tipo: "servico", camada: "frontstage", competencia: "Gestão de turmas", valor: "Central do professor", fluxo: "↔ PEC → POC", dependencias: ["pec","poc"], relacionamentos: [{ com: "pec", tipo: "Leitura+Gravação" }, { com: "poc", tipo: "Gravação" }] },
+            { id: "t-tia", nome: "T-TIA", tipo: "servico", camada: "frontstage", competencia: "Trilha offline", valor: "Experiência imersiva", fluxo: "↔ POC", dependencias: ["poc"], relacionamentos: [{ com: "poc", tipo: "Leitura+Gravação" }] },
+            { id: "pec", nome: "PEC", tipo: "armazenamento", camada: "backstage", competencia: "Matrizes JSON", valor: "Fonte única", fluxo: "Recebe dados do E-TIA e P-TIA", dependencias: [], relacionamentos: [] },
+            { id: "poc", nome: "POC", tipo: "armazenamento", camada: "backstage", competencia: "Turmas, progresso", valor: "Gestão operacional", fluxo: "Recebe progresso do T-TIA", dependencias: [], relacionamentos: [] },
+            { id: "app_aluno", nome: "App Aluno", tipo: "touchpoint", camada: "frontstage", competencia: "Interface mobile", valor: "Acesso fácil", fluxo: "Conecta aluno ao T-TIA", dependencias: ["t-tia"], relacionamentos: [{ com: "t-tia", tipo: "Interação direta" }] },
+            { id: "mec", nome: "Regulamentação MEC", tipo: "fator_externo", camada: "none", competencia: "Diretrizes nacionais", valor: "Conformidade legal", fluxo: "Influencia E-TIA", dependencias: [], relacionamentos: [{ com: "e-tia", tipo: "Regulamentação" }] },
+            { id: "feedback_imo", nome: "Melhoria Contínua IMO", tipo: "feedback_loop", camada: "backstage", competencia: "Ajuste do IMO", valor: "Evolução curricular", fluxo: "POC → Pedagogo → E-TIA → PEC", dependencias: ["poc","e-tia"], relacionamentos: [{ com: "e-tia", tipo: "Feedback (melhoria)" }] }
+        ];
+        document.getElementById('nomeEcossistema').value = "Ecossistema ASTIA - Educação 4.0";
+        atualizarListaElementos();
+        gerarJSONPreview();
+        renderizarDiagrama();
+        if (elementos.length) mostrarDetalhes(elementos[0].id);
+        setActiveTab('editor');
+        preencherTemplate();
+    }
+
+    // Eventos
+    document.getElementById('addRelBtn').addEventListener('click', () => {
+        const destino = document.getElementById('relDestino').value.trim();
+        const tipo = document.getElementById('relTipo').value;
+        if (!destino) return;
+        relacoesTemp.push({ com: destino, tipo });
+        atualizarListaRelacoes();
+        document.getElementById('relDestino').value = '';
+    });
+    document.getElementById('saveElemBtn').addEventListener('click', salvarElemento);
+    document.getElementById('cancelEditBtn').addEventListener('click', limparFormulario);
+    document.getElementById('exportJsonBtn').addEventListener('click', exportarJSON);
+    document.getElementById('importJsonBtn').addEventListener('click', () => document.getElementById('importFile').click());
+    document.getElementById('importFile').addEventListener('change', (e) => { if (e.target.files.length) importarJSON(e.target.files[0]); e.target.value = ''; });
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => aplicarFiltro(btn.getAttribute('data-filter')));
+    });
+    document.getElementById('elemTipo').addEventListener('change', preencherTemplate);
+    window.addEventListener('resize', () => { if (network) network.redraw(); });
+    init();
+</script>
+</body>
+</html>
