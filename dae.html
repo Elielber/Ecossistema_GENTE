@@ -221,6 +221,9 @@
                 <button class="filter-btn" data-filter="frontstage">Frontstage</button>
                 <button class="filter-btn" data-filter="backstage">Backstage</button>
                 <button id="togglePhysicsBtn" class="filter-btn" style="background:#10b981;">🔒 Travar Layout</button>
+                <button id="btnAgruparCamada" class="filter-btn" style="background:#f59e0b; color:white;">📦 Agrupar Camadas</button>
+<button id="btnDesagrupar" class="filter-btn" style="display:none; background:#ef4444; color:white;">Desagrupar</button>
+
             </div>
         </div>
         <div id="network"></div>
@@ -459,6 +462,7 @@
     const nodes = elementosFiltrados.map(el => ({
         id: el.id,
         label: el.nome,
+        camada: el.camada,
         title: `${el.nome}\n${el.competencia?.substring(0,80) || ''}`,
         color: { background: tipoCor[el.tipo] || '#8b5cf6', border: '#2d3748', highlight: { background: tipoCor[el.tipo], border: '#f59e0b' } },
         shape: 'icon',
@@ -475,7 +479,7 @@
         group: el.tipo
     }));
 
-    const edges = [];
+        const edges = [];
     elementosFiltrados.forEach(el => {
         (el.relacionamentos || []).forEach(rel => {
             const targetExists = elementosFiltrados.some(e => e.id === rel.com);
@@ -487,6 +491,7 @@
                 edges.push({ 
                     from: el.id, 
                     to: rel.com,
+                    relTipo: rel.tipo, // <--- ADICIONE ESTA LINHA AQUI
                     color: { color: relTipoCor[rel.tipo] || '#94a3b8' }, 
                     originalColor: relTipoCor[rel.tipo] || '#94a3b8', 
                     originalWidth: width,
@@ -503,6 +508,7 @@
                 edges.push({ 
                     from: el.id, 
                     to: depId,
+                    relTipo: 'Dependência', // <--- ADICIONE ESTA LINHA AQUI
                     color: { color: '#ef4444' }, 
                     originalColor: '#ef4444', 
                     originalWidth: 0.8,
@@ -514,6 +520,7 @@
             }
         });
     });
+
 
     const container = document.getElementById('network');
     const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
@@ -578,8 +585,8 @@ if (!window.physicsBtnListenerAdded) {
     window.physicsBtnListenerAdded = true;
 }
 
-    // Clique: destaca arestas conectadas
-        network.on('click', (params) => {
+     // 1. EVENTO DE CLIQUE (CORRIGIDO PARA SUPORTAR CLUSTERS)
+    network.on('click', (params) => {
         const tituloEl = document.getElementById('diagramTitle');
         
         if (params.nodes.length) {
@@ -589,9 +596,15 @@ if (!window.physicsBtnListenerAdded) {
             
             const elementoSelecionado = elementos.find(e => e.id === id);
             
-            // [NOVO] Atualiza o título com o nome do elemento selecionado
-            if(elementoSelecionado) {
-                tituloEl.innerText = 🌐 DAE - ${elementoSelecionado.nome};
+            // Lida com a ausência do elemento quando é um cluster virtual
+            if (elementoSelecionado) {
+                tituloEl.innerText = `🌐 DAE - ${elementoSelecionado.nome}`;
+            } else if (network.isCluster(id)) {
+                tituloEl.innerText = `🌐 DAE - Camada Agrupada`;
+            } else {
+                // [ALTERAÇÃO AQUI 1] Fallback dinâmico se o nó não for encontrado
+                const nomeEcos = document.getElementById('nomeEcossistema').value.trim() || 'DAE';
+                tituloEl.innerText = `🌐 ${nomeEcos}`;
             }
 
             const textoIds = elementoSelecionado ? getConnectedIdsFromText(elementoSelecionado) : new Set();
@@ -607,8 +620,10 @@ if (!window.physicsBtnListenerAdded) {
             });
             network.setSelection({ nodes: [id] }, { highlightEdges: false });
         } else {
-            // [NOVO] Restaura o título padrão ao clicar fora
-            tituloEl.innerText = 🌐 DAE;
+            // [ALTERAÇÃO AQUI 2] Atualiza o título dinamicamente quando NADA está selecionado
+            const nomeEcos = document.getElementById('nomeEcossistema').value.trim() || 'DAE';
+            tituloEl.innerText = `🌐 ${nomeEcos}`;
+            currentSelectedId = null; // Limpa a referência do ID selecionado
             
             const allEdges = data.edges.get();
             allEdges.forEach(edge => {
@@ -619,14 +634,71 @@ if (!window.physicsBtnListenerAdded) {
                     color: { color: originalColor, opacity: 1 }
                 });
             });
+
             network.unselectAll();
             mostrarDetalhes();
         }
     });
-     
+
+    // 2. LÓGICA DE AGRUPAMENTO (QUE ESTAVA FALTANDO NO SEU CÓDIGO)
+    if (!window.clusterBtnListenerAdded) {
+        document.getElementById('btnAgruparCamada').addEventListener('click', () => {
+            ['frontstage', 'backstage'].forEach(camadaStr => {
+                let clusterOptions = {
+                    joinCondition: function (nodeOptions) {
+                        return nodeOptions.camada === camadaStr;
+                    },
+                    clusterNodeProperties: {
+                        id: 'cluster_' + camadaStr,
+                        borderWidth: 2,
+                        shape: 'box',
+                        mass: 1, // Previne a explosão física
+                        allowSingleNodeCluster: true, // Evita falha se houver só 1 nó
+                        label: `📦 Camada: ${camadaStr.toUpperCase()}`,
+                        color: { background: '#f8fafc', border: '#8b5cf6' },
+                        font: { size: 14, color: '#1e293b', face: 'Inter' }
+                    }
+                };
+                network.cluster(clusterOptions);
+            });
+            document.getElementById('btnDesagrupar').style.display = 'inline-block';
+            document.getElementById('btnAgruparCamada').style.display = 'none';
+        });
+
+        document.getElementById('btnDesagrupar').addEventListener('click', () => {
+            Object.keys(network.body.nodes).forEach(nodeId => {
+                if (network.isCluster(nodeId)) {
+                    network.openCluster(nodeId);
+                }
+            });
+            document.getElementById('btnDesagrupar').style.display = 'none';
+            document.getElementById('btnAgruparCamada').style.display = 'inline-block';
+        });
+
+        window.clusterBtnListenerAdded = true;
+    }
+
+    // 3. EXPANSÃO NO CLIQUE DUPLO
+    network.on("doubleClick", function (params) {
+        if (params.nodes.length == 1) {
+            if (network.isCluster(params.nodes[0])) {
+                network.openCluster(params.nodes[0]);
+                
+                let temCluster = Object.keys(network.body.nodes).some(id => network.isCluster(id));
+                if(!temCluster) {
+                    document.getElementById('btnDesagrupar').style.display = 'none';
+                    document.getElementById('btnAgruparCamada').style.display = 'inline-block';
+                }
+            }
+        }
+    });
+
+
+
     network.on('stabilized', () => { network.fit(); });
 
     // Legenda
+        // Legenda (Substituição integral para uso de data-attributes precisos)
     const legendDiv = document.getElementById('legend');
     if (legendDiv) {
         legendDiv.innerHTML = `
@@ -640,51 +712,55 @@ if (!window.physicsBtnListenerAdded) {
             </div>
             <hr style="margin:8px 0; width:100%;">
             <div style="display:flex; flex-wrap:wrap; gap:0.8rem; justify-content:center;">
-                <span><span style="border:2px solid #ef4444; width:12px; height:2px; background:#ef4444;"></span> Dependência</span>
-                <span><span style="border:2px solid #14b8a6; width:12px; height:2px; background:#14b8a6;"></span> Fluxo de Dados</span>
-                <span><span style="border:3px solid #f43f5e; width:12px; height:2px; background:#f43f5e;"></span> Fluxo Financeiro</span>
-                <span><span style="border:2px dashed #ec489a; width:12px; height:2px; background:#ec489a;"></span> Feedback</span>
-                <span><span style="border:2px solid #c084fc; width:12px; height:2px; background:#c084fc;"></span> Autenticação</span>
+                <span class="legend-filter-edge" data-rel="Dependência" style="cursor:pointer;"><span style="border:2px solid #ef4444; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#ef4444;"></span> Dependência</span>
+                <span class="legend-filter-edge" data-rel="Fluxo de Valor (dados)" style="cursor:pointer;"><span style="border:2px solid #14b8a6; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#14b8a6;"></span> Fluxo de Dados</span>
+                <span class="legend-filter-edge" data-rel="Fluxo de Valor (financeiro)" style="cursor:pointer;"><span style="border:3px solid #f43f5e; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#f43f5e;"></span> Fluxo Financeiro</span>
+                <span class="legend-filter-edge" data-rel="Feedback (melhoria)" style="cursor:pointer;"><span style="border:2px dashed #ec489a; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#ec489a;"></span> Feedback</span>
+                <span class="legend-filter-edge" data-rel="Autenticação" style="cursor:pointer;"><span style="border:2px solid #c084fc; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#c084fc;"></span> Autenticação</span>
             </div>
         `;
         legendDiv.style.display = 'flex';
     }
-    // Adiciona eventos de filtro nos itens da legenda
-setTimeout(() => {
-    const legendSpans = document.querySelectorAll('#legend span');
-    legendSpans.forEach(span => {
-        span.style.cursor = 'pointer';
-        span.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const tipoRel = span.innerText.split('➜')[0].trim();
-            const allEdges = data.edges.get();
-            let hasMatch = false;
-            allEdges.forEach(edge => {
-                // Verifica se o tipo da aresta corresponde ao clicado
-                let edgeType = edge.label || '';
-                if (edge.dashes && !edge.label) edgeType = 'Dependência';
-                const isMatch = edgeType === tipoRel || (tipoRel === 'Dependência' && edge.dashes);
-                if (isMatch) hasMatch = true;
-                data.edges.update({
-                    id: edge.id,
-                    color: { color: edge.originalColor, opacity: isMatch ? 1 : 0.15 }
-                });
-            });
-            if (!hasMatch) {
-                // Se nenhuma aresta corresponde, restaura todas
+
+    // Adiciona eventos de filtro restritos apenas às marcações válidas
+    setTimeout(() => {
+        const legendEdgeFilters = document.querySelectorAll('.legend-filter-edge');
+        legendEdgeFilters.forEach(span => {
+            span.addEventListener('click', (e) => {
+                e.stopPropagation();
+                
+                // Extrai o tipo exato a partir do atributo do DOM, eliminando a ambiguidade textual
+                const tipoClicado = span.getAttribute('data-rel'); 
+                const allEdges = data.edges.get();
+                let hasMatch = false;
+
                 allEdges.forEach(edge => {
+                    const isMatch = (edge.relTipo === tipoClicado);
+                    if (isMatch) hasMatch = true;
+                    
                     data.edges.update({
                         id: edge.id,
-                        color: { color: edge.originalColor, opacity: 1 }
+                        color: { color: edge.originalColor, opacity: isMatch ? 1 : 0.1 }
                     });
                 });
-            }
-            // Feedback visual
-            span.style.transform = 'scale(1.05)';
-            setTimeout(() => { span.style.transform = ''; }, 200);
+
+                if (!hasMatch) {
+                    // Se a aresta filtrada não existe no contexto atual, restaura todas
+                    allEdges.forEach(edge => {
+                        data.edges.update({
+                            id: edge.id,
+                            color: { color: edge.originalColor, opacity: 1 }
+                        });
+                    });
+                } else {
+                    // Feedback visual restrito a uma condição de correspondência válida
+                    span.style.transform = 'scale(1.05)';
+                    setTimeout(() => { span.style.transform = ''; }, 200);
+                }
+            });
         });
-    });
-}, 100);
+    }, 100);
+
 }
 
     function mostrarDetalhes(id = null) {
@@ -786,7 +862,7 @@ setTimeout(() => {
     document.getElementById('exportJsonBtn').addEventListener('click', exportarJSON);
     document.getElementById('importJsonBtn').addEventListener('click', () => document.getElementById('importFile').click());
     document.getElementById('importFile').addEventListener('change', (e) => { if (e.target.files.length) importarJSON(e.target.files[0]); e.target.value = ''; });
-    document.querySelectorAll('.filter-btn').forEach(btn => {
+   document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
         btn.addEventListener('click', () => aplicarFiltro(btn.getAttribute('data-filter')));
     });
     document.getElementById('elemTipo').addEventListener('change', preencherTemplate);
