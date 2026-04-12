@@ -713,10 +713,11 @@ if (!window.physicsBtnListenerAdded) {
             <hr style="margin:8px 0; width:100%;">
             <div style="display:flex; flex-wrap:wrap; gap:0.8rem; justify-content:center;">
                 <span class="legend-filter-edge" data-rel="Dependência" style="cursor:pointer;"><span style="border:2px solid #ef4444; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#ef4444;"></span> Dependência</span>
-                <span class="legend-filter-edge" data-rel="Fluxo de Valor (dados)" style="cursor:pointer;"><span style="border:2px solid #14b8a6; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#14b8a6;"></span> Fluxo de Dados</span>
-                <span class="legend-filter-edge" data-rel="Fluxo de Valor (financeiro)" style="cursor:pointer;"><span style="border:3px solid #f43f5e; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#f43f5e;"></span> Fluxo Financeiro</span>
-                <span class="legend-filter-edge" data-rel="Feedback (melhoria)" style="cursor:pointer;"><span style="border:2px dashed #ec489a; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#ec489a;"></span> Feedback</span>
-                <span class="legend-filter-edge" data-rel="Autenticação" style="cursor:pointer;"><span style="border:2px solid #c084fc; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#c084fc;"></span> Autenticação</span>
+<span class="legend-filter-edge" data-rel="Fluxo de Valor (dados),Leitura,Gravação,Leitura+Gravação" style="cursor:pointer;"><span style="border:2px solid #14b8a6; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#14b8a6;"></span> Fluxo de Dados</span>
+<span class="legend-filter-edge" data-rel="Fluxo de Valor (financeiro)" style="cursor:pointer;"><span style="border:3px solid #f43f5e; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#f43f5e;"></span> Fluxo Financeiro</span>
+<span class="legend-filter-edge" data-rel="Feedback (melhoria)" style="cursor:pointer;"><span style="border:2px dashed #ec489a; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#ec489a;"></span> Feedback</span>
+<span class="legend-filter-edge" data-rel="Autenticação" style="cursor:pointer;"><span style="border:2px solid #c084fc; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#c084fc;"></span> Autenticação</span>
+
             </div>
         `;
         legendDiv.style.display = 'flex';
@@ -730,12 +731,14 @@ if (!window.physicsBtnListenerAdded) {
                 e.stopPropagation();
                 
                 // Extrai o tipo exato a partir do atributo do DOM, eliminando a ambiguidade textual
-                const tipoClicado = span.getAttribute('data-rel'); 
+                                // Extrai os tipos, transformando em um array (agora suporta múltiplos filtros num botão só)
+                const tiposClicados = span.getAttribute('data-rel').split(','); 
                 const allEdges = data.edges.get();
                 let hasMatch = false;
 
                 allEdges.forEach(edge => {
-                    const isMatch = (edge.relTipo === tipoClicado);
+                    // [ALTERAÇÃO AQUI] Verifica se o tipo da linha existe dentro do array do botão
+                    const isMatch = tiposClicados.includes(edge.relTipo);
                     if (isMatch) hasMatch = true;
                     
                     data.edges.update({
@@ -743,6 +746,7 @@ if (!window.physicsBtnListenerAdded) {
                         color: { color: edge.originalColor, opacity: isMatch ? 1 : 0.1 }
                     });
                 });
+
 
                 if (!hasMatch) {
                     // Se a aresta filtrada não existe no contexto atual, restaura todas
