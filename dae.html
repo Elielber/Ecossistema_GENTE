@@ -579,42 +579,51 @@ if (!window.physicsBtnListenerAdded) {
 }
 
     // Clique: destaca arestas conectadas
-    network.on('click', (params) => {
-    if (params.nodes.length) {
-        const id = params.nodes[0];
-        currentSelectedId = id;
-        mostrarDetalhes(id);
-        const elementoSelecionado = elementos.find(e => e.id === id);
-        const textoIds = elementoSelecionado ? getConnectedIdsFromText(elementoSelecionado) : new Set();
-        const allEdges = data.edges.get();
-        allEdges.forEach(edge => {
-            const isConnected = (edge.from === id || edge.to === id) || textoIds.has(edge.from) || textoIds.has(edge.to);
-            const originalColor = edge.originalColor || edge.color;
-            data.edges.update({
-                id: edge.id,
-                width: isConnected ? 2.5 : (edge.dashes ? 0.8 : 1.0),
-                color: {
-                    color: originalColor,
-                    opacity: 1
-                }
-            });
-        });
-        network.setSelection({ nodes: [id] }, { highlightEdges: false });
-    } else {
-        const allEdges = data.edges.get();
-        allEdges.forEach(edge => {
-            const originalColor = edge.originalColor || edge.color;
-            data.edges.update({
-                id: edge.id,
-                width: (edge.dashes ? 0.8 : (edge.originalWidth || 1.0)),
-                color: { color: originalColor, opacity: 1 }
-            });
-        });
-        network.unselectAll();
-        mostrarDetalhes();
-    }
-});
+        network.on('click', (params) => {
+        const tituloEl = document.getElementById('diagramTitle');
+        
+        if (params.nodes.length) {
+            const id = params.nodes[0];
+            currentSelectedId = id;
+            mostrarDetalhes(id);
+            
+            const elementoSelecionado = elementos.find(e => e.id === id);
+            
+            // [NOVO] Atualiza o título com o nome do elemento selecionado
+            if(elementoSelecionado) {
+                tituloEl.innerText = 🌐 DAE - ${elementoSelecionado.nome};
+            }
 
+            const textoIds = elementoSelecionado ? getConnectedIdsFromText(elementoSelecionado) : new Set();
+            const allEdges = data.edges.get();
+            allEdges.forEach(edge => {
+                const isConnected = (edge.from === id || edge.to === id) || textoIds.has(edge.from) || textoIds.has(edge.to);
+                const originalColor = edge.originalColor || edge.color;
+                data.edges.update({
+                    id: edge.id,
+                    width: isConnected ? 2.5 : (edge.dashes ? 0.8 : 1.0),
+                    color: { color: originalColor, opacity: 1 }
+                });
+            });
+            network.setSelection({ nodes: [id] }, { highlightEdges: false });
+        } else {
+            // [NOVO] Restaura o título padrão ao clicar fora
+            tituloEl.innerText = 🌐 DAE;
+            
+            const allEdges = data.edges.get();
+            allEdges.forEach(edge => {
+                const originalColor = edge.originalColor || edge.color;
+                data.edges.update({
+                    id: edge.id,
+                    width: (edge.dashes ? 0.8 : (edge.originalWidth || 1.0)),
+                    color: { color: originalColor, opacity: 1 }
+                });
+            });
+            network.unselectAll();
+            mostrarDetalhes();
+        }
+    });
+     
     network.on('stabilized', () => { network.fit(); });
 
     // Legenda
