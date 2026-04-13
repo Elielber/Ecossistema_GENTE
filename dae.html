@@ -187,7 +187,7 @@
                 <div class="form-group"><label>Dependências (IDs vírgula)</label><input type="text" id="dependencias" placeholder="ex: api, crm"></div>
                 <div class="form-group">
                     <label>Relacionamentos</label>
-                    <div style="display:flex; gap:0.3rem;"><input type="text" id="relDestino" placeholder="ID destino" style="flex:2;"><button id="ativarModoCliqueBtn" style="background:#f97316; font-size:0.7rem; margin-top:0.3rem;">🔘 Clique no diagrama para definir destino</button><select id="relTipo" style="flex:1;"><option>Autenticação</option><option>Leitura</option><option>Gravação</option><option>Leitura+Gravação</option><option>Fluxo de Valor (dados)</option><option>Fluxo de Valor (financeiro)</option><option>Feedback (melhoria)</option><option>Regulamentação</option><option>Interação direta</option></select><button id="addRelBtn">➕</button></div>
+                    <div style="display:flex; gap:0.3rem;"><input type="text" id="relDestino" placeholder="ID destino" style="flex:2;"><button id="ativarModoCliqueBtn" style="background:#f97316; font-size:0.7rem; margin-top:0.3rem;">🔘 Destino</button><select id="relTipo" style="flex:1;"><option>Autenticação</option><option>Leitura</option><option>Gravação</option><option>Leitura+Gravação</option><option>Fluxo de Valor (dados)</option><option>Fluxo de Valor (financeiro)</option><option>Feedback (melhoria)</option><option>Regulamentação</option><option>Interação direta</option></select><button id="addRelBtn">➕</button></div>
                     <ul id="relList" class="rel-list"></ul>
                 </div>
                 <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem;">
@@ -197,11 +197,16 @@
             </div>
             <h4>📋 Elementos</h4>
             <div id="elementList" class="element-list"></div>
-            <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem;">
+                        <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; flex-wrap: wrap;">
                 <button id="exportJsonBtn" style="background:#10b981;">📤 Exportar JSON</button>
                 <button id="importJsonBtn" class="secondary">📂 Importar JSON</button>
                 <input type="file" id="importFile" accept=".json" style="display:none;">
+                
+                <button id="exportXmlBtn" style="background:#8b5cf6;">📤 Exportar XMI (UML)</button>
+                <button id="importXmlBtn" class="secondary" style="background:#64748b;">📂 Importar XML</button>
+                <input type="file" id="importXmlFile" accept=".xml,.xmi" style="display:none;">
             </div>
+
             <div class="json-output" id="jsonOutput"></div>
         </div>
         <div id="visualizacaoPanel" class="panel-content">
@@ -214,14 +219,11 @@
             <div class="filters" id="filterContainer">
                 
                 <button class="filter-btn active" data-filter="all">Todos</button>
-                <button class="filter-btn" data-filter="ator">Atores</button>
-                <button class="filter-btn" data-filter="servico">Serviços</button>
-                <button class="filter-btn" data-filter="armazenamento">Armazenamento</button>
-                <button class="filter-btn" data-filter="touchpoint">Touchpoints</button>
+                
                 <button class="filter-btn" data-filter="frontstage">Frontstage</button>
                 <button class="filter-btn" data-filter="backstage">Backstage</button>
-                <button id="togglePhysicsBtn" class="filter-btn" style="background:#10b981;">🔒 Travar Layout</button>
-                <button id="btnAgruparCamada" class="filter-btn" style="background:#f59e0b; color:white;">📦 Agrupar Camadas</button>
+                <button id="togglePhysicsBtn" class="filter-btn" style="background:#10b981;">🔒 Travar</button>
+                <button id="btnAgruparCamada" class="filter-btn" style="background:#f59e0b; color:white;">📦 Agrupar</button>
 <button id="btnDesagrupar" class="filter-btn" style="display:none; background:#ef4444; color:white;">Desagrupar</button>
 
             </div>
@@ -572,12 +574,12 @@ if (!window.physicsBtnListenerAdded) {
         physicsEnabled = !physicsEnabled;
         network.setOptions({ physics: { enabled: physicsEnabled } });
         if (physicsEnabled) {
-            newToggleBtn.innerHTML = '🔒 Travar Layout';
+            newToggleBtn.innerHTML = '🔒 Travar';
             newToggleBtn.style.background = '#10b981';
             network.startSimulation();
             setTimeout(() => network.stopSimulation(), 1000);
         } else {
-            newToggleBtn.innerHTML = '🌐 Ativar Física';
+            newToggleBtn.innerHTML = '🌐 Liberar';
             newToggleBtn.style.background = '#f59e0b';
             network.stopSimulation();
         }
@@ -699,32 +701,46 @@ if (!window.physicsBtnListenerAdded) {
 
     // Legenda
         // Legenda (Substituição integral para uso de data-attributes precisos)
+        // Legenda (Substituição integral para uso de data-attributes precisos)
     const legendDiv = document.getElementById('legend');
     if (legendDiv) {
+        // Lógica visual: se estiver filtrado, apaga os outros.
+        const isAll = currentFilter === 'all';
+        const getOp = (tipo) => isAll || currentFilter === tipo ? '1' : '0.3';
+
         legendDiv.innerHTML = `
-            <div style="display:flex; flex-wrap:wrap; gap:0.8rem; justify-content:center;">
-                <span><span style="font-size:1.1rem;">👤</span> Ator</span>
-                <span><span style="font-size:1.1rem;">⚙️</span> Serviço</span>
-                <span><span style="font-size:1.1rem;">🗄️</span> Armazenamento</span>
-                <span><span style="font-size:1.1rem;">📱</span> Touchpoint</span>
-                <span><span style="font-size:1.1rem;">🌍</span> Fator Externo</span>
-                <span><span style="font-size:1.1rem;">🔄</span> Feedback</span>
+            <div style="display:flex; flex-wrap:wrap; gap:1rem; justify-content:center; align-items:center;">
+                
+                <span class="legend-filter-node" data-filter="ator" style="cursor:pointer; opacity:${getOp('ator')}; transition:0.2s;"><span style="font-size:1.1rem;">👤</span> Ator</span>
+                <span class="legend-filter-node" data-filter="servico" style="cursor:pointer; opacity:${getOp('servico')}; transition:0.2s;"><span style="font-size:1.1rem;">⚙️</span> Serviço</span>
+                <span class="legend-filter-node" data-filter="armazenamento" style="cursor:pointer; opacity:${getOp('armazenamento')}; transition:0.2s;"><span style="font-size:1.1rem;">🗄️</span> Armazenamento</span>
+                <span class="legend-filter-node" data-filter="touchpoint" style="cursor:pointer; opacity:${getOp('touchpoint')}; transition:0.2s;"><span style="font-size:1.1rem;">📱</span> Touchpoint</span>
+                <span class="legend-filter-node" data-filter="fator_externo" style="cursor:pointer; opacity:${getOp('fator_externo')}; transition:0.2s;"><span style="font-size:1.1rem;">🌍</span> Fator Externo</span>
+                <span class="legend-filter-node" data-filter="feedback_loop" style="cursor:pointer; opacity:${getOp('feedback_loop')}; transition:0.2s;"><span style="font-size:1.1rem;">🔄</span> Feedback</span>
             </div>
             <hr style="margin:8px 0; width:100%;">
             <div style="display:flex; flex-wrap:wrap; gap:0.8rem; justify-content:center;">
                 <span class="legend-filter-edge" data-rel="Dependência" style="cursor:pointer;"><span style="border:2px solid #ef4444; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#ef4444;"></span> Dependência</span>
-<span class="legend-filter-edge" data-rel="Fluxo de Valor (dados),Leitura,Gravação,Leitura+Gravação" style="cursor:pointer;"><span style="border:2px solid #14b8a6; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#14b8a6;"></span> Fluxo de Dados</span>
-<span class="legend-filter-edge" data-rel="Fluxo de Valor (financeiro)" style="cursor:pointer;"><span style="border:3px solid #f43f5e; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#f43f5e;"></span> Fluxo Financeiro</span>
-<span class="legend-filter-edge" data-rel="Feedback (melhoria)" style="cursor:pointer;"><span style="border:2px dashed #ec489a; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#ec489a;"></span> Feedback</span>
-<span class="legend-filter-edge" data-rel="Autenticação" style="cursor:pointer;"><span style="border:2px solid #c084fc; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#c084fc;"></span> Autenticação</span>
-
+                <span class="legend-filter-edge" data-rel="Fluxo de Valor (dados),Leitura,Gravação,Leitura+Gravação" style="cursor:pointer;"><span style="border:2px solid #14b8a6; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#14b8a6;"></span> Fluxo de Dados</span>
+                <span class="legend-filter-edge" data-rel="Fluxo de Valor (financeiro)" style="cursor:pointer;"><span style="border:3px solid #f43f5e; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#f43f5e;"></span> Fluxo Financeiro</span>
+                <span class="legend-filter-edge" data-rel="Feedback (melhoria)" style="cursor:pointer;"><span style="border:2px dashed #ec489a; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#ec489a;"></span> Feedback</span>
+                <span class="legend-filter-edge" data-rel="Autenticação" style="cursor:pointer;"><span style="border:2px solid #c084fc; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#c084fc;"></span> Autenticação</span>
             </div>
         `;
         legendDiv.style.display = 'flex';
     }
 
+
     // Adiciona eventos de filtro restritos apenas às marcações válidas
     setTimeout(() => {
+    const legendNodeFilters = document.querySelectorAll('.legend-filter-node');
+        legendNodeFilters.forEach(span => {
+            span.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const tipoClicado = span.getAttribute('data-filter');
+                aplicarFiltro(tipoClicado); // Chama sua função global que já faz a mágica toda
+            });
+        });
         const legendEdgeFilters = document.querySelectorAll('.legend-filter-edge');
         legendEdgeFilters.forEach(span => {
             span.addEventListener('click', (e) => {
@@ -827,6 +843,119 @@ if (!window.physicsBtnListenerAdded) {
     }
     tabEditor.addEventListener('click', () => setActiveTab('editor'));
     tabVisualizacao.addEventListener('click', () => setActiveTab('visualizacao'));
+    
+        // ==================== CONVERSÃO XMI (UML) ====================
+
+    /**
+     * Converte o modelo DAE (JSON) para XMI (UML 2.5.1) de forma hierárquica e validada.
+     */
+    function daeToXMI(dados) {
+        const { nome_ecossistema = "Ecossistema", elementos = [] } = dados;
+        let nextId = 1;
+        const getNewId = () => `_${nextId++}`;
+        const elementMap = new Map();
+
+        const camadas = { frontstage: [], backstage: [], none: [] };
+        elementos.forEach(el => {
+            elementMap.set(el.id, getNewId());
+            const camada = el.camada || 'none';
+            camadas[camada].push(el);
+        });
+
+        let rootPackageContent = '';
+
+        // 1. Gera os pacotes (camadas) com as classes encapsuladas corretamente
+        for (const [camadaNome, elementosCamada] of Object.entries(camadas)) {
+            if (elementosCamada.length === 0) continue;
+            const pacoteId = getNewId();
+            const pacoteNome = camadaNome === 'frontstage' ? 'Frontstage' : (camadaNome === 'backstage' ? 'Backstage' : 'Sem Camada');
+            
+            let camadaXML = `\n        <packagedElement xmi:type="uml:Package" xmi:id="${pacoteId}" name="${pacoteNome}">`;
+            
+            elementosCamada.forEach(el => {
+                const classId = elementMap.get(el.id);
+                camadaXML += `\n            <packagedElement xmi:type="uml:Class" xmi:id="${classId}" name="${escapeXml(el.nome)}" visibility="public">`;
+                camadaXML += `\n                <ownedComment xmi:type="uml:Comment" xmi:id="${getNewId()}" body="Tipo: ${escapeXml(el.tipo)}"/>`;
+                camadaXML += `\n                <ownedComment xmi:type="uml:Comment" xmi:id="${getNewId()}" body="Competências: ${escapeXml(el.competencia || '')}"/>`;
+                camadaXML += `\n                <ownedComment xmi:type="uml:Comment" xmi:id="${getNewId()}" body="Valor Agregado: ${escapeXml(el.valor || '')}"/>`;
+                camadaXML += `\n                <ownedComment xmi:type="uml:Comment" xmi:id="${getNewId()}" body="Fluxo de Informação: ${escapeXml(el.fluxo || '')}"/>`;
+                camadaXML += `\n            </packagedElement>`;
+            });
+            
+            camadaXML += `\n        </packagedElement>`;
+            rootPackageContent += camadaXML;
+        }
+
+        // 2. Gera associações direcionais e dependências
+        elementos.forEach(el => {
+            const sourceId = elementMap.get(el.id);
+            if (!sourceId) return;
+
+            (el.relacionamentos || []).forEach(rel => {
+                const targetId = elementMap.get(rel.com);
+                if (!targetId) return;
+                const assocId = getNewId();
+                const memberEnd1 = getNewId();
+                const memberEnd2 = getNewId();
+                
+                // Associação com direcionalidade resolvida (source -> target)
+                rootPackageContent += `\n        <packagedElement xmi:type="uml:Association" xmi:id="${assocId}" name="${escapeXml(rel.tipo)}" visibility="public">`;
+                rootPackageContent += `\n            <memberEnd xmi:idref="${memberEnd1}"/>`;
+                rootPackageContent += `\n            <memberEnd xmi:idref="${memberEnd2}"/>`;
+                rootPackageContent += `\n            <ownedEnd xmi:type="uml:Property" xmi:id="${memberEnd1}" type="${sourceId}" association="${assocId}"/>`;
+                rootPackageContent += `\n            <ownedEnd xmi:type="uml:Property" xmi:id="${memberEnd2}" type="${targetId}" association="${assocId}" navigable="true"/>`;
+                rootPackageContent += `\n        </packagedElement>`;
+            });
+
+            (el.dependencias || []).forEach(depId => {
+                const targetId = elementMap.get(depId);
+                if (!targetId) return;
+                const depIdXmi = getNewId();
+                rootPackageContent += `\n        <packagedElement xmi:type="uml:Dependency" xmi:id="${depIdXmi}" client="${sourceId}" supplier="${targetId}"/>`;
+            });
+        });
+
+        const rootPackageId = getNewId();
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<uml:Model xmi:version="20131001" xmlns:xmi="http://www.omg.org/spec/XMI/20131001" xmlns:uml="http://www.omg.org/spec/UML/20131001" xmi:id="_0" name="${escapeXml(nome_ecossistema)}">
+    <packagedElement xmi:type="uml:Package" xmi:id="${rootPackageId}" name="${escapeXml(nome_ecossistema)}">${rootPackageContent}
+    </packagedElement>
+</uml:Model>`;
+    }
+
+    function escapeXml(unsafe) {
+        if (!unsafe) return '';
+        return unsafe.replace(/[<>&'"]/g, (c) => {
+            switch (c) { case '<': return '&lt;'; case '>': return '&gt;'; case '&': return '&amp;'; case '\'': return '&apos;'; case '"': return '&quot;'; default: return c; }
+        });
+    }
+
+    function exportarXMI() {
+        const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim() || "Ecossistema";
+        const dadosCompletos = { nome_ecossistema: nomeEcossistema, elementos: elementos };
+        const xmiString = daeToXMI(dadosCompletos);
+        
+        const dataStr = "data:text/xml;charset=utf-8," + encodeURIComponent(xmiString);
+        const a = document.createElement('a');
+        a.href = dataStr;
+        a.download = "ecossistema_uml.xmi";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    }
+
+    function importarXMI(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const xmlString = e.target.result;
+            // O desenvolvimento de um parser XML->JSON para reconstruir o DAE
+            // deve ser implementado aqui futuramente, caso seja estritamente necessário.
+            alert("A leitura de dados XMI/XML foi iniciada, mas o parser de engenharia reversa para reconstruir as coordenadas Vis.js ainda precisa ser mapeado no sistema.");
+            console.log("XML Carregado:", xmlString);
+        };
+        reader.readAsText(file);
+    };
+
 
     // ==================== INICIALIZAÇÃO ====================
     function init() {
@@ -865,6 +994,12 @@ if (!window.physicsBtnListenerAdded) {
     document.getElementById('cancelEditBtn').addEventListener('click', limparFormulario);
     document.getElementById('exportJsonBtn').addEventListener('click', exportarJSON);
     document.getElementById('importJsonBtn').addEventListener('click', () => document.getElementById('importFile').click());
+    document.getElementById('exportXmlBtn').addEventListener('click', exportarXMI);
+    document.getElementById('importXmlBtn').addEventListener('click', () => document.getElementById('importXmlFile').click());
+    document.getElementById('importXmlFile').addEventListener('change', (e) => { 
+        if (e.target.files.length) importarXMI(e.target.files[0]); 
+        e.target.value = ''; 
+    });
     document.getElementById('importFile').addEventListener('change', (e) => { if (e.target.files.length) importarJSON(e.target.files[0]); e.target.value = ''; });
    document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
         btn.addEventListener('click', () => aplicarFiltro(btn.getAttribute('data-filter')));
@@ -877,6 +1012,7 @@ if (!window.physicsBtnListenerAdded) {
     alert('Clique em um nó no diagrama para definir o destino do relacionamento.');
     document.getElementById('network').style.cursor = 'crosshair';
 });
+
 </script>
 </body>
 </html>
