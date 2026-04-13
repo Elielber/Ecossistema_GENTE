@@ -178,16 +178,39 @@
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
                     <div><label>ID (único)</label><input type="text" id="elemId" placeholder="ex: gestor"></div>
                     <div><label>Nome</label><input type="text" id="elemNome" placeholder="Gestor"></div>
-                    <div><label>Tipo</label><select id="elemTipo"><option value="ator">Ator</option><option value="servico">Serviço</option><option value="armazenamento">Armazenamento</option><option value="touchpoint">Touchpoint</option><option value="fator_externo">Fator Externo</option><option value="feedback_loop">Feedback Loop</option></select></div>
-                    <div><label>Camada</label><select id="elemCamada"><option value="frontstage">Frontstage</option><option value="backstage">Backstage</option><option value="none">Nenhuma</option></select></div>
+                    <div><label>Tipo</label><select id="elemTipo">
+ <option value="ator">Ator</option>
+ <option value="servico">Serviço</option>
+ <option value="armazenamento">Armazenamento</option>
+ <option value="touchpoint">Touchpoint</option>
+ <option value="fator_externo">Fator Externo</option>
+ <option value="feedback_loop">Feedback Loop</option></select></div>
+                    <div><label>Camada</label><select id="elemCamada">
+<option value="frontstage">Frontstage</option>
+<option value="backstage">Backstage</option>
+<option value="none">Nenhuma</option></select></div>
                 </div>
                 <div class="form-group"><label>Competências</label><textarea id="elemComp" rows="2"></textarea></div>
                 <div class="form-group"><label>Valor Agregado</label><textarea id="elemValor" rows="2"></textarea></div>
-                <div class="form-group"><label>Fluxo de Informação</label><textarea id="elemFluxo" rows="2"></textarea></div>
-                <div class="form-group"><label>Dependências (IDs vírgula)</label><input type="text" id="dependencias" placeholder="ex: api, crm"></div>
+                
                 <div class="form-group">
                     <label>Relacionamentos</label>
-                    <div style="display:flex; gap:0.3rem;"><input type="text" id="relDestino" placeholder="ID destino" style="flex:2;"><button id="ativarModoCliqueBtn" style="background:#f97316; font-size:0.7rem; margin-top:0.3rem;">🔘 Destino</button><select id="relTipo" style="flex:1;"><option>Autenticação</option><option>Leitura</option><option>Gravação</option><option>Leitura+Gravação</option><option>Fluxo de Valor (dados)</option><option>Fluxo de Valor (financeiro)</option><option>Feedback (melhoria)</option><option>Regulamentação</option><option>Interação direta</option></select><button id="addRelBtn">➕</button></div>
+                    <div style="display:flex; gap:0.3rem;"><input type="text" id="relDestino" placeholder="ID destino" style="flex:2;">
+ <button id="ativarModoCliqueBtn" style="background:#f97316; font-size:0.7rem; margin-top:0.3rem;">🔘 Destino</button>
+ <select id="relTipo" style="flex:1;">
+ <option>Autenticação</option>
+ <option>Leitura</option>
+ <option>Gravação</option>
+ <option>Leitura+Gravação</option>
+ <option>Fluxo de Valor (dados)</option>
+ <option>Fluxo de Valor (financeiro)</option>
+ <option>Feedback (melhoria)</option>
+ <option>Regulamentação</option>
+ <option>Interação direta</option>
+ <option>Dependência</option>
+ </select>
+ <button id="addRelBtn">➕</button>
+ </div>
                     <ul id="relList" class="rel-list"></ul>
                 </div>
                 <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem;">
@@ -279,13 +302,17 @@
         fator_externo: { competencia: "Elemento fora do controle direto.", valor: "Influencia estratégia.", fluxo: "Impacta serviços e decisões." },
         feedback_loop: { competencia: "Ciclo de melhoria contínua.", valor: "Aprendizado e adaptação.", fluxo: "Conecta saídas a entradas de melhoria." }
     };
-    function preencherTemplate() {
+        function preencherTemplate() {
         const tipo = document.getElementById('elemTipo').value;
         const tpl = templatesPorTipo[tipo] || {};
+        
         document.getElementById('elemComp').value = tpl.competencia || '';
         document.getElementById('elemValor').value = tpl.valor || '';
-        document.getElementById('elemFluxo').value = tpl.fluxo || '';
+        
+        // A tentativa de preencher o 'elemFluxo' foi removida daqui, 
+        // pois agora ele é calculado automaticamente ao salvar!
     }
+
 
     // ==================== AUXILIARES UI ====================
     function atualizarListaElementos() {
@@ -319,20 +346,7 @@
         });
     }
 
-    function carregarParaEdicao(idx) {
-        const el = elementos[idx];
-        editandoIndex = idx;
-        document.getElementById('elemId').value = el.id;
-        document.getElementById('elemNome').value = el.nome;
-        document.getElementById('elemTipo').value = el.tipo;
-        document.getElementById('elemCamada').value = el.camada || 'frontstage';
-        document.getElementById('elemComp').value = el.competencia || '';
-        document.getElementById('elemValor').value = el.valor || '';
-        document.getElementById('elemFluxo').value = el.fluxo || '';
-        document.getElementById('dependencias').value = (el.dependencias || []).join(', ');
-        relacoesTemp = [...(el.relacionamentos || [])];
-        atualizarListaRelacoes();
-    }
+    
 
     function atualizarListaRelacoes() {
         const ul = document.getElementById('relList');
@@ -351,20 +365,52 @@
         });
     }
 
+        function carregarParaEdicao(idx) {
+        const el = elementos[idx];
+        editandoIndex = idx;
+        document.getElementById('elemId').value = el.id;
+        document.getElementById('elemNome').value = el.nome;
+        document.getElementById('elemTipo').value = el.tipo;
+        document.getElementById('elemCamada').value = el.camada || 'frontstage';
+        document.getElementById('elemComp').value = el.competencia || '';
+        document.getElementById('elemValor').value = el.valor || '';
+        
+        // Carrega relacionamentos padrão
+        relacoesTemp = [...(el.relacionamentos || [])];
+        // Converte dependências do banco de volta para a lista visual como tipo "Dependência"
+        (el.dependencias || []).forEach(dep => {
+            relacoesTemp.push({ com: dep, tipo: 'Dependência' });
+        });
+        atualizarListaRelacoes();
+    }
+
     function salvarElemento() {
         const id = document.getElementById('elemId').value.trim();
         const nome = document.getElementById('elemNome').value.trim();
-        const tipo = document.getElementById('elemTipo').value;
-        const camada = document.getElementById('elemCamada').value;
-        const competencia = document.getElementById('elemComp').value.trim();
-        const valor = document.getElementById('elemValor').value.trim();
-        const fluxo = document.getElementById('elemFluxo').value.trim();
-        const dependenciasStr = document.getElementById('dependencias').value.trim();
-        const dependencias = dependenciasStr ? dependenciasStr.split(',').map(s => s.trim()) : [];
         if (!id || !nome) { alert("ID e Nome obrigatórios."); return; }
-        const novoElemento = { id, nome, tipo, camada, competencia, valor, fluxo, dependencias, relacionamentos: relacoesTemp };
+
+        // Separa Relacionamentos reais de Dependências estruturais
+        const relacionamentosFinais = relacoesTemp.filter(r => r.tipo !== 'Dependência');
+        const dependenciasFinais = relacoesTemp.filter(r => r.tipo === 'Dependência').map(r => r.com);
+        
+        // Auto-gera o texto de Fluxo de Informação (Ambiguidade resolvida com concatenação literal)
+        const fluxoCalculado = relacionamentosFinais.map(r => `→ ${r.com} (${r.tipo})`).join(' | ');
+
+        const novoElemento = { 
+            id, 
+            nome, 
+            tipo: document.getElementById('elemTipo').value, 
+            camada: document.getElementById('elemCamada').value, 
+            competencia: document.getElementById('elemComp').value.trim(), 
+            valor: document.getElementById('elemValor').value.trim(), 
+            fluxo: fluxoCalculado, 
+            dependencias: dependenciasFinais, 
+            relacionamentos: relacionamentosFinais 
+        };
+
         if (editandoIndex !== null) elementos[editandoIndex] = novoElemento;
         else elementos.push(novoElemento);
+        
         limparFormulario();
         atualizarListaElementos();
         gerarJSONPreview();
@@ -379,13 +425,12 @@
         document.getElementById('elemCamada').value = 'frontstage';
         document.getElementById('elemComp').value = '';
         document.getElementById('elemValor').value = '';
-        document.getElementById('elemFluxo').value = '';
-        document.getElementById('dependencias').value = '';
         relacoesTemp = [];
         atualizarListaRelacoes();
         editandoIndex = null;
-        preencherTemplate();
+        preencherTemplate(); // Se template usar Fluxo, ele não jogará na tela, apenas manterá interno
     }
+
 
     function gerarJSONPreview() {
         const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim();
@@ -393,53 +438,93 @@
         document.getElementById('jsonOutput').innerText = JSON.stringify(dadosCompletos, null, 2);
     }
 
-    function exportarJSON() {
-    const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim() || "Ecossistema";
-    // Captura posições atuais dos nós
-    const positions = {};
-    if (network) {
-        const nodePositions = network.getPositions();
-        Object.keys(nodePositions).forEach(id => {
-            positions[id] = { x: nodePositions[id].x, y: nodePositions[id].y };
-        });
+            function exportarJSON() {
+        const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim() || "Ecossistema";
+        const positions = {};
+        if (network) {
+            const nodePositions = network.getPositions();
+            Object.keys(nodePositions).forEach(id => { positions[id] = { x: nodePositions[id].x, y: nodePositions[id].y }; });
+        }
+        const dadosCompletos = { nome_ecossistema: nomeEcossistema, elementos: elementos, positions: positions };
+        
+        // 1. Cria o conteúdo em texto
+        const jsonStr = JSON.stringify(dadosCompletos, null, 2);
+        
+        // 2. Transforma em um arquivo real na memória do navegador (Blob)
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        // Dinamiza o nome do arquivo
+        const nomeArquivo = nomeEcossistema.replace(/[^a-z0-9]/gi, '_').toLowerCase() + ".json";
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nomeArquivo;
+        document.body.appendChild(a);
+        a.click();
+        
+        // 3. Limpa a memória após o download
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url); 
     }
-    const dadosCompletos = { 
-        nome_ecossistema: nomeEcossistema, 
-        elementos: elementos,
-        positions: positions  // salva as posições
-    };
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dadosCompletos, null, 2));
-    const a = document.createElement('a');
-    a.href = dataStr;
-    a.download = "ecossistema.json";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-}
 
+    function exportarXMI() {
+        const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim() || "Ecossistema";
+        const dadosCompletos = { nome_ecossistema: nomeEcossistema, elementos: elementos };
+        const xmiString = daeToXMI(dadosCompletos);
+        
+        // Transforma o XML em um arquivo na memória (Blob)
+        const blob = new Blob([xmiString], { type: "application/xml" });
+        const url = URL.createObjectURL(blob);
+        
+        const nomeArquivo = nomeEcossistema.replace(/[^a-z0-9]/gi, '_').toLowerCase() + "_uml.xmi";
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nomeArquivo;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Limpa a memória
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
     function importarJSON(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const dados = JSON.parse(e.target.result);
-            if (Array.isArray(dados)) {
-                elementos = dados;
-                document.getElementById('nomeEcossistema').value = "";
-            } else {
-                document.getElementById('nomeEcossistema').value = dados.nome_ecossistema || "";
-                elementos = dados.elementos || [];
-                // Se houver posições salvas, guarda para restaurar depois do network ser criado
-                window.savedPositions = dados.positions || {};
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            let dados;
+            // 1. Isola a leitura sintática (Detecta JSON malformado real)
+            try {
+                dados = JSON.parse(e.target.result);
+            } catch (erroParse) {
+                alert("Arquivo inválido. O documento corrompeu as normas de um arquivo JSON.");
+                return;
             }
-            atualizarListaElementos();
-            gerarJSONPreview();
-            renderizarDiagrama();
-            if (elementos.length) mostrarDetalhes(elementos[0].id);
-            alert("Importado com sucesso!");
-        } catch (erro) { alert("JSON inválido."); }
-    };
-    reader.readAsText(file);
-}
+
+            // 2. Isola o processamento de renderização (Evita falhas silenciosas no Vis.js)
+            try {
+                if (Array.isArray(dados)) {
+                    elementos = dados;
+                    document.getElementById('nomeEcossistema').value = "";
+                } else {
+                    document.getElementById('nomeEcossistema').value = dados.nome_ecossistema || "";
+                    elementos = dados.elementos || [];
+                    window.savedPositions = dados.positions || {};
+                }
+                atualizarListaElementos();
+                gerarJSONPreview();
+                renderizarDiagrama();
+                if (elementos.length) mostrarDetalhes(elementos[0].id);
+                alert("Importado com sucesso!");
+            } catch (erroRender) { 
+                console.error(erroRender);
+                alert("O JSON foi carregado, mas houve um erro crítico de renderização de diagrama. Verifique o console."); 
+            }
+        };
+        reader.readAsText(file);
+    }
+
+
     // ==================== DIAGRAMA COM ÍCONES DENTRO DOS CÍRCULOS ====================
  function renderizarDiagrama() {
     if (!document.getElementById('network')) return;
@@ -556,12 +641,31 @@
     network = new vis.Network(container, data, options);
     
 if (window.savedPositions) {
-    network.setPositions(window.savedPositions);
+    // [CORREÇÃO] O Vis.js exige que a atualização de posições seja feita via DataSet
+    const posUpdates = [];
+    Object.keys(window.savedPositions).forEach(id => {
+        // Verifica se o nó realmente existe no diagrama atual (evita crash se um filtro estiver ativo)
+        if (data.nodes.get(id)) {
+            posUpdates.push({
+                id: id,
+                x: window.savedPositions[id].x,
+                y: window.savedPositions[id].y
+            });
+        }
+    });
+    
+    // Injeta as coordenadas salvas e estabiliza a física
+    if (posUpdates.length > 0) {
+        data.nodes.update(posUpdates);
+    }
+    
     window.savedPositions = null;
+    
     if (!physicsEnabled) {
         network.setOptions({ physics: { enabled: false } });
     }
 }
+
     
 
 // Botão para alternar física
@@ -589,6 +693,15 @@ if (!window.physicsBtnListenerAdded) {
 
      // 1. EVENTO DE CLIQUE (CORRIGIDO PARA SUPORTAR CLUSTERS)
     network.on('click', (params) => {
+    if (modoEdicaoRelacionamento) {
+            if (params.nodes.length) {
+                document.getElementById('relDestino').value = params.nodes[0];
+            }
+            modoEdicaoRelacionamento = false;
+            document.getElementById('network').style.cursor = 'default';
+            network.unselectAll(); 
+            return; // 🛑 Impede que o restante do código abaixo seja executado
+        }
         const tituloEl = document.getElementById('diagramTitle');
         
         if (params.nodes.length) {
