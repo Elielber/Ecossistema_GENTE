@@ -1087,27 +1087,36 @@ renderizarMalhaMicro: function(idMissao) {
 
     const container = document.getElementById('micro-cards-dinamicos');
     const historico = this.diarioDeBordo.find(m => m.idMissao === idMissao);
+    const assistenteArea = document.querySelector('#tela-micro .assistente-tia');
+    
+    if(!container) return;
     container.innerHTML = ''; // Limpa para a nova missão
 
-    // 1. INJEÇÃO DA CÁPSULA (Se houver resumo do mestre)
+    // 1. INJEÇÃO DA CÁPSULA (Se houver resumo do mestre no histórico)
     if (historico && historico.resumo) {
         const capsula = document.createElement('div');
         capsula.className = 'card-modulo card-capsula';
         capsula.style.cssText = 'background: rgba(74, 222, 128, 0.05); border: 1px solid var(--cor-sucesso); margin-bottom: 1rem;';
-        capsula.innerHTML = `<p style="font-style: italic; font-size: 0.9rem;">"${historico.resumo}"</p>`;
+        capsula.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: var(--cor-sucesso);">
+                <span class="material-icons-round">auto_stories</span>
+                <strong style="font-size: 0.8rem; letter-spacing: 1px;">CÁPSULA DE CONHECIMENTO</strong>
+            </div>
+            <p style="font-style: italic; font-size: 0.9rem;">"${historico.resumo}"</p>
+        `;
         container.appendChild(capsula);
     }
 
-    // 2. DEFINIÇÃO DAS 4 DIMENSÕES (Conforme o Plano de Curso)
-    [span_4](start_span)// Mapeamos os dados da matriz para as categorias do seu plano[span_4](end_span)
+    // 2. DEFINIÇÃO DAS 4 DIMENSÕES (Conforme o seu Plano de Curso)
+    // Buscamos os dados nos campos card1, card2, etc., ou campos nomeados da sua matriz
     const dimensoes = [
-        { nome: "Dimensão Técnica", dado: missao.cardTecnico || "Conteúdo técnico em análise.", classe: "tipo-contexto", icone: "code" },
-        { nome: "Dimensão Cognitiva", dado: missao.cardCognitivo || "Processamento analítico.", classe: "tipo-cognitivo", icone: "psychology" },
-        { nome: "Dimensão Contextual", dado: missao.cardContextual || "Aplicação no mundo real.", classe: "tipo-contexto", icone: "explore" },
-        { nome: "Dimensão Social", dado: missao.cardSocial || "Interação e debate.", classe: "tipo-cognitivo", icone: "groups" }
+        { nome: "Dimensão Técnica", dado: missao.card1 || missao.cardTecnico || "Conteúdo técnico em análise.", classe: "tipo-contexto", icone: "code" },
+        { nome: "Dimensão Cognitiva", dado: missao.card2 || missao.cardCognitivo || "Processamento analítico.", classe: "tipo-cognitivo", icone: "psychology" },
+        { nome: "Dimensão Contextual", dado: missao.card3 || missao.cardContextual || "Aplicação no mundo real.", classe: "tipo-contexto", icone: "explore" },
+        { nome: "Dimensão Social", dado: missao.card4 || missao.cardSocial || "Interação e debate.", classe: "tipo-cognitivo", icone: "groups" }
     ];
 
-    // 3. RENDERIZAÇÃO DOS CARDS DAS DIMENSÕES
+    // 3. RENDERIZAÇÃO DINÂMICA DOS CARDS
     dimensoes.forEach(dim => {
         const card = document.createElement('div');
         card.className = `card-modulo ${dim.classe}`;
@@ -1121,25 +1130,44 @@ renderizarMalhaMicro: function(idMissao) {
         container.appendChild(card);
     });
 
-    // 4. ATUALIZAÇÃO DO STATUS DO TERMINAL (SEU CÓDIGO DE VALIDAÇÃO)
-    this.atualizarStatusTerminal(historico, idMissao);
-},
-
-atualizarStatusTerminal: function(historico, idMissao) {
+    // 4. ATUALIZAÇÃO DO STATUS DO TERMINAL E ASSISTENTE
     const cardChefe = document.getElementById('micro-terminal');
-    const assistenteArea = document.querySelector('#tela-micro .assistente-tia');
-    
-    if (historico && historico.status === "concluida") {
-        cardChefe.classList.remove('bloqueado');
-        cardChefe.innerHTML = `<h3>CONEXÃO ESTABELECIDA</h3><p>Validado via G3.</p>`;
-        // ... (seu código de sucesso para a assistente) ...
-    } else {
-        cardChefe.classList.add('bloqueado');
-        cardChefe.innerHTML = `<h3>TERMINAL BLOQUEADO</h3><button onclick="ScannerG3.abrir('JOGO')">INICIAR G3</button>`;
-        // ... (seu código de bloqueio para a assistente) ...
+    if (cardChefe) {
+        if (historico && historico.status === "concluida") {
+            cardChefe.classList.remove('bloqueado');
+            cardChefe.style.borderColor = "var(--cor-sucesso)";
+            cardChefe.innerHTML = `
+                <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-sucesso); margin-bottom: 1rem;">check_circle</span>
+                <h3 style="color: var(--cor-sucesso); margin-bottom: 10px;">CONEXÃO ESTABELECIDA</h3>
+                <p style="font-size: 0.85rem; color: var(--texto-suave);">Desbloqueado via Protocolo G3.</p>
+            `;
+            
+            if (assistenteArea) {
+                assistenteArea.style.borderColor = "var(--cor-sucesso)";
+                assistenteArea.querySelector('p:first-child').style.color = "var(--cor-sucesso)";
+                assistenteArea.querySelector('p:first-child').innerText = "SISTEMA OPERACIONAL LIBERADO";
+                assistenteArea.querySelector('.material-icons-round').innerText = "check_circle";
+            }
+        } else {
+            cardChefe.classList.add('bloqueado');
+            cardChefe.style.borderColor = "var(--cor-alerta)";
+            cardChefe.innerHTML = `
+                <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-alerta); margin-bottom: 1rem;">lock_outline</span>
+                <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">TERMINAL BLOQUEADO</h3>
+                <button class="btn btn-primario" style="margin-top: 20px; width: 100%;" onclick="ScannerG3.abrir('JOGO', 'Capture o código da aula')">
+                    <span class="material-icons-round">qr_code_scanner</span> INICIAR PROTOCOLO G3
+                </button>
+            `;
+            
+            if (assistenteArea) {
+                assistenteArea.style.borderColor = "var(--texto-suave)";
+                assistenteArea.querySelector('p:first-child').style.color = "var(--cor-alerta)";
+                assistenteArea.querySelector('p:first-child').innerText = "MÓDULO DE EXECUÇÃO BLOQUEADO";
+                assistenteArea.querySelector('.material-icons-round').innerText = "warning";
+            }
+        }
     }
 }
-
 			};
 			const GenteGameEngine = {
     timerInterval: null,
