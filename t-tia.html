@@ -188,7 +188,7 @@
     .area-acoes-fixa .btn { pointer-events: auto; width: 100%; max-width: 300px; }
 
     /* --- CAMADA MICRO (O Terminal -> image_6cd485.png popup) --- */
-    #tela-micro { background: var(--bg-principal); padding: 2rem; position: fixed; top: 70px; left: 0; width: 100%; height: calc(100% - 70px); z-index: 101; display: none; flex-direction: column; align-items: center; gap: 1.5rem; animation: slideUp 0.3s ease-out; }
+    #tela-micro { background: var(--bg-body); padding: 2rem; position: fixed; top: 70px; left: 0; width: 100%; height: calc(100% - 70px); z-index: 101; display: none; flex-direction: column; align-items: center; gap: 1.5rem; animation: slideUp 0.3s ease-out; }
     #tela-micro.ativa { display: flex; }
 
     @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -365,6 +365,49 @@
         /* Compatibilidade com o Tema Roblox */
         html[data-tema="roblox"] .g3j-timer { color: var(--cor-primaria); }
         html[data-tema="roblox"] .g3j-comando { color: #191A1B; }
+
+		/* --- ESTILOS DOS CARDS DA MALHA MICRO --- */
+.malha-container { 
+    display: flex; flex-direction: column; gap: 1rem; 
+    width: 100%; max-width: 400px; margin: 0 auto; 
+}
+
+.card-modulo {
+    background: rgba(22, 28, 44, 0.8);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    border-radius: 16px;
+    padding: 1.2rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    transition: all 0.3s ease;
+}
+
+/* Cores por Dimensão */
+.tipo-contexto { border-left: 4px solid var(--cor-sucesso); }
+.tipo-cognitivo { border-left: 4px solid var(--cor-primaria); }
+
+.modulo-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.badge-dimensao { font-size: 0.75rem; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: var(--texto-suave); }
+.modulo-titulo { font-size: 0.95rem; color: var(--texto-puro); line-height: 1.4; font-weight: 500; }
+
+.card-chefe {
+    text-align: center; border: 2px solid var(--borda-cor);
+    background: radial-gradient(circle at center, rgba(30, 41, 59, 0.4) 0%, rgba(10, 14, 23, 0.6) 100%);
+}
+
+.card-chefe.bloqueado {
+    border: 2px dashed var(--cor-alerta);
+    opacity: 0.8;
+}
+		
+
+/* Adaptação Automática para o Tema Roblox */
+html[data-tema="roblox"] .card-modulo {
+    background: #FFFFFF; border: 2px solid #D5D8DA;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.1);
+}
+html[data-tema="roblox"] .modulo-titulo { color: #191A1B; }
+html[data-tema="roblox"] .badge-dimensao { color: #575C60; }
+		
 
 		</style>
 </head>
@@ -1048,7 +1091,7 @@ processarCrachaQR: function(textoDecodificado) {
                 });
             },
 
-           renderizarMalhaMicro: function(idMissao) {
+ renderizarMalhaMicro: function(idMissao) {
     let missaoEncontrada = null;
     for(let t of this.mapaCurricular.territorios) {
         const m = t.missoes.find(x => x.idMissao === idMissao);
@@ -1057,9 +1100,9 @@ processarCrachaQR: function(textoDecodificado) {
     if(!missaoEncontrada) return;
 
     // 1. ATUALIZAÇÃO DOS CARDS PEDAGÓGICOS (Contexto e Estratégia)
-    // Extraímos os verbos e a dimensão da matriz para dar vida aos cards
     const txtContexto = document.getElementById('micro-contexto-titulo');
     const txtEstrategia = document.getElementById('micro-estrategia-titulo');
+    const assistenteArea = document.querySelector('#tela-micro .assistente-tia');
     
     if(txtContexto) txtContexto.innerText = `Cenário: ${missaoEncontrada.titulo}`;
     if(txtEstrategia) {
@@ -1077,7 +1120,6 @@ processarCrachaQR: function(textoDecodificado) {
             capsulaCard = document.createElement('div');
             capsulaCard.className = 'card-modulo card-capsula';
             capsulaCard.style.cssText = 'background: rgba(74, 222, 128, 0.05); border: 1px solid var(--cor-sucesso); padding: 1.5rem; border-radius: 16px; margin-bottom: 1rem;';
-            // Insere no topo da malha
             container.prepend(capsulaCard);
         }
         capsulaCard.innerHTML = `
@@ -1091,10 +1133,11 @@ processarCrachaQR: function(textoDecodificado) {
         capsulaCard.remove();
     }
 
-    // 3. ATUALIZAÇÃO DO TERMINAL (Card Chefe)
+    // 3. ATUALIZAÇÃO DO TERMINAL E DA ASSISTENTE (Reatividade HUD)
     const cardChefe = document.querySelector('.card-chefe');
     if (cardChefe) {
         if (historico && historico.status === "concluida") {
+            // Sucesso: Terminal Aberto
             cardChefe.classList.remove('bloqueado');
             cardChefe.style.borderColor = "var(--cor-sucesso)";
             cardChefe.innerHTML = `
@@ -1102,7 +1145,17 @@ processarCrachaQR: function(textoDecodificado) {
                 <h3 style="color: var(--cor-sucesso); margin-bottom: 10px;">CONEXÃO ESTABELECIDA</h3>
                 <p style="font-size: 0.85rem; color: var(--texto-suave);">Desbloqueado via Protocolo G3.</p>
             `;
+            
+            // Reatividade da Assistente (O trecho que faltava)
+            if (assistenteArea) {
+                assistenteArea.style.borderColor = "var(--cor-sucesso)";
+                assistenteArea.querySelector('p:first-child').style.color = "var(--cor-sucesso)";
+                assistenteArea.querySelector('p:first-child').innerText = "SISTEMA OPERACIONAL LIBERADO";
+                assistenteArea.querySelector('.material-icons-round').innerText = "check_circle";
+                assistenteArea.querySelector('.material-icons-round').style.color = "var(--cor-sucesso)";
+            }
         } else {
+            // Bloqueado: Exige Validação
             cardChefe.classList.add('bloqueado');
             cardChefe.style.borderColor = "var(--cor-alerta)";
             cardChefe.innerHTML = `
@@ -1112,9 +1165,19 @@ processarCrachaQR: function(textoDecodificado) {
                     <span class="material-icons-round">qr_code_scanner</span> INICIAR PROTOCOLO G3
                 </button>
             `;
+            
+            // Reseta Assistente para modo Alerta
+            if (assistenteArea) {
+                assistenteArea.style.borderColor = "var(--texto-suave)";
+                assistenteArea.querySelector('p:first-child').style.color = "var(--cor-alerta)";
+                assistenteArea.querySelector('p:first-child').innerText = "MÓDULO DE EXECUÇÃO BLOQUEADO";
+                assistenteArea.querySelector('.material-icons-round').innerText = "warning";
+                assistenteArea.querySelector('.material-icons-round').style.color = "var(--cor-alerta)";
+            }
         }
     }
 }
+
 			};
 			const GenteGameEngine = {
     timerInterval: null,
