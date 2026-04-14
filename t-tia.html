@@ -505,28 +505,14 @@ html[data-tema="roblox"] .badge-dimensao { color: #575C60; }
             </div>
         </div>
 
-        <div class="malha-container">
-    <div class="card-modulo tipo-contexto">
-        <div class="modulo-header">
-            <span class="badge-dimensao">Contexto EPT</span>
-            <span class="material-icons-round" style="font-size: 1rem; color: var(--cor-sucesso);">explore</span>
-        </div>
-        <div class="modulo-titulo" id="micro-contexto-titulo">Carregando cenário...</div>
+<div class="malha-container" id="micro-cards-dinamicos">
     </div>
 
-    <div class="card-modulo tipo-cognitivo">
-        <div class="modulo-header">
-            <span class="badge-dimensao">Estratégia</span>
-            <span class="material-icons-round" style="font-size: 1rem; color: var(--cor-primaria);">psychology</span>
+<div id="micro-terminal-container" style="margin-top: 1rem;">
+    <div class="card-modulo card-chefe bloqueado" id="micro-terminal">
         </div>
-        <div class="modulo-titulo" id="micro-estrategia-titulo">Analisando competências...</div>
-    </div>
-
-    <div id="micro-terminal-container">
-        <div class="card-modulo card-chefe bloqueado">
-             </div>
-    </div>
 </div>
+
 
         <div class="area-acoes-fixa">
             <button class="btn" onclick="Navegador.zoomOut('tela-meso', 'T2: MODELAGEM')">
@@ -1091,90 +1077,66 @@ processarCrachaQR: function(textoDecodificado) {
                 });
             },
 
- renderizarMalhaMicro: function(idMissao) {
-    let missaoEncontrada = null;
+renderizarMalhaMicro: function(idMissao) {
+    let missao = null;
     for(let t of this.mapaCurricular.territorios) {
         const m = t.missoes.find(x => x.idMissao === idMissao);
-        if(m) { missaoEncontrada = m; break; }
+        if(m) { missao = m; break; }
     }
-    if(!missaoEncontrada) return;
+    if(!missao) return;
 
-    // 1. ATUALIZAÇÃO DOS CARDS PEDAGÓGICOS (Contexto e Estratégia)
-    const txtContexto = document.getElementById('micro-contexto-titulo');
-    const txtEstrategia = document.getElementById('micro-estrategia-titulo');
+    const container = document.getElementById('micro-cards-dinamicos');
+    const historico = this.diarioDeBordo.find(m => m.idMissao === idMissao);
+    container.innerHTML = ''; // Limpa para a nova missão
+
+    // 1. INJEÇÃO DA CÁPSULA (Se houver resumo do mestre)
+    if (historico && historico.resumo) {
+        const capsula = document.createElement('div');
+        capsula.className = 'card-modulo card-capsula';
+        capsula.style.cssText = 'background: rgba(74, 222, 128, 0.05); border: 1px solid var(--cor-sucesso); margin-bottom: 1rem;';
+        capsula.innerHTML = `<p style="font-style: italic; font-size: 0.9rem;">"${historico.resumo}"</p>`;
+        container.appendChild(capsula);
+    }
+
+    // 2. DEFINIÇÃO DAS 4 DIMENSÕES (Conforme o Plano de Curso)
+    [span_4](start_span)// Mapeamos os dados da matriz para as categorias do seu plano[span_4](end_span)
+    const dimensoes = [
+        { nome: "Dimensão Técnica", dado: missao.cardTecnico || "Conteúdo técnico em análise.", classe: "tipo-contexto", icone: "code" },
+        { nome: "Dimensão Cognitiva", dado: missao.cardCognitivo || "Processamento analítico.", classe: "tipo-cognitivo", icone: "psychology" },
+        { nome: "Dimensão Contextual", dado: missao.cardContextual || "Aplicação no mundo real.", classe: "tipo-contexto", icone: "explore" },
+        { nome: "Dimensão Social", dado: missao.cardSocial || "Interação e debate.", classe: "tipo-cognitivo", icone: "groups" }
+    ];
+
+    // 3. RENDERIZAÇÃO DOS CARDS DAS DIMENSÕES
+    dimensoes.forEach(dim => {
+        const card = document.createElement('div');
+        card.className = `card-modulo ${dim.classe}`;
+        card.innerHTML = `
+            <div class="modulo-header">
+                <span class="badge-dimensao">${dim.nome}</span>
+                <span class="material-icons-round" style="font-size: 1.2rem;">${dim.icone}</span>
+            </div>
+            <div class="modulo-titulo">${dim.dado}</div>
+        `;
+        container.appendChild(card);
+    });
+
+    // 4. ATUALIZAÇÃO DO STATUS DO TERMINAL (SEU CÓDIGO DE VALIDAÇÃO)
+    this.atualizarStatusTerminal(historico, idMissao);
+},
+
+atualizarStatusTerminal: function(historico, idMissao) {
+    const cardChefe = document.getElementById('micro-terminal');
     const assistenteArea = document.querySelector('#tela-micro .assistente-tia');
     
-    if(txtContexto) txtContexto.innerText = `Cenário: ${missaoEncontrada.titulo}`;
-    if(txtEstrategia) {
-        const verbos = missaoEncontrada.verbosExtraidos ? missaoEncontrada.verbosExtraidos.join(", ") : "Análise tática";
-        txtEstrategia.innerText = `Objetivo: ${verbos.toUpperCase()}`;
-    }
-
-    // 2. GESTÃO DA CÁPSULA DE CONHECIMENTO (Resumo do Professor)
-    const container = document.querySelector('.malha-container');
-    const historico = this.diarioDeBordo.find(m => m.idMissao === idMissao);
-    let capsulaCard = document.querySelector('.card-capsula');
-
-    if (historico && historico.resumo) {
-        if (!capsulaCard) {
-            capsulaCard = document.createElement('div');
-            capsulaCard.className = 'card-modulo card-capsula';
-            capsulaCard.style.cssText = 'background: rgba(74, 222, 128, 0.05); border: 1px solid var(--cor-sucesso); padding: 1.5rem; border-radius: 16px; margin-bottom: 1rem;';
-            container.prepend(capsulaCard);
-        }
-        capsulaCard.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: var(--cor-sucesso);">
-                <span class="material-icons-round">auto_stories</span>
-                <strong style="font-size: 0.8rem; letter-spacing: 1px;">CÁPSULA DE CONHECIMENTO</strong>
-            </div>
-            <p style="font-size: 0.95rem; color: var(--texto-puro); line-height: 1.6; font-style: italic;">"${historico.resumo}"</p>
-        `;
-    } else if (capsulaCard) {
-        capsulaCard.remove();
-    }
-
-    // 3. ATUALIZAÇÃO DO TERMINAL E DA ASSISTENTE (Reatividade HUD)
-    const cardChefe = document.querySelector('.card-chefe');
-    if (cardChefe) {
-        if (historico && historico.status === "concluida") {
-            // Sucesso: Terminal Aberto
-            cardChefe.classList.remove('bloqueado');
-            cardChefe.style.borderColor = "var(--cor-sucesso)";
-            cardChefe.innerHTML = `
-                <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-sucesso); margin-bottom: 1rem;">check_circle</span>
-                <h3 style="color: var(--cor-sucesso); margin-bottom: 10px;">CONEXÃO ESTABELECIDA</h3>
-                <p style="font-size: 0.85rem; color: var(--texto-suave);">Desbloqueado via Protocolo G3.</p>
-            `;
-            
-            // Reatividade da Assistente (O trecho que faltava)
-            if (assistenteArea) {
-                assistenteArea.style.borderColor = "var(--cor-sucesso)";
-                assistenteArea.querySelector('p:first-child').style.color = "var(--cor-sucesso)";
-                assistenteArea.querySelector('p:first-child').innerText = "SISTEMA OPERACIONAL LIBERADO";
-                assistenteArea.querySelector('.material-icons-round').innerText = "check_circle";
-                assistenteArea.querySelector('.material-icons-round').style.color = "var(--cor-sucesso)";
-            }
-        } else {
-            // Bloqueado: Exige Validação
-            cardChefe.classList.add('bloqueado');
-            cardChefe.style.borderColor = "var(--cor-alerta)";
-            cardChefe.innerHTML = `
-                <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-alerta); margin-bottom: 1rem;">lock_outline</span>
-                <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">TERMINAL BLOQUEADO</h3>
-                <button class="btn btn-primario" style="margin-top: 20px; width: 100%;" onclick="ScannerG3.abrir('JOGO', 'Capture o código da aula')">
-                    <span class="material-icons-round">qr_code_scanner</span> INICIAR PROTOCOLO G3
-                </button>
-            `;
-            
-            // Reseta Assistente para modo Alerta
-            if (assistenteArea) {
-                assistenteArea.style.borderColor = "var(--texto-suave)";
-                assistenteArea.querySelector('p:first-child').style.color = "var(--cor-alerta)";
-                assistenteArea.querySelector('p:first-child').innerText = "MÓDULO DE EXECUÇÃO BLOQUEADO";
-                assistenteArea.querySelector('.material-icons-round').innerText = "warning";
-                assistenteArea.querySelector('.material-icons-round').style.color = "var(--cor-alerta)";
-            }
-        }
+    if (historico && historico.status === "concluida") {
+        cardChefe.classList.remove('bloqueado');
+        cardChefe.innerHTML = `<h3>CONEXÃO ESTABELECIDA</h3><p>Validado via G3.</p>`;
+        // ... (seu código de sucesso para a assistente) ...
+    } else {
+        cardChefe.classList.add('bloqueado');
+        cardChefe.innerHTML = `<h3>TERMINAL BLOQUEADO</h3><button onclick="ScannerG3.abrir('JOGO')">INICIAR G3</button>`;
+        // ... (seu código de bloqueio para a assistente) ...
     }
 }
 
