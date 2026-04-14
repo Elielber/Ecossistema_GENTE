@@ -463,28 +463,27 @@
         </div>
 
         <div class="malha-container">
-            <div class="card-modulo tipo-contexto">
-                <div class="modulo-header">
-                    <span class="badge-dimensao">Contexto EPT</span>
-                    <span class="material-icons-round" style="font-size: 1rem; color: var(--cor-sucesso);">explore</span>
-                </div>
-                <div class="modulo-titulo">Identifique o gargalo de carga no Porto do Açu.</div>
-            </div>
-
-            <div class="card-modulo tipo-cognitivo">
-                <div class="modulo-header">
-                    <span class="badge-dimensao">Estratégia</span>
-                    <span class="material-icons-round" style="font-size: 1rem; color: var(--cor-primaria);">psychology</span>
-                </div>
-                <div class="modulo-titulo">Defina a relação (1:N ou N:M) ideal para o problema.</div>
-            </div>
-
-            <div class="card-modulo card-chefe bloqueado">
-                <span class="material-icons-round" style="font-size: 2rem; color: var(--texto-suave); margin-bottom: 0.5rem;">lock</span>
-                <div class="badge-dimensao" style="color: var(--cor-alerta); margin-bottom: 0.5rem;">Terminal Técnico</div>
-                <div class="modulo-titulo" style="color: var(--texto-suave);">Desenvolver Script de Infiltração (SQL)</div>
-            </div>
+    <div class="card-modulo tipo-contexto">
+        <div class="modulo-header">
+            <span class="badge-dimensao">Contexto EPT</span>
+            <span class="material-icons-round" style="font-size: 1rem; color: var(--cor-sucesso);">explore</span>
         </div>
+        <div class="modulo-titulo" id="micro-contexto-titulo">Carregando cenário...</div>
+    </div>
+
+    <div class="card-modulo tipo-cognitivo">
+        <div class="modulo-header">
+            <span class="badge-dimensao">Estratégia</span>
+            <span class="material-icons-round" style="font-size: 1rem; color: var(--cor-primaria);">psychology</span>
+        </div>
+        <div class="modulo-titulo" id="micro-estrategia-titulo">Analisando competências...</div>
+    </div>
+
+    <div id="micro-terminal-container">
+        <div class="card-modulo card-chefe bloqueado">
+             </div>
+    </div>
+</div>
 
         <div class="area-acoes-fixa">
             <button class="btn" onclick="Navegador.zoomOut('tela-meso', 'T2: MODELAGEM')">
@@ -1050,69 +1049,72 @@ processarCrachaQR: function(textoDecodificado) {
             },
 
            renderizarMalhaMicro: function(idMissao) {
-                console.log("[Renderização] A desenhar Malha Micro para:", idMissao);
-                
-                // Encontra os dados completos da Missão clicada
-                let missaoEncontrada = null;
-                for(let t of this.mapaCurricular.territorios) {
-                    const m = t.missoes.find(x => x.idMissao === idMissao);
-                    if(m) { missaoEncontrada = m; break; }
-                }
+    let missaoEncontrada = null;
+    for(let t of this.mapaCurricular.territorios) {
+        const m = t.missoes.find(x => x.idMissao === idMissao);
+        if(m) { missaoEncontrada = m; break; }
+    }
+    if(!missaoEncontrada) return;
 
-                if(!missaoEncontrada) return;
+    // 1. ATUALIZAÇÃO DOS CARDS PEDAGÓGICOS (Contexto e Estratégia)
+    // Extraímos os verbos e a dimensão da matriz para dar vida aos cards
+    const txtContexto = document.getElementById('micro-contexto-titulo');
+    const txtEstrategia = document.getElementById('micro-estrategia-titulo');
+    
+    if(txtContexto) txtContexto.innerText = `Cenário: ${missaoEncontrada.titulo}`;
+    if(txtEstrategia) {
+        const verbos = missaoEncontrada.verbosExtraidos ? missaoEncontrada.verbosExtraidos.join(", ") : "Análise tática";
+        txtEstrategia.innerText = `Objetivo: ${verbos.toUpperCase()}`;
+    }
 
-                // Atualiza a Assistente
-                const assistenteMsg = document.querySelector('#tela-micro .assistente-tia p:nth-child(2)');
-                if(assistenteMsg) {
-                    assistenteMsg.innerText = `A iniciar extração tática para: ${missaoEncontrada.titulo}`;
-                }
+    // 2. GESTÃO DA CÁPSULA DE CONHECIMENTO (Resumo do Professor)
+    const container = document.querySelector('.malha-container');
+    const historico = this.diarioDeBordo.find(m => m.idMissao === idMissao);
+    let capsulaCard = document.querySelector('.card-capsula');
 
-                // --- INÍCIO DA NOVA LÓGICA DE DADOS OFFLINE ---
-                const container = document.querySelector('.malha-container');
-                const historico = this.diarioDeBordo.find(m => m.idMissao === idMissao);
-                let htmlCards = '';
+    if (historico && historico.resumo) {
+        if (!capsulaCard) {
+            capsulaCard = document.createElement('div');
+            capsulaCard.className = 'card-modulo card-capsula';
+            capsulaCard.style.cssText = 'background: rgba(74, 222, 128, 0.05); border: 1px solid var(--cor-sucesso); padding: 1.5rem; border-radius: 16px; margin-bottom: 1rem;';
+            // Insere no topo da malha
+            container.prepend(capsulaCard);
+        }
+        capsulaCard.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: var(--cor-sucesso);">
+                <span class="material-icons-round">auto_stories</span>
+                <strong style="font-size: 0.8rem; letter-spacing: 1px;">CÁPSULA DE CONHECIMENTO</strong>
+            </div>
+            <p style="font-size: 0.95rem; color: var(--texto-puro); line-height: 1.6; font-style: italic;">"${historico.resumo}"</p>
+        `;
+    } else if (capsulaCard) {
+        capsulaCard.remove();
+    }
 
-                // 1. Injeta a Cápsula de Conhecimento (Resumo do Professor) se existir
-                if (historico && historico.resumo) {
-                    htmlCards += `
-                        <div class="card-chefe" style="background: rgba(74, 222, 128, 0.05); border-color: var(--cor-sucesso); text-align: left; margin-bottom: 10px;">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: var(--cor-sucesso);">
-                                <span class="material-icons-round">auto_stories</span>
-                                <strong style="font-size: 0.8rem; letter-spacing: 1px;">CÁPSULA DE CONHECIMENTO</strong>
-                            </div>
-                            <p style="font-size: 0.9rem; color: var(--texto-puro); line-height: 1.6; font-style: italic;">
-                                "${historico.resumo}"
-                            </p>
-                        </div>
-                    `;
-                }
-
-                // 2. Altera o estado do Terminal (Resolvido vs Bloqueado)
-                if (historico && historico.status === "concluida") {
-                    htmlCards += `
-                        <div class="card-chefe" style="border-color: var(--cor-sucesso);">
-                            <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-sucesso); margin-bottom: 1rem;">check_circle</span>
-                            <h3 style="color: var(--cor-sucesso); margin-bottom: 10px;">CONEXÃO ESTABELECIDA</h3>
-                            <p style="font-size: 0.85rem; color: var(--texto-suave);">Os dados desta aula foram extraídos e validados pelo professor.</p>
-                        </div>
-                    `;
-                } else {
-                    htmlCards += `
-                        <div class="card-chefe">
-                            <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-alerta); margin-bottom: 1rem;">lock_outline</span>
-                            <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">TERMINAL BLOQUEADO</h3>
-                            <p style="font-size: 0.85rem; color: var(--texto-suave);">O acesso a este nó exige intervenção do Painel do Mestre.</p>
-            
-                            <button class="btn btn-primario" style="margin-top: 20px; width: 100%;" onclick="ScannerG3.abrir('JOGO', 'Capture o Cartucho do Professor')">
-                                <span class="material-icons-round">qr_code_scanner</span> INICIAR PROTOCOLO G3
-                            </button>
-                        </div>
-                    `;
-                }
-
-                // Renderiza o HTML final na tela do aluno
-                container.innerHTML = htmlCards;
-            }
+    // 3. ATUALIZAÇÃO DO TERMINAL (Card Chefe)
+    const cardChefe = document.querySelector('.card-chefe');
+    if (cardChefe) {
+        if (historico && historico.status === "concluida") {
+            cardChefe.classList.remove('bloqueado');
+            cardChefe.style.borderColor = "var(--cor-sucesso)";
+            cardChefe.innerHTML = `
+                <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-sucesso); margin-bottom: 1rem;">check_circle</span>
+                <h3 style="color: var(--cor-sucesso); margin-bottom: 10px;">CONEXÃO ESTABELECIDA</h3>
+                <p style="font-size: 0.85rem; color: var(--texto-suave);">Desbloqueado via Protocolo G3.</p>
+            `;
+        } else {
+            cardChefe.classList.add('bloqueado');
+            cardChefe.style.borderColor = "var(--cor-alerta)";
+            cardChefe.innerHTML = `
+                <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-alerta); margin-bottom: 1rem;">lock_outline</span>
+                <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">TERMINAL BLOQUEADO</h3>
+                <button class="btn btn-primario" style="margin-top: 20px; width: 100%;" onclick="ScannerG3.abrir('JOGO', 'Capture o código da aula')">
+                    <span class="material-icons-round">qr_code_scanner</span> INICIAR PROTOCOLO G3
+                </button>
+            `;
+        }
+    }
+}
 			};
 			const GenteGameEngine = {
     timerInterval: null,
