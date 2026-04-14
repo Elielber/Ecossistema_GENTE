@@ -501,37 +501,40 @@
         // PROTOCOLO DE COMPRESSÃO: G3-FUSION (G3-F)
         // Tokenização Semântica (ASTIA) + LZW Base64
         // ==========================================
-       const G3Fusion = {
-            dicionario: {
-                " de ": "~", " que ": "^", " para ": "|", " com ": "`",
-                " uma ": "@", " um ": "*", " os ": "=", " as ": "+",
-                " em ": "<", " na ": ">", " no ": "$", 
-                " da ": "§", // Trocado para não destruir chaves JSON
-                " do ": "£", // Trocado para não destruir chaves JSON
-                " dos ": "¢", // Trocado para não destruir arrays JSON
-                " das ": "¥", // Trocado para não destruir arrays JSON
-                "ção": "_", "ções": "#", 
-                "mente": "µ"  // Trocado para não gerar barras de escape
-            },
-            
-            comprimir: function(jsonString) {
-                let txt = jsonString;
-                for (let [palavra, simbolo] of Object.entries(this.dicionario)) {
-                    txt = txt.split(palavra).join(simbolo);
-                }
-                return LZString.compressToBase64(txt);
-            },
-            
-            descomprimir: function(base64String) {
-                let txt = LZString.decompressFromBase64(base64String);
-                if (!txt) throw new Error("Falha na descompressão LZW");
-                
-                for (let [palavra, simbolo] of Object.entries(this.dicionario)) {
-                    txt = txt.split(simbolo).join(palavra);
-                }
-                return txt;
-            }
-        };
+      // ==========================================
+// PROTOCOLO DE COMPRESSÃO: G3-FUSION (G3-F)
+// Compressão LZW pura via LZString (sem tokenização conflituosa)
+// ==========================================
+const G3Fusion = {
+    /**
+     * Comprime uma string JSON para Base64 usando LZW
+     * @param {string} jsonString - String JSON válida
+     * @returns {string} - Base64 comprimido
+     */
+    comprimir: function(jsonString) {
+        if (!jsonString || typeof jsonString !== 'string') {
+            throw new Error("G3Fusion: Entrada inválida para compressão");
+        }
+        return LZString.compressToBase64(jsonString);
+    },
+    
+    /**
+     * Descomprime uma string Base64 para JSON string
+     * @param {string} base64String - Base64 comprimido
+     * @returns {string} - String JSON original
+     */
+    descomprimir: function(base64String) {
+        if (!base64String || typeof base64String !== 'string') {
+            throw new Error("G3Fusion: Entrada inválida para descompressão");
+        }
+        
+        const txt = LZString.decompressFromBase64(base64String);
+        if (!txt) {
+            throw new Error("G3Fusion: Falha na descompressão LZW");
+        }
+        return txt;
+    }
+};
         /**
          * ============================================================================
          * a-TIA | SISTEMA OPERACIONAL PRINCIPAL
