@@ -734,29 +734,59 @@
     }
 },
 
-            salvarPlanilhaSecretaria: async function() {
-    if (!this.dadosCrachaAtual.n) { alert("Gere o crachá primeiro."); return; }
+salvarPlanilhaSecretaria: async function() {
+    if (!this.dadosCrachaAtual.n) { 
+        alert("Gere o crachá primeiro."); 
+        return; 
+    }
     
+    const cargo = document.getElementById("sec-cargo").value;
+    let idParaEnviar = "";
+    let idTurma = "TURMA_PADRAO"; // Ideal: buscar de um select de turmas
+    
+    // 1. Determinar o ID correto baseado no cargo
+    if (cargo === 'Aluno') {
+        idParaEnviar = document.getElementById('sec-aluno-id').value.trim();
+        if (!idParaEnviar) {
+            alert("Preencha o ID do Aluno.");
+            return;
+        }
+    } else {
+        idParaEnviar = document.getElementById('sec-staff-id').value.trim();
+        if (!idParaEnviar) {
+            alert("Preencha o ID Funcional.");
+            return;
+        }
+        // Se for professor ou secretaria, NÃO deve chamar matricularAluno, 
+        // mas sim uma função para cadastrar staff (que não existe na POC ainda).
+        // Vamos simular um alerta para não poluir a aba de alunos.
+        alert(`[SIMULAÇÃO] Profissional ${idParaEnviar} registrado na base de Staff.`);
+        document.getElementById('sec-status-msg').style.color = "var(--cor-sucesso)";
+        document.getElementById('sec-status-msg').innerText = "Registro local concluído (Staff).";
+        return;
+    }
+
+    // 2. Construir Payload CORRETO
     const dadosParaEnviar = {
         action: 'matricularAluno',
-        idAluno: this.dadosCrachaAtual.p.alunoId,
+        idAluno: idParaEnviar,
         nome: this.dadosCrachaAtual.n,
-        idTurma: "TURMA_PADRAO",
+        idTurma: idTurma,
         email: "" 
     };
 
+    // 3. Enviar para a URL CORRETA (POC)
     try {
-        const resposta = await fetch(this.SCRIPT_URL, {
+        const resposta = await fetch(this.POC_URL, { // <-- MUDOU DE SCRIPT_URL PARA POC_URL
             method: "POST",
             body: JSON.stringify(dadosParaEnviar)
         });
         const resultado = await resposta.json();
         
-        // Feedback visual corrigido
         const statusMsg = document.getElementById('sec-status-msg');
         if (resultado.sucesso) {
             statusMsg.style.color = "var(--cor-sucesso)";
-            statusMsg.innerText = "Registrado na planilha com sucesso!";
+            statusMsg.innerText = "Registrado na planilha (POC) com sucesso!";
         } else {
             throw new Error(resultado.erro || "Erro desconhecido");
         }
