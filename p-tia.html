@@ -735,25 +735,23 @@
 },
 
             salvarPlanilhaSecretaria: async function() {
-                if (!this.dadosCrachaAtual.n) { alert("Gere o crachá primeiro antes de salvar."); return; }
-                const msg = document.getElementById("sec-status-msg");
+    if (!this.dadosCrachaAtual.n) { alert("Gere o crachá primeiro."); return; }
+    
+    // Adicione o campo 'action' dentro do objeto que será enviado
+    const dadosParaEnviar = {
+        action: 'matricularAluno', // A SENHA PARA O SCRIPT
+        idAluno: this.dadosCrachaAtual.p.alunoId,
+        nome: this.dadosCrachaAtual.n,
+        idTurma: "TURMA_PADRAO", // Ou o campo de turma do seu formulário
+        email: "" // Opcional, conforme seu script pede
+    };
 
-                if(this.SCRIPT_URL === "SUA_URL_DO_WEB_APP_AQUI"){
-                    msg.style.color = "var(--cor-alerta)";
-                    msg.innerText = "Link do banco de dados (Apps Script) não configurado.";
-                    // Efeito visual de simulação para manter a PoC rodando
-                    setTimeout(() => { msg.style.color = "var(--cor-sucesso)"; msg.innerText = "[Simulação] Dados salvos com sucesso!"; }, 1500);
-                    return;
-                }
-
-                msg.style.color = "var(--cor-g3)"; msg.innerText = "Enviando dados para a nuvem...";
-
-                try {
-                    const resposta = await fetch(this.SCRIPT_URL, {
-                        method: "POST",
-                        body: JSON.stringify({ nome: this.dadosCrachaAtual.n, cargo: this.dadosCrachaAtual.c, dadosExtras: JSON.stringify(this.dadosCrachaAtual.p) })
-                    });
-                    const resultado = await resposta.json();
+    try {
+        const resposta = await fetch(this.SCRIPT_URL, {
+            method: "POST",
+            body: JSON.stringify(dadosParaEnviar) // Agora com a action incluída
+        });
+        const resultado = await resposta.json();
                     
                     if (resultado.status === "sucesso") {
                         msg.style.color = "var(--cor-sucesso)"; msg.innerText = "Registrado na planilha com sucesso!";
