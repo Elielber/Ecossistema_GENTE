@@ -664,46 +664,85 @@ processarCrachaQR: function(textoDecodificado) {
                 alert("Falha no Protocolo G3: Dados corrompidos ou incompatíveis.");
             }
         },
-            processarG3Validacao: async function(dados) {
-                console.log("[Protocolo G3] Recebendo chave de validação:", dados);
+processarG3Validacao: async function(dados) {
+    console.log("[Protocolo G3] Analisando dados capturados:", dados);
 
-                // 1. Verificação Anti-Fraude (O Relógio)
-                const agora = new Date().getTime();
-                if (agora > dados.expira) {
-                    alert("⚠️ ACESSO NEGADO: Esta chave G3 expirou. Validação presencial falhou.");
-                    if (this.leitorHTML5) { this.leitorHTML5.clear(); this.leitorHTML5 = null; }
-                    return;
-                }
+    // 1. VERIFICAÇÃO: É UM CRACHÁ DE PROFESSOR? (O "Visto" Digital)
+    if (dados.t === "LOGIN_PTIA" && dados.p === "professor") {
+        const nomeMestre = dados.n || "Professor(a)";
+        const idMissao = aTIA_Core.missaoAtivaId; // Recupera a missão que está aberta na tela
 
-                // 2. Extrai qual foi a missão concluída
-                const idMissaoConcluida = dados.idMissao;
+        if (!idMissao) {
+            alert("⚠️ ERRO: Nenhuma missão ativa selecionada para receber o visto.");
+            return;
+        }
 
-                // 3. Salva no Banco de Dados Offline (IndexedDB)
-               const registroMissao = {
-                    idMissao: dados.idMissao,
-                    status: "concluida",
-                    dataConclusao: new Date().toISOString(),
-                    resumo: dados.resumo || "" 
-                };
-                
-                await DB.salvarProgresso(registroMissao);
-                
-                sincronizarProgresso(idMissaoConcluida, "concluida", dados.resumo);
+        // Recupera o histórico para não sobrescrever sub-tarefas (os checks dos cards)
+        const historicoTotal = await DB.obterTodoHistorico();
+        let registro = historicoTotal.find(m => m.idMissao === idMissao) || { idMissao: idMissao };
 
-                console.log(`[Banco de Dados] Missão ${idMissaoConcluida} salva como concluída!`);
+        // Eleva o status e registra a autoria da validação humana
+        registro.status = "validada";
+        registro.validadoPor = nomeMestre;
+        registro.dataValidacao = new Date().toISOString();
 
-                // 4. Feedback Visual de Sucesso
-                alert(`✅ EXTRAÇÃO BEM-SUCEDIDA!\n\nMissão ${idMissaoConcluida} concluída e validada pelo Mestre.`);
-                
-                // 5. Limpa a câmera e reinicia o motor para redesenhar a Árvore de Habilidades
-                if (this.leitorHTML5) {
-                    this.leitorHTML5.clear();
-                    this.leitorHTML5 = null;
-                }
-                
-                // Recarrega o Core para o losango seguinte acender!
-                aTIA_Core.iniciar();
-            },
+        await DB.salvarProgresso(registro);
+        
+        // Sincroniza a validação com a secretaria (POC)
+        if (typeof sincronizarProgresso === 'function') {
+            sincronizarProgresso(idMissao, "validada", `Validado por: ${nomeMestre}`);
+        }
+
+        alert(`✅ VISTO REGISTRADO!\n\nO Mestre ${nomeMestre} validou sua execução técnica e social.`);
+        this.fecharScannerG3(); // Função auxiliar para limpar leitor e fechar modal
+        aTIA_Core.renderizarMalhaMicro(idMissao); // Redesenha para mostrar o selo de "Validada"
+        return;
+    }
+
+    // 2. VERIFICAÇÃO: É UMA CHAVE DE CONCLUSÃO DE AULA? (Lógica Existente)
+    if (dados.idMissao && dados.expira) {
+        // Verificação Anti-Fraude (O Relógio)
+        const agora = new Date().getTime();
+        if (agora > dados.expira) {
+            alert("⚠️ ACESSO NEGADO: Esta chave G3 expirou. Validação presencial falhou.");
+            this.fecharScannerG3();
+            return;
+        }
+
+        const idMissaoConcluida = dados.idMissao;
+        const registroMissao = {
+            idMissao: idMissaoConcluida,
+            status: "concluida",
+            dataConclusao: new Date().toISOString(),
+            resumo: dados.resumo || "" 
+        };
+        
+        await DB.salvarProgresso(registroMissao);
+        sincronizarProgresso(idMissaoConcluida, "concluida", dados.resumo);
+
+        alert(`✅ EXTRAÇÃO BEM-SUCEDIDA!\n\nMissão ${idMissaoConcluida} concluída e validada pelo Mestre.`);
+        
+        this.fecharScannerG3();
+        
+        // Em vez de reiniciar o Core e voltar para o mapa, 
+        // redesenhamos a malha para o aluno ler a Cápsula de Conhecimento e os Cards
+        aTIA_Core.renderizarMalhaMicro(idMissaoConcluida);
+    } else {
+        alert("⚠️ CÓDIGO INVÁLIDO: O artefato lido não é reconhecido pelo protocolo ASTIA.");
+        this.fecharScannerG3();
+    }
+},
+
+// Função auxiliar para evitar repetição de código
+fecharScannerG3: function() {
+    if (this.leitorHTML5) {
+        this.leitorHTML5.clear();
+        this.leitorHTML5 = null;
+    }
+    // Adicione aqui a lógica para fechar o modal do scanner se necessário
+    const modal = document.getElementById('modal-scanner-g3');
+    if(modal) modal.style.display = 'none';
+}
 
             desenharCracha: function(dados) {
                 const areaCracha = document.getElementById('area-cracha');
