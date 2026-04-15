@@ -1244,7 +1244,37 @@ renderizarMalhaMicro: async function(idMissao) {
     // Continua chamando a sua função atualizarStatusTerminal intacta!
     this.atualizarStatusTerminal(historico, idMissao, tasksConcluidas);
 },
+abrirModalDesafio: function(idMissao, dim, jaConcluida) {
+        const modal = document.getElementById('overlay-desafio');
+        document.getElementById('desafio-icone').innerText = dim.icone;
+        document.getElementById('desafio-titulo').innerText = dim.nome;
+        document.getElementById('desafio-descricao').innerText = dim.dado;
+        
+        const btn = document.getElementById('btn-executar-tarefa');
+        
+        if(jaConcluida) {
+            btn.style.display = 'none'; // Se já fez, esconde o botão
+        } else {
+            btn.style.display = 'flex';
+            btn.onclick = () => this.confirmarTarefa(idMissao, dim.id);
+        }
+        
+        modal.style.display = 'flex';
+    },
 
+    confirmarTarefa: async function(idMissao, dimId) {
+        const historicoTotal = await DB.obterTodoHistorico();
+        let registro = historicoTotal.find(h => h.idMissao === idMissao) || { idMissao: idMissao, status: "em_progresso", subTasks: {} };
+
+        if(!registro.subTasks) registro.subTasks = {};
+        registro.subTasks[dimId] = true;
+        
+        await DB.salvarProgresso(registro);
+        this.diarioDeBordo = await DB.obterTodoHistorico(); // Atualiza a memória RAM do app
+        
+        document.getElementById('overlay-desafio').style.display = 'none';
+        this.renderizarMalhaMicro(idMissao); // Redesenha para colocar o check verde
+    },
 
 atualizarStatusTerminal: function(historico, idMissao, tasksConcluidas) {
     const cardChefe = document.getElementById('micro-terminal');
