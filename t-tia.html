@@ -660,36 +660,48 @@ const G3Fusion = {
 // Localize o método processarCrachaQR e atualize a lógica de interceptação:
 
 processarCrachaQR: function(textoDecodificado) {
-    try {
-        let dados;
-        if (textoDecodificado.startsWith("G3!")) {
-            const extraido = textoDecodificado.substring(3).replace(/[\r\n\s]+/g, '');
-            const stringRestaurada = G3Fusion.descomprimir(extraido);
-            dados = JSON.parse(stringRestaurada);
-        } else {
-            dados = JSON.parse(textoDecodificado);
-        }
+        try {
+            let dados;
+            
+            if (textoDecodificado.startsWith("G3!")) {
+                const extraido = textoDecodificado.substring(3).replace(/[\r\n\s]+/g, '');
+                const stringRestaurada = G3Fusion.descomprimir(extraido);
+                dados = JSON.parse(stringRestaurada);
+            } else {
+                // Previne erros com aspas simples
+                const jsonLimpo = textoDecodificado.replace(/'/g, '"');
+                dados = JSON.parse(jsonLimpo);
+            }
 
-        if (dados.t === "G3_V" || dados.tipo === "G3_VALIDACAO") {
-            this.processarG3Validacao({ idMissao: dados.id || dados.idMissao, expira: dados.e || dados.expira, resumo: dados.r || dados.resumo });
-            return;
-        }
+            // ROTA 1: É o QR da Aula Concluída? (Aceita a tag nova ou a antiga idMissao)
+            if (dados.t === "G3_V" || dados.tipo === "G3_VALIDACAO" || dados.idMissao) {
+                this.processarG3Validacao({ 
+                    idMissao: dados.id || dados.idMissao, 
+                    expira: dados.e || dados.expira, 
+                    resumo: dados.r || dados.resumo 
+                });
+                return;
+            }
 
-        // ROTEADOR: Se ler o crachá do professor, vai para o "Visto"!
-        if (dados.t === "LOGIN_PTIA" && dados.p === "professor") {
-            this.processarG3Validacao(dados);
-            return;
-        }
+            // ROTA 2: É o Visto do Professor?
+            if (dados.t === "LOGIN_PTIA" && dados.p === "professor") {
+                this.processarG3Validacao(dados);
+                return;
+            }
 
-        if (dados.tipo === "aTIA_LOGIN") {
-            this.processarLogin(dados);
+            // ROTA 3: É o Crachá de Login do Aluno?
+            if (dados.tipo === "aTIA_LOGIN") {
+                this.processarLogin(dados);
+                return;
+            }
+            
+            alert("⚠️ Protocolo G3 não reconheceu a finalidade deste código interno.");
+
+        } catch (erro) {
+            console.error("Erro na leitura:", erro);
+            alert("Falha no Protocolo G3: O código não está no formato JSON esperado.");
         }
-        
-    } catch (erro) {
-        console.error("Erro na leitura:", erro);
-        alert("Falha no Protocolo G3: Dados corrompidos ou incompatíveis.");
-    }
-},
+    },
 
         
 processarG3Validacao: async function(dados) {
@@ -2012,49 +2024,54 @@ const ScannerG3 = {
         }
     }
 },
-    processarLeitura: function(textoDecodificado) {
+processarLeitura: function(textoDecodificado) {
         try {
             this.fechar();
             let stringFinal = textoDecodificado;
 
-            // 1. Tratamento do Protocolo Oficial G3-Fusion
+            // 1. Descompressão Oficial G3-Fusion
             if (textoDecodificado.startsWith("G3!")) {
-                // A CORREÇÃO: Arranca qualquer quebra de linha ou espaço sujo que a câmera colocou
                 const extraido = textoDecodificado.substring(3).replace(/[\r\n\s]+/g, ''); 
                 stringFinal = G3Fusion.descomprimir(extraido);
             } 
-            // 2. Fallback para cartuchos não comprimidos
+            // 2. Fallback para cartuchos base64 antigos
             else if (textoDecodificado.length > 0 && textoDecodificado[0] !== '{') {
                 try {
                     const cleanBase64 = textoDecodificado.replace(/[\r\n\s]+/g, '');
                     const descompactado = LZString.decompressFromBase64(cleanBase64);
                     if (descompactado) stringFinal = descompactado;
-                } catch (e) {
-                    console.log("[G3] Tentativa de descompressão ignorada.");
-                }
+                } catch (e) { }
             }
 
-           // O JSON agora está são e salvo para ser parseado!
-            let dados = JSON.parse(stringFinal);
+            // 3. Validação de Integridade JSON
+            let dados;
+            try {
+                // Tenta corrigir aspas simples caso o P-TIA envie mal formatado
+                const jsonCorrigido = stringFinal.replace(/'/g, '"');
+                dados = JSON.parse(jsonCorrigido);
+            } catch(e) {
+                alert("⚠️ LEITURA ABORTADA:\nO código não é um cartucho ASTIA válido ou está danificado.\n\nLido: " + stringFinal.substring(0, 30) + "...");
+                return;
+            }
             
-            // Roteia a ação para o destino correto
-                        if (dados.tipo === "aTIA_LOGIN" || dados.tipo === "G3_VALIDACAO" || dados.t === "G3_V" || dados.t === "LOGIN_PTIA") { Autenticacao.processarCrachaQR(stringFinal);
+            // 4. ROTEADOR UNIVERSAL (Adicionado dados.idMissao para liberar a Aula)
+            if (dados.tipo === "aTIA_LOGIN" || dados.tipo === "G3_VALIDACAO" || dados.t === "G3_V" || dados.t === "LOGIN_PTIA" || dados.idMissao) {
+                Autenticacao.processarCrachaQR(stringFinal);
             } 
-             
-            // A CORREÇÃO ESTÁ AQUI: Removemos o "|| dados.e" para ele não roubar o QR de conclusão
             else if (dados.t === "G3J" || dados.tipo === "G3J") {
-                // Vai para o Laboratório de Jogos
                 GenteGameEngine.iniciarCartucho(dados);
             } 
             else {
-                alert("Protocolo G3 não reconheceu a assinatura do código.");
+                alert("⚠️ ACESSO NEGADO:\nO Terminal T-TIA não reconheceu a assinatura deste código.");
             }
 
         } catch (erro) {
             console.error("ERRO QR:", erro);
-            alert("QR Code inválido ou corrompido. Certifique-se de que é um crachá oficial.");
+            alert("Erro interno do sistema de captura óptico.");
         }
     }
+
+	
 		};
 // ----------------------------------------------------------------------------
         // MÓDULO UI: MOTOR DE TEMAS (DESIGN SYSTEM)
