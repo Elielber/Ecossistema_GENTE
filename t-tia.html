@@ -11,6 +11,8 @@
         
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/qrcode_js@1.0.0/qrcode.min.js"></script>
+	
 	
     
     <style>
@@ -407,6 +409,29 @@ html[data-tema="roblox"] .card-modulo {
 }
 html[data-tema="roblox"] .modulo-titulo { color: #191A1B; }
 html[data-tema="roblox"] .badge-dimensao { color: #575C60; }
+
+/* Efeito visual de card concluído (Check) */
+.card-modulo.concluido {
+    border-color: var(--cor-sucesso) !important;
+    background: rgba(34, 197, 94, 0.1) !important;
+    opacity: 0.9;
+}
+.card-modulo.concluido .modulo-titulo { text-decoration: line-through; color: var(--cor-sucesso); }
+.check-tarefa {
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    border: 2px solid var(--borda-cor); margin-left: 10px;
+}
+.card-modulo.concluido .check-tarefa { background: var(--cor-sucesso); border-color: var(--cor-sucesso); color: #000; }
+
+/* Modal de Desafio (Onde a tarefa abre) */
+#overlay-desafio {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(10, 14, 23, 0.95); z-index: 10000; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    padding: 2rem; text-align: center; backdrop-filter: blur(5px);
+}
+
 		
 
 		</style>
@@ -633,37 +658,40 @@ const G3Fusion = {
             },
 
 // Localize o método processarCrachaQR e atualize a lógica de interceptação:
+
 processarCrachaQR: function(textoDecodificado) {
-            try {
-                let dados;
-                
-                // Verificação de Protocolo Comprimido (G3-Fusion)
-                if (textoDecodificado.startsWith("G3!")) {
-                    const extraido = textoDecodificado.substring(3).replace(/[\r\n\s]+/g, '');
-                    const stringRestaurada = G3Fusion.descomprimir(extraido);
-                    dados = JSON.parse(stringRestaurada);
-                } else {
-                    dados = JSON.parse(textoDecodificado);
-                }
+    try {
+        let dados;
+        if (textoDecodificado.startsWith("G3!")) {
+            const extraido = textoDecodificado.substring(3).replace(/[\r\n\s]+/g, '');
+            const stringRestaurada = G3Fusion.descomprimir(extraido);
+            dados = JSON.parse(stringRestaurada);
+        } else {
+            dados = JSON.parse(textoDecodificado);
+        }
 
-                if (dados.t === "G3_V" || dados.tipo === "G3_VALIDACAO") {
-                    this.processarG3Validacao({
-                        idMissao: dados.id || dados.idMissao,
-                        expira: dados.e || dados.expira,
-                        resumo: dados.r || dados.resumo
-                    });
-                    return;
-                }
+        if (dados.t === "G3_V" || dados.tipo === "G3_VALIDACAO") {
+            this.processarG3Validacao({ idMissao: dados.id || dados.idMissao, expira: dados.e || dados.expira, resumo: dados.r || dados.resumo });
+            return;
+        }
 
-                if (dados.tipo === "aTIA_LOGIN") {
-                    this.processarLogin(dados);
-                }
-                
-            } catch (erro) {
-                console.error("Erro na descompressão/leitura:", erro);
-                alert("Falha no Protocolo G3: Dados corrompidos ou incompatíveis.");
-            }
-        },
+        // ROTEADOR: Se ler o crachá do professor, vai para o "Visto"!
+        if (dados.t === "LOGIN_PTIA" && dados.p === "professor") {
+            this.processarG3Validacao(dados);
+            return;
+        }
+
+        if (dados.tipo === "aTIA_LOGIN") {
+            this.processarLogin(dados);
+        }
+        
+    } catch (erro) {
+        console.error("Erro na leitura:", erro);
+        alert("Falha no Protocolo G3: Dados corrompidos ou incompatíveis.");
+    }
+},
+
+        
 processarG3Validacao: async function(dados) {
     console.log("[Protocolo G3] Analisando dados capturados:", dados);
 
@@ -742,7 +770,7 @@ fecharScannerG3: function() {
     // Adicione aqui a lógica para fechar o modal do scanner se necessário
     const modal = document.getElementById('modal-scanner-g3');
     if(modal) modal.style.display = 'none';
-}
+},
 
             desenharCracha: function(dados) {
                 const areaCracha = document.getElementById('area-cracha');
@@ -1065,19 +1093,22 @@ fecharScannerG3: function() {
                     let status = "bloqueado";
                     const historico = this.diarioDeBordo.find(m => m.idMissao === missao.idMissao);
 
-                    if (historico && historico.status === "concluida") {
+                         if (historico && (historico.status === "concluida" || historico.status === "validada")) {
                         status = "concluido";
-                    } else if (index === 0) {
+                    }  else if (index === 0) {
                         // A primeira missão do território está sempre disponível
                         status = "ativo";
-                    } else {
-                        // Verifica se a missão imediatamente acima já foi concluída
+                                        } else {
+                        // TRAVA PEDAGÓGICA: Verifica se a missão acima já recebeu o VISTO ("validada")
                         const missaoAnterior = territorio.missoes[index - 1];
                         const histAnterior = this.diarioDeBordo.find(m => m.idMissao === missaoAnterior.idMissao);
-                        if (histAnterior && histAnterior.status === "concluida") {
+                        
+                        // Mudamos de "concluida" para "validada"
+                        if (histAnterior && histAnterior.status === "validada") {
                             status = "ativo";
                         }
                     }
+
 
                     // Motor de Renderização Semântica (Lê os dados gerados pelo AP-TIA)
                     let icone = "memory"; // Padrão
@@ -1117,6 +1148,8 @@ fecharScannerG3: function() {
             },
 
 renderizarMalhaMicro: function(idMissao) {
+    this.missaoAtivaId = idMissao; // Salva na memória para o leitor de crachá do professor saber onde dar o visto
+
     let missao = null;
     for(let t of this.mapaCurricular.territorios) {
         const m = t.missoes.find(x => x.idMissao === idMissao);
@@ -1125,13 +1158,18 @@ renderizarMalhaMicro: function(idMissao) {
     if(!missao) return;
 
     const container = document.getElementById('micro-cards-dinamicos');
-    const historico = this.diarioDeBordo.find(m => m.idMissao === idMissao);
+    const historico = this.diarioDeBordo.find(m => m.idMissao === idMissao) || { subTasks: {} };
     const assistenteArea = document.querySelector('#tela-micro .assistente-tia');
     
     if(!container) return;
-    container.innerHTML = ''; // Limpa para a nova missão
+    container.innerHTML = ''; 
 
-    // 1. INJEÇÃO DA CÁPSULA (Se houver resumo do mestre no histórico)
+    // === A TRAVA PEDAGÓGICA CRÍTICA ===
+    // Define o status global da missão para travar ou liberar a execução dos cards
+    const statusMissao = historico.status || "pendente";
+    const cardsLiberados = (statusMissao === "concluida" || statusMissao === "validada");
+
+    // 1. INJEÇÃO DA CÁPSULA
     if (historico && historico.resumo) {
         const capsula = document.createElement('div');
         capsula.className = 'card-modulo card-capsula';
@@ -1146,67 +1184,191 @@ renderizarMalhaMicro: function(idMissao) {
         container.appendChild(capsula);
     }
 
-    // 2. DEFINIÇÃO DAS 4 DIMENSÕES (Conforme o seu Plano de Curso)
-    // Buscamos os dados nos campos card1, card2, etc., ou campos nomeados da sua matriz
+    // 2. DEFINIÇÃO DAS 4 DIMENSÕES
     const dimensoes = [
-        { nome: "Dimensão Técnica", dado: missao.card1 || missao.cardTecnico || "Conteúdo técnico em análise.", classe: "tipo-contexto", icone: "code" },
-        { nome: "Dimensão Cognitiva", dado: missao.card2 || missao.cardCognitivo || "Processamento analítico.", classe: "tipo-cognitivo", icone: "psychology" },
-        { nome: "Dimensão Contextual", dado: missao.card3 || missao.cardContextual || "Aplicação no mundo real.", classe: "tipo-contexto", icone: "explore" },
-        { nome: "Dimensão Social", dado: missao.card4 || missao.cardSocial || "Interação e debate.", classe: "tipo-cognitivo", icone: "groups" }
+        { id: "T", nome: "Dimensão Técnica", dado: missao.card1 || missao.cardTecnico || "Conteúdo técnico em análise.", classe: "tipo-contexto", icone: "code" },
+        { id: "C", nome: "Dimensão Cognitiva", dado: missao.card2 || missao.cardCognitivo || "Processamento analítico.", classe: "tipo-cognitivo", icone: "psychology" },
+        { id: "X", nome: "Dimensão Contextual", dado: missao.card3 || missao.cardContextual || "Aplicação no mundo real.", classe: "tipo-contexto", icone: "explore" },
+        { id: "S", nome: "Dimensão Social", dado: missao.card4 || missao.cardSocial || "Interação e debate.", classe: "tipo-cognitivo", icone: "groups" }
     ];
 
-    // 3. RENDERIZAÇÃO DINÂMICA DOS CARDS
+    let tasksConcluidas = 0;
+
+    // 3. RENDERIZAÇÃO DOS CARDS (COM AVALIAÇÃO DE BLOQUEIO)
     dimensoes.forEach(dim => {
+        const concluida = historico.subTasks && historico.subTasks[dim.id];
+        if(concluida) tasksConcluidas++;
+
         const card = document.createElement('div');
-        card.className = `card-modulo ${dim.classe}`;
-        card.innerHTML = `
-            <div class="modulo-header">
-                <span class="badge-dimensao">${dim.nome}</span>
-                <span class="material-icons-round" style="font-size: 1.2rem;">${dim.icone}</span>
-            </div>
-            <div class="modulo-titulo">${dim.dado}</div>
-        `;
+        
+        if (cardsLiberados) {
+            // Card Desbloqueado (O aluno já leu o QR da Aula)
+            card.className = `card-modulo ${dim.classe} ${concluida ? 'concluido' : ''}`;
+            card.style.cursor = 'pointer';
+            card.innerHTML = `
+                <div class="modulo-header">
+                    <span class="badge-dimensao">${dim.nome}</span>
+                    <div style="display:flex; align-items:center;">
+                        <span class="material-icons-round" style="font-size: 1.2rem;">${dim.icone}</span>
+                        <div class="check-tarefa"><span class="material-icons-round" style="font-size:16px;">${concluida ? 'check' : ''}</span></div>
+                    </div>
+                </div>
+                <div class="modulo-titulo">${dim.dado}</div>
+            `;
+            // Mantém a sua função de abrir o desafio ativa
+            card.onclick = () => this.abrirModalDesafio(idMissao, dim, concluida);
+        } else {
+            // Card Bloqueado (O aluno NÃO leu o QR da Aula)
+            card.className = `card-modulo`;
+            card.style.cursor = 'not-allowed';
+            card.style.opacity = '0.5';
+            card.style.border = '1px dashed var(--texto-suave)';
+            card.innerHTML = `
+                <div class="modulo-header">
+                    <span class="badge-dimensao" style="color: var(--texto-suave);">${dim.nome}</span>
+                    <span class="material-icons-round" style="font-size: 1.2rem; color: var(--texto-suave);">lock</span>
+                </div>
+                <div class="modulo-titulo" style="color: var(--texto-suave); font-style: italic;">
+                    Tarefa selada. Requer protocolo de aula.
+                </div>
+            `;
+            // Bloqueia a execução da tarefa
+            card.onclick = () => alert("🔒 ACESSO NEGADO:\nExtraia o conteúdo na lousa (Protocolo G3) para liberar a execução das tarefas dimensionais.");
+        }
+        
         container.appendChild(card);
     });
 
-    // 4. ATUALIZAÇÃO DO STATUS DO TERMINAL E ASSISTENTE
+    // 4. ATUALIZAÇÃO DO STATUS DO TERMINAL
+    // Continua chamando a sua função atualizarStatusTerminal intacta!
+    this.atualizarStatusTerminal(historico, idMissao, tasksConcluidas);
+},
+
+
+atualizarStatusTerminal: function(historico, idMissao, tasksConcluidas) {
     const cardChefe = document.getElementById('micro-terminal');
-    if (cardChefe) {
-        if (historico && historico.status === "concluida") {
-            cardChefe.classList.remove('bloqueado');
-            cardChefe.style.borderColor = "var(--cor-sucesso)";
-            cardChefe.innerHTML = `
-                <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-sucesso); margin-bottom: 1rem;">check_circle</span>
-                <h3 style="color: var(--cor-sucesso); margin-bottom: 10px;">CONEXÃO ESTABELECIDA</h3>
-                <p style="font-size: 0.85rem; color: var(--texto-suave);">Desbloqueado via Protocolo G3.</p>
-            `;
+    const assistenteArea = document.querySelector('#tela-micro .assistente-tia');
+    if (!cardChefe) return;
+
+    // Garante que temos um status para avaliar (pendente, concluida ou validada)
+    const statusMissao = historico ? historico.status : "pendente";
+
+    // ====================================================================
+    // ESTÁGIO 4: VALIDAÇÃO PRESENCIAL (Tudo pronto e com Visto)
+    // ====================================================================
+    if (statusMissao === "validada") {
+        const mestre = historico.validadoPor || "Professor";
+        cardChefe.classList.remove('bloqueado');
+        cardChefe.style.borderColor = "var(--cor-sucesso)";
+        cardChefe.innerHTML = `
+            <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-sucesso); margin-bottom: 1rem;">verified</span>
+            <h3 style="color: var(--cor-sucesso); margin-bottom: 10px;">CONEXÃO VALIDADA</h3>
+            <p style="font-size: 0.85rem; color: var(--texto-suave);">Aprovação registrada presencialmente por:<br>
+            <strong style="color: var(--texto-puro); font-size: 1.1rem; display: block; margin-top: 5px;">${mestre}</strong></p>
+        `;
+        if (assistenteArea) {
+            assistenteArea.style.borderColor = "var(--cor-sucesso)";
+            assistenteArea.querySelector('p:first-child').style.color = "var(--cor-sucesso)";
+            assistenteArea.querySelector('p:first-child').innerText = "SISTEMA OPERACIONAL VALIDADO";
+            assistenteArea.querySelector('.material-icons-round').innerText = "verified";
+        }
+    } 
+    // ====================================================================
+    // ESTÁGIO 3: AULA LIDA + 4 TAREFAS FEITAS (Pronto para o Visto)
+    // ====================================================================
+    else if (statusMissao === "concluida" && tasksConcluidas === 4) {
+        cardChefe.classList.remove('bloqueado');
+        cardChefe.style.borderColor = "var(--cor-primaria)";
+        cardChefe.innerHTML = `
+            <span class="material-icons-round" style="font-size: 2.5rem; color: var(--cor-primaria); margin-bottom: 0.5rem;">share</span>
+            <h3 style="color: var(--cor-primaria); margin-bottom: 10px;">CARTUCHO DE ENTREGA</h3>
             
-            if (assistenteArea) {
-                assistenteArea.style.borderColor = "var(--cor-sucesso)";
-                assistenteArea.querySelector('p:first-child').style.color = "var(--cor-sucesso)";
-                assistenteArea.querySelector('p:first-child').innerText = "SISTEMA OPERACIONAL LIBERADO";
-                assistenteArea.querySelector('.material-icons-round').innerText = "check_circle";
-            }
-        } else {
-            cardChefe.classList.add('bloqueado');
-            cardChefe.style.borderColor = "var(--cor-alerta)";
-            cardChefe.innerHTML = `
-                <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-alerta); margin-bottom: 1rem;">lock_outline</span>
-                <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">TERMINAL BLOQUEADO</h3>
-                <button class="btn btn-primario" style="margin-top: 20px; width: 100%;" onclick="ScannerG3.abrir('JOGO', 'Capture o código da aula')">
-                    <span class="material-icons-round">qr_code_scanner</span> INICIAR PROTOCOLO G3
-                </button>
-            `;
+            <p style="font-size: 0.85rem; color: var(--texto-suave); margin-bottom: 10px;">1. Apresente este código para a leitura do Professor:</p>
             
-            if (assistenteArea) {
-                assistenteArea.style.borderColor = "var(--texto-suave)";
-                assistenteArea.querySelector('p:first-child').style.color = "var(--cor-alerta)";
-                assistenteArea.querySelector('p:first-child').innerText = "MÓDULO DE EXECUÇÃO BLOQUEADO";
-                assistenteArea.querySelector('.material-icons-round').innerText = "warning";
+            <div id="qr-entrega-aluno" style="background: #fff; padding: 10px; border-radius: 8px; display: inline-block; margin-bottom: 15px; min-height: 120px; min-width: 120px;"></div>
+            
+            <p style="font-size: 0.85rem; color: var(--texto-suave); margin-bottom: 10px;">2. Após o registro, escaneie o crachá do professor para receber o Visto:</p>
+            
+            <button class="btn btn-primario" style="width: 100%;" onclick="ScannerG3.abrir('VISTO', 'Aponte para o crachá do professor')">
+                <span class="material-icons-round">qr_code_scanner</span> LER CRACHÁ DO PROFESSOR
+            </button>
+        `;
+
+        // Motor Assíncrono para desenhar o QR Code assim que o HTML for injetado
+        setTimeout(() => {
+            const containerQr = document.getElementById('qr-entrega-aluno');
+            if(containerQr) {
+                containerQr.innerHTML = '';
+                
+                // O pacote de dados que o P-TIA vai ler para salvar na sua Planilha (POC)
+                const payloadEntrega = JSON.stringify({
+                    tipo: "ENTREGA_TAREFA",
+                    idMissao: idMissao,
+                    tarefasFeitas: tasksConcluidas
+                });
+
+                new QRCode(containerQr, {
+                    text: payloadEntrega,
+                    width: 130,
+                    height: 130,
+                    correctLevel: QRCode.Level.L // Nível L facilita a leitura rápida em sala
+                });
             }
+        }, 150);
+
+        if (assistenteArea) {
+            assistenteArea.style.borderColor = "var(--cor-primaria)";
+            assistenteArea.querySelector('p:first-child').style.color = "var(--cor-primaria)";
+            assistenteArea.querySelector('p:first-child').innerText = "AGUARDANDO VALIDAÇÃO HUMANA";
+            assistenteArea.querySelector('.material-icons-round').innerText = "how_to_reg";
+        }
+    } 
+
+    // ====================================================================
+    // ESTÁGIO 2: AULA LIDA, MAS FALTAM TAREFAS (Em Execução)
+    // ====================================================================
+    else if (statusMissao === "concluida") {
+        cardChefe.classList.add('bloqueado');
+        cardChefe.style.borderColor = "var(--cor-alerta)";
+        cardChefe.innerHTML = `
+            <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-alerta); margin-bottom: 1rem;">engineering</span>
+            <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">EM EXECUÇÃO</h3>
+            <p style="font-size: 0.85rem; color: var(--texto-suave); margin-bottom: 15px;">Conclua as ${4 - tasksConcluidas} tarefas dimensionais acima para liberar o scanner do visto.</p>
+            <button class="btn btn-primario" style="width: 100%; opacity: 0.5; cursor: not-allowed;">
+                <span class="material-icons-round">lock</span> REQUER TAREFAS
+            </button>
+        `;
+        if (assistenteArea) {
+            assistenteArea.style.borderColor = "var(--texto-suave)";
+            assistenteArea.querySelector('p:first-child').style.color = "var(--cor-alerta)";
+            assistenteArea.querySelector('p:first-child').innerText = "TAREFAS PENDENTES";
+            assistenteArea.querySelector('.material-icons-round').innerText = "pending_actions";
+        }
+    }
+    // ====================================================================
+    // ESTÁGIO 1: AINDA NÃO LEU O QR DA AULA (Totalmente bloqueado)
+    // ====================================================================
+    else {
+        cardChefe.classList.add('bloqueado');
+        cardChefe.style.borderColor = "var(--cor-alerta)";
+        cardChefe.innerHTML = `
+            <span class="material-icons-round" style="font-size: 3rem; color: var(--cor-alerta); margin-bottom: 1rem;">lock_outline</span>
+            <h3 style="color: var(--cor-alerta); margin-bottom: 10px;">TERMINAL BLOQUEADO</h3>
+            <p style="font-size: 0.85rem; color: var(--texto-suave); margin-bottom: 15px;">Leia o QR Code da aula na lousa para iniciar esta missão.</p>
+            <button class="btn btn-primario" style="width: 100%;" onclick="ScannerG3.abrir('JOGO', 'Capture o código da aula')">
+                <span class="material-icons-round">qr_code_scanner</span> EXTRAIR CONTEÚDO
+            </button>
+        `;
+        if (assistenteArea) {
+            assistenteArea.style.borderColor = "var(--texto-suave)";
+            assistenteArea.querySelector('p:first-child').style.color = "var(--cor-alerta)";
+            assistenteArea.querySelector('p:first-child').innerText = "MÓDULO DE EXECUÇÃO BLOQUEADO";
+            assistenteArea.querySelector('.material-icons-round').innerText = "warning";
         }
     }
 }
+
+
 			};
 			const GenteGameEngine = {
     timerInterval: null,
@@ -1844,10 +2006,9 @@ const ScannerG3 = {
             let dados = JSON.parse(stringFinal);
             
             // Roteia a ação para o destino correto
-            if (dados.tipo === "aTIA_LOGIN" || dados.tipo === "G3_VALIDACAO" || dados.t === "G3_V") {
-                // Vai para a Autenticação / Conclusão
-                Autenticacao.processarCrachaQR(stringFinal);
+                        if (dados.tipo === "aTIA_LOGIN" || dados.tipo === "G3_VALIDACAO" || dados.t === "G3_V" || dados.t === "LOGIN_PTIA") { Autenticacao.processarCrachaQR(stringFinal);
             } 
+             
             // A CORREÇÃO ESTÁ AQUI: Removemos o "|| dados.e" para ele não roubar o QR de conclusão
             else if (dados.t === "G3J" || dados.tipo === "G3J") {
                 // Vai para o Laboratório de Jogos
@@ -1945,7 +2106,19 @@ async function sincronizarProgresso(idMissao, status, resumo) {
             </button>
         </div>
     </div>
-
+    <div id="overlay-desafio">
+        <div style="width: 100%; max-width: 400px; background: var(--bg-card); padding: 2rem; border-radius: 20px; border: 1px solid var(--cor-primaria); box-shadow: 0 10px 30px rgba(0,0,0,0.8); display: flex; flex-direction: column; align-items: center;">
+            <span id="desafio-icone" class="material-icons-round" style="font-size: 4rem; color: var(--cor-primaria);"></span>
+            <h2 id="desafio-titulo" style="margin: 1rem 0; color: var(--texto-puro);"></h2>
+            <div id="desafio-descricao" style="background: rgba(0,0,0,0.3); padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; line-height: 1.6; color: var(--texto-suave); font-size: 0.95rem;"></div>
+            
+            <button class="btn btn-primario" id="btn-executar-tarefa" style="width: 100%; justify-content: center; margin-bottom: 10px;">
+                <span class="material-icons-round">task_alt</span> CONFIRMAR EXECUÇÃO
+            </button>
+            <button class="btn" onclick="document.getElementById('overlay-desafio').style.display='none'" style="width: 100%; justify-content: center; background: transparent; border: 1px solid var(--borda-cor); color: var(--texto-suave);">VOLTAR</button>
+        </div>
+    </div>
+    
 
 </body>
 </html>
