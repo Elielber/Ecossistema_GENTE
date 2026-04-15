@@ -1304,8 +1304,8 @@ atualizarStatusTerminal: function(historico, idMissao, tasksConcluidas) {
             assistenteArea.querySelector('.material-icons-round').innerText = "verified";
         }
     } 
-    // ====================================================================
-    // ESTÁGIO 3: AULA LIDA + 4 TAREFAS FEITAS (Pronto para o Visto)
+   // ====================================================================
+    // ESTÁGIO 3: AULA LIDA + 4 TAREFAS FEITAS (Geração do QR de Entrega)
     // ====================================================================
     else if (statusMissao === "concluida" && tasksConcluidas === 4) {
         cardChefe.classList.remove('bloqueado');
@@ -1316,14 +1316,45 @@ atualizarStatusTerminal: function(historico, idMissao, tasksConcluidas) {
             
             <p style="font-size: 0.85rem; color: var(--texto-suave); margin-bottom: 10px;">1. Apresente este código para a leitura do Professor:</p>
             
-            <div id="qr-entrega-aluno" style="background: #fff; padding: 10px; border-radius: 8px; display: inline-block; margin-bottom: 15px; min-height: 120px; min-width: 120px;"></div>
+            <div id="qr-entrega-aluno" style="background: #fff; padding: 10px; border-radius: 8px; display: inline-block; margin-bottom: 15px; min-height: 130px; min-width: 130px;"></div>
             
-            <p style="font-size: 0.85rem; color: var(--texto-suave); margin-bottom: 10px;">2. Após o registro, escaneie o crachá do professor para receber o Visto:</p>
+            <p style="font-size: 0.85rem; color: var(--texto-suave); margin-bottom: 10px;">2. Após o professor registrar, escaneie o crachá dele:</p>
             
             <button class="btn btn-primario" style="width: 100%;" onclick="ScannerG3.abrir('VISTO', 'Aponte para o crachá do professor')">
                 <span class="material-icons-round">qr_code_scanner</span> LER CRACHÁ DO PROFESSOR
             </button>
         `;
+
+        // Motor de Geração do QR Code
+        setTimeout(() => {
+            const containerQr = document.getElementById('qr-entrega-aluno');
+            if (containerQr && typeof QRCode !== 'undefined') {
+                containerQr.innerHTML = '';
+                
+                // Dados que o seu P-TIA vai ler e enviar para a planilha (POC)
+                const payloadEntrega = JSON.stringify({
+                    tipo: "ENTREGA_TAREFA",
+                    aluno: Autenticacao.usuario ? Autenticacao.usuario.nome : "Estudante",
+                    idMissao: idMissao,
+                    check: true
+                });
+
+                new QRCode(containerQr, {
+                    text: payloadEntrega,
+                    width: 130,
+                    height: 130,
+                    correctLevel: QRCode.CorrectLevel.L // Correção aqui: CorrectLevel em vez de Level
+                });
+            }
+        }, 200);
+
+        if (assistenteArea) {
+            assistenteArea.style.borderColor = "var(--cor-primaria)";
+            assistenteArea.querySelector('p:first-child').style.color = "var(--cor-primaria)";
+            assistenteArea.querySelector('p:first-child').innerText = "AGUARDANDO VALIDAÇÃO HUMANA";
+            assistenteArea.querySelector('.material-icons-round').innerText = "how_to_reg";
+        }
+    }
 
         // Motor Assíncrono para desenhar o QR Code assim que o HTML for injetado
         setTimeout(() => {
