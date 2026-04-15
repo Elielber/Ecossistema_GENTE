@@ -1070,7 +1070,6 @@ carregarMatrizDaPEC: async function(idCurso) {
     }
 },
 
-// Localize a função gerarChaveG3 e substitua por esta versão otimizada:
 gerarChaveG3: function() {
     const select = document.getElementById('select-missao');
     const missaoId = select.value;
@@ -1087,8 +1086,8 @@ gerarChaveG3: function() {
         r: resumoAula
     });
 
-    // Aplica compressão G3-Fusion
-    const payloadFinal = "G3!" + G3Fusion.comprimir(payloadBruto);
+    // A MÁGICA AQUI: Removemos a compressão G3! e usamos o padrão seguro UTF-8 dos jogos
+    const payloadFinal = unescape(encodeURIComponent(payloadBruto));
 
     const container = document.getElementById('container-qr-gigante');
     container.innerHTML = '';
@@ -1098,13 +1097,11 @@ gerarChaveG3: function() {
             text: payloadFinal,
             width: 450,
             height: 450,
-            correctLevel: QRCode.CorrectLevel.L
+            correctLevel: QRCode.CorrectLevel.M // Elevado para M para garantir leitura fácil de longe
         });
 
         // --- REGISTRA A CHAVE NA POC ---
-        // Nota: idTurma deve ser obtido da turma ativa. Vamos usar um valor fixo ou buscar do select.
-        // Sugestão: adicionar um campo "Turma" na interface. Por enquanto, usamos "TURMA_PADRAO".
-        const idTurma = "TURMA_PADRAO"; // Substitua pela lógica real de seleção de turma
+        const idTurma = "TURMA_PADRAO"; 
         this.registrarChaveG3NaPOC(payloadFinal, missaoId, idTurma, new Date(validadeTimestamp).toISOString());
 
         document.getElementById('painel-projecao-g3').style.display = 'flex';
