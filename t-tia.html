@@ -2026,15 +2026,27 @@ const ScannerG3 = {
 },
 processarLeitura: function(textoDecodificado) {
         try {
-            this.fechar();
+            // 1. DESLIGAMENTO SEGURO DA CÂMERA
+            // Ignora erros nativos se a biblioteca da câmera engasgar
+            const overlay = document.getElementById('overlay-scanner-g3');
+            if (overlay) overlay.style.display = 'none';
+            try { 
+                if (this.leitorHTML5) this.leitorHTML5.stop().then(() => this.leitorHTML5.clear()).catch(()=>{}); 
+            } catch(e) {}
+
             let stringFinal = textoDecodificado;
 
-            // 1. Descompressão Oficial G3-Fusion
+            // 2. DESCOMPRESSÃO PROTEGIDA G3-FUSION
             if (textoDecodificado.startsWith("G3!")) {
-                const extraido = textoDecodificado.substring(3).replace(/[\r\n\s]+/g, ''); 
-                stringFinal = G3Fusion.descomprimir(extraido);
+                try {
+                    const extraido = textoDecodificado.substring(3).replace(/[\r\n\s]+/g, '');
+                    stringFinal = G3Fusion.descomprimir(extraido);
+                } catch(e) {
+                    alert("⚠️ FALHA DE DESCOMPRESSÃO:\nO cartucho G3 lido pela câmera está corrompido ou incompleto.");
+                    return;
+                }
             } 
-            // 2. Fallback para cartuchos base64 antigos
+            // Fallback base64
             else if (textoDecodificado.length > 0 && textoDecodificado[0] !== '{') {
                 try {
                     const cleanBase64 = textoDecodificado.replace(/[\r\n\s]+/g, '');
@@ -2043,18 +2055,23 @@ processarLeitura: function(textoDecodificado) {
                 } catch (e) { }
             }
 
-            // 3. Validação de Integridade JSON
+            // 3. PARSER JSON PROTEGIDO
             let dados;
             try {
-                // Tenta corrigir aspas simples caso o P-TIA envie mal formatado
                 const jsonCorrigido = stringFinal.replace(/'/g, '"');
                 dados = JSON.parse(jsonCorrigido);
             } catch(e) {
-                alert("⚠️ LEITURA ABORTADA:\nO código não é um cartucho ASTIA válido ou está danificado.\n\nLido: " + stringFinal.substring(0, 30) + "...");
+                alert("⚠️ LEITURA ABORTADA:\nO código não é um cartucho ASTIA válido ou a imagem estava desfocada.\n\nLido: " + stringFinal.substring(0, 30) + "...");
                 return;
             }
-            
-            // 4. ROTEADOR UNIVERSAL (Adicionado dados.idMissao para liberar a Aula)
+
+            // 4. BLINDAGEM CONTRA OBJETOS NULOS (O Provável Culpado)
+            if (!dados || typeof dados !== 'object') {
+                alert("⚠️ LEITURA ABORTADA:\nO payload extraído da imagem está vazio.");
+                return;
+            }
+
+            // 5. ROTEADOR UNIVERSAL
             if (dados.tipo === "aTIA_LOGIN" || dados.tipo === "G3_VALIDACAO" || dados.t === "G3_V" || dados.t === "LOGIN_PTIA" || dados.idMissao) {
                 Autenticacao.processarCrachaQR(stringFinal);
             } 
@@ -2067,7 +2084,8 @@ processarLeitura: function(textoDecodificado) {
 
         } catch (erro) {
             console.error("ERRO QR:", erro);
-            alert("Erro interno do sistema de captura óptico.");
+            // Agora o erro imprime a real causa do Javascript, caso as blindagens falhem
+            alert("Erro do Sistema Óptico: " + erro.message);
         }
     }
 
