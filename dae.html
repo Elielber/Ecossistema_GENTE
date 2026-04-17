@@ -179,16 +179,19 @@
                     <div><label>ID (único)</label><input type="text" id="elemId" placeholder="ex: gestor"></div>
                     <div><label>Nome</label><input type="text" id="elemNome" placeholder="Gestor"></div>
                     <div><label>Tipo</label><select id="elemTipo">
- <option value="ator">Ator</option>
- <option value="servico">Serviço</option>
- <option value="armazenamento">Armazenamento</option>
- <option value="touchpoint">Touchpoint</option>
- <option value="fator_externo">Fator Externo</option>
- <option value="feedback_loop">Feedback Loop</option></select></div>
+                        <option value="ator">Ator</option>
+                        <option value="servico">Serviço</option>
+                        <option value="armazenamento">Armazenamento</option>
+                        <option value="touchpoint">Touchpoint</option>
+                        <option value="fator_externo">Fator Externo</option>
+                        <option value="feedback_loop">Feedback Loop</option>
+                        <option value="tarefa">Tarefa / Processo</option>
+                    </select></div>
                     <div><label>Camada</label><select id="elemCamada">
-<option value="frontstage">Frontstage</option>
-<option value="backstage">Backstage</option>
-<option value="none">Nenhuma</option></select></div>
+                        <option value="frontstage">Frontstage</option>
+                        <option value="backstage">Backstage</option>
+                        <option value="none">Nenhuma</option>
+                    </select></div>
                 </div>
                 <div class="form-group"><label>Competências</label><textarea id="elemComp" rows="2"></textarea></div>
                 <div class="form-group"><label>Valor Agregado</label><textarea id="elemValor" rows="2"></textarea></div>
@@ -196,21 +199,21 @@
                 <div class="form-group">
                     <label>Relacionamentos</label>
                     <div style="display:flex; gap:0.3rem;"><input type="text" id="relDestino" placeholder="ID destino" style="flex:2;">
- <button id="ativarModoCliqueBtn" style="background:#f97316; font-size:0.7rem; margin-top:0.3rem;">🔘 Destino</button>
- <select id="relTipo" style="flex:1;">
- <option>Autenticação</option>
- <option>Leitura</option>
- <option>Gravação</option>
- <option>Leitura+Gravação</option>
- <option>Fluxo de Valor (dados)</option>
- <option>Fluxo de Valor (financeiro)</option>
- <option>Feedback (melhoria)</option>
- <option>Regulamentação</option>
- <option>Interação direta</option>
- <option>Dependência</option>
- </select>
- <button id="addRelBtn">➕</button>
- </div>
+                    <button id="ativarModoCliqueBtn" style="background:#f97316; font-size:0.7rem; margin-top:0.3rem;">🔘 Destino</button>
+                    <select id="relTipo" style="flex:1;">
+                        <option>Autenticação</option>
+                        <option>Leitura</option>
+                        <option>Gravação</option>
+                        <option>Leitura+Gravação</option>
+                        <option>Fluxo de Valor (dados)</option>
+                        <option>Fluxo de Valor (financeiro)</option>
+                        <option>Feedback (melhoria)</option>
+                        <option>Regulamentação</option>
+                        <option>Interação direta</option>
+                        <option>Dependência</option>
+                    </select>
+                    <button id="addRelBtn">➕</button>
+                    </div>
                     <ul id="relList" class="rel-list"></ul>
                 </div>
                 <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.5rem;">
@@ -220,7 +223,7 @@
             </div>
             <h4>📋 Elementos</h4>
             <div id="elementList" class="element-list"></div>
-                        <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; flex-wrap: wrap;">
+            <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; flex-wrap: wrap;">
                 <button id="exportJsonBtn" style="background:#10b981;">📤 Exportar JSON</button>
                 <button id="importJsonBtn" class="secondary">📂 Importar JSON</button>
                 <input type="file" id="importFile" accept=".json" style="display:none;">
@@ -228,6 +231,9 @@
                 <button id="exportXmlBtn" style="background:#8b5cf6;">📤 Exportar XMI (UML)</button>
                 <button id="importXmlBtn" class="secondary" style="background:#64748b;">📂 Importar XML</button>
                 <input type="file" id="importXmlFile" accept=".xml,.xmi" style="display:none;">
+				<button id="gerarBpmnBtn" class="btn" style="background:#3b82f6; color: white;">
+				<span class="material-icons-round">view_timeline</span> Exportar Diagrama de Raias
+				</button>
             </div>
 
             <div class="json-output" id="jsonOutput"></div>
@@ -240,15 +246,12 @@
         <div class="diagram-header">
             <div class="diagram-title" id="diagramTitle">🌐 DAE</div>
             <div class="filters" id="filterContainer">
-                
                 <button class="filter-btn active" data-filter="all">Todos</button>
-                
                 <button class="filter-btn" data-filter="frontstage">Frontstage</button>
                 <button class="filter-btn" data-filter="backstage">Backstage</button>
                 <button id="togglePhysicsBtn" class="filter-btn" style="background:#10b981;">🔒 Travar</button>
                 <button id="btnAgruparCamada" class="filter-btn" style="background:#f59e0b; color:white;">📦 Agrupar</button>
-<button id="btnDesagrupar" class="filter-btn" style="display:none; background:#ef4444; color:white;">Desagrupar</button>
-
+                <button id="btnDesagrupar" class="filter-btn" style="display:none; background:#ef4444; color:white;">Desagrupar</button>
             </div>
         </div>
         <div id="network"></div>
@@ -267,52 +270,58 @@
     let physicsEnabled = true; 
     
     function getConnectedIdsFromText(elemento) {
-    const ids = new Set();
-    const text = `${elemento.fluxo || ''} ${(elemento.relacionamentos || []).map(r => r.com).join(' ')}`.toLowerCase();
-    elementos.forEach(el => {
-        if (text.includes(el.id.toLowerCase())) {
-            ids.add(el.id);
-        }
-    });
-    return ids;
-}
+        const ids = new Set();
+        const text = `${elemento.fluxo || ''} ${(elemento.relacionamentos || []).map(r => r.com).join(' ')}`.toLowerCase();
+        elementos.forEach(el => {
+            if (text.includes(el.id.toLowerCase())) {
+                ids.add(el.id);
+            }
+        });
+        return ids;
+    }
 
     // Mapeamentos visuais
-    const tipoIcone = { ator: '👤', servico: '⚙️', armazenamento: '🗄️', touchpoint: '📱', fator_externo: '🌍', feedback_loop: '🔄' };
-    const tipoCor = { ator: '#3b82f6', servico: '#10b981', armazenamento: '#f59e0b', touchpoint: '#f97316', fator_externo: '#6b7280', feedback_loop: '#ec489a' };
-    const relTipoCor = { "Autenticação": "#c084fc", "Leitura": "#3b82f6", "Gravação": "#f59e0b", "Leitura+Gravação": "#10b981", "Fluxo de Valor (dados)": "#14b8a6", "Fluxo de Valor (financeiro)": "#f43f5e", "Feedback (melhoria)": "#ec489a", "Regulamentação": "#94a3b8", "Interação direta": "#a855f7" };
-    const relTipoLabel = { "Autenticação": "Autenticação", "Leitura": "Leitura", "Gravação": "Gravação", "Leitura+Gravação": "Leitura+Gravação", "Fluxo de Valor (dados)": "Fluxo de Dados", "Fluxo de Valor (financeiro)": "Fluxo Financeiro", "Feedback (melhoria)": "Feedback", "Regulamentação": "Regulamentação", "Interação direta": "Interação" };
-
-    // Mapeamento de ícones Material Icons (códigos Unicode) para cada tipo
-    const materialIconCode = {
-        ator: '\ue7fd',      // person
-        servico: '\ue8b8',   // settings
-        armazenamento: '\ue1e4', // storage
-        touchpoint: '\ue913',    // touch_app
-        fator_externo: '\ue80b', // public
-        feedback_loop: '\ue022'  // loop
+    const tipoIcone = { 
+        ator: '👤', servico: '⚙️', armazenamento: '🗄️', touchpoint: '📱', 
+        fator_externo: '🌍', feedback_loop: '🔄', tarefa: '✅' 
+    };
+    const tipoCor = { 
+        ator: '#3b82f6', servico: '#10b981', armazenamento: '#f59e0b', touchpoint: '#f97316', 
+        fator_externo: '#6b7280', feedback_loop: '#ec489a', tarefa: '#f8fafc' 
+    };
+    const tipoBorda = {
+        tarefa: '#64748b' // Borda escura para destacar do fundo claro
+    };
+    const relTipoCor = { 
+        "Autenticação": "#c084fc", "Leitura": "#3b82f6", "Gravação": "#f59e0b", 
+        "Leitura+Gravação": "#10b981", "Fluxo de Valor (dados)": "#14b8a6", 
+        "Fluxo de Valor (financeiro)": "#f43f5e", "Feedback (melhoria)": "#ec489a", 
+        "Regulamentação": "#94a3b8", "Interação direta": "#a855f7", "Dependência": "#ef4444"
+    };
+    const relTipoLabel = { 
+        "Autenticação": "Autenticação", "Leitura": "Leitura", "Gravação": "Gravação", 
+        "Leitura+Gravação": "Leitura+Gravação", "Fluxo de Valor (dados)": "Fluxo de Dados", 
+        "Fluxo de Valor (financeiro)": "Fluxo Financeiro", "Feedback (melhoria)": "Feedback", 
+        "Regulamentação": "Regulamentação", "Interação direta": "Interação" 
     };
 
     // Templates
     const templatesPorTipo = {
-        ator: { competencia: "Papel e responsabilidades do ator.", valor: "Valor que este ator agrega ao ecossistema.", fluxo: "Interage com serviços via autenticação." },
-        servico: { competencia: "Função técnica, APIs, capacidade.", valor: "Valor funcional e de negócio.", fluxo: "Troca de dados com outros serviços e armazenamentos." },
-        armazenamento: { competencia: "Persistência, estrutura de dados.", valor: "Disponibilidade e integridade.", fluxo: "Recebe e fornece dados para serviços autorizados." },
-        touchpoint: { competencia: "Canal de interação com o usuário.", valor: "Experiência do usuário.", fluxo: "Conecta atores aos serviços backend." },
-        fator_externo: { competencia: "Elemento fora do controle direto.", valor: "Influencia estratégia.", fluxo: "Impacta serviços e decisões." },
-        feedback_loop: { competencia: "Ciclo de melhoria contínua.", valor: "Aprendizado e adaptação.", fluxo: "Conecta saídas a entradas de melhoria." }
+        ator: { competencia: "Papel e responsabilidades do ator.", valor: "Valor que este ator agrega ao ecossistema." },
+        servico: { competencia: "Função técnica, APIs, capacidade.", valor: "Valor funcional e de negócio." },
+        armazenamento: { competencia: "Persistência, estrutura de dados.", valor: "Disponibilidade e integridade." },
+        touchpoint: { competencia: "Canal de interação com o usuário.", valor: "Experiência do usuário." },
+        fator_externo: { competencia: "Elemento fora do controle direto.", valor: "Influencia estratégia." },
+        feedback_loop: { competencia: "Ciclo de melhoria contínua.", valor: "Aprendizado e adaptação." },
+        tarefa: { competencia: "Ação ou passo executado no processo.", valor: "Transformação ou avanço no fluxo de trabalho." }
     };
-        function preencherTemplate() {
+
+    function preencherTemplate() {
         const tipo = document.getElementById('elemTipo').value;
         const tpl = templatesPorTipo[tipo] || {};
-        
         document.getElementById('elemComp').value = tpl.competencia || '';
         document.getElementById('elemValor').value = tpl.valor || '';
-        
-        // A tentativa de preencher o 'elemFluxo' foi removida daqui, 
-        // pois agora ele é calculado automaticamente ao salvar!
     }
-
 
     // ==================== AUXILIARES UI ====================
     function atualizarListaElementos() {
@@ -346,8 +355,6 @@
         });
     }
 
-    
-
     function atualizarListaRelacoes() {
         const ul = document.getElementById('relList');
         ul.innerHTML = '';
@@ -365,7 +372,7 @@
         });
     }
 
-        function carregarParaEdicao(idx) {
+    function carregarParaEdicao(idx) {
         const el = elementos[idx];
         editandoIndex = idx;
         document.getElementById('elemId').value = el.id;
@@ -375,9 +382,7 @@
         document.getElementById('elemComp').value = el.competencia || '';
         document.getElementById('elemValor').value = el.valor || '';
         
-        // Carrega relacionamentos padrão
         relacoesTemp = [...(el.relacionamentos || [])];
-        // Converte dependências do banco de volta para a lista visual como tipo "Dependência"
         (el.dependencias || []).forEach(dep => {
             relacoesTemp.push({ com: dep, tipo: 'Dependência' });
         });
@@ -389,16 +394,12 @@
         const nome = document.getElementById('elemNome').value.trim();
         if (!id || !nome) { alert("ID e Nome obrigatórios."); return; }
 
-        // Separa Relacionamentos reais de Dependências estruturais
         const relacionamentosFinais = relacoesTemp.filter(r => r.tipo !== 'Dependência');
         const dependenciasFinais = relacoesTemp.filter(r => r.tipo === 'Dependência').map(r => r.com);
-        
-        // Auto-gera o texto de Fluxo de Informação (Ambiguidade resolvida com concatenação literal)
         const fluxoCalculado = relacionamentosFinais.map(r => `→ ${r.com} (${r.tipo})`).join(' | ');
 
         const novoElemento = { 
-            id, 
-            nome, 
+            id, nome, 
             tipo: document.getElementById('elemTipo').value, 
             camada: document.getElementById('elemCamada').value, 
             competencia: document.getElementById('elemComp').value.trim(), 
@@ -428,9 +429,8 @@
         relacoesTemp = [];
         atualizarListaRelacoes();
         editandoIndex = null;
-        preencherTemplate(); // Se template usar Fluxo, ele não jogará na tela, apenas manterá interno
+        preencherTemplate();
     }
-
 
     function gerarJSONPreview() {
         const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim();
@@ -438,7 +438,7 @@
         document.getElementById('jsonOutput').innerText = JSON.stringify(dadosCompletos, null, 2);
     }
 
-            function exportarJSON() {
+    function exportarJSON() {
         const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim() || "Ecossistema";
         const positions = {};
         if (network) {
@@ -446,62 +446,29 @@
             Object.keys(nodePositions).forEach(id => { positions[id] = { x: nodePositions[id].x, y: nodePositions[id].y }; });
         }
         const dadosCompletos = { nome_ecossistema: nomeEcossistema, elementos: elementos, positions: positions };
-        
-        // 1. Cria o conteúdo em texto
         const jsonStr = JSON.stringify(dadosCompletos, null, 2);
-        
-        // 2. Transforma em um arquivo real na memória do navegador (Blob)
         const blob = new Blob([jsonStr], { type: "application/json" });
         const url = URL.createObjectURL(blob);
-        
-        // Dinamiza o nome do arquivo
         const nomeArquivo = nomeEcossistema.replace(/[^a-z0-9]/gi, '_').toLowerCase() + ".json";
-        
         const a = document.createElement('a');
         a.href = url;
         a.download = nomeArquivo;
         document.body.appendChild(a);
         a.click();
-        
-        // 3. Limpa a memória após o download
         document.body.removeChild(a);
         URL.revokeObjectURL(url); 
     }
 
-    function exportarXMI() {
-        const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim() || "Ecossistema";
-        const dadosCompletos = { nome_ecossistema: nomeEcossistema, elementos: elementos };
-        const xmiString = daeToXMI(dadosCompletos);
-        
-        // Transforma o XML em um arquivo na memória (Blob)
-        const blob = new Blob([xmiString], { type: "application/xml" });
-        const url = URL.createObjectURL(blob);
-        
-        const nomeArquivo = nomeEcossistema.replace(/[^a-z0-9]/gi, '_').toLowerCase() + "_uml.xmi";
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = nomeArquivo;
-        document.body.appendChild(a);
-        a.click();
-        
-        // Limpa a memória
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
     function importarJSON(file) {
         const reader = new FileReader();
         reader.onload = (e) => {
             let dados;
-            // 1. Isola a leitura sintática (Detecta JSON malformado real)
             try {
                 dados = JSON.parse(e.target.result);
             } catch (erroParse) {
                 alert("Arquivo inválido. O documento corrompeu as normas de um arquivo JSON.");
                 return;
             }
-
-            // 2. Isola o processamento de renderização (Evita falhas silenciosas no Vis.js)
             try {
                 if (Array.isArray(dados)) {
                     elementos = dados;
@@ -524,413 +491,369 @@
         reader.readAsText(file);
     }
 
-
     // ==================== DIAGRAMA COM ÍCONES DENTRO DOS CÍRCULOS ====================
- function renderizarDiagrama() {
-    if (!document.getElementById('network')) return;
+    function renderizarDiagrama() {
+        if (!document.getElementById('network')) return;
 
-    let elementosFiltrados = elementos;
-    if (currentFilter !== 'all') {
-        if (currentFilter === 'frontstage') elementosFiltrados = elementos.filter(e => e.camada === 'frontstage');
-        else if (currentFilter === 'backstage') elementosFiltrados = elementos.filter(e => e.camada === 'backstage');
-        else elementosFiltrados = elementos.filter(e => e.tipo === currentFilter);
-    }
+        let elementosFiltrados = elementos;
+        if (currentFilter !== 'all') {
+            if (currentFilter === 'frontstage') elementosFiltrados = elementos.filter(e => e.camada === 'frontstage');
+            else if (currentFilter === 'backstage') elementosFiltrados = elementos.filter(e => e.camada === 'backstage');
+            else elementosFiltrados = elementos.filter(e => e.tipo === currentFilter);
+        }
 
-    // Mapeamento de emojis para cada tipo
-    const emojiMap = {
-        ator: '👤',
-        servico: '⚙️',
-        armazenamento: '🗄️',
-        touchpoint: '📱',
-        fator_externo: '🌍',
-        feedback_loop: '🔄'
-    };
+        const nodes = elementosFiltrados.map(el => {
+            let bgColor = tipoCor[el.tipo] || '#8b5cf6';
+            let borderColor = tipoBorda[el.tipo] || '#2d3748';
+            let shape = 'icon';
+            let iconCode = tipoIcone[el.tipo] || '❓';
+            
+            // Estilo especial para tarefa: fundo claro, borda escura e formato de caixa
+            if (el.tipo === 'tarefa') {
+                shape = 'box';
+                bgColor = '#f8fafc';
+                borderColor = '#64748b';
+            }
 
-    const nodes = elementosFiltrados.map(el => ({
-        id: el.id,
-        label: el.nome,
-        camada: el.camada,
-        title: `${el.nome}\n${el.competencia?.substring(0,80) || ''}`,
-        color: { background: tipoCor[el.tipo] || '#8b5cf6', border: '#2d3748', highlight: { background: tipoCor[el.tipo], border: '#f59e0b' } },
-        shape: 'icon',
-        icon: {
-            face: 'Arial',
-            code: emojiMap[el.tipo] || '❓',
-            size: 28,
-            color: '#ffffff'
-        },
-        size: 42,
-        font: { size: 11, color: '#1a202c', face: 'Inter', background: 'rgba(255,255,255,0.7)' },
-        borderWidth: 2,
-        borderWidthSelected: 4,
-        group: el.tipo
-    }));
+            return {
+                id: el.id,
+                label: el.nome,
+                camada: el.camada,
+                title: `${el.nome}\n${el.competencia?.substring(0,80) || ''}`,
+                color: { 
+                    background: bgColor, 
+                    border: borderColor, 
+                    highlight: { background: bgColor, border: '#f59e0b' } 
+                },
+                shape: shape,
+                icon: (shape === 'icon') ? {
+                    face: 'Arial',
+                    code: iconCode,
+                    size: 28,
+                    color: '#ffffff'
+                } : undefined,
+                size: 42,
+                font: { size: 11, color: '#1a202c', face: 'Inter', background: 'rgba(255,255,255,0.7)' },
+                borderWidth: 2,
+                borderWidthSelected: 4,
+                group: el.tipo
+            };
+        });
 
         const edges = [];
-    elementosFiltrados.forEach(el => {
-        (el.relacionamentos || []).forEach(rel => {
-            const targetExists = elementosFiltrados.some(e => e.id === rel.com);
-            if (targetExists) {
-                let width = 1.0;
-                let dashes = false;
-                if (rel.tipo === 'Dependência' || rel.tipo === 'Regulamentação') { width = 0.8; dashes = true; }
-                if (rel.tipo === 'Fluxo de Valor (financeiro)') width = 1.2;
-                edges.push({ 
-                    from: el.id, 
-                    to: rel.com,
-                    relTipo: rel.tipo, // <--- ADICIONE ESTA LINHA AQUI
-                    color: { color: relTipoCor[rel.tipo] || '#94a3b8' }, 
-                    originalColor: relTipoCor[rel.tipo] || '#94a3b8', 
-                    originalWidth: width,
-                    arrows: 'to',
-                    width: width,
-                    dashes: dashes,
-                    smooth: { type: 'continuous', roundness: 0 }
-                });
-            }
-        });
-        (el.dependencias || []).forEach(depId => {
-            const targetExists = elementosFiltrados.some(e => e.id === depId);
-            if (targetExists) {
-                edges.push({ 
-                    from: el.id, 
-                    to: depId,
-                    relTipo: 'Dependência', // <--- ADICIONE ESTA LINHA AQUI
-                    color: { color: '#ef4444' }, 
-                    originalColor: '#ef4444', 
-                    originalWidth: 0.8,
-                    dashes: true,
-                    arrows: 'to',
-                    width: 0.8,
-                    smooth: { type: 'continuous', roundness: 0 }
-                });
-            }
-        });
-    });
-
-
-    const container = document.getElementById('network');
-    const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
-    if (network) network.destroy();
-
-    const options = {
-    nodes: { shape: 'icon', size: 40, font: { size: 11, color: '#1a202c' } },
-    edges: {
-        smooth: { type: 'continuous', roundness: 0 },
-        font: { size: 0 },
-        selectionWidth: 0,        // desativa o aumento de espessura automático
-        hoverWidth: 0,            // desativa o aumento de espessura no hover
-        color: { inherit: false } // impede herança de cor do nó
-    },
-    physics: {
-        enabled: true,
-        stabilization: { iterations: 150, fit: true },
-        solver: 'forceAtlas2Based',
-        forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 120, springConstant: 0.08 }
-    },
-    interaction: {
-        hover: false,             // desativa hover (evita mudança de cor)
-        tooltipDelay: 100,
-        navigationButtons: false,
-        selectable: true,
-        multiselect: false
-    },
-    layout: { randomSeed: 42 }
-};
-
-    network = new vis.Network(container, data, options);
-    
-if (window.savedPositions) {
-    // [CORREÇÃO] O Vis.js exige que a atualização de posições seja feita via DataSet
-    const posUpdates = [];
-    Object.keys(window.savedPositions).forEach(id => {
-        // Verifica se o nó realmente existe no diagrama atual (evita crash se um filtro estiver ativo)
-        if (data.nodes.get(id)) {
-            posUpdates.push({
-                id: id,
-                x: window.savedPositions[id].x,
-                y: window.savedPositions[id].y
+        elementosFiltrados.forEach(el => {
+            (el.relacionamentos || []).forEach(rel => {
+                const targetExists = elementosFiltrados.some(e => e.id === rel.com);
+                if (targetExists) {
+                    let width = 1.0;
+                    let dashes = false;
+                    if (rel.tipo === 'Dependência' || rel.tipo === 'Regulamentação') { width = 0.8; dashes = true; }
+                    if (rel.tipo === 'Fluxo de Valor (financeiro)') width = 1.2;
+                    edges.push({ 
+                        from: el.id, to: rel.com, relTipo: rel.tipo,
+                        color: { color: relTipoCor[rel.tipo] || '#94a3b8' }, 
+                        originalColor: relTipoCor[rel.tipo] || '#94a3b8', 
+                        originalWidth: width,
+                        arrows: 'to', width: width, dashes: dashes,
+                        smooth: { type: 'continuous', roundness: 0 }
+                    });
+                }
             });
-        }
-    });
-    
-    // Injeta as coordenadas salvas e estabiliza a física
-    if (posUpdates.length > 0) {
-        data.nodes.update(posUpdates);
-    }
-    
-    window.savedPositions = null;
-    
-    if (!physicsEnabled) {
-        network.setOptions({ physics: { enabled: false } });
-    }
-}
+            (el.dependencias || []).forEach(depId => {
+                const targetExists = elementosFiltrados.some(e => e.id === depId);
+                if (targetExists) {
+                    edges.push({ 
+                        from: el.id, to: depId, relTipo: 'Dependência',
+                        color: { color: '#ef4444' }, originalColor: '#ef4444', originalWidth: 0.8,
+                        dashes: true, arrows: 'to', width: 0.8,
+                        smooth: { type: 'continuous', roundness: 0 }
+                    });
+                }
+            });
+        });
 
-    
+        const container = document.getElementById('network');
+        const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+        if (network) network.destroy();
 
-// Botão para alternar física
-// Configuração do botão de física (garantindo evento único)
-if (!window.physicsBtnListenerAdded) {
-    const toggleBtn = document.getElementById('togglePhysicsBtn');
-    const newToggleBtn = toggleBtn.cloneNode(true);
-    toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
-    newToggleBtn.addEventListener('click', () => {
-        physicsEnabled = !physicsEnabled;
-        network.setOptions({ physics: { enabled: physicsEnabled } });
-        if (physicsEnabled) {
-            newToggleBtn.innerHTML = '🔒 Travar';
-            newToggleBtn.style.background = '#10b981';
-            network.startSimulation();
-            setTimeout(() => network.stopSimulation(), 1000);
-        } else {
-            newToggleBtn.innerHTML = '🌐 Liberar';
-            newToggleBtn.style.background = '#f59e0b';
-            network.stopSimulation();
-        }
-    });
-    window.physicsBtnListenerAdded = true;
-}
+        const options = {
+            nodes: { shape: 'icon', size: 40, font: { size: 11, color: '#1a202c' } },
+            edges: {
+                smooth: { type: 'continuous', roundness: 0 },
+                font: { size: 0 },
+                selectionWidth: 0,
+                hoverWidth: 0,
+                color: { inherit: false }
+            },
+            physics: {
+                enabled: true,
+                stabilization: { iterations: 150, fit: true },
+                solver: 'forceAtlas2Based',
+                forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 120, springConstant: 0.08 }
+            },
+            interaction: {
+                hover: false,
+                tooltipDelay: 100,
+                navigationButtons: false,
+                selectable: true,
+                multiselect: false
+            },
+            layout: { randomSeed: 42 }
+        };
 
-     // 1. EVENTO DE CLIQUE (CORRIGIDO PARA SUPORTAR CLUSTERS)
-    network.on('click', (params) => {
-    if (modoEdicaoRelacionamento) {
-            if (params.nodes.length) {
-                document.getElementById('relDestino').value = params.nodes[0];
-            }
-            modoEdicaoRelacionamento = false;
-            document.getElementById('network').style.cursor = 'default';
-            network.unselectAll(); 
-            return; // 🛑 Impede que o restante do código abaixo seja executado
-        }
-        const tituloEl = document.getElementById('diagramTitle');
+        network = new vis.Network(container, data, options);
         
-        if (params.nodes.length) {
-            const id = params.nodes[0];
-            currentSelectedId = id;
-            mostrarDetalhes(id);
-            
-            const elementoSelecionado = elementos.find(e => e.id === id);
-            
-            // Lida com a ausência do elemento quando é um cluster virtual
-            if (elementoSelecionado) {
-                tituloEl.innerText = `🌐 DAE - ${elementoSelecionado.nome}`;
-            } else if (network.isCluster(id)) {
-                tituloEl.innerText = `🌐 DAE - Camada Agrupada`;
-            } else {
-                // [ALTERAÇÃO AQUI 1] Fallback dinâmico se o nó não for encontrado
-                const nomeEcos = document.getElementById('nomeEcossistema').value.trim() || 'DAE';
-                tituloEl.innerText = `🌐 ${nomeEcos}`;
-            }
-
-            const textoIds = elementoSelecionado ? getConnectedIdsFromText(elementoSelecionado) : new Set();
-            const allEdges = data.edges.get();
-            allEdges.forEach(edge => {
-                const isConnected = (edge.from === id || edge.to === id) || textoIds.has(edge.from) || textoIds.has(edge.to);
-                const originalColor = edge.originalColor || edge.color;
-                data.edges.update({
-                    id: edge.id,
-                    width: isConnected ? 2.5 : (edge.dashes ? 0.8 : 1.0),
-                    color: { color: originalColor, opacity: 1 }
-                });
-            });
-            network.setSelection({ nodes: [id] }, { highlightEdges: false });
-        } else {
-            // [ALTERAÇÃO AQUI 2] Atualiza o título dinamicamente quando NADA está selecionado
-            const nomeEcos = document.getElementById('nomeEcossistema').value.trim() || 'DAE';
-            tituloEl.innerText = `🌐 ${nomeEcos}`;
-            currentSelectedId = null; // Limpa a referência do ID selecionado
-            
-            const allEdges = data.edges.get();
-            allEdges.forEach(edge => {
-                const originalColor = edge.originalColor || edge.color;
-                data.edges.update({
-                    id: edge.id,
-                    width: (edge.dashes ? 0.8 : (edge.originalWidth || 1.0)),
-                    color: { color: originalColor, opacity: 1 }
-                });
-            });
-
-            network.unselectAll();
-            mostrarDetalhes();
-        }
-    });
-
-    // 2. LÓGICA DE AGRUPAMENTO (QUE ESTAVA FALTANDO NO SEU CÓDIGO)
-    if (!window.clusterBtnListenerAdded) {
-        document.getElementById('btnAgruparCamada').addEventListener('click', () => {
-            ['frontstage', 'backstage'].forEach(camadaStr => {
-                let clusterOptions = {
-                    joinCondition: function (nodeOptions) {
-                        return nodeOptions.camada === camadaStr;
-                    },
-                    clusterNodeProperties: {
-                        id: 'cluster_' + camadaStr,
-                        borderWidth: 2,
-                        shape: 'box',
-                        mass: 1, // Previne a explosão física
-                        allowSingleNodeCluster: true, // Evita falha se houver só 1 nó
-                        label: `📦 Camada: ${camadaStr.toUpperCase()}`,
-                        color: { background: '#f8fafc', border: '#8b5cf6' },
-                        font: { size: 14, color: '#1e293b', face: 'Inter' }
-                    }
-                };
-                network.cluster(clusterOptions);
-            });
-            document.getElementById('btnDesagrupar').style.display = 'inline-block';
-            document.getElementById('btnAgruparCamada').style.display = 'none';
-        });
-
-        document.getElementById('btnDesagrupar').addEventListener('click', () => {
-            Object.keys(network.body.nodes).forEach(nodeId => {
-                if (network.isCluster(nodeId)) {
-                    network.openCluster(nodeId);
+        if (window.savedPositions) {
+            const posUpdates = [];
+            Object.keys(window.savedPositions).forEach(id => {
+                if (data.nodes.get(id)) {
+                    posUpdates.push({
+                        id: id,
+                        x: window.savedPositions[id].x,
+                        y: window.savedPositions[id].y
+                    });
                 }
             });
-            document.getElementById('btnDesagrupar').style.display = 'none';
-            document.getElementById('btnAgruparCamada').style.display = 'inline-block';
-        });
-
-        window.clusterBtnListenerAdded = true;
-    }
-
-    // 3. EXPANSÃO NO CLIQUE DUPLO
-    network.on("doubleClick", function (params) {
-        if (params.nodes.length == 1) {
-            if (network.isCluster(params.nodes[0])) {
-                network.openCluster(params.nodes[0]);
-                
-                let temCluster = Object.keys(network.body.nodes).some(id => network.isCluster(id));
-                if(!temCluster) {
-                    document.getElementById('btnDesagrupar').style.display = 'none';
-                    document.getElementById('btnAgruparCamada').style.display = 'inline-block';
-                }
-            }
+            if (posUpdates.length > 0) data.nodes.update(posUpdates);
+            window.savedPositions = null;
+            if (!physicsEnabled) network.setOptions({ physics: { enabled: false } });
         }
-    });
 
-
-
-    network.on('stabilized', () => { network.fit(); });
-
-    // Legenda
-        // Legenda (Substituição integral para uso de data-attributes precisos)
-        // Legenda (Substituição integral para uso de data-attributes precisos)
-    const legendDiv = document.getElementById('legend');
-    if (legendDiv) {
-        // Lógica visual: se estiver filtrado, apaga os outros.
-        const isAll = currentFilter === 'all';
-        const getOp = (tipo) => isAll || currentFilter === tipo ? '1' : '0.3';
-
-        legendDiv.innerHTML = `
-            <div style="display:flex; flex-wrap:wrap; gap:1rem; justify-content:center; align-items:center;">
-                
-                <span class="legend-filter-node" data-filter="ator" style="cursor:pointer; opacity:${getOp('ator')}; transition:0.2s;"><span style="font-size:1.1rem;">👤</span> Ator</span>
-                <span class="legend-filter-node" data-filter="servico" style="cursor:pointer; opacity:${getOp('servico')}; transition:0.2s;"><span style="font-size:1.1rem;">⚙️</span> Serviço</span>
-                <span class="legend-filter-node" data-filter="armazenamento" style="cursor:pointer; opacity:${getOp('armazenamento')}; transition:0.2s;"><span style="font-size:1.1rem;">🗄️</span> Armazenamento</span>
-                <span class="legend-filter-node" data-filter="touchpoint" style="cursor:pointer; opacity:${getOp('touchpoint')}; transition:0.2s;"><span style="font-size:1.1rem;">📱</span> Touchpoint</span>
-                <span class="legend-filter-node" data-filter="fator_externo" style="cursor:pointer; opacity:${getOp('fator_externo')}; transition:0.2s;"><span style="font-size:1.1rem;">🌍</span> Fator Externo</span>
-                <span class="legend-filter-node" data-filter="feedback_loop" style="cursor:pointer; opacity:${getOp('feedback_loop')}; transition:0.2s;"><span style="font-size:1.1rem;">🔄</span> Feedback</span>
-            </div>
-            <hr style="margin:8px 0; width:100%;">
-            <div style="display:flex; flex-wrap:wrap; gap:0.8rem; justify-content:center;">
-                <span class="legend-filter-edge" data-rel="Dependência" style="cursor:pointer;"><span style="border:2px solid #ef4444; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#ef4444;"></span> Dependência</span>
-                <span class="legend-filter-edge" data-rel="Fluxo de Valor (dados),Leitura,Gravação,Leitura+Gravação" style="cursor:pointer;"><span style="border:2px solid #14b8a6; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#14b8a6;"></span> Fluxo de Dados</span>
-                <span class="legend-filter-edge" data-rel="Fluxo de Valor (financeiro)" style="cursor:pointer;"><span style="border:3px solid #f43f5e; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#f43f5e;"></span> Fluxo Financeiro</span>
-                <span class="legend-filter-edge" data-rel="Feedback (melhoria)" style="cursor:pointer;"><span style="border:2px dashed #ec489a; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#ec489a;"></span> Feedback</span>
-                <span class="legend-filter-edge" data-rel="Autenticação" style="cursor:pointer;"><span style="border:2px solid #c084fc; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#c084fc;"></span> Autenticação</span>
-            </div>
-        `;
-        legendDiv.style.display = 'flex';
-    }
-
-
-    // Adiciona eventos de filtro restritos apenas às marcações válidas
-    setTimeout(() => {
-    const legendNodeFilters = document.querySelectorAll('.legend-filter-node');
-        legendNodeFilters.forEach(span => {
-            span.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const tipoClicado = span.getAttribute('data-filter');
-                aplicarFiltro(tipoClicado); // Chama sua função global que já faz a mágica toda
+        // Botão para alternar física
+        if (!window.physicsBtnListenerAdded) {
+            const toggleBtn = document.getElementById('togglePhysicsBtn');
+            const newToggleBtn = toggleBtn.cloneNode(true);
+            toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
+            newToggleBtn.addEventListener('click', () => {
+                physicsEnabled = !physicsEnabled;
+                network.setOptions({ physics: { enabled: physicsEnabled } });
+                if (physicsEnabled) {
+                    newToggleBtn.innerHTML = '🔒 Travar';
+                    newToggleBtn.style.background = '#10b981';
+                    network.startSimulation();
+                    setTimeout(() => network.stopSimulation(), 1000);
+                } else {
+                    newToggleBtn.innerHTML = '🌐 Liberar';
+                    newToggleBtn.style.background = '#f59e0b';
+                    network.stopSimulation();
+                }
             });
-        });
-        const legendEdgeFilters = document.querySelectorAll('.legend-filter-edge');
-        legendEdgeFilters.forEach(span => {
-            span.addEventListener('click', (e) => {
-                e.stopPropagation();
+            window.physicsBtnListenerAdded = true;
+        }
+
+        // Evento de clique
+        network.on('click', (params) => {
+            if (modoEdicaoRelacionamento) {
+                if (params.nodes.length) {
+                    document.getElementById('relDestino').value = params.nodes[0];
+                }
+                modoEdicaoRelacionamento = false;
+                document.getElementById('network').style.cursor = 'default';
+                network.unselectAll(); 
+                return;
+            }
+            const tituloEl = document.getElementById('diagramTitle');
+            
+            if (params.nodes.length) {
+                const id = params.nodes[0];
+                currentSelectedId = id;
+                mostrarDetalhes(id);
                 
-                // Extrai o tipo exato a partir do atributo do DOM, eliminando a ambiguidade textual
-                                // Extrai os tipos, transformando em um array (agora suporta múltiplos filtros num botão só)
-                const tiposClicados = span.getAttribute('data-rel').split(','); 
+                const elementoSelecionado = elementos.find(e => e.id === id);
+                if (elementoSelecionado) {
+                    tituloEl.innerText = `🌐 DAE - ${elementoSelecionado.nome}`;
+                } else if (network.isCluster(id)) {
+                    tituloEl.innerText = `🌐 DAE - Camada Agrupada`;
+                } else {
+                    const nomeEcos = document.getElementById('nomeEcossistema').value.trim() || 'DAE';
+                    tituloEl.innerText = `🌐 ${nomeEcos}`;
+                }
+
+                const textoIds = elementoSelecionado ? getConnectedIdsFromText(elementoSelecionado) : new Set();
                 const allEdges = data.edges.get();
-                let hasMatch = false;
-
                 allEdges.forEach(edge => {
-                    // [ALTERAÇÃO AQUI] Verifica se o tipo da linha existe dentro do array do botão
-                    const isMatch = tiposClicados.includes(edge.relTipo);
-                    if (isMatch) hasMatch = true;
-                    
+                    const isConnected = (edge.from === id || edge.to === id) || textoIds.has(edge.from) || textoIds.has(edge.to);
+                    const originalColor = edge.originalColor || edge.color;
                     data.edges.update({
                         id: edge.id,
-                        color: { color: edge.originalColor, opacity: isMatch ? 1 : 0.1 }
+                        width: isConnected ? 2.5 : (edge.dashes ? 0.8 : 1.0),
+                        color: { color: originalColor, opacity: 1 }
+                    });
+                });
+                network.setSelection({ nodes: [id] }, { highlightEdges: false });
+            } else {
+                const nomeEcos = document.getElementById('nomeEcossistema').value.trim() || 'DAE';
+                tituloEl.innerText = `🌐 ${nomeEcos}`;
+                currentSelectedId = null;
+                
+                const allEdges = data.edges.get();
+                allEdges.forEach(edge => {
+                    const originalColor = edge.originalColor || edge.color;
+                    data.edges.update({
+                        id: edge.id,
+                        width: (edge.dashes ? 0.8 : (edge.originalWidth || 1.0)),
+                        color: { color: originalColor, opacity: 1 }
                     });
                 });
 
+                network.unselectAll();
+                mostrarDetalhes();
+            }
+        });
 
-                if (!hasMatch) {
-                    // Se a aresta filtrada não existe no contexto atual, restaura todas
+        // Lógica de agrupamento
+        if (!window.clusterBtnListenerAdded) {
+            document.getElementById('btnAgruparCamada').addEventListener('click', () => {
+                ['frontstage', 'backstage'].forEach(camadaStr => {
+                    let clusterOptions = {
+                        joinCondition: function (nodeOptions) {
+                            return nodeOptions.camada === camadaStr;
+                        },
+                        clusterNodeProperties: {
+                            id: 'cluster_' + camadaStr,
+                            borderWidth: 2,
+                            shape: 'box',
+                            mass: 1,
+                            allowSingleNodeCluster: true,
+                            label: `📦 Camada: ${camadaStr.toUpperCase()}`,
+                            color: { background: '#f8fafc', border: '#8b5cf6' },
+                            font: { size: 14, color: '#1e293b', face: 'Inter' }
+                        }
+                    };
+                    network.cluster(clusterOptions);
+                });
+                document.getElementById('btnDesagrupar').style.display = 'inline-block';
+                document.getElementById('btnAgruparCamada').style.display = 'none';
+            });
+
+            document.getElementById('btnDesagrupar').addEventListener('click', () => {
+                Object.keys(network.body.nodes).forEach(nodeId => {
+                    if (network.isCluster(nodeId)) {
+                        network.openCluster(nodeId);
+                    }
+                });
+                document.getElementById('btnDesagrupar').style.display = 'none';
+                document.getElementById('btnAgruparCamada').style.display = 'inline-block';
+            });
+
+            window.clusterBtnListenerAdded = true;
+        }
+
+        network.on("doubleClick", function (params) {
+            if (params.nodes.length == 1) {
+                if (network.isCluster(params.nodes[0])) {
+                    network.openCluster(params.nodes[0]);
+                    let temCluster = Object.keys(network.body.nodes).some(id => network.isCluster(id));
+                    if(!temCluster) {
+                        document.getElementById('btnDesagrupar').style.display = 'none';
+                        document.getElementById('btnAgruparCamada').style.display = 'inline-block';
+                    }
+                }
+            }
+        });
+
+        network.on('stabilized', () => { network.fit(); });
+
+        // Legenda
+        const legendDiv = document.getElementById('legend');
+        if (legendDiv) {
+            const isAll = currentFilter === 'all';
+            const getOp = (tipo) => isAll || currentFilter === tipo ? '1' : '0.3';
+            legendDiv.innerHTML = `
+                <div style="display:flex; flex-wrap:wrap; gap:1rem; justify-content:center; align-items:center;">
+                    <span class="legend-filter-node" data-filter="ator" style="cursor:pointer; opacity:${getOp('ator')}; transition:0.2s;"><span style="font-size:1.1rem;">👤</span> Ator</span>
+                    <span class="legend-filter-node" data-filter="servico" style="cursor:pointer; opacity:${getOp('servico')}; transition:0.2s;"><span style="font-size:1.1rem;">⚙️</span> Serviço</span>
+                    <span class="legend-filter-node" data-filter="armazenamento" style="cursor:pointer; opacity:${getOp('armazenamento')}; transition:0.2s;"><span style="font-size:1.1rem;">🗄️</span> Armazenamento</span>
+                    <span class="legend-filter-node" data-filter="touchpoint" style="cursor:pointer; opacity:${getOp('touchpoint')}; transition:0.2s;"><span style="font-size:1.1rem;">📱</span> Touchpoint</span>
+                    <span class="legend-filter-node" data-filter="fator_externo" style="cursor:pointer; opacity:${getOp('fator_externo')}; transition:0.2s;"><span style="font-size:1.1rem;">🌍</span> Fator Externo</span>
+                    <span class="legend-filter-node" data-filter="feedback_loop" style="cursor:pointer; opacity:${getOp('feedback_loop')}; transition:0.2s;"><span style="font-size:1.1rem;">🔄</span> Feedback</span>
+                    <span class="legend-filter-node" data-filter="tarefa" style="cursor:pointer; opacity:${getOp('tarefa')}; transition:0.2s;"><span style="font-size:1.1rem;">✅</span> Tarefa</span>
+                </div>
+                <hr style="margin:8px 0; width:100%;">
+                <div style="display:flex; flex-wrap:wrap; gap:0.8rem; justify-content:center;">
+                    <span class="legend-filter-edge" data-rel="Dependência" style="cursor:pointer;"><span style="border:2px solid #ef4444; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#ef4444;"></span> Dependência</span>
+                    <span class="legend-filter-edge" data-rel="Fluxo de Valor (dados),Leitura,Gravação,Leitura+Gravação" style="cursor:pointer;"><span style="border:2px solid #14b8a6; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#14b8a6;"></span> Fluxo de Dados</span>
+                    <span class="legend-filter-edge" data-rel="Fluxo de Valor (financeiro)" style="cursor:pointer;"><span style="border:3px solid #f43f5e; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#f43f5e;"></span> Fluxo Financeiro</span>
+                    <span class="legend-filter-edge" data-rel="Feedback (melhoria)" style="cursor:pointer;"><span style="border:2px dashed #ec489a; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#ec489a;"></span> Feedback</span>
+                    <span class="legend-filter-edge" data-rel="Autenticação" style="cursor:pointer;"><span style="border:2px solid #c084fc; width:12px; height:2px; display:inline-block; vertical-align:middle; background:#c084fc;"></span> Autenticação</span>
+                </div>
+            `;
+            legendDiv.style.display = 'flex';
+        }
+
+        // Eventos de filtro da legenda
+        setTimeout(() => {
+            document.querySelectorAll('.legend-filter-node').forEach(span => {
+                span.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    aplicarFiltro(span.getAttribute('data-filter'));
+                });
+            });
+            document.querySelectorAll('.legend-filter-edge').forEach(span => {
+                span.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const tiposClicados = span.getAttribute('data-rel').split(','); 
+                    const allEdges = data.edges.get();
+                    let hasMatch = false;
                     allEdges.forEach(edge => {
+                        const isMatch = tiposClicados.includes(edge.relTipo);
+                        if (isMatch) hasMatch = true;
                         data.edges.update({
                             id: edge.id,
-                            color: { color: edge.originalColor, opacity: 1 }
+                            color: { color: edge.originalColor, opacity: isMatch ? 1 : 0.1 }
                         });
                     });
-                } else {
-                    // Feedback visual restrito a uma condição de correspondência válida
-                    span.style.transform = 'scale(1.05)';
-                    setTimeout(() => { span.style.transform = ''; }, 200);
-                }
+                    if (!hasMatch) {
+                        allEdges.forEach(edge => {
+                            data.edges.update({
+                                id: edge.id,
+                                color: { color: edge.originalColor, opacity: 1 }
+                            });
+                        });
+                    } else {
+                        span.style.transform = 'scale(1.05)';
+                        setTimeout(() => { span.style.transform = ''; }, 200);
+                    }
+                });
             });
-        });
-    }, 100);
-
-}
+        }, 100);
+    }
 
     function mostrarDetalhes(id = null) {
-    const panel = document.getElementById('dynamicDetails');
-    if (!id) {
-        // Visão geral do ecossistema
-        const nomeEcossistema = document.getElementById('nomeEcossistema').value || 'Ecossistema sem nome';
-        const totalElementos = elementos.length;
-        const tipos = {};
-        elementos.forEach(el => { tipos[el.tipo] = (tipos[el.tipo] || 0) + 1; });
-        const relCount = {};
-        elementos.forEach(el => {
-            (el.relacionamentos || []).forEach(r => { relCount[r.tipo] = (relCount[r.tipo] || 0) + 1; });
-        });
+        const panel = document.getElementById('dynamicDetails');
+        if (!id) {
+            const nomeEcossistema = document.getElementById('nomeEcossistema').value || 'Ecossistema sem nome';
+            const totalElementos = elementos.length;
+            const tipos = {};
+            elementos.forEach(el => { tipos[el.tipo] = (tipos[el.tipo] || 0) + 1; });
+            const relCount = {};
+            elementos.forEach(el => {
+                (el.relacionamentos || []).forEach(r => { relCount[r.tipo] = (relCount[r.tipo] || 0) + 1; });
+            });
+            panel.innerHTML = `
+                <div class="detail-card" style="border-left-color: #8b5cf6;">
+                    <h4>📊 Visão Geral do Ecossistema</h4>
+                    <p><strong>${nomeEcossistema}</strong></p>
+                    <p>📌 Total de elementos: ${totalElementos}</p>
+                    <p>🔹 Distribuição: ${Object.entries(tipos).map(([t, c]) => `${t}: ${c}`).join(', ')}</p>
+                    <p>🔸 Relacionamentos: ${Object.entries(relCount).map(([t, c]) => `${t}: ${c}`).join(', ')}</p>
+                </div>
+            `;
+            return;
+        }
+        const el = elementos.find(e => e.id === id);
+        if (!el) return;
+        const relHtml = (el.relacionamentos || []).map(r => `<li><strong>${r.com}</strong>: ${r.tipo}</li>`).join('');
+        const depHtml = (el.dependencias || []).map(d => `<li>${d}</li>`).join('');
         panel.innerHTML = `
-            <div class="detail-card" style="border-left-color: #8b5cf6;">
-                <h4>📊 Visão Geral do Ecossistema</h4>
-                <p><strong>${nomeEcossistema}</strong></p>
-                <p>📌 Total de elementos: ${totalElementos}</p>
-                <p>🔹 Distribuição: ${Object.entries(tipos).map(([t, c]) => `${t}: ${c}`).join(', ')}</p>
-                <p>🔸 Relacionamentos: ${Object.entries(relCount).map(([t, c]) => `${t}: ${c}`).join(', ')}</p>
-            </div>
+            <div class="detail-card" style="border-left-color: #8b5cf6;"><h4>🧠 Competências</h4><p>${el.competencia || 'Não informado'}</p></div>
+            <div class="detail-card" style="border-left-color: #10b981;"><h4>💎 Valor Agregado</h4><p>${el.valor || 'Não informado'}</p></div>
+            <div class="detail-card" style="border-left-color: #3b82f6;"><h4>🔄 Fluxo de Informação</h4><p>${el.fluxo || 'Não informado'}</p></div>
+            <div class="detail-card" style="border-left-color: #c084fc;"><h4>🔗 Relacionamentos</h4><ul>${relHtml || '<li>Nenhum</li>'}</ul></div>
+            <div class="detail-card" style="border-left-color: #ef4444;"><h4>📌 Dependências</h4><ul>${depHtml || '<li>Nenhuma</li>'}</ul></div>
         `;
-        return;
     }
-    const el = elementos.find(e => e.id === id);
-    if (!el) return;
-    const relHtml = (el.relacionamentos || []).map(r => `<li><strong>${r.com}</strong>: ${r.tipo}</li>`).join('');
-    const depHtml = (el.dependencias || []).map(d => `<li>${d}</li>`).join('');
-    panel.innerHTML = `
-        <div class="detail-card" style="border-left-color: #8b5cf6;"><h4>🧠 Competências</h4><p>${el.competencia || 'Não informado'}</p></div>
-        <div class="detail-card" style="border-left-color: #10b981;"><h4>💎 Valor Agregado</h4><p>${el.valor || 'Não informado'}</p></div>
-        <div class="detail-card" style="border-left-color: #3b82f6;"><h4>🔄 Fluxo de Informação</h4><p>${el.fluxo || 'Não informado'}</p></div>
-        <div class="detail-card" style="border-left-color: #c084fc;"><h4>🔗 Relacionamentos</h4><ul>${relHtml || '<li>Nenhum</li>'}</ul></div>
-        <div class="detail-card" style="border-left-color: #ef4444;"><h4>📌 Dependências</h4><ul>${depHtml || '<li>Nenhuma</li>'}</ul></div>
-    `;
-}
+
     function aplicarFiltro(tipo) {
         currentFilter = tipo;
         document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -940,28 +863,7 @@ if (!window.physicsBtnListenerAdded) {
         renderizarDiagrama();
     }
 
-    // ==================== ABAS ====================
-    const tabEditor = document.getElementById('tabEditorBtn');
-    const tabVisualizacao = document.getElementById('tabVisualizacaoBtn');
-    const editorPanel = document.getElementById('editorPanel');
-    const visualizacaoPanel = document.getElementById('visualizacaoPanel');
-    function setActiveTab(tab) {
-        tabEditor.classList.remove('active'); tabVisualizacao.classList.remove('active');
-        editorPanel.classList.remove('active'); visualizacaoPanel.classList.remove('active');
-        if (tab === 'editor') { tabEditor.classList.add('active'); editorPanel.classList.add('active'); }
-        else { tabVisualizacao.classList.add('active'); visualizacaoPanel.classList.add('active');
-            if (currentSelectedId) mostrarDetalhes(currentSelectedId);
-            else if (elementos.length) mostrarDetalhes(elementos[0].id);
-        }
-    }
-    tabEditor.addEventListener('click', () => setActiveTab('editor'));
-    tabVisualizacao.addEventListener('click', () => setActiveTab('visualizacao'));
-    
-        // ==================== CONVERSÃO XMI (UML) ====================
-
-    /**
-     * Converte o modelo DAE (JSON) para XMI (UML 2.5.1) de forma hierárquica e validada.
-     */
+    // ==================== CONVERSÃO XMI (UML) ====================
     function daeToXMI(dados) {
         const { nome_ecossistema = "Ecossistema", elementos = [] } = dados;
         let nextId = 1;
@@ -976,15 +878,12 @@ if (!window.physicsBtnListenerAdded) {
         });
 
         let rootPackageContent = '';
-
-        // 1. Gera os pacotes (camadas) com as classes encapsuladas corretamente
         for (const [camadaNome, elementosCamada] of Object.entries(camadas)) {
             if (elementosCamada.length === 0) continue;
             const pacoteId = getNewId();
             const pacoteNome = camadaNome === 'frontstage' ? 'Frontstage' : (camadaNome === 'backstage' ? 'Backstage' : 'Sem Camada');
             
             let camadaXML = `\n        <packagedElement xmi:type="uml:Package" xmi:id="${pacoteId}" name="${pacoteNome}">`;
-            
             elementosCamada.forEach(el => {
                 const classId = elementMap.get(el.id);
                 camadaXML += `\n            <packagedElement xmi:type="uml:Class" xmi:id="${classId}" name="${escapeXml(el.nome)}" visibility="public">`;
@@ -994,24 +893,19 @@ if (!window.physicsBtnListenerAdded) {
                 camadaXML += `\n                <ownedComment xmi:type="uml:Comment" xmi:id="${getNewId()}" body="Fluxo de Informação: ${escapeXml(el.fluxo || '')}"/>`;
                 camadaXML += `\n            </packagedElement>`;
             });
-            
             camadaXML += `\n        </packagedElement>`;
             rootPackageContent += camadaXML;
         }
 
-        // 2. Gera associações direcionais e dependências
         elementos.forEach(el => {
             const sourceId = elementMap.get(el.id);
             if (!sourceId) return;
-
             (el.relacionamentos || []).forEach(rel => {
                 const targetId = elementMap.get(rel.com);
                 if (!targetId) return;
                 const assocId = getNewId();
                 const memberEnd1 = getNewId();
                 const memberEnd2 = getNewId();
-                
-                // Associação com direcionalidade resolvida (source -> target)
                 rootPackageContent += `\n        <packagedElement xmi:type="uml:Association" xmi:id="${assocId}" name="${escapeXml(rel.tipo)}" visibility="public">`;
                 rootPackageContent += `\n            <memberEnd xmi:idref="${memberEnd1}"/>`;
                 rootPackageContent += `\n            <memberEnd xmi:idref="${memberEnd2}"/>`;
@@ -1019,7 +913,6 @@ if (!window.physicsBtnListenerAdded) {
                 rootPackageContent += `\n            <ownedEnd xmi:type="uml:Property" xmi:id="${memberEnd2}" type="${targetId}" association="${assocId}" navigable="true"/>`;
                 rootPackageContent += `\n        </packagedElement>`;
             });
-
             (el.dependencias || []).forEach(depId => {
                 const targetId = elementMap.get(depId);
                 if (!targetId) return;
@@ -1047,7 +940,6 @@ if (!window.physicsBtnListenerAdded) {
         const nomeEcossistema = document.getElementById('nomeEcossistema').value.trim() || "Ecossistema";
         const dadosCompletos = { nome_ecossistema: nomeEcossistema, elementos: elementos };
         const xmiString = daeToXMI(dadosCompletos);
-        
         const dataStr = "data:text/xml;charset=utf-8," + encodeURIComponent(xmiString);
         const a = document.createElement('a');
         a.href = dataStr;
@@ -1061,14 +953,236 @@ if (!window.physicsBtnListenerAdded) {
         const reader = new FileReader();
         reader.onload = (e) => {
             const xmlString = e.target.result;
-            // O desenvolvimento de um parser XML->JSON para reconstruir o DAE
-            // deve ser implementado aqui futuramente, caso seja estritamente necessário.
             alert("A leitura de dados XMI/XML foi iniciada, mas o parser de engenharia reversa para reconstruir as coordenadas Vis.js ainda precisa ser mapeado no sistema.");
             console.log("XML Carregado:", xmlString);
         };
         reader.readAsText(file);
     };
 
+    // ==================== EXPORTAÇÃO SWIMLANE (BPMN) REFATORADA ====================
+    function exportarVisaoSwimlane() {
+        if (!network || !network.body.data.nodes) {
+            alert('Nenhum diagrama renderizado para exportar.');
+            return;
+        }
+        
+        const todosNos = network.body.data.nodes.get();
+        const todasArestas = network.body.data.edges.get();
+
+        if (todosNos.length === 0) {
+            alert('O diagrama está vazio. Adicione elementos primeiro.');
+            return;
+        }
+
+        const positions = network.getPositions();
+        let nosComPosicao = todosNos.map(n => ({
+            ...n,
+            x: positions[n.id].x,
+            y: positions[n.id].y,
+            elemento: elementos.find(el => el.id === n.id) // Associa ao modelo completo
+        })).filter(n => n.elemento); // Garante que temos o modelo
+
+        // Separação Semântica: O que é Raia (Não-Tarefa) vs Tarefa
+        const nosRaia = nosComPosicao.filter(n => n.elemento.tipo !== 'tarefa');
+        const nosTarefa = nosComPosicao.filter(n => n.elemento.tipo === 'tarefa');
+
+        // 1. Agrupa Raias por proximidade no eixo Y
+        let raias = [];
+        if (nosRaia.length > 0) {
+            nosRaia.sort((a, b) => a.y - b.y);
+            let raiaAtual = [nosRaia[0]];
+            let yReferencia = nosRaia[0].y;
+            
+            for (let i = 1; i < nosRaia.length; i++) {
+                const n = nosRaia[i];
+                if (Math.abs(n.y - yReferencia) > 100) {
+                    raias.push(raiaAtual);
+                    raiaAtual = [];
+                    yReferencia = n.y;
+                }
+                raiaAtual.push(n);
+            }
+            if (raiaAtual.length > 0) raias.push(raiaAtual);
+        } else {
+            // Caso não haja raias (só tarefas), cria uma raia padrão
+            raias.push([{ id: 'default', label: 'Processo', x: 0, y: 0, elemento: { nome: 'Fluxo de Trabalho' } }]);
+        }
+
+        // 2. Aloca cada Tarefa à Raia mais próxima (ou pai se dependência)
+        const tarefasPorRaia = Array(raias.length).fill().map(() => []);
+        nosTarefa.forEach(tarefa => {
+            let raiaIndex = 0;
+            let minDist = Infinity;
+            
+            // Prioridade 1: Dependência explícita (se a tarefa depende de algum nó da raia)
+            const dependencias = tarefa.elemento.dependencias || [];
+            for (let i = 0; i < raias.length; i++) {
+                const raia = raias[i];
+                if (raia.some(n => dependencias.includes(n.id) || n.id === tarefa.elemento.id)) {
+                    raiaIndex = i;
+                    break;
+                }
+            }
+            
+            // Prioridade 2: Proximidade física (distância euclidiana)
+            if (raiaIndex === 0 && minDist === Infinity) {
+                raias.forEach((raia, idx) => {
+                    raia.forEach(nRaia => {
+                        const dist = Math.hypot(tarefa.x - nRaia.x, tarefa.y - nRaia.y);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            raiaIndex = idx;
+                        }
+                    });
+                });
+            }
+            
+            tarefasPorRaia[raiaIndex].push(tarefa);
+        });
+
+        // 3. Construção do HTML
+        const paletaCores = ['#dbeafe', '#d1fae5', '#fef3c7', '#f3e8ff', '#f1f5f9', '#ffe4e6'];
+        const bordaCores = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#475569', '#e11d48'];
+        
+        let htmlLanes = '';
+        let mapaCoordenadas = {};
+
+        raias.forEach((raia, index) => {
+            const corFundo = paletaCores[index % paletaCores.length];
+            const corBorda = bordaCores[index % bordaCores.length];
+            
+            // Nome da Raia: Pega o primeiro elemento significativo (Ator, Serviço, etc.)
+            const donoRaia = raia.find(n => n.elemento.tipo !== 'tarefa') || raia[0];
+            const nomeRaia = donoRaia.elemento.nome || `Raia ${index + 1}`;
+
+            let htmlTasks = '';
+            const tarefas = tarefasPorRaia[index];
+            tarefas.sort((a, b) => a.x - b.x); // Ordem de leitura (esquerda para direita)
+            
+            tarefas.forEach((tarefa, idx) => {
+                // Calcula posição relativa dentro da raia
+                const minX = Math.min(...raia.map(n => n.x));
+                const maxX = Math.max(...raia.map(n => n.x));
+                const rangeX = maxX - minX || 300;
+                
+                // Posição left baseada na coordenada X original
+                let posLeft = ((tarefa.x - minX) / rangeX) * 600 + 20;
+                if (posLeft < 20) posLeft = 20 + (idx * 150);
+                
+                mapaCoordenadas[tarefa.id] = {
+                    cx: 170 + posLeft + 75, // Ajuste para o centro do retângulo
+                    cy: (index * 130) + 65
+                };
+
+                htmlTasks += `
+                    <div class="task" style="background: #ffffff; border: 2px solid ${corBorda}; left: ${posLeft}px; top: 35px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                        <span style="font-weight:600;">✅</span> ${tarefa.elemento.nome}
+                        <div style="font-size:0.7rem; color:#475569; margin-top:4px;">${tarefa.elemento.competencia?.substring(0,40) || ''}</div>
+                    </div>
+                `;
+            });
+
+            htmlLanes += `
+            <div class="lane" style="border-left: 6px solid ${corBorda};">
+                <div class="lane-header" style="background: ${corFundo};">${nomeRaia}</div>
+                <div class="lane-content">
+                    ${htmlTasks}
+                </div>
+            </div>
+            `;
+        });
+
+        // 4. Desenho das Linhas (Fluxos entre Tarefas e/ou Recursos)
+        let svgEdges = `
+        <svg class="svg-overlay">
+            <defs>
+                <marker id="seta" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+                </marker>
+            </defs>`;
+            
+        todasArestas.forEach(aresta => {
+            let origem = mapaCoordenadas[aresta.from];
+            let destino = mapaCoordenadas[aresta.to];
+            
+            // Se não encontrou no mapa de tarefas, tenta buscar no mapa de raias
+            if (!origem) {
+                const noOrigem = nosRaia.find(n => n.id === aresta.from);
+                if (noOrigem) origem = { cx: 100, cy: raias.findIndex(r => r.some(n => n.id === noOrigem.id)) * 130 + 65 };
+            }
+            if (!destino) {
+                const noDestino = nosRaia.find(n => n.id === aresta.to);
+                if (noDestino) destino = { cx: 800, cy: raias.findIndex(r => r.some(n => n.id === noDestino.id)) * 130 + 65 };
+            }
+            
+            if (origem && destino) {
+                let curvatura = (destino.cx - origem.cx) * 0.2;
+                svgEdges += `
+                    <path d="M ${origem.cx} ${origem.cy} C ${origem.cx + curvatura} ${origem.cy}, ${destino.cx - curvatura} ${destino.cy}, ${destino.cx} ${destino.cy}" 
+                          stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#seta)" stroke-dasharray="${aresta.dashes ? '5,5' : 'none'}"/>
+                `;
+            }
+        });
+        svgEdges += `</svg>`;
+
+        // 5. HTML Final
+        const htmlBPMN = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <title>Visão Swimlane (BPMN) - ${document.getElementById('nomeEcossistema').value || 'DAE'}</title>
+            <style>
+                body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8fafc; padding: 40px; margin: 0;}
+                h1 { text-align: center; color: #334155; margin-bottom: 30px; }
+                .diagram-wrapper { 
+                    position: relative; 
+                    display: flex; flex-direction: column; border: 2px solid #cbd5e1; 
+                    background: white; min-width: 900px; border-radius: 12px; overflow: hidden;
+                }
+                .lane { 
+                    display: flex; border-bottom: 1px solid #cbd5e1; 
+                    min-height: 130px; box-sizing: border-box; position: relative; z-index: 2;
+                }
+                .lane:last-child { border-bottom: none; }
+                .lane-header {
+                    width: 150px; border-right: 2px solid #cbd5e1;
+                    display: flex; align-items: center; justify-content: center;
+                    text-align: center; font-weight: bold; font-size: 0.9rem;
+                    padding: 15px; text-transform: uppercase; color: #1e293b;
+                    flex-shrink: 0; box-sizing: border-box; z-index: 3;
+                }
+                .lane-content { 
+                    flex-grow: 1; position: relative; box-sizing: border-box; min-height: 120px;
+                }
+                .task {
+                    width: 160px; padding: 12px; border-radius: 12px; box-sizing: border-box;
+                    font-size: 0.85rem; text-align: center;
+                    box-shadow: 2px 4px 8px rgba(0,0,0,0.05); position: absolute;
+                    font-weight: 500; color: #1e293b; z-index: 3; background: white;
+                    transition: transform 0.1s ease;
+                }
+                .task:hover { transform: scale(1.02); box-shadow: 4px 8px 12px rgba(0,0,0,0.1); z-index: 10; }
+                .svg-overlay {
+                    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                    z-index: 1; pointer-events: none; 
+                }
+            </style>
+        </head>
+        <body>
+            <h1>📋 Visão de Processos & Responsabilidades</h1>
+            <div class="diagram-wrapper">
+                ${svgEdges}
+                ${htmlLanes}
+            </div>
+        </body>
+        </html>
+        `;
+
+        const novaAba = window.open('', '_blank');
+        novaAba.document.write(htmlBPMN);
+        novaAba.document.close();
+    }
 
     // ==================== INICIALIZAÇÃO ====================
     function init() {
@@ -1083,7 +1197,11 @@ if (!window.physicsBtnListenerAdded) {
             { id: "poc", nome: "POC", tipo: "armazenamento", camada: "backstage", competencia: "Turmas, progresso", valor: "Gestão operacional", fluxo: "Recebe progresso do T-TIA", dependencias: [], relacionamentos: [] },
             { id: "app_aluno", nome: "App Aluno", tipo: "touchpoint", camada: "frontstage", competencia: "Interface mobile", valor: "Acesso fácil", fluxo: "Conecta aluno ao T-TIA", dependencias: ["t-tia"], relacionamentos: [{ com: "t-tia", tipo: "Interação direta" }] },
             { id: "mec", nome: "Regulamentação MEC", tipo: "fator_externo", camada: "none", competencia: "Diretrizes nacionais", valor: "Conformidade legal", fluxo: "Influencia E-TIA", dependencias: [], relacionamentos: [{ com: "e-tia", tipo: "Regulamentação" }] },
-            { id: "feedback_imo", nome: "Melhoria Contínua IMO", tipo: "feedback_loop", camada: "backstage", competencia: "Ajuste do IMO", valor: "Evolução curricular", fluxo: "POC → Pedagogo → E-TIA → PEC", dependencias: ["poc","e-tia"], relacionamentos: [{ com: "e-tia", tipo: "Feedback (melhoria)" }] }
+            { id: "feedback_imo", nome: "Melhoria Contínua IMO", tipo: "feedback_loop", camada: "backstage", competencia: "Ajuste do IMO", valor: "Evolução curricular", fluxo: "POC → Pedagogo → E-TIA → PEC", dependencias: ["poc","e-tia"], relacionamentos: [{ com: "e-tia", tipo: "Feedback (melhoria)" }] },
+            // Novas Tarefas de Exemplo
+            { id: "tarefa_criar_matriz", nome: "Criar Matriz Curricular", tipo: "tarefa", camada: "backstage", competencia: "Estruturar competências e habilidades", valor: "Base para o ano letivo", fluxo: "", dependencias: ["e-tia"], relacionamentos: [{ com: "pec", tipo: "Gravação" }] },
+            { id: "tarefa_gerar_chave", nome: "Gerar Chave de Turma", tipo: "tarefa", camada: "frontstage", competencia: "Ativar turma no sistema", valor: "Acesso dos alunos", fluxo: "", dependencias: ["p-tia"], relacionamentos: [{ com: "poc", tipo: "Gravação" }] },
+            { id: "tarefa_realizar_atividade", nome: "Realizar Atividade Offline", tipo: "tarefa", camada: "frontstage", competencia: "Resolver questões no app", valor: "Progresso do aluno", fluxo: "", dependencias: ["t-tia"], relacionamentos: [{ com: "poc", tipo: "Gravação" }] }
         ];
         document.getElementById('nomeEcossistema').value = "Ecossistema ASTIA - Educação 4.0";
         atualizarListaElementos();
@@ -1094,7 +1212,23 @@ if (!window.physicsBtnListenerAdded) {
         preencherTemplate();
     }
 
-    // Eventos
+    // ==================== ABAS E EVENT LISTENERS ====================
+    const tabEditor = document.getElementById('tabEditorBtn');
+    const tabVisualizacao = document.getElementById('tabVisualizacaoBtn');
+    const editorPanel = document.getElementById('editorPanel');
+    const visualizacaoPanel = document.getElementById('visualizacaoPanel');
+    function setActiveTab(tab) {
+        tabEditor.classList.remove('active'); tabVisualizacao.classList.remove('active');
+        editorPanel.classList.remove('active'); visualizacaoPanel.classList.remove('active');
+        if (tab === 'editor') { tabEditor.classList.add('active'); editorPanel.classList.add('active'); }
+        else { tabVisualizacao.classList.add('active'); visualizacaoPanel.classList.add('active');
+            if (currentSelectedId) mostrarDetalhes(currentSelectedId);
+            else if (elementos.length) mostrarDetalhes(elementos[0].id);
+        }
+    }
+    tabEditor.addEventListener('click', () => setActiveTab('editor'));
+    tabVisualizacao.addEventListener('click', () => setActiveTab('visualizacao'));
+
     document.getElementById('addRelBtn').addEventListener('click', () => {
         const destino = document.getElementById('relDestino').value.trim();
         const tipo = document.getElementById('relTipo').value;
@@ -1103,6 +1237,7 @@ if (!window.physicsBtnListenerAdded) {
         atualizarListaRelacoes();
         document.getElementById('relDestino').value = '';
     });
+	document.getElementById('gerarBpmnBtn').addEventListener('click', exportarVisaoSwimlane);
     document.getElementById('saveElemBtn').addEventListener('click', salvarElemento);
     document.getElementById('cancelEditBtn').addEventListener('click', limparFormulario);
     document.getElementById('exportJsonBtn').addEventListener('click', exportarJSON);
@@ -1114,18 +1249,19 @@ if (!window.physicsBtnListenerAdded) {
         e.target.value = ''; 
     });
     document.getElementById('importFile').addEventListener('change', (e) => { if (e.target.files.length) importarJSON(e.target.files[0]); e.target.value = ''; });
-   document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
+    document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
         btn.addEventListener('click', () => aplicarFiltro(btn.getAttribute('data-filter')));
     });
     document.getElementById('elemTipo').addEventListener('change', preencherTemplate);
     window.addEventListener('resize', () => { if (network) network.redraw(); });
-    init();
+    
     document.getElementById('ativarModoCliqueBtn').addEventListener('click', () => {
-    modoEdicaoRelacionamento = true;
-    alert('Clique em um nó no diagrama para definir o destino do relacionamento.');
-    document.getElementById('network').style.cursor = 'crosshair';
-});
+        modoEdicaoRelacionamento = true;
+        alert('Clique em um nó no diagrama para definir o destino do relacionamento.');
+        document.getElementById('network').style.cursor = 'crosshair';
+    });
 
+    init();
 </script>
 </body>
 </html>
