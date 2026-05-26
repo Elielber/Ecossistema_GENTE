@@ -1299,23 +1299,29 @@
 <div id="screen-fornecedor-dash" class="app-screen" style="background:#f4f6f7;">
     <header style="background:#2c3e50; padding:15px; display:flex; align-items:center;">
         <button class="btn-home" onclick="goToScreen('welcome')">🏠</button>
-        <h1 style="font-size:1rem; flex:1; text-align:center;">Painel de Negócios</h1><div style="width:35px"></div>
+        <h1 style="font-size:1rem; flex:1; text-align:center;">Vitrine de Negócios</h1>
+        <div style="background:#f1c40f; color:#2c3e50; font-weight:bold; padding:5px 10px; border-radius:15px; font-size:0.8rem; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+            🪙 <span id="lbl-forn-creditos">5</span>
+        </div>
     </header>
     <div style="padding:20px;">
-        <div style="background:white; padding:15px; border-radius:12px; margin-bottom:15px; border-left:5px solid #27ae60;">
+        <div style="background:white; padding:15px; border-radius:12px; margin-bottom:15px; border-left:5px solid #27ae60; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
             <h3 style="margin:0; color:#2c3e50;">Olá, <span id="lbl-forn-nome">Parceiro</span>!</h3>
             <p style="font-size:0.8rem; color:#666;">Seu radar: <span id="dash-radar-list"></span></p>
         </div>
         
-        <div id="area-metricas-reais"></div>
-
+        <h4 style="color:#7f8c8d; margin-bottom:10px;">🔥 Orçamentos na sua região</h4>
+        
+        <div id="area-vitrine-leads"></div>
+        
         <div style="background:#e3f2fd; padding:15px; border-radius:10px; text-align:center; margin-top:20px; border:1px solid #bbdefb;">
             <div style="font-size:2rem;">📲</div>
-            <strong>Aguarde Pedidos</strong>
-            <p style="font-size:0.8rem; color:#1565c0;">Os prestadores enviarão as listas pelo WhatsApp.</p>
+            <strong>Como funciona?</strong>
+            <p style="font-size:0.8rem; color:#1565c0;">Gaste 1 crédito para desbloquear o contato do profissional e envie sua tabela de preços cobrindo a oferta direto no WhatsApp dele.</p>
         </div>
+    </div>
 </div>
-</div>
+
 <div id="modal-dossie" class="modal-overlay" onclick="if(event.target.id==='modal-dossie')this.style.display='none'">
     <div class="modal-content" style="max-height:90vh; display:flex; flex-direction:column;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
@@ -6588,8 +6594,9 @@ function encontrarGrupoPorServico(servico) {
     return "";
 }
 /* --- MÓDULO FORNECEDOR & COTAÇÃO --- */
+// Adicionamos 'creditos' (iniciando com 5 testes grátis) e 'leadsAtuais' para a vitrine
+let stateFornecedor = { nome: "", cnpj: "", zap: "", radar: [], creditos: 5, leadsAtuais: [] };
 
-let stateFornecedor = { nome: "", cnpj: "", zap: "", radar: [] };
 
 // 1. INICIALIZAÇÃO E RADAR
 // Substitua a função antiga por esta:
@@ -6711,36 +6718,121 @@ function fazerLoginFornecedor() {
     });
 }
 
-// 4. DASHBOARD COM DADOS REAIS
+// 4. DASHBOARD COM VITRINE DE LEADS
 function carregarDashboardFornecedor() {
     goToScreen('fornecedor-dash');
     document.getElementById('lbl-forn-nome').innerText = stateFornecedor.nome;
     document.getElementById('dash-radar-list').innerText = stateFornecedor.radar.join(", ");
     
-    const divRes = document.getElementById('area-metricas-reais');
-    divRes.innerHTML = "<div style='text-align:center; padding:20px;'>🔄 Buscando dados reais do mercado...</div>";
+    // Inicia os créditos na tela (No futuro, esse valor virá do backend no momento do login)
+    if (stateFornecedor.creditos === undefined) stateFornecedor.creditos = 5;
+    document.getElementById('lbl-forn-creditos').innerText = stateFornecedor.creditos;
+    
+    const divRes = document.getElementById('area-vitrine-leads');
+    divRes.innerHTML = "<div style='text-align:center; padding:20px; color:#e67e22;'>🔄 Buscando orçamentos nas suas áreas...</div>";
 
-    fetch(API_URL + "?acao=BUSCAR_METRICAS_MERCADO&radar=" + encodeURIComponent(stateFornecedor.radar.join(",")))
+    // Chama o backend pedindo os Leads baseados no Radar
+    // NOTA: Como o endpoint BUSCAR_LEADS_FORNECEDOR ainda precisa ser criado no Google Apps Script, 
+    // coloquei um Fallback robusto no catch() para você testar a interface imediatamente com dados simulados.
+    fetch(API_URL + "?acao=BUSCAR_LEADS_FORNECEDOR&radar=" + encodeURIComponent(stateFornecedor.radar.join(",")))
     .then(res => res.json())
     .then(lista => {
-        divRes.innerHTML = "";
-        if(lista.length === 0) {
-            divRes.innerHTML = "<div class='card' style='text-align:center; color:#7f8c8d'>Sem dados recentes para seu radar.</div>";
-            return;
-        }
-        divRes.innerHTML = `<h4 style="color:#7f8c8d; margin-bottom:10px;">📈 Top Materiais (Sua Região)</h4>`;
-        lista.forEach((item, i) => {
-             const badge = i < 3 ? `<span class="badge badge-green">🔥 Alta</span>` : "";
-             divRes.innerHTML += `
-             <div class="card">
-                <div style="display:flex; justify-content:space-between; font-weight:bold; color:#2c3e50;">
-                    <span>${i+1}. ${item.material}</span> ${badge}
-                </div>
-                <div style="font-size:0.8rem; color:#666;">Orçados na rede: <strong>${item.qtd} un</strong></div>
-             </div>`;
-        });
+        stateFornecedor.leadsAtuais = lista;
+        renderVitrineLeads();
+    })
+    .catch(err => {
+        console.warn("Backend não respondeu com leads. Usando dados mock para visualização da Vitrine.");
+        // Simulação de Dados Anonimizados vindos do Sheet
+        stateFornecedor.leadsAtuais = [
+            { id: "L1", prof: "Eletricista", itens: 12, valorObj: 850.00, bairro: "Centro", desbloqueado: false, prestadorNome: "João Silva", prestadorZap: "5521999999999" },
+            { id: "L2", prof: "Pedreiro", itens: 24, valorObj: 1420.00, bairro: "Alto", desbloqueado: false, prestadorNome: "Marcos Paulo", prestadorZap: "5521988888888" },
+            { id: "L3", prof: "Encanador", itens: 5, valorObj: 230.00, bairro: "Várzea", desbloqueado: false, prestadorNome: "Luiz", prestadorZap: "5521977777777" }
+        ];
+        renderVitrineLeads();
     });
 }
+
+// ELEMENTO 1: Renderiza o Painel Anonimizado
+function renderVitrineLeads() {
+    const divRes = document.getElementById('area-vitrine-leads');
+    divRes.innerHTML = "";
+
+    if (!stateFornecedor.leadsAtuais || stateFornecedor.leadsAtuais.length === 0) {
+        divRes.innerHTML = "<div class='card' style='text-align:center; color:#7f8c8d'>Nenhuma lista de material compatível com seu radar no momento.</div>";
+        return;
+    }
+
+    stateFornecedor.leadsAtuais.forEach((lead, index) => {
+        let conteudoAcao = "";
+
+        if (lead.desbloqueado) {
+            // ELEMENTO 3: O Roteamento de Negociação (O Link)
+            const msg = `Olá ${lead.prestadorNome}, vi a sua cotação de ${lead.itens} itens no Bem + Bom e consigo cobrir o valor aqui na loja. Segue a tabela...`;
+            const zapLink = `https://wa.me/${lead.prestadorZap}?text=${encodeURIComponent(msg)}`;
+            
+            conteudoAcao = `
+                <div style="background:#e8f5e9; padding:12px; border-radius:8px; margin-top:12px; border:1px solid #c8e6c9;">
+                    <div style="font-size:0.75rem; color:#2e7d32; font-weight:bold; margin-bottom:5px; text-transform:uppercase;">✅ Contato Liberado</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <span style="font-weight:bold; color:#2c3e50; font-size:1.1rem;">👷 ${lead.prestadorNome}</span>
+                    </div>
+                    <button class="btn btn-success" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="window.open('${zapLink}', '_blank')">
+                        💬 Enviar Proposta no Zap
+                    </button>
+                </div>
+            `;
+        } else {
+            // ELEMENTO 2: A Mecânica de Destravamento (O Botão)
+            conteudoAcao = `
+                <button class="btn btn-primary" style="width:100%; margin-top:12px; background:#f39c12; border:none; color:#2c3e50; font-weight:bold;" onclick="desbloquearLead(${index})">
+                    🔓 Desbloquear Contato (1 Crédito)
+                </button>
+            `;
+        }
+
+        // Construção do Cartão Frugal e Anonimizado
+        divRes.innerHTML += `
+        <div class="card" style="border-left:5px solid #3498db; margin-bottom:15px; padding:15px; box-shadow:0 4px 10px rgba(0,0,0,0.05);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                <div>
+                    <div style="font-weight:bold; color:#2c3e50; font-size:1.1rem;">${lead.prof}</div>
+                    <div style="font-size:0.8rem; color:#95a5a6; margin-top:2px;">ID: #${lead.id}</div>
+                </div>
+                <span class="badge" style="background:#e3f2fd; color:#1565c0; padding:4px 8px;">📍 ${lead.bairro || 'Região Central'}</span>
+            </div>
+            
+            <div style="background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:5px; border:1px solid #eee;">
+                <div style="font-size:0.85rem; color:#333;">📦 Lista: <strong>${lead.itens} itens</strong> (Curva A/B)</div>
+                <div style="font-size:0.85rem; color:#27ae60; margin-top:5px;">💰 Valor Orçado: <strong>R$ ${parseFloat(lead.valorObj).toFixed(2)}</strong></div>
+            </div>
+            
+            ${conteudoAcao}
+        </div>`;
+    });
+}
+
+function desbloquearLead(index) {
+    if (stateFornecedor.creditos <= 0) {
+        alert("⚠️ Seus créditos de teste acabaram!\n\nEm breve, disponibilizaremos pacotes de créditos.");
+        return;
+    }
+    
+    if (confirm("Deseja utilizar 1 Crédito Virtual para revelar o contato deste profissional?")) {
+        // Deduz crédito do banco local (Frugal)
+        stateFornecedor.creditos -= 1;
+        document.getElementById('lbl-forn-creditos').innerText = stateFornecedor.creditos;
+        
+        // Desbloqueia na interface
+        stateFornecedor.leadsAtuais[index].desbloqueado = true;
+        
+        // Atualiza a vitrine
+        renderVitrineLeads();
+
+        // Opcional Acadêmico: Ação para registrar o consumo do lead no seu Google Sheet no futuro
+        // fetch(API_URL + "?acao=CONSUMIR_CREDITO&idLead=" + stateFornecedor.leadsAtuais[index].id + "&cnpj=" + stateFornecedor.cnpj, { method: 'POST', mode: 'no-cors' });
+    }
+}
+
 
 // 5. COTAÇÃO DO PRESTADOR (Busca Fornecedores)
 
