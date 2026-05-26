@@ -6718,35 +6718,31 @@ function fazerLoginFornecedor() {
     });
 }
 
-// 4. DASHBOARD COM VITRINE DE LEADS
+// 4. DASHBOARD COM VITRINE DE LEADS (CONECTADO AO SERVIDOR)
 function carregarDashboardFornecedor() {
     goToScreen('fornecedor-dash');
     document.getElementById('lbl-forn-nome').innerText = stateFornecedor.nome;
     document.getElementById('dash-radar-list').innerText = stateFornecedor.radar.join(", ");
     
-    // Inicia os créditos na tela
     if (stateFornecedor.creditos === undefined) stateFornecedor.creditos = 5;
     document.getElementById('lbl-forn-creditos').innerText = stateFornecedor.creditos;
     
     const divRes = document.getElementById('area-vitrine-leads');
-    divRes.innerHTML = "<div style='text-align:center; padding:20px; color:#e67e22;'>🔄 Carregando vitrine...</div>";
+    divRes.innerHTML = "<div style='text-align:center; padding:20px; color:#e67e22;'>🔄 Buscando orçamentos nas suas áreas...</div>";
 
-    /* Desativado temporariamente até o backend GAS estar pronto.
+    // Reativando a chamada real para o Apps Script
     fetch(API_URL + "?acao=BUSCAR_LEADS_FORNECEDOR&radar=" + encodeURIComponent(stateFornecedor.radar.join(",")))
     .then(res => res.json())
-    .then(lista => { ... }) 
-    */
-
-    // MOCK FORÇADO: Injetando dados simulados para testar a interface e a mecânica de créditos
-    setTimeout(() => {
-        stateFornecedor.leadsAtuais = [
-            { id: "L1", prof: "Eletricista", itens: 12, valorObj: 850.00, bairro: "Centro", desbloqueado: false, prestadorNome: "João Silva", prestadorZap: "5521999999999" },
-            { id: "L2", prof: "Pedreiro", itens: 24, valorObj: 1420.00, bairro: "Alto", desbloqueado: false, prestadorNome: "Marcos Paulo", prestadorZap: "5521988888888" },
-            { id: "L3", prof: "Encanador", itens: 5, valorObj: 230.00, bairro: "Várzea", desbloqueado: false, prestadorNome: "Luiz", prestadorZap: "5521977777777" }
-        ];
+    .then(lista => {
+        stateFornecedor.leadsAtuais = lista;
         renderVitrineLeads();
-    }, 500);
+    })
+    .catch(err => {
+        console.error("Erro ao buscar leads do servidor:", err);
+        divRes.innerHTML = "<div class='card' style='text-align:center; color:#e74c3c'>Erro ao conectar com o servidor. Tente novamente.</div>";
+    });
 }
+
 
 
 // ELEMENTO 1: Renderiza o Painel Anonimizado
