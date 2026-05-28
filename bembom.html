@@ -6745,7 +6745,7 @@ function carregarDashboardFornecedor() {
 
 
 
-// ELEMENTO 1: Renderiza o Painel Anonimizado
+// ELEMENTO 1: Renderiza o Painel Anonimizado e Expansivo
 function renderVitrineLeads() {
     const divRes = document.getElementById('area-vitrine-leads');
     divRes.innerHTML = "";
@@ -6758,7 +6758,6 @@ function renderVitrineLeads() {
     stateFornecedor.leadsAtuais.forEach((lead, index) => {
         let conteudoAcao = "";
         
-        // Tratamento Defensivo (Evita undefined e NaN)
         const profissao = lead.prof || lead.cat || "Especialidade não informada";
         const idVisual = lead.id || "000";
         const bairro = lead.bairro || "Região não informada";
@@ -6768,33 +6767,52 @@ function renderVitrineLeads() {
         const zapPrestador = lead.prestadorZap || "";
 
         if (lead.desbloqueado) {
-            // ELEMENTO 3: O Roteamento de Negociação (O Link)
+            // NOVO: Montar o HTML da lista de materiais com barra de rolagem (scroll)
+            let htmlListaMateriais = "<div style='margin-top:10px; padding:10px; background:#fff; border:1px solid #eee; border-radius:6px; max-height:180px; overflow-y:auto; font-size:0.8rem; color:#555;'>";
+            htmlListaMateriais += "<strong style='color:#2c3e50; display:block; margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:5px;'>📋 Relatório de Materiais:</strong>";
+            
+            if (lead.listaMat && lead.listaMat.length > 0) {
+                lead.listaMat.forEach(mat => {
+                    htmlListaMateriais += `<div style='border-bottom:1px dashed #f5f5f5; padding:4px 0; display:flex; justify-content:space-between;'>
+                        <span>${mat.nome}</span>
+                        <strong style='color:#e67e22;'>${mat.qtd} un</strong>
+                    </div>`;
+                });
+            } else {
+                htmlListaMateriais += "<em>Lista detalhada não disponível.</em>";
+            }
+            htmlListaMateriais += "</div>";
+
             const msg = `Olá ${nomePrestador}, vi a sua cotação de ${qtdItens} itens no Bem + Bom e consigo cobrir o valor aqui na loja. Segue a tabela...`;
             const zapLink = `https://wa.me/${zapPrestador}?text=${encodeURIComponent(msg)}`;
             
+            // O card se expande mostrando a lista e o Zap
             conteudoAcao = `
                 <div style="background:#e8f5e9; padding:12px; border-radius:8px; margin-top:12px; border:1px solid #c8e6c9;">
-                    <div style="font-size:0.75rem; color:#2e7d32; font-weight:bold; margin-bottom:5px; text-transform:uppercase;">✅ Contato Liberado</div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div style="font-size:0.75rem; color:#2e7d32; font-weight:bold; margin-bottom:5px; text-transform:uppercase;">✅ Lista e Contato Liberados</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
                         <span style="font-weight:bold; color:#2c3e50; font-size:1.1rem;">👷 ${nomePrestador}</span>
                     </div>
-                    <button class="btn btn-success" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="window.open('${zapLink}', '_blank')">
-                        💬 Enviar Proposta no Zap
+                    
+                    ${htmlListaMateriais}
+
+                    <button class="btn btn-success" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; margin-top:12px;" onclick="window.open('${zapLink}', '_blank')">
+                        💬 Fazer Proposta no Zap
                     </button>
                 </div>
             `;
         } else {
-            // ELEMENTO 2: A Mecânica de Destravamento (O Botão)
+            // ELEMENTO 2: A Mecânica de Destravamento (Oculta a lista)
             conteudoAcao = `
                 <button class="btn btn-primary" style="width:100%; margin-top:12px; background:#f39c12; border:none; color:#2c3e50; font-weight:bold;" onclick="desbloquearLead(${index})">
-                    🔓 Desbloquear Contato (1 Crédito)
+                    🔓 Desbloquear Lista e Contato (1 Crédito)
                 </button>
             `;
         }
 
-        // Construção do Cartão
+        // Construção do Cartão Base
         divRes.innerHTML += `
-        <div class="card" style="border-left:5px solid #3498db; margin-bottom:15px; padding:15px; box-shadow:0 4px 10px rgba(0,0,0,0.05);">
+        <div class="card" style="border-left:5px solid #3498db; margin-bottom:15px; padding:15px; box-shadow:0 4px 10px rgba(0,0,0,0.05); transition: all 0.3s ease;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
                 <div>
                     <div style="font-weight:bold; color:#2c3e50; font-size:1.1rem;">${profissao}</div>
@@ -6804,14 +6822,15 @@ function renderVitrineLeads() {
             </div>
             
             <div style="background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:5px; border:1px solid #eee;">
-                <div style="font-size:0.85rem; color:#333;">📦 Lista: <strong>${qtdItens} itens</strong> (Curva A/B)</div>
-                <div style="font-size:0.85rem; color:#27ae60; margin-top:5px;">💰 Valor Orçado: <strong>R$ ${valorFomatado}</strong></div>
+                <div style="font-size:0.85rem; color:#333;">📦 Total de Itens: <strong>${qtdItens} un</strong> (Curva A/B)</div>
+                <div style="font-size:0.85rem; color:#27ae60; margin-top:5px;">💰 Potencial da Venda: <strong>R$ ${valorFomatado}</strong></div>
             </div>
             
             ${conteudoAcao}
         </div>`;
     });
 }
+
 
 
 function desbloquearLead(index) {
