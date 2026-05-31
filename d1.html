@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>D+1 | Liberdade Financeira</title>
+    <style>
+        :root {
+            --primary: #1e293b; /* Azul escuro seguro e institucional */
+            --secondary: #64748b; /* Cinza de apoio */
+            --accent: #0ea5e9; /* Azul vibrante para ações */
+            --bg-color: #f8fafc; /* Fundo limpo e leve */
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        /* Container que emula a tela do celular */
+        .app-container {
+            width: 100%;
+            max-width: 480px;
+            background: var(--bg-color);
+            position: relative;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Telas (Screens) */
+        .screen {
+            display: none;
+            flex-direction: column;
+            padding: 30px 20px;
+            height: 100%;
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+        .screen.active { display: flex; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Tipografia e UI */
+        .title { font-size: 1.5rem; font-weight: 700; color: var(--primary); margin-bottom: 10px; line-height: 1.3; }
+        .subtitle { font-size: 1rem; color: var(--secondary); margin-bottom: 30px; line-height: 1.5; }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            margin-bottom: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .btn-option {
+            width: 100%;
+            background: var(--card-bg);
+            border: 2px solid #e2e8f0;
+            color: var(--primary);
+            padding: 18px 20px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn-option:hover, .btn-option:active {
+            border-color: var(--accent);
+            background: #f0f9ff;
+        }
+
+        .btn-primary {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 18px;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: auto;
+            transition: 0.2s;
+            box-shadow: 0 4px 15px rgba(30, 41, 59, 0.2);
+        }
+        .btn-primary:active { transform: scale(0.98); }
+
+        /* Loader Silencioso */
+        .loader {
+            display: none;
+            text-align: center;
+            color: var(--secondary);
+            font-size: 0.9rem;
+            margin-top: 20px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+
+    <!-- TELA 1: Acolhimento Fricção Zero -->
+    <div id="screen-welcome" class="screen active">
+        <div style="font-size: 3rem; margin-bottom: 10px;">🌅</div>
+        <h1 class="title">Respire fundo.<br>Você chegou ao D+1.</h1>
+        <p class="subtitle">Aqui, não existe julgamento, cobrança ou jargão difícil. Os números vão começar a trabalhar para você, e não o contrário.</p>
+        
+        <div class="card">
+            <p style="font-size: 0.9rem; color: var(--secondary); line-height: 1.5;">
+                Nós processamos tudo no seu próprio celular. Nenhum dado financeiro seu será enviado ou vendido para bancos. Este é um ambiente seguro.
+            </p>
+        </div>
+
+        <button class="btn-primary" onclick="avancarParaTriagem()">Dar o primeiro passo</button>
+    </div>
+
+    <!-- TELA 2: Triagem Oculta (Locus de Controle) -->
+    <div id="screen-triage" class="screen">
+        <span style="font-size: 0.8rem; font-weight: bold; color: var(--secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">Contexto Rápido</span>
+        <h2 class="title">Olhando para o próximo mês...</h2>
+        <p class="subtitle">Como você sente que será a sua organização para manter as contas no eixo?</p>
+
+        <div style="margin-top: 10px;">
+            <button class="btn-option" onclick="registrarResposta('locus_interno')">
+                <span style="font-size: 1.5rem;">🧭</span>
+                <span>Depende mais de eu conseguir organizar a minha própria rotina.</span>
+            </button>
+            <button class="btn-option" onclick="registrarResposta('locus_externo')">
+                <span style="font-size: 1.5rem;">🌪️</span>
+                <span>Depende mais de como as coisas no país e na economia vão andar.</span>
+            </button>
+        </div>
+        
+        <div id="triage-loader" class="loader">⚙️ Preparando seu painel seguro...</div>
+    </div>
+
+    <!-- TELA 3: Painel Principal -->
+        <div id="screen-dashboard" class="screen">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+            <div>
+                <span style="font-size: 0.8rem; font-weight: bold; color: var(--secondary); text-transform: uppercase;">O seu Plano D+1</span>
+                <h2 style="font-size: 1.4rem; font-weight: 700; color: var(--primary);">Visão Estratégica</h2>
+            </div>
+            <div style="background: #e2e8f0; padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: bold; color: var(--primary);">
+                NÍVEL 1
+            </div>
+        </div>
+
+        <div class="card" style="background: #1e293b; color: white; border: none; position: relative; overflow: hidden; margin-bottom: 20px;">
+            <div style="position: absolute; right: -20px; top: -20px; font-size: 6rem; opacity: 0.1;">🧠</div>
+            <span style="font-size: 0.75rem; font-weight: bold; color: #38bdf8; text-transform: uppercase; letter-spacing: 1px;">Leitura Rápida</span>
+            <h3 style="font-size: 1.1rem; margin: 8px 0; color: white;">A Armadilha da Identidade</h3>
+            <p style="font-size: 0.9rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 15px;">
+                Você não é endividado. Você está com um passivo. Separar o problema matemático de quem você é, é o primeiro passo para o controle.
+            </p>
+            <button class="btn-sm" style="background: #38bdf8; color: #0f172a; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.85rem;" onclick="abrirMicroArtigo()">
+                Ler conceito (2 min)
+            </button>
+        </div>
+
+        <div id="modulo-missao" style="display: none;">
+            <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--primary); margin-bottom: 10px;">Micro-Tarefa da Semana</h3>
+            <div class="card" style="border-left: 4px solid #f59e0b; background: #fffbeb;">
+                <strong style="color: #d97706; display: block; margin-bottom: 5px;">Auditoria de Valores</strong>
+                <p style="font-size: 0.85rem; color: #92400e; margin-bottom: 15px; line-height: 1.4;">
+                    Identificamos que alguns credores foram registrados com valores estimados. Nosso algoritmo precisa das faturas reais para calcular sua rota de saída.
+                </p>
+                <div id="lista-auditoria-estimativas" style="margin-bottom: 15px;"></div>
+            </div>
+        </div>
+
+        <div id="modulo-analitico" style="display: none;">
+            <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--primary); margin-bottom: 10px;">Raio-X do Fluxo de Caixa</h3>
+            
+            <div class="card" style="padding: 15px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem;">
+                    <span style="color: var(--secondary);">Renda Líquida</span>
+                    <strong style="color: #10b981;" id="raiox-renda">R$ 0,00</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem;">
+                    <span style="color: var(--secondary);">Fortaleza (Inegociável)</span>
+                    <strong style="color: #e65100;" id="raiox-fortaleza">- R$ 0,00</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 0.9rem; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0;">
+                    <span style="color: var(--secondary);">Estilo de Vida (Flexível)</span>
+                    <strong style="color: #e65100;" id="raiox-flexivel">- R$ 0,00</strong>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 1rem;">
+                    <span style="font-weight: bold; color: var(--primary);">Saldo para as Dívidas</span>
+                    <strong id="raiox-saldo-disponivel" style="color: var(--primary);">R$ 0,00</strong>
+                </div>
+
+                <div style="background: #f8fafc; padding: 12px; border-radius: 8px; display: flex; justify-content: space-between; font-size: 0.9rem;">
+                    <span style="color: var(--secondary);">Total das Parcelas Atuais</span>
+                    <strong style="color: #ef4444;" id="raiox-parcelas">R$ 0,00</strong>
+                </div>
+                
+                <div id="alerta-capacidade" style="margin-top: 15px; font-size: 0.85rem; font-weight: 600; text-align: center; padding: 10px; border-radius: 6px;"></div>
+                <div id="acao-raiox-container" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+        <div id="modulo-plano-ativo" style="display: none; animation: fadeIn 0.4s;">
+            </div>
+            
+    </div>
+
+    <div id="screen-mapeamento" class="screen">
+        <h2 class="title">Quem faz parte desta lista?</h2>
+        <p class="subtitle">Não vamos falar de valores agora. Apenas anote quem são as instituições para tirá-las da cabeça.</p>
+
+        <div class="card">
+            <div id="lista-credores-ui" style="margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px;">
+                </div>
+
+            <input type="text" id="input-nome-credor" placeholder="Ex: Cartão X, Banco Y..." 
+                   style="width: 100%; padding: 15px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 1rem; outline: none; margin-bottom: 15px;">
+            
+            <button class="btn-option" onclick="adicionarNomeCredor()" style="justify-content: center; border-color: var(--secondary); margin-bottom: 0;">
+                + Adicionar à lista
+            </button>
+        </div>
+
+        <button class="btn-primary" onclick="avancarParaValores()">Já listei todos, avançar</button>
+    </div>
+
+    <div id="screen-valores-atomicos" class="screen">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <span style="font-size: 0.85rem; font-weight: bold; color: var(--secondary); text-transform: uppercase;">
+                Credor <span id="indice-atual">1</span> de <span id="total-credores">X</span>
+            </span>
+            <div style="background: #e2e8f0; height: 8px; width: 50%; border-radius: 4px; overflow: hidden;">
+                <div id="barra-progresso" style="background: var(--accent); height: 100%; width: 0%; transition: width 0.3s;"></div>
+            </div>
+        </div>
+        
+        <h2 class="title" id="nome-credor-display">Nome do Credor</h2>
+        <p class="subtitle">Insira os valores atuais. Se não souber o valor exato agora, marque como estimativa.</p>
+
+        <div class="card">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--primary); font-size: 0.9rem;">Valor Total da Dívida</label>
+            <div style="position: relative; margin-bottom: 20px;">
+                <span style="position: absolute; left: 15px; top: 15px; color: var(--secondary); font-weight: bold;">R$</span>
+                <input type="number" id="valor-total" placeholder="0.00" style="width: 100%; padding: 15px 15px 15px 45px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 1.1rem; outline: none;">
+            </div>
+
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--primary); font-size: 0.9rem;">Valor da Parcela Mensal</label>
+            <div style="position: relative; margin-bottom: 15px;">
+                <span style="position: absolute; left: 15px; top: 15px; color: var(--secondary); font-weight: bold;">R$</span>
+                <input type="number" id="valor-parcela" placeholder="0.00" style="width: 100%; padding: 15px 15px 15px 45px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 1.1rem; outline: none;">
+            </div>
+            
+            <label style="display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: var(--secondary); cursor: pointer;">
+                <input type="checkbox" id="valor-estimado" style="width: 18px; height: 18px; accent-color: var(--accent);">
+                Estes valores são apenas uma estimativa.
+            </label>
+        </div>
+
+        <button class="btn-primary" onclick="guardarCredorEAvancar()">Guardar e Continuar</button>
+    </div>
+    <div id="screen-renda" class="screen">
+        <h2 class="title">Qual é o seu fôlego real?</h2>
+        <p class="subtitle">Não olhe para o salário bruto. Precisamos saber o que efetivamente cai na sua conta após os descontos.</p>
+
+        <div class="card">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--primary);">Renda Mensal Líquida</label>
+            <div style="position: relative; margin-bottom: 10px;">
+                <span style="position: absolute; left: 15px; top: 15px; color: var(--secondary); font-weight: bold;">R$</span>
+                <input type="number" id="valor-renda" placeholder="0.00" style="width: 100%; padding: 15px 15px 15px 45px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 1.1rem; outline: none;">
+            </div>
+            <span style="font-size: 0.8rem; color: var(--secondary);">*Se for autônomo, insira a média dos meses mais fracos.</span>
+        </div>
+
+        <button class="btn-primary" onclick="avancarParaInegociavel()">Avançar</button>
+    </div>
+
+    <div id="screen-inegociavel" class="screen">
+        <span style="font-size: 0.85rem; font-weight: bold; color: #e65100; text-transform: uppercase;">Passo 1: Sobrevivência</span>
+        <h2 class="title">A sua Fortaleza.</h2>
+        <p class="subtitle">Este é o custo inegociável para manter a sua família segura. <strong>Nós nunca vamos pedir para você cortar daqui.</strong></p>
+
+        <div style="background: #fff3e0; border-left: 4px solid #ffb74d; padding: 12px; border-radius: 0 8px 8px 0; margin-bottom: 20px; font-size: 0.85rem; color: #e65100;">
+            <strong>O que entra aqui:</strong>
+            <ul style="margin-top: 5px; margin-left: 20px; line-height: 1.4;">
+                <li>Teto (Aluguel, Condomínio, Prestação da casa)</li>
+                <li>Contas de base (Água, Luz, Gás)</li>
+                <li>Alimentação de sobrevivência (Mercado básico, sem luxos)</li>
+            </ul>
+        </div>
+
+        <div class="card" style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--primary);">Custo Básico da Fortaleza</label>
+            <div style="position: relative;">
+                <span style="position: absolute; left: 15px; top: 15px; color: var(--secondary); font-weight: bold;">R$</span>
+                <input type="number" id="valor-fortaleza" placeholder="0.00" style="width: 100%; padding: 15px 15px 15px 45px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 1.1rem; outline: none;">
+            </div>
+        </div>
+
+        <div class="card" style="background: #f0f9ff; border-color: #bae6fd;">
+            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="check-saude" onchange="toggleCampoSaude()" style="width: 20px; height: 20px; accent-color: var(--accent); margin-top: 2px;">
+                <div>
+                    <strong style="color: var(--primary); font-size: 0.95rem; display: block;">Gastos com Saúde ou Dependentes</strong>
+                    <span style="font-size: 0.8rem; color: var(--secondary); line-height: 1.3; display: block; margin-top: 3px;">Marque se você possui custos inegociáveis com remédios contínuos, terapias ou dependentes.</span>
+                </div>
+            </label>
+
+            <div id="campo-saude-extra" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #bae6fd;">
+                <label style="display: block; margin-bottom: 8px; font-size: 0.85rem; font-weight: 600; color: var(--primary);">Qual o valor mensal dessa necessidade?</label>
+                <div style="position: relative;">
+                    <span style="position: absolute; left: 15px; top: 10px; color: var(--secondary); font-weight: bold;">R$</span>
+                    <input type="number" id="valor-saude" placeholder="0.00" style="width: 100%; padding: 10px 10px 10px 45px; border-radius: 8px; border: 1px solid #bae6fd; font-size: 1rem; outline: none;">
+                </div>
+            </div>
+        </div>
+
+        <button class="btn-primary" onclick="avancarParaFlexivel()">Avançar</button>
+    </div>
+
+    <div id="screen-flexivel" class="screen">
+        <span style="font-size: 0.85rem; font-weight: bold; color: var(--accent); text-transform: uppercase;">Passo 2: Estilo de Vida</span>
+        <h2 class="title">Os custos flexíveis.</h2>
+        <p class="subtitle">A fortaleza está protegida. Agora, quanto vai embora com o resto?</p>
+
+        <div style="background: #e0f2fe; border-left: 4px solid #38bdf8; padding: 12px; border-radius: 0 8px 8px 0; margin-bottom: 20px; font-size: 0.85rem; color: #0369a1;">
+            <strong>O que entra aqui (Onde vamos trabalhar):</strong>
+            <ul style="margin-top: 5px; margin-left: 20px; line-height: 1.4;">
+                <li>Assinaturas (Streaming, Apps)</li>
+                <li>Lanches, padaria, saídas de fim de semana</li>
+                <li>Transporte por aplicativo (além do essencial)</li>
+                <li>Compras não planejadas</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--primary);">Custo Flexível Estimado</label>
+            <div style="position: relative;">
+                <span style="position: absolute; left: 15px; top: 15px; color: var(--secondary); font-weight: bold;">R$</span>
+                <input type="number" id="valor-flexivel" placeholder="0.00" style="width: 100%; padding: 15px 15px 15px 45px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 1.1rem; outline: none;">
+            </div>
+        </div>
+
+        <button class="btn-primary" onclick="finalizarDiagnostico()">Gerar Diagnóstico</button>
+    </div>
+
+    <div id="screen-diagnostico-sucesso" class="screen" style="justify-content: center; text-align: center; background-color: #064e3b; color: white;">
+        <div style="font-size: 4rem; animation: fadeIn 1s ease-out forwards; margin-bottom: 20px;">🛡️</div>
+        <h2 style="font-size: 2rem; font-weight: bold; margin-bottom: 15px; color: #34d399;">O pior já passou.</h2>
+        <p style="font-size: 1.1rem; line-height: 1.6; color: #a7f3d0; margin-bottom: 40px; text-align: left;">
+            A maioria das pessoas passa a vida inteira a fugir destes números. Hoje, você teve a coragem de olhar para a sua realidade de frente.<br><br>
+            O caos invisível é agora apenas um problema matemático. E problemas matemáticos, nós resolvemos com gestão.
+        </p>
+        <button class="btn-primary" style="background: #10b981; color: white;" onclick="renderizarDashboard(); goToScreen('screen-dashboard')">Assumir o Controle</button>
+
+    </div>
+        <div id="overlay-artigo" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.8); z-index: 1000; justify-content: center; align-items: flex-end; animation: fadeIn 0.3s;">
+        <div style="background: white; width: 100%; max-width: 480px; border-radius: 24px 24px 0 0; padding: 35px 25px; position: relative;">
+            <button onclick="fecharMicroArtigo()" style="position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer;">&times;</button>
+            <span style="font-size: 0.8rem; font-weight: bold; color: var(--accent); text-transform: uppercase;">Mentalidade</span>
+            <h2 style="font-size: 1.5rem; color: var(--primary); margin: 10px 0;">O Viés da Identidade</h2>
+            <p style="color: var(--secondary); line-height: 1.6; margin-bottom: 15px;">Quando dizemos "eu sou endividado", nosso cérebro aceita isso como uma identidade, uma falha de caráter. E identidades são difíceis de mudar.</p>
+            <p style="color: var(--secondary); line-height: 1.6; margin-bottom: 25px;">A ciência nos ensina a separar o problema da pessoa. Você não *é* endividado. Você *está* com um passivo financeiro. É um problema matemático a ser gerido, não um traço da sua personalidade.</p>
+            <div style="background: #f8fafc; padding: 15px; border-radius: 8px; font-size: 0.85rem; color: var(--secondary); margin-bottom: 20px; border-left: 3px solid var(--accent);">
+                <em>Nota de Gestão: O primeiro passo do planeamento estratégico é mapear a realidade sem a julgar.</em>
+            </div>
+            <button class="btn-primary" onclick="fecharMicroArtigo()">Entendido</button>
+        </div>
+    </div>
+
+    <div id="overlay-edicao" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.8); z-index: 1000; justify-content: center; align-items: center; animation: fadeIn 0.3s; padding: 20px;">
+        <div class="card" style="width: 100%; max-width: 400px; position: relative; margin: 0; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <button onclick="fecharEdicaoEstimativa()" style="position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer;">&times;</button>
+            <h3 style="color: var(--primary); margin-bottom: 5px;">Validar Fatura</h3>
+            <p style="font-size: 0.9rem; color: var(--secondary); margin-bottom: 20px;">Atualize os valores exatos para <strong id="edit-nome-credor" style="color: var(--primary);">Credor</strong></p>
+            
+            <input type="hidden" id="edit-id-credor">
+            
+            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.85rem; color: var(--primary);">Valor Total Real (R$)</label>
+            <input type="number" id="edit-valor-total" placeholder="Ex: 1500.00" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 15px; outline: none; font-size: 1rem;">
+            
+            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.85rem; color: var(--primary);">Valor da Parcela Mensal (R$)</label>
+            <input type="number" id="edit-valor-parcela" placeholder="Ex: 150.00" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 20px; outline: none; font-size: 1rem;">
+            
+            <button class="btn-primary" style="padding: 14px; font-size: 1rem;" onclick="salvarEdicaoCredor()">Confirmar Valores Reais</button>
+        </div>
+    </div>
+        <!-- TELA 10: Revisão de Gastos (O Caça a Vazamentos) -->
+    <div id="screen-revisao-gastos" class="screen">
+        <span style="font-size: 0.85rem; font-weight: bold; color: #dc2626; text-transform: uppercase;">Plano de Crise</span>
+        <h2 class="title">Temos um Déficit Operacional.</h2>
+        <p class="subtitle">A sua conta atual não fecha. Antes de tomarmos medidas drásticas com os credores, precisamos de encontrar cortes no seu <strong>Estilo de Vida (Flexível)</strong>.</p>
+
+        <!-- O Alvo (Painel de Status Dinâmico) -->
+        <div id="painel-alvo-corte" class="card" style="background: #fee2e2; border-color: #f87171; text-align: center; padding: 20px;">
+            <span style="font-size: 0.9rem; color: #991b1b; font-weight: 600;">O nosso alvo de corte é:</span>
+            <div style="font-size: 2rem; font-weight: bold; color: #b91c1c; margin: 10px 0;" id="valor-alvo-corte">
+                R$ 0,00
+            </div>
+            <span style="font-size: 0.8rem; color: #991b1b;">Adicione cortes abaixo até o painel ficar verde.</span>
+        </div>
+
+        <!-- Formulário de Micro-Cortes -->
+        <div class="card" style="background: #f8fafc;">
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <input type="text" id="nome-corte" placeholder="Ex: Netflix, iFood..." style="flex: 2; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none; font-size: 0.95rem;">
+                <input type="number" id="valor-corte" placeholder="R$" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none; font-size: 0.95rem;">
+            </div>
+            <button class="btn-option" style="justify-content: center; background: #fff; margin-bottom: 0;" onclick="adicionarVazamento()">+ Adicionar Corte</button>
+        </div>
+
+        <!-- Lista de Cortes Realizados -->
+        <div id="lista-cortes-ui" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
+            <!-- Itens injetados via JS -->
+        </div>
+
+        <button id="btn-finalizar-revisao" class="btn-primary" style="background: #94a3b8; cursor: not-allowed;" disabled onclick="concluirRevisao()">Meta não atingida</button>
+        
+        <!-- Válvula de Escape: Calote Estratégico -->
+        <button onclick="avancarParaAuditoria()" style="background: none; border: none; color: var(--secondary); margin-top: 15px; text-decoration: underline; font-size: 0.85rem; cursor: pointer;">
+            Já cortei tudo o que podia e a conta ainda não fecha.
+        </button>
+
+    </div>
+        <!-- TELA 11: Auditoria de Contratos -->
+    <div id="screen-auditoria-contratos" class="screen">
+        <span style="font-size: 0.85rem; font-weight: bold; color: var(--accent); text-transform: uppercase;">Passo 3: Os Contratos</span>
+        <h2 class="title">Auditoria de Passivo.</h2>
+        <p class="subtitle">Os cortes no estilo de vida esgotaram-se. Agora, precisamos descobrir o peso real da sua dívida para o algoritmo calcular se é possível trocar essa dívida pulverizada por uma mais barata.</p>
+
+        <div style="background: #f0f9ff; border-left: 4px solid #38bdf8; padding: 12px; border-radius: 0 8px 8px 0; margin-bottom: 20px; font-size: 0.85rem; color: #0369a1;">
+            <strong>Recolha Documental:</strong> Olhe para os contratos ou aplicações dos bancos e preencha os dados abaixo. Se não souber exato, coloque um valor aproximado.
+        </div>
+
+        <div id="lista-auditoria-contratos" style="margin-bottom: 20px;">
+            <!-- Os cards dos credores serão injetados dinamicamente via JS -->
+        </div>
+
+        <button class="btn-primary" onclick="processarSimulacao()">Rodar Motor de Simulação</button>
+    </div>
+        <div id="screen-consolidacao" class="screen" style="background-color: #f0fdf4;">
+        <span style="font-size: 0.85rem; font-weight: bold; color: #16a34a; text-transform: uppercase;">Solução Encontrada</span>
+        <h2 class="title" style="color: #14532d;">O Jogo Virou.</h2>
+        <p class="subtitle" style="color: #166534;">A matemática está a seu favor. Conseguimos desenhar um plano para unificar as suas dívidas e proteger o seu nome.</p>
+
+        <div class="card" style="border-top: 4px solid #10b981; background: white;">
+            <p style="font-size: 0.9rem; color: var(--secondary); margin-bottom: 15px;">Ao renegociar todas as dívidas para um único crédito com taxa aproximada de 2.5% ao mês, a sua nova realidade será:</p>
+            
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 1rem;">
+                <span style="color: var(--secondary);">Fôlego Mensal (Pós-Cortes):</span>
+                <strong style="color: #10b981;" id="resultado-folego">R$ 0,00</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0; font-size: 1rem;">
+                <span style="color: var(--secondary);">Nova Parcela Estimada:</span>
+                <strong style="color: #16a34a;" id="resultado-pmt">R$ 0,00</strong>
+            </div>
+            
+            <div style="background: #ecfdf5; padding: 15px; border-radius: 8px;">
+                <strong style="color: #065f46; display: block; margin-bottom: 8px;">O Script de Negociação</strong>
+                <p style="font-size: 0.85rem; color: #047857; line-height: 1.5;">
+                    Vá ao seu banco principal e diga: <em>"Preciso de uma linha de crédito de <strong><span id="resultado-pv">R$ 0,00</span></strong> para consolidação de passivos num prazo de 60 meses. O meu limite máximo de parcela é de <strong><span id="resultado-folego-script">R$ 0,00</span></strong>."</em>
+                </p>
+            </div>
+        </div>
+
+        <button class="btn-primary" style="background: #10b981;" onclick="ativarPlanoGeral('consolidacao')">Aceitar Plano e Ir para o Painel</button>
+    </div>
+
+    <div id="screen-calote" class="screen" style="background-color: #fef2f2;">
+        <span style="font-size: 0.85rem; font-weight: bold; color: #dc2626; text-transform: uppercase;">Protocolo de Crise Ativado</span>
+        <h2 class="title" style="color: #7f1d1d;">A Sobrevivência em Primeiro Lugar.</h2>
+        <p class="subtitle" style="color: #991b1b;">Mesmo com uma reestruturação, a matemática não fecha. Para proteger a sua família e garantir o mínimo existencial, teremos de suspender pagamentos estrategicamente.</p>
+
+        <div class="card" style="border-left: 4px solid #dc2626; background: white;">
+            <strong style="color: #991b1b; display: block; margin-bottom: 8px;">Credor a Suspender Imediatamente:</strong>
+            <div id="credor-alvo-calote" style="font-size: 1.2rem; font-weight: bold; color: #b91c1c; margin-bottom: 10px;">Banco X</div>
+            <p style="font-size: 0.85rem; color: var(--secondary); line-height: 1.4;">
+                O algoritmo selecionou esta dívida porque possui a maior taxa de juros e não tem bens em garantia (como casa ou carro).
+            </p>
+        </div>
+
+        <div style="background: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #fca5a5;">
+            <strong style="color: #b91c1c; font-size: 0.9rem; display: block; margin-bottom: 8px;">⚠️ O que vai acontecer agora:</strong>
+            <ul style="font-size: 0.85rem; color: #7f1d1d; margin-left: 20px; line-height: 1.5; margin-bottom: 15px;">
+                <li>O seu nome será inscrito nos órgãos de proteção ao crédito (restrição).</li>
+                <li>As linhas de crédito e cartões serão bloqueados.</li>
+                <li>O credor iniciará um processo de cobrança intensa (chamadas).</li>
+            </ul>
+            
+            <strong style="color: #0369a1; font-size: 0.9rem; display: block; margin-bottom: 8px;">⚖️ A sua Proteção Legal:</strong>
+            <p style="font-size: 0.85rem; color: var(--secondary); line-height: 1.5;">
+                A legislação protege o <strong>Mínimo Existencial</strong>. O banco não pode confiscar o dinheiro que garante a sua alimentação e teto. Quando a poeira assentar e o credor perceber que não há liquidez, ele será forçado a oferecer uma negociação justa com descontos drásticos no capital (frequentemente superiores a 70%). Nós vamos ajudá-lo a juntar esse valor até lá.
+            </p>
+        </div>
+
+        <button class="btn-primary" style="background: #dc2626;" onclick="ativarPlanoGeral('calote')">Assumir o Controle da Crise</button>
+    </div>
+        <div id="screen-quitacao" class="screen">
+        <span style="font-size: 0.85rem; font-weight: bold; color: var(--accent); text-transform: uppercase;">Aceleração Estratégica</span>
+        <h2 class="title">O Caminho para a Liberdade.</h2>
+        <p class="subtitle">A matemática está a seu favor. Com o fôlego mensal que lhe sobra, vamos criar um plano de ataque para liquidar o seu passivo mais rapidamente. Escolha a sua tática:</p>
+
+        <div class="card" onclick="selecionarEstrategiaQuitacao('boladeneve')" id="card-boladeneve" style="cursor: pointer; border: 2px solid transparent; transition: 0.3s;">
+            <strong style="color: var(--primary); display: block; margin-bottom: 5px;">⛄ Efeito Bola de Neve (Foco na Motivação)</strong>
+            <p style="font-size: 0.85rem; color: var(--secondary);">Ataca primeiro a dívida com o <strong>menor saldo total</strong>. Elimina credores rapidamente, gerando pequenas vitórias que mantêm o cérebro engajado.</p>
+        </div>
+
+        <div class="card" onclick="selecionarEstrategiaQuitacao('avalanche')" id="card-avalanche" style="cursor: pointer; border: 2px solid transparent; transition: 0.3s;">
+            <strong style="color: var(--primary); display: block; margin-bottom: 5px;">⛰️ Efeito Avalanche (Foco na Matemática)</strong>
+            <p style="font-size: 0.85rem; color: var(--secondary);">Ataca primeiro a dívida com a <strong>maior taxa de juro</strong>. Poupa mais dinheiro a longo prazo, mas exige mais disciplina no início.</p>
+        </div>
+
+        <div id="preview-estrategia" style="display: none; margin-top: 20px; animation: fadeIn 0.4s;">
+            <h3 style="font-size: 1rem; color: var(--primary); margin-bottom: 10px;">A sua Ordem de Combate:</h3>
+            <div id="lista-ordem-quitacao" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
+                </div>
+            
+            <button class="btn-primary" onclick="ativarPlanoGeral()">Confirmar Plano e Ir para o Painel</button>
+        </div>
+    </div>
+    
+    
+</div>
+
+<script>
+    // --- ESTADO LOCAL E TELEMETRIA ---
+    let timeStart = 0;
+    
+    // Objeto temporário para emular o salvamento no localStorage
+    let state = {
+        perfilComportamental: "analitico", // Padrão assistido
+        historicoRespostas: []
+    };
+
+    function goToScreen(id) {
+        document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    function avancarParaTriagem() {
+        goToScreen('screen-triage');
+        // Inicia o cronômetro no momento em que a tela de triagem é carregada
+        timeStart = Date.now();
+    }
+
+    function registrarResposta(resposta) {
+        const timeEnd = Date.now();
+        const tempoRespostaMs = timeEnd - timeStart;
+        
+     // Restringe a ocultação apenas aos botões dentro do ecrã de triagem
+document.querySelectorAll('#screen-triage .btn-option').forEach(btn => btn.style.display = 'none');
+
+        document.getElementById('triage-loader').style.display = 'block';
+
+        // LÓGICA DE AUDITORIA DE SATISFICING
+        if (tempoRespostaMs < 3000) {
+            console.warn(`[AUDITORIA] Satisficing detectado. Tempo: ${tempoRespostaMs}ms. Perfil alterado para Neutro.`);
+            state.perfilComportamental = "neutro_transacional";
+            state.historicoRespostas.push({ 
+                pergunta: "locus_controle", 
+                resposta: resposta, 
+                valida: false 
+            });
+        } else {
+            console.log(`[AUDITORIA] Leitura orgânica. Tempo: ${tempoRespostaMs}ms. Mantendo trilha assistida.`);
+            state.historicoRespostas.push({ 
+                pergunta: "locus_controle", 
+                resposta: resposta, 
+                valida: true 
+            });
+            // O algoritmo de modelagem de regras agiria aqui baseado na resposta válida
+        }
+
+        // Salvar no "Cofre Offline" (emulado)
+        localStorage.setItem('d_mais_1_dados', JSON.stringify(state));
+
+        
+
+              // Transição suave para o início da recolha de dados
+        setTimeout(() => {
+            goToScreen('screen-mapeamento');
+        }, 1200);
+        }
+
+        // --- MOTOR DE MAPEAMENTO E VALORES ---
+    let nomesCredores = [];
+    let credoresDetalhados = [];
+    let indiceProcessamento = 0;
+
+    // Função para Tela 4: Adiciona apenas o nome na UI
+    function adicionarNomeCredor() {
+        const input = document.getElementById('input-nome-credor');
+        const nome = input.value.trim();
+        
+        if (nome === "") return;
+
+        nomesCredores.push(nome);
+        input.value = "";
+        
+        // Atualiza UI
+        const container = document.getElementById('lista-credores-ui');
+        const item = document.createElement('div');
+        item.style.cssText = "background: #f0f9ff; color: var(--primary); padding: 10px 15px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; border: 1px solid #bae6fd;";
+        item.innerText = "✓ " + nome;
+        container.appendChild(item);
+    }
+
+    // Função de transição da Tela 4 para a Tela 5
+    function avancarParaValores() {
+        if (nomesCredores.length === 0) {
+            alert("Por favor, adicione pelo menos um credor para avançar.");
+            return;
+        }
+        indiceProcessamento = 0;
+        credoresDetalhados = [];
+        carregarCredorNaTela();
+        goToScreen('screen-valores-atomicos');
+    }
+
+    // Função para Tela 5: Renderiza um credor por vez
+    function carregarCredorNaTela() {
+        if (indiceProcessamento >= nomesCredores.length) {
+            finalizarMapeamento();
+            return;
+        }
+
+        // Atualizar textos e progresso
+        document.getElementById('nome-credor-display').innerText = nomesCredores[indiceProcessamento];
+        document.getElementById('indice-atual').innerText = indiceProcessamento + 1;
+        document.getElementById('total-credores').innerText = nomesCredores.length;
+        
+        const percentagem = (indiceProcessamento / nomesCredores.length) * 100;
+        document.getElementById('barra-progresso').style.width = percentagem + '%';
+
+        // Limpar inputs para o novo credor
+        document.getElementById('valor-total').value = '';
+        document.getElementById('valor-parcela').value = '';
+        document.getElementById('valor-estimado').checked = false;
+    }
+
+    // Guarda no array e avança o índice
+    function guardarCredorEAvancar() {
+        const total = parseFloat(document.getElementById('valor-total').value) || 0;
+        const parcela = parseFloat(document.getElementById('valor-parcela').value) || 0;
+        const estimado = document.getElementById('valor-estimado').checked;
+
+        credoresDetalhados.push({
+            id: Date.now() + Math.random().toString(36).substr(2, 9),
+            nome: nomesCredores[indiceProcessamento],
+            valorTotal: total,
+            valorParcela: parcela,
+            isEstimativa: estimado
+        });
+
+        indiceProcessamento++;
+        carregarCredorNaTela();
+    }
+
+    // Conclusão do ciclo
+    function finalizarMapeamento() {
+        document.getElementById('barra-progresso').style.width = '100%';
+        
+        // Simulação de persistência segura (Zero-Trust)
+        state.credores = credoresDetalhados;
+        localStorage.setItem('d_mais_1_dados', JSON.stringify(state));
+        
+        // Retorna ao dashboard e imprime no console para auditoria técnica
+        console.log("[AUDITORIA] Mapeamento Atômico Concluído:", credoresDetalhados);
+        alert("Excelente! Mapeamento concluído com sucesso. (Verifique o console [F12] para auditar o JSON).");
+        goToScreen('screen-renda');
+    }
+    // --- MOTOR DE REALIDADE (CUSTO DE VIDA) ---
+    
+    function avancarParaInegociavel() {
+        const renda = parseFloat(document.getElementById('valor-renda').value) || 0;
+        if (renda <= 0) {
+            alert("Precisamos saber o seu fôlego inicial para desenhar o plano.");
+            return;
+        }
+        state.rendaMensal = renda;
+        goToScreen('screen-inegociavel');
+    }
+
+    function toggleCampoSaude() {
+        const checkbox = document.getElementById('check-saude');
+        const campoAxtra = document.getElementById('campo-saude-extra');
+        campoAxtra.style.display = checkbox.checked ? 'block' : 'none';
+        if (!checkbox.checked) document.getElementById('valor-saude').value = '';
+    }
+
+    function avancarParaFlexivel() {
+        const fortaleza = parseFloat(document.getElementById('valor-fortaleza').value) || 0;
+        const saude = parseFloat(document.getElementById('valor-saude').value) || 0;
+        
+        if (fortaleza <= 0) {
+            alert("A sua fortaleza não pode ser zero. Todo mundo tem um custo básico de sobrevivência.");
+            return;
+        }
+
+        state.custosInegociaveis = {
+            base: fortaleza,
+            saude_dependentes: saude,
+            total: fortaleza + saude
+        };
+        
+        goToScreen('screen-flexivel');
+    }
+
+    function finalizarDiagnostico() {
+        const flexivel = parseFloat(document.getElementById('valor-flexivel').value) || 0;
+        
+        state.custoFlexivel = flexivel;
+        state.custoVidaTotal = state.custosInegociaveis.total + flexivel;
+        
+        // Persistência segura
+        localStorage.setItem('d_mais_1_dados', JSON.stringify(state));
+        console.log("[AUDITORIA] Mapeamento de Realidade:", state);
+
+        // O Rito de Passagem Menor
+        goToScreen('screen-diagnostico-sucesso');
+    }
+        // --- INTELIGÊNCIA DO DASHBOARD E CÁLCULOS ---
+    function renderizarDashboard() {
+        const credores = state.credores || [];
+        const temEstimativa = credores.some(credor => credor.isEstimativa === true);
+        
+        const moduloMissao = document.getElementById('modulo-missao');
+        const moduloAnalitico = document.getElementById('modulo-analitico');
+        const moduloPlanoAtivo = document.getElementById('modulo-plano-ativo'); // NOVO
+        const listaAuditoria = document.getElementById('lista-auditoria-estimativas');
+        
+        // FASE 3 (NOVA): Verifica se o utilizador já possui um Plano Tático definido
+        if (state.planoAtivo) {
+            moduloMissao.style.display = 'none';
+            moduloAnalitico.style.display = 'none';
+            moduloPlanoAtivo.style.display = 'block';
+            
+            renderizarCockpitPlano(); // Invoca a mutação visual
+            return; // Interrompe a leitura das fases anteriores
+        }
+
+        // FASES 1 e 2 (Inalteradas)
+        if (temEstimativa) {
+            moduloMissao.style.display = 'block';
+            moduloAnalitico.style.display = 'none';
+            moduloPlanoAtivo.style.display = 'none';
+            listaAuditoria.innerHTML = ''; 
+            
+            credores.forEach(credor => {
+                if (credor.isEstimativa) {
+                    const item = document.createElement('div');
+                    item.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #fde68a;";
+                    item.innerHTML = `
+                        <span style="font-size: 0.9rem; font-weight: 600; color: #92400e;">${credor.nome}</span>
+                        <button style="background: white; border: 1px solid #d97706; color: #d97706; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; cursor: pointer;" onclick="abrirEdicaoEstimativa('${credor.id}')">Validar Fatura</button>
+                    `;
+                    listaAuditoria.appendChild(item);
+                }
+            });
+        } else {
+            moduloMissao.style.display = 'none';
+            moduloAnalitico.style.display = 'block';
+            moduloPlanoAtivo.style.display = 'none';
+            
+            const renda = state.rendaMensal || 0;
+            const fortaleza = (state.custosInegociaveis && state.custosInegociaveis.total) ? state.custosInegociaveis.total : 0;
+            const flexivel = state.custoFlexivel || 0;
+            
+            let totalParcelas = 0;
+            credores.forEach(c => totalParcelas += c.valorParcela);
+            
+            const saldoDisponivel = renda - fortaleza - flexivel;
+            const balancoFinal = saldoDisponivel - totalParcelas;
+
+            const formatarRS = (valor) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+            document.getElementById('raiox-renda').innerText = formatarRS(renda);
+            document.getElementById('raiox-fortaleza').innerText = "- " + formatarRS(fortaleza);
+            document.getElementById('raiox-flexivel').innerText = "- " + formatarRS(flexivel);
+            document.getElementById('raiox-saldo-disponivel').innerText = formatarRS(saldoDisponivel);
+            document.getElementById('raiox-parcelas').innerText = formatarRS(totalParcelas);
+
+            const alertaUI = document.getElementById('alerta-capacidade');
+            const containerAcao = document.getElementById('acao-raiox-container');
+
+            if (balancoFinal >= 0) {
+                alertaUI.style.backgroundColor = "#d1fae5";
+                alertaUI.style.color = "#065f46";
+                alertaUI.innerText = `Você possui capacidade de pagamento! Sobram ${formatarRS(balancoFinal)} para acelerar a quitação.`;
+                containerAcao.innerHTML = `<button class="btn-primary" style="background: #10b981;" onclick="goToScreen('screen-quitacao')">Montar Plano de Quitação</button>`;
+            } else {
+                alertaUI.style.backgroundColor = "#fee2e2";
+                alertaUI.style.color = "#991b1b";
+                alertaUI.innerText = `Déficit Operacional de ${formatarRS(Math.abs(balancoFinal))}. Precisamos acionar o plano de crise.`;
+                containerAcao.innerHTML = `<button class="btn-primary" style="background: #dc2626;" onclick="prepararTelaRevisao(${Math.abs(balancoFinal)}); goToScreen('screen-revisao-gastos')">Acionar Plano de Revisão</button>`;
+            }
+        }
+    }
+    // --- MOTOR GRÁFICO DO PLANO ATIVO (BORDA 2) ---
+    function renderizarCockpitPlano() {
+        const container = document.getElementById('modulo-plano-ativo');
+        const plano = state.planoAtivo;
+        
+        if (plano.tipo === 'quitacao') {
+            container.innerHTML = `
+                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--primary); margin-bottom: 10px;">Missão de Quitação Ativa</h3>
+                <div class="card" style="border-left: 4px solid #10b981;">
+                    <strong style="color: #065f46; display: block; margin-bottom: 5px;">Estratégia: ${plano.estrategia === 'boladeneve' ? 'Bola de Neve ⛄' : 'Avalanche ⛰️'}</strong>
+                    <p style="font-size: 0.85rem; color: var(--secondary); margin-bottom: 15px;">O seu objetivo deste mês é focar o fôlego livre para liquidar antecipadamente a primeira dívida da sua lista de combate, mantendo os outros credores no pagamento mínimo.</p>
+                    <button class="btn-sm" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%;" onclick="alert('Em breve: Ver Lista de Credores e Marcar Pagamento')">Ver Ordem de Combate</button>
+                </div>
+            `;
+        } else if (plano.tipo === 'consolidacao') {
+            container.innerHTML = `
+                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--primary); margin-bottom: 10px;">Missão de Reestruturação</h3>
+                <div class="card" style="border-left: 4px solid #38bdf8;">
+                    <strong style="color: #0369a1; display: block; margin-bottom: 5px;">Ação Imediata: Visitar o Banco</strong>
+                    <p style="font-size: 0.85rem; color: var(--secondary); margin-bottom: 15px;">O seu plano matemático exige que troque as dívidas pulverizadas por um crédito unificado. Você tem até ao final da semana para ir à agência.</p>
+                    <button class="btn-sm" style="background: #e0f2fe; color: #0369a1; border: 1px solid #38bdf8; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 10px;" onclick="alert('Em breve: Abre Modal com o Script de Negociação')">Revisar Script de Negociação</button>
+                    <button class="btn-sm" style="background: #38bdf8; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%;" onclick="alert('Em breve: Fluxo de Confirmação de Crédito Aprovado')">Confirmar Novo Empréstimo</button>
+                </div>
+            `;
+        } else if (plano.tipo === 'calote') {
+            container.innerHTML = `
+                <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--primary); margin-bottom: 10px;">Protocolo de Defesa Ativo</h3>
+                <div class="card" style="border-left: 4px solid #dc2626; background: #fef2f2;">
+                    <strong style="color: #991b1b; display: block; margin-bottom: 5px;">🛡️ Blindagem Psicológica</strong>
+                    <p style="font-size: 0.85rem; color: #7f1d1d; margin-bottom: 15px;">O credor que escolhemos suspender o pagamento vai começar a cobrar. Lembre-se: o seu mínimo existencial é protegido por lei. Você não é uma fraude, está em processo de reestruturação.</p>
+                    <div style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #fca5a5; margin-bottom: 15px;">
+                        <strong style="font-size: 0.8rem; color: #dc2626; display: block;">Tarefa da Semana:</strong>
+                        <span style="font-size: 0.85rem; color: var(--secondary);">Configure o bloqueio de chamadas de <em>spam</em> no telemóvel e silencie números desconhecidos. O seu objetivo agora é acumular caixa para a negociação futura.</span>
+                    </div>
+                    <button class="btn-sm" style="background: #dc2626; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%;" onclick="alert('Em breve: Módulo de Poupança para Quitação com Desconto')">Registar Caixa Poupado</button>
+                </div>
+            `;
+        }
+    }
+    
+
+        // --- CONTROLE DE OVERLAYS (MODAIS) ---
+
+    // 1. Lógica do Micro-Artigo
+    function abrirMicroArtigo() {
+        document.getElementById('overlay-artigo').style.display = 'flex';
+    }
+    
+    function fecharMicroArtigo() {
+        document.getElementById('overlay-artigo').style.display = 'none';
+    }
+
+    // 2. Lógica de Edição de Estimativas
+    function abrirEdicaoEstimativa(idCredor) {
+        // Encontra o credor na base de dados local
+        const credor = state.credores.find(c => c.id === idCredor);
+        if (!credor) return;
+
+        // Preenche o modal com os dados atuais
+        document.getElementById('edit-id-credor').value = credor.id;
+        document.getElementById('edit-nome-credor').innerText = credor.nome;
+        document.getElementById('edit-valor-total').value = credor.valorTotal || '';
+        document.getElementById('edit-valor-parcela').value = credor.valorParcela || '';
+
+        // Exibe o modal
+        document.getElementById('overlay-edicao').style.display = 'flex';
+    }
+
+    function fecharEdicaoEstimativa() {
+        document.getElementById('overlay-edicao').style.display = 'none';
+    }
+
+    function salvarEdicaoCredor() {
+        const id = document.getElementById('edit-id-credor').value;
+        const novoTotal = parseFloat(document.getElementById('edit-valor-total').value) || 0;
+        const novaParcela = parseFloat(document.getElementById('edit-valor-parcela').value) || 0;
+
+        // Atualiza o array no state
+        const credorIndex = state.credores.findIndex(c => c.id === id);
+        if (credorIndex !== -1) {
+            state.credores[credorIndex].valorTotal = novoTotal;
+            state.credores[credorIndex].valorParcela = novaParcela;
+            state.credores[credorIndex].isEstimativa = false; // Remove a flag!
+        }
+
+        // Salva as alterações no localStorage
+        localStorage.setItem('d_mais_1_dados', JSON.stringify(state));
+
+        // Fecha o modal e recalcula o Dashboard
+        fecharEdicaoEstimativa();
+        renderizarDashboard(); // Se não houver mais estimativas, ele abre o Raio-X matemático!
+    }
+    // --- MOTOR DE REVISÃO DE GASTOS (CAÇA A VAZAMENTOS) ---
+    let cortesTemporarios = [];
+    let deficitAlvo = 0;
+    let deficitRestante = 0;
+
+    // Prepara a tela recebendo o valor do déficit exato
+    function prepararTelaRevisao(deficit) {
+        deficitAlvo = deficit;
+        deficitRestante = deficit;
+        cortesTemporarios = [];
+        
+        document.getElementById('lista-cortes-ui').innerHTML = '';
+        document.getElementById('nome-corte').value = '';
+        document.getElementById('valor-corte').value = '';
+        
+        atualizarPainelCorte();
+    }
+
+    // Adiciona o corte ao array temporário e atualiza a UI
+    function adicionarVazamento() {
+        const nome = document.getElementById('nome-corte').value.trim();
+        const valor = parseFloat(document.getElementById('valor-corte').value) || 0;
+        
+        if(nome === '' || valor <= 0) {
+            alert("Aponte o nome da despesa e um valor maior que zero.");
+            return;
+        }
+        
+        cortesTemporarios.push({ id: Date.now(), nome: nome, valor: valor });
+        
+        document.getElementById('nome-corte').value = '';
+        document.getElementById('valor-corte').value = '';
+        
+        atualizarPainelCorte();
+    }
+
+    // Motor gráfico do alvo
+    function atualizarPainelCorte() {
+        const formatarRS = (valor) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        
+        let totalCortado = 0;
+        const listaUI = document.getElementById('lista-cortes-ui');
+        listaUI.innerHTML = '';
+        
+        cortesTemporarios.forEach(c => {
+            totalCortado += c.valor;
+            const item = document.createElement('div');
+            item.style.cssText = "display: flex; justify-content: space-between; background: white; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.9rem; animation: fadeIn 0.3s;";
+            item.innerHTML = `<span>${c.nome}</span> <strong style="color: #10b981;">- ${formatarRS(c.valor)}</strong>`;
+            listaUI.appendChild(item);
+        });
+        
+        deficitRestante = deficitAlvo - totalCortado;
+        
+        const painel = document.getElementById('painel-alvo-corte');
+        const valorAlvo = document.getElementById('valor-alvo-corte');
+        const btn = document.getElementById('btn-finalizar-revisao');
+        
+        if (deficitRestante <= 0) {
+            // Vitória: Déficit zerado ou superado
+            painel.style.backgroundColor = '#d1fae5';
+            painel.style.borderColor = '#10b981';
+            valorAlvo.style.color = '#065f46';
+            valorAlvo.innerText = "Meta Atingida!";
+            
+            btn.disabled = false;
+            btn.style.background = '#10b981';
+            btn.style.cursor = 'pointer';
+            btn.innerText = "Aplicar Cortes e Salvar";
+        } else {
+            // Continua a faltar
+            painel.style.backgroundColor = '#fee2e2';
+            painel.style.borderColor = '#f87171';
+            valorAlvo.style.color = '#b91c1c';
+            valorAlvo.innerText = "Falta " + formatarRS(deficitRestante);
+            
+            btn.disabled = true;
+            btn.style.background = '#94a3b8';
+            btn.style.cursor = 'not-allowed';
+            btn.innerText = "Meta não atingida";
+        }
+    }
+
+    // Conclusão com sucesso
+    function concluirRevisao() {
+        let totalCortado = cortesTemporarios.reduce((acc, curr) => acc + curr.valor, 0);
+        
+        // Aplica a auditoria no cofre
+        state.custoFlexivel -= totalCortado;
+        state.cortesRealizados = cortesTemporarios; 
+        localStorage.setItem('d_mais_1_dados', JSON.stringify(state));
+        
+        console.log("[AUDITORIA] Plano de Crise Aplicado. Cortes:", state.cortesRealizados);
+        
+        // Recalcula o dashboard (que agora ficará verde) e volta para lá
+        renderizarDashboard();
+        goToScreen('screen-dashboard');
+    }
+
+    // Válvula de escape (Stub)
+    function assumirCaloteEstrategico() {
+        alert("Em breve: O sistema selecionará matematicamente qual credor deixar de pagar.");
+    }
+        // --- MOTOR DE AUDITORIA E SIMULAÇÃO DE REESTRUTURAÇÃO ---
+
+    function avancarParaAuditoria() {
+        goToScreen('screen-auditoria-contratos');
+        
+        const container = document.getElementById('lista-auditoria-contratos');
+        container.innerHTML = '';
+
+        state.credores.forEach(credor => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.style.marginBottom = '15px';
+            card.style.padding = '15px';
+            card.innerHTML = `
+                <strong style="color: var(--primary); display: block; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">${credor.nome}</strong>
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--secondary); display: block; margin-bottom: 5px;">Taxa Mensal (%)</label>
+                        <input type="number" id="juros-${credor.id}" step="0.01" placeholder="Ex: 5.5" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--secondary); display: block; margin-bottom: 5px;">Parcelas Restantes</label>
+                        <input type="number" id="prazo-${credor.id}" placeholder="Ex: 12" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;">
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function processarSimulacao() {
+        let saldoDevedorTotalReal = 0;
+
+        // 1. Cálculo Académico do Saldo Devedor à Vista (PV)
+        state.credores.forEach(credor => {
+            const jurosInformado = parseFloat(document.getElementById(`juros-${credor.id}`).value) || 0;
+            const prazoInformado = parseInt(document.getElementById(`prazo-${credor.id}`).value) || 0;
+
+            credor.taxaJuros = jurosInformado / 100; // Transformação para decimal matemático
+            credor.parcelasRestantes = prazoInformado;
+
+            if (credor.taxaJuros > 0 && credor.parcelasRestantes > 0) {
+                const i = credor.taxaJuros;
+                const n = credor.parcelasRestantes;
+                const pmt = credor.valorParcela;
+                
+                // PV = PMT * [1 - (1+i)^-n] / i
+                credor.saldoDevedorReal = pmt * ((1 - Math.pow(1 + i, -n)) / i);
+            } else {
+                // Fallback seguro caso o utilizador omita os juros
+                credor.saldoDevedorReal = credor.valorTotal; 
+            }
+            saldoDevedorTotalReal += credor.saldoDevedorReal;
+        });
+
+        // 2. Simulação de Consolidação (Troca de Dívida)
+        // Premissa estrutural: O sistema busca um crédito de mercado a 2.5% a.m. com limite de 60 meses.
+        const taxaConsolidacao = 0.025; 
+        const prazoConsolidacao = 60;
+
+        // Cálculo da Prestação (PMT) do Novo Empréstimo Unificado
+        // PMT = P * [ i(1+i)^n ] / [ (1+i)^n - 1 ]
+        const pmtConsolidado = saldoDevedorTotalReal * (
+            (taxaConsolidacao * Math.pow(1 + taxaConsolidacao, prazoConsolidacao)) /
+            (Math.pow(1 + taxaConsolidacao, prazoConsolidacao) - 1)
+        );
+
+        // 3. Auditoria do Fluxo de Caixa (Sobrevivência)
+        const renda = state.rendaMensal;
+        const fortaleza = state.custosInegociaveis.total;
+        const flexivelPosCortes = state.custoFlexivel; // O sistema já reduziu isto na Tela 10
+        
+        const folegoDisponivel = renda - fortaleza - flexivelPosCortes;
+
+              // 4. A Árvore de Decisão e Navegação
+        const formatarRS = (valor) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        if (pmtConsolidado <= folegoDisponivel && folegoDisponivel > 0) {
+            // CENÁRIO A: Viável. Prepara a Tela de Consolidação
+            document.getElementById('resultado-folego').innerText = formatarRS(folegoDisponivel);
+            document.getElementById('resultado-pmt').innerText = formatarRS(pmtConsolidado);
+            document.getElementById('resultado-pv').innerText = formatarRS(saldoDevedorTotalReal);
+            document.getElementById('resultado-folego-script').innerText = formatarRS(folegoDisponivel);
+            
+            goToScreen('screen-consolidacao');
+            
+        } else {
+            // CENÁRIO B: Inviável. Prepara o Protocolo de Calote
+            
+            // Algoritmo de Calote: Encontra o credor com maior taxa de juro e que não seja garantia real (simplificado)
+            let credorAlvo = null;
+            let maiorJuro = -1;
+            
+            state.credores.forEach(c => {
+                if(c.taxaJuros > maiorJuro) {
+                    maiorJuro = c.taxaJuros;
+                    credorAlvo = c;
+                }
+            });
+            
+            if (credorAlvo) {
+                document.getElementById('credor-alvo-calote').innerText = credorAlvo.nome + " (Juros: " + (credorAlvo.taxaJuros * 100).toFixed(1) + "% a.m.)";
+            } else {
+                // Fallback caso não haja juros informados
+                document.getElementById('credor-alvo-calote').innerText = state.credores[0].nome; 
+            }
+            
+            goToScreen('screen-calote');
+        }
+
+    }
+    
+        // --- MOTOR DE QUITAÇÃO (EFEITO BOLA DE NEVE / AVALANCHE) ---
+
+    function selecionarEstrategiaQuitacao(tipo) {
+        // Feedback visual da seleção
+        document.getElementById('card-boladeneve').style.borderColor = tipo === 'boladeneve' ? 'var(--accent)' : 'transparent';
+        document.getElementById('card-avalanche').style.borderColor = tipo === 'avalanche' ? 'var(--accent)' : 'transparent';
+
+        state.estrategiaQuitacao = tipo;
+        const listaUI = document.getElementById('lista-ordem-quitacao');
+        listaUI.innerHTML = '';
+
+        // Clonar o array para não corromper os dados originais
+        let dividasOrdenadas = [...state.credores];
+
+        if (tipo === 'boladeneve') {
+            // Ordena do menor valor total para o maior
+            dividasOrdenadas.sort((a, b) => a.valorTotal - b.valorTotal);
+        } else {
+            // Avalanche: Aqui assumimos uma ordenação provisória pelo maior valor de parcela
+            // Uma vez que ainda não temos as taxas de juro para quem não passou pela crise.
+            // O Dashboard pedirá as taxas posteriormente.
+            dividasOrdenadas.sort((a, b) => b.valorParcela - a.valorParcela);
+        }
+
+        // Renderizar a lista
+        dividasOrdenadas.forEach((d, index) => {
+            const formatarRS = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const item = document.createElement('div');
+            item.style.cssText = `display: flex; justify-content: space-between; background: ${index === 0 ? '#e0f2fe' : 'white'}; padding: 12px; border-radius: 6px; border: 1px solid ${index === 0 ? '#38bdf8' : '#e2e8f0'}; font-size: 0.9rem;`;
+            
+            const seloAlvo = index === 0 ? `<span style="font-size: 0.7rem; background: #0284c7; color: white; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">ALVO ATUAL</span>` : '';
+            
+            item.innerHTML = `<span><strong>${index + 1}º</strong> ${d.nome} ${seloAlvo}</span> <strong>${formatarRS(d.valorTotal)}</strong>`;
+            listaUI.appendChild(item);
+        });
+
+        document.getElementById('preview-estrategia').style.display = 'block';
+    }
+           // --- GESTOR DE ESTADO FINAL (PREPARAÇÃO PARA A BORDA 2) ---
+
+    function ativarPlanoGeral(tipoForcado = null) {
+        // Se a função for chamada diretamente do Calote ou Consolidação, usamos o tipo forçado
+        if (tipoForcado) {
+            state.planoAtivo = { tipo: tipoForcado, dataInicio: new Date().toISOString() };
+        } else {
+            // Caso contrário, vem do ecrã de Quitação
+            state.planoAtivo = { tipo: 'quitacao', estrategia: state.estrategiaQuitacao, dataInicio: new Date().toISOString() };
+        }
+        
+        // Persistir a decisão monumental no cofre
+        localStorage.setItem('d_mais_1_dados', JSON.stringify(state));
+        console.log("[AUDITORIA] Plano de Ação Ativado:", state.planoAtivo);
+        
+        // A CORREÇÃO: Invocar a mutação do Dashboard ANTES de navegar
+        renderizarDashboard();
+        
+        goToScreen('screen-dashboard');
+    }
+
+    
+    
+    
+</script>
+</body>
+</html>
