@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pesquisa - Perfil Financeiro</title>
+    <style>
+        :root {
+            --primary: #0056b3; /* Azul EdTech */
+            --accent: #00a859;  /* Verde Financeiro */
+            --success: #27ae60;
+            --bg: #f4f7f6;
+            --text: #333;
+        }
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; color: var(--text); }
+        
+        #survey-container { background: white; width: 100%; max-width: 800px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; position: relative; height: 85vh; min-height: 600px; display: flex; flex-direction: column; }
+        
+        .progress-bar { height: 6px; background: #e0e0e0; width: 100%; flex-shrink: 0;}
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.4s ease; }
+        
+        .content-area { flex-grow: 1; position: relative; overflow-y: auto; scroll-behavior: smooth; }
+        
+        .step-content { padding: 40px 50px; display: none; flex-direction: column; box-sizing: border-box; animation: fadeIn 0.4s ease; }
+        .step-content.active { display: flex; }
+        .step-content.final-step { text-align: center; justify-content: center; align-items: center; height: 100%; }
+        
+        .block-title { color: #888; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; font-weight: bold; }
+        h2 { color: var(--primary); margin-top: 0; margin-bottom: 25px; font-size: 1.5rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        
+        .question-block { margin-bottom: 35px; }
+        .question-text { font-size: 1.1rem; font-weight: 600; color: #2c3e50; margin-bottom: 15px; line-height: 1.4; }
+        
+        .options-list { display: flex; flex-direction: column; gap: 10px; }
+        .option-simple { padding: 16px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: all 0.2s; font-size: 0.95rem; line-height: 1.4; background: #fff;}
+        .option-simple:hover { background: #f9fbfd; border-color: #bbb; transform: translateX(3px); }
+        .option-simple.selected { background: #eef6ff; color: var(--primary); border-color: var(--primary); font-weight: 500; box-shadow: inset 3px 0 0 var(--primary); }
+
+        input[type="number"], textarea { width: 100%; padding: 15px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-family: inherit; font-size: 1rem; transition: border 0.3s; }
+        input[type="number"]:focus, textarea:focus { border-color: var(--primary); outline: none; }
+        
+        .nav-buttons { padding: 20px 50px; border-top: 1px solid #eee; display: flex; justify-content: space-between; background: #fff; flex-shrink: 0; }
+        button.nav-btn { padding: 12px 30px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; transition: background 0.3s; }
+        .btn-next { background: var(--primary); color: white; }
+        .btn-next:hover { background: #004494; }
+        .btn-prev { background: transparent; color: #777; border: 1px solid #ddd; }
+        .btn-prev:hover { background: #f5f5f5; }
+        
+        .success-icon { font-size: 5rem; color: var(--success); margin-bottom: 20px; animation: popIn 0.6s; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes popIn { 0% { transform: scale(0); } 80% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        
+        @media (max-width: 600px) {
+            .step-content { padding: 25px 20px; }
+            .nav-buttons { padding: 15px 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="survey-container">
+    <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+
+    <div class="content-area">
+        
+        <div class="step-content active" data-step="1">
+            <div class="block-title">Bloco 1 de 4</div>
+            <h2>Como você se sente</h2>
+            
+            <div class="question-block">
+                <div class="question-text">1. Quando você pensa na sua vida financeira hoje, qual frase combina mais com você?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="selectOption(this, 'q1', 'a')">a) Sinto paz. Sei quanto ganho, quanto gasto e tenho tudo sob controle.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q1', 'b')">b) Sinto aperto no peito. As contas sempre me preocupam.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q1', 'c')">c) Sinto ansiedade, então prefiro nem olhar o extrato.</div>
+                </div>
+            </div>
+
+            <div class="question-block">
+                <div class="question-text">2. Sobre as dívidas que você tem (cartão, empréstimo, carnê, etc.), como está hoje?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="handleQ2(this, 'a')">a) Não tenho dívidas ou as parcelas cabem no orçamento.</div>
+                    <div class="option-simple" onclick="handleQ2(this, 'b')">b) Pago tudo em dia, mas não sobra quase nada.</div>
+                    <div class="option-simple" onclick="handleQ2(this, 'c')">c) Estou atrasando algumas contas ou pagando só o mínimo do cartão.</div>
+                    <div class="option-simple" onclick="handleQ2(this, 'd')">d) Virou uma bola de neve – pagar dívidas tiraria dinheiro do essencial.</div>
+                </div>
+            </div>
+
+            <div class="question-block">
+                <div class="question-text">3. Do seu salário total, quanto vai só para pagar parcelas e dívidas?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="selectOption(this, 'q3', 'a')">a) Menos de 10%</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q3', 'b')">b) Entre 10% e 30%</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q3', 'c')">c) Entre 30% e 50%</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q3', 'd')">d) Mais de 50%</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q3', 'e')">e) Não sei exatamente.</div>
+                </div>
+            </div>
+
+            <div class="question-block">
+                <div class="question-text">4. Sobre a sua renda (salário ou ganhos):</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="selectOption(this, 'q4', 'a')">a) É sempre o mesmo valor todo mês.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q4', 'b')">b) É fixo, mas tem comissões ou extras que variam.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q4', 'c')">c) Varia totalmente – depende de vendas ou serviços do mês.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q4', 'd')">d) Não tenho renda no momento.</div>
+                </div>
+            </div>
+
+            <div class="question-block">
+                <div class="question-text">5. Se você perdesse sua renda hoje, por quanto tempo conseguiria pagar as contas com o que tem guardado?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="selectOption(this, 'q5', 'a')">a) Menos de 1 mês.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q5', 'b')">b) Entre 1 e 3 meses.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q5', 'c')">c) Entre 3 e 6 meses.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q5', 'd')">d) Mais de 6 meses.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="step-content" data-step="2">
+            <div class="block-title">Bloco 2 de 4</div>
+            <h2>Seus Hábitos e Situação</h2>
+
+            <div class="question-block">
+                <div class="question-text">6. Com que frequência você acompanha seus gastos e planeja as contas?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="selectOption(this, 'q6', 'a')">a) Todos os dias.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q6', 'b')">b) Toda semana.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q6', 'c')">c) Pelo menos uma vez por mês.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q6', 'd')">d) Raramente.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q6', 'e')">e) Nunca.</div>
+                </div>
+            </div>
+
+            <div class="question-block" id="q7-container" style="display: none; background: #fffcf5; padding: 20px; border-left: 4px solid #f39c12; border-radius: 4px;">
+                <div class="question-text" style="color: #d35400;">7. O que mais influenciou para você chegar na situação de dívida atual?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="selectOption(this, 'q7', 'a')">a) Um imprevisto forte (perda de emprego, doença, separação).</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q7', 'b')">b) Parcelamentos que foram saindo do controle aos poucos.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q7', 'c')">c) Decisão consciente de assumir parcelas altas para comprar algo necessário ou investir.</div>
+                </div>
+            </div>
+
+            <div class="question-block">
+                <div class="question-text">8. Hoje, qual é o seu maior problema financeiro?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="selectOption(this, 'q8', 'a')">a) Não consigo economizar – o dinheiro não sobra.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q8', 'b')">b) Tenho muitas dívidas espalhadas.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q8', 'c')">c) Não sei para onde meu dinheiro vai.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q8', 'd')">d) Minha renda não dá para o básico.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q8', 'e')">e) Tenho vergonha ou dificuldade de negociar dívidas.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="step-content" data-step="3">
+            <div class="block-title">Bloco 3 de 4</div>
+            <h2>Expectativas e Soluções</h2>
+
+            <div class="question-block">
+                <div class="question-text">9. Você já tentou aprender sobre finanças por cursos, livros ou vídeos?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="handleQ9(this, 'a')">a) Sim, e consegui aplicar algumas coisas.</div>
+                    <div class="option-simple" onclick="handleQ9(this, 'b')">b) Sim, mas não consegui aplicar ou não funcionou para mim.</div>
+                    <div class="option-simple" onclick="handleQ9(this, 'c')">c) Não, nunca tentei.</div>
+                </div>
+            </div>
+
+            <div class="question-block" id="q10-container" style="display: none; background: #fffcf5; padding: 20px; border-left: 4px solid #f39c12; border-radius: 4px;">
+                <div class="question-text" style="color: #d35400;">10. O que você sentiu que mais faltou na solução que tentou?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="selectOption(this, 'q10', 'a')">a) A linguagem era difícil ou pedia uma renda que eu não tenho.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q10', 'b')">b) Era muita teoria – faltou um passo a passo prático.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q10', 'c')">c) Faltou alguém para tirar minhas dúvidas.</div>
+                </div>
+            </div>
+
+            <div class="question-block">
+                <div class="question-text">11. Qual tipo de ajuda você acha que traria resultado mais rápido para você agora?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="selectOption(this, 'q11', 'a')">a) Um curso em vídeo com passo a passo objetivo.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q11', 'b')">b) Um aplicativo que organizasse minhas contas automaticamente.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q11', 'c')">c) Um assistente com inteligência artificial para analisar meus números e me dar um roteiro.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q11', 'd')">d) Um consultor humano para me orientar e negociar por mim.</div>
+                </div>
+            </div>
+
+            <div class="question-block">
+                <div class="question-text">12. Você conectaria suas contas bancárias a um aplicativo seguro para ele organizar tudo por você?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="selectOption(this, 'q12', 'a')">a) Sim, sem problemas.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q12', 'b')">b) Sim, desde que me expliquem como meus dados serão protegidos.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q12', 'c')">c) Tenho dúvidas e receio.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q12', 'd')">d) Não faria isso de jeito nenhum.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="step-content" data-step="4">
+            <div class="block-title">Bloco 4 de 4</div>
+            <h2>Conhecendo Você Melhor</h2>
+
+            <div class="question-block">
+                <div class="question-text">13. Qual o seu gênero e idade?</div>
+                <div class="options-list" style="margin-bottom: 10px;">
+                    <div class="option-simple" onclick="selectOption(this, 'q13_genero', 'Feminino')">Feminino</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q13_genero', 'Masculino')">Masculino</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q13_genero', 'Prefiro nao dizer')">Prefiro não dizer</div>
+                </div>
+                <input type="number" id="input_idade" placeholder="Digite sua idade em anos (ex: 35)" onchange="state.answers.q13_idade = this.value" min="14" max="100">
+            </div>
+
+            <div class="question-block">
+                <div class="question-text">14. Quantas pessoas dependem da sua renda (incluindo você)?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="selectOption(this, 'q14', 'a')">a) Apenas eu.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q14', 'b')">b) Eu + 1 pessoa.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q14', 'c')">c) Eu + 2 pessoas.</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q14', 'd')">d) Eu + 3 ou mais pessoas.</div>
+                </div>
+            </div>
+
+            <div class="question-block">
+                <div class="question-text">15. Somando sua renda com a de quem mora com você, quanto dá por mês?</div>
+                <div class="options-list">
+                    <div class="option-simple" onclick="selectOption(this, 'q15', 'a')">a) Até 2 salários mínimos (até ~R$ 3.000)</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q15', 'b')">b) De 2 a 5 salários (de R$ 3.000 a R$ 7.500)</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q15', 'c')">c) De 5 a 10 salários (de R$ 7.500 a R$ 15.000)</div>
+                    <div class="option-simple" onclick="selectOption(this, 'q15', 'd')">d) Mais de 10 salários (acima de R$ 15.000)</div>
+                </div>
+            </div>
+
+            <div class="question-block">
+                <div class="question-text">16. Para encerrar: se você pudesse resolver APENAS UM problema financeiro hoje, qual seria?</div>
+                <textarea id="q16_texto" rows="4" placeholder="Escreva com suas palavras..." onchange="state.answers.q16 = this.value"></textarea>
+            </div>
+        </div>
+
+        <div class="step-content final-step" data-step="5">
+            <div class="success-icon">✓</div>
+            <h2 style="border:none;">Pesquisa Concluída!</h2>
+            <p style="color: #666; font-size: 1.1rem; line-height: 1.5; max-width: 400px;">
+                Muito obrigado por compartilhar sua realidade conosco. Suas respostas, que são 100% sigilosas, nos ajudarão a criar uma educação financeira que realmente transforma vidas.
+            </p>
+        </div>
+    </div>
+
+    <div class="nav-buttons" id="navContainer">
+        <button class="nav-btn btn-prev" id="prevBtn" onclick="changeStep(-1)">Voltar</button>
+        <button class="nav-btn btn-next" id="nextBtn" onclick="changeStep(1)">Próximo</button>
+    </div>
+</div>
+
+<script>
+    let currentStep = 1;
+    const totalSteps = 4;
+    
+    const state = {
+        answers: {}
+    };
+
+    function selectOption(el, questionId, value) {
+        // Remove 'selected' de todos os irmãos
+        el.parentNode.querySelectorAll('.option-simple').forEach(opt => opt.classList.remove('selected'));
+        // Adiciona no clicado
+        el.classList.add('selected');
+        // Salva no estado
+        state.answers[questionId] = value;
+    }
+
+    // Lógica Condicional: Pergunta 2 controla Pergunta 7
+    function handleQ2(el, value) {
+        selectOption(el, 'q2', value);
+        const q7Container = document.getElementById('q7-container');
+        
+        if(value === 'a') {
+            q7Container.style.display = 'none';
+            state.answers.q7 = 'N/A'; // Pula a pergunta
+        } else {
+            q7Container.style.display = 'block';
+            // Se mudou de ideia, reseta a resposta da 7
+            if (state.answers.q7 === 'N/A') {
+                delete state.answers.q7;
+                q7Container.querySelectorAll('.option-simple').forEach(opt => opt.classList.remove('selected'));
+            }
+        }
+    }
+
+    // Lógica Condicional: Pergunta 9 controla Pergunta 10
+    function handleQ9(el, value) {
+        selectOption(el, 'q9', value);
+        const q10Container = document.getElementById('q10-container');
+        
+        if(value === 'a' || value === 'c') {
+            q10Container.style.display = 'none';
+            state.answers.q10 = 'N/A'; // Pula a pergunta
+        } else if (value === 'b') {
+            q10Container.style.display = 'block';
+            if (state.answers.q10 === 'N/A') {
+                delete state.answers.q10;
+                q10Container.querySelectorAll('.option-simple').forEach(opt => opt.classList.remove('selected'));
+            }
+        }
+    }
+
+    function validateCurrentStep() {
+        // Correção Crítica: Captura os valores dos inputs de texto diretamente do DOM 
+        // no instante da validação para evitar atrasos do evento onchange.
+        const inputIdade = document.getElementById('input_idade');
+        const textareaQ16 = document.getElementById('q16_texto');
+        
+        if (inputIdade && inputIdade.value.trim() !== '') {
+            state.answers.q13_idade = inputIdade.value.trim();
+        }
+        if (textareaQ16 && textareaQ16.value.trim() !== '') {
+            state.answers.q16 = textareaQ16.value.trim();
+        }
+
+        // Validações por Bloco
+        if (currentStep === 1) {
+            if (!state.answers.q1 || !state.answers.q2 || !state.answers.q3 || !state.answers.q4 || !state.answers.q5) {
+                alert("Por favor, responda a todas as perguntas do Bloco 1 para avançar.");
+                return false;
+            }
+        }
+        if (currentStep === 2) {
+            if (!state.answers.q6 || !state.answers.q8) {
+                alert("Por favor, responda a todas as perguntas visíveis do Bloco 2.");
+                return false;
+            }
+            if (state.answers.q2 !== 'a' && !state.answers.q7) {
+                alert("A pergunta 7 requer uma resposta com base na sua situação anterior.");
+                return false;
+            }
+        }
+        if (currentStep === 3) {
+            if (!state.answers.q9 || !state.answers.q11 || !state.answers.q12) {
+                alert("Por favor, responda a todas as perguntas visíveis do Bloco 3.");
+                return false;
+            }
+            if (state.answers.q9 === 'b' && !state.answers.q10) {
+                alert("A pergunta 10 requer uma resposta com base na sua experiência anterior.");
+                return false;
+            }
+        }
+        if (currentStep === 4) {
+            if (!state.answers.q13_genero || !state.answers.q13_idade || !state.answers.q14 || !state.answers.q15 || !state.answers.q16) {
+                alert("Verificamos que um ou mais campos do Bloco Final estão em branco. Por favor, confira sua Idade e a Pergunta 16.");
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function updateUI() {
+        document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+        
+        const currentContent = document.querySelector(`.step-content[data-step="${currentStep}"]`);
+        if(currentContent) {
+            currentContent.classList.add('active');
+            // Scroll top container
+            document.querySelector('.content-area').scrollTop = 0;
+        }
+
+        let progress = ((currentStep - 1) / totalSteps) * 100;
+        if(currentStep > totalSteps) progress = 100;
+        
+        const progressFill = document.querySelector('.progress-fill');
+        if(progressFill) progressFill.style.width = `${progress}%`;
+
+        const navContainer = document.getElementById('navContainer');
+        if (currentStep > totalSteps) {
+            if(navContainer) navContainer.style.display = 'none';
+        } else {
+            if(navContainer) navContainer.style.display = 'flex';
+            const prevBtn = document.getElementById('prevBtn');
+            if(prevBtn) prevBtn.style.visibility = currentStep === 1 ? 'hidden' : 'visible';
+            
+            const nextBtn = document.getElementById('nextBtn');
+            if(nextBtn) {
+                nextBtn.innerText = currentStep === totalSteps ? "Finalizar Pesquisa" : "Próximo Bloco";
+                nextBtn.style.background = currentStep === totalSteps ? "#27ae60" : "#0056b3";
+            }
+        }
+    }
+
+    function changeStep(dir) {
+        if (dir === 1 && !validateCurrentStep()) {
+            return;
+        }
+
+        const next = currentStep + dir;
+        
+        if (next > totalSteps) {
+            submitSurvey();
+        } else {
+            currentStep = next;
+            updateUI();
+        }
+    }
+
+    function submitSurvey() {
+        const btn = document.getElementById('nextBtn');
+        btn.innerText = "Processando Envios...";
+        btn.disabled = true;
+
+        // ATENÇÃO: Substitua esta string pela URL gerada na Implantação do seu Google Apps Script
+        const scriptURL = 'COLE_AQUI_A_URL_DO_SEU_WEB_APP'; 
+
+        // Serialização da matriz de respostas para o formato suportado pelo Apps Script (application/x-www-form-urlencoded)
+        const params = new URLSearchParams();
+        for (const key in state.answers) {
+            params.append(key, state.answers[key]);
+        }
+
+        fetch(scriptURL, {
+            method: 'POST',
+            body: params,
+            mode: 'no-cors' // Mandatório: Evita que políticas de CORS bloqueiem o redirecionamento do Google
+        })
+        .then(() => {
+            currentStep = totalSteps + 1;
+            updateUI();
+        })
+        .catch(error => {
+            console.error('Falha na requisição de rede:', error);
+            alert('Houve um erro de conectividade na submissão. Verifique sua conexão e tente novamente.');
+            btn.innerText = "Finalizar Pesquisa";
+            btn.disabled = false;
+        });
+    }
+    
+    updateUI();
+</script>
+
+</body>
+</html>
