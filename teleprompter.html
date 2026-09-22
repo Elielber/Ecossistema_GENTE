@@ -23,18 +23,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Teleprompter Web</title>
+    
+    <!-- Bibliotecas externas para extração de PDF e DOCX no navegador -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
     <style>
-        /* Estilos base focados em alto contraste e legibilidade mobile */
+        /* Estilos base focados em alto contraste e legibilidade no telemóvel */
         body {
             margin: 0;
             background-color: #000000;
             color: #ffffff;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            overflow-x: hidden; /* Previne rolagem horizontal */
+            overflow-x: hidden;
             scroll-behavior: smooth;
         }
 
-        /* Painel de Controle Fixo */
+        /* Painel de Controlo Fixo */
         #controls {
             position: fixed;
             top: 0;
@@ -95,7 +100,15 @@
         button.paused { background: #28a745; }
         button.playing { background: #dc3545; }
 
-        /* Dica de usabilidade */
+        /* Mensagem de estado do processamento */
+        #status {
+            font-size: 13px;
+            color: #00a8ff;
+            display: none;
+            font-weight: bold;
+        }
+
+        /* Dica de utilização */
         #hint {
             text-align: center;
             font-size: 12px;
@@ -105,10 +118,10 @@
 
         /* Área do Texto */
         #text-display {
-            margin-top: 180px; /* Espaço para o controle */
+            margin-top: 200px; /* Espaço ajustado para o painel de controlo */
             padding: 20px;
-            padding-bottom: 80vh; /* Permite que o texto role até o final da tela */
-            white-space: pre-wrap; /* Respeita as quebras de linha do TXT */
+            padding-bottom: 80vh; /* Permite rolar até ao final do texto */
+            white-space: pre-wrap;
             line-height: 1.6;
             text-align: left;
         }
@@ -118,8 +131,9 @@
 
     <div id="controls">
         <div class="control-group">
-            <input type="file" id="fileInput" accept=".txt">
+            <input type="file" id="fileInput" accept=".txt,.pdf,.docx,.doc">
         </div>
+        <div id="status">A processar o ficheiro, por favor aguarde...</div>
         <div class="control-group">
             <label>Tamanho: <input type="range" id="fontSize" min="16" max="100" value="40"></label>
         </div>
@@ -129,60 +143,138 @@
         <div class="control-group">
             <button id="playBtn" class="paused">INICIAR ROLAGEM</button>
         </div>
-        <div id="hint">Toque duas vezes na tela para ocultar/mostrar os controles.</div>
+        <div id="hint">Toque duas vezes no ecrã para ocultar/mostrar os controlos.</div>
     </div>
 
     <div id="text-display">
-        Carregue um arquivo .TXT no menu acima para começar.
+        Carregue um ficheiro (.TXT, .PDF ou .DOCX) no menu acima para começar.
         
         Instruções:
-        1. Selecione seu texto.
-        2. Ajuste o tamanho da fonte.
-        3. Ajuste a velocidade.
+        1. Selecione o seu ficheiro.
+        2. Ajuste o tamanho da letra.
+        3. Ajuste a velocidade de deslocamento.
         4. Clique em Iniciar.
-        5. Toque duas vezes na tela para esconder o menu superior e focar apenas na leitura.
+        5. Toque duas vezes no ecrã para esconder o menu superior e focar apenas na leitura.
     </div>
 
     <script>
+        // Configurar o Worker do PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
         const fileInput = document.getElementById('fileInput');
         const textDisplay = document.getElementById('text-display');
         const fontSizeSlider = document.getElementById('fontSize');
         const speedSlider = document.getElementById('speed');
         const playBtn = document.getElementById('playBtn');
         const controls = document.getElementById('controls');
+        const statusDiv = document.getElementById('status');
 
         let isPlaying = false;
         let animationFrameId;
 
-        // Lógica de Leitura do Arquivo TXT (FileReader API)
-        fileInput.addEventListener('change', function(e) {
+        // Gestão da seleção de ficheiros
+        fileInput.addEventListener('change', async function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                textDisplay.textContent = e.target.result;
-                window.scrollTo(0, 0); // Volta ao topo ao carregar novo arquivo
-            };
-            reader.readAsText(file);
+            const fileName = file.name.toLowerCase();
+            showStatus('A ler o ficheiro...');
+
+            try {
+                if (fileName.endsWith('.txt')) {
+                    await handleTxtFile(file);
+                } else if (fileName.endsWith('.docx')) {
+                    await handleDocxFile(file);
+                } else if (fileName.endsWith('.pdf')) {
+                    await handlePdfFile(file);
+                } else if (fileName.endsWith('.doc')) {
+                    alert('O formato .DOC (antigo) não é suportado diretamente no navegador. Por favor, converta o ficheiro para .DOCX ou .TXT.');
+                    hideStatus();
+                    return;
+                } else {
+                    alert('Formato de ficheiro não suportado.');
+                    hideStatus();
+                    return;
+                }
+
+                window.scrollTo(0, 0); // Volta ao topo ao carregar o novo texto
+                hideStatus();
+            } catch (error) {
+                console.error('Erro ao ler ficheiro:', error);
+                alert('Ocorreu um erro ao processar o ficheiro.');
+                hideStatus();
+            }
         });
 
-        // Configuração de Tamanho da Fonte em tempo real
+        function showStatus(msg) {
+            statusDiv.textContent = msg;
+            statusDiv.style.display = 'block';
+        }
+
+        function hideStatus() {
+            statusDiv.style.display = 'none';
+        }
+
+        // Leitura de ficheiros TXT
+        function handleTxtFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    textDisplay.textContent = e.target.result;
+                    resolve();
+                };
+                reader.onerror = reject;
+                reader.readAsText(file);
+            });
+        }
+
+        // Leitura de ficheiros DOCX com Mammoth.js
+        function handleDocxFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const arrayBuffer = e.target.result;
+                    mammoth.extractRawText({ arrayBuffer: arrayBuffer })
+                        .then(function(result) {
+                            textDisplay.textContent = result.value;
+                            resolve();
+                        })
+                        .catch(reject);
+                };
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // Leitura de ficheiros PDF com PDF.js
+        async function handlePdfFile(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let fullText = '';
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                showStatus(`A extrair página ${i} de ${pdf.numPages}...`);
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                fullText += pageText + '\n\n';
+            }
+
+            textDisplay.textContent = fullText;
+        }
+
+        // Ajuste do tamanho da letra em tempo real
         function updateFontSize() {
             textDisplay.style.fontSize = fontSizeSlider.value + 'px';
         }
         fontSizeSlider.addEventListener('input', updateFontSize);
-        updateFontSize(); // Inicializa
+        updateFontSize();
 
-        // Lógica de Rolagem Suave
+        // Lógica de deslocamento suave (Rolagem)
         function scrollStep() {
             if (isPlaying) {
-                // A velocidade é calculada com base no valor do slider. 
-                // Valores menores que 1 garantem fluidez em velocidades baixas.
                 const speedMultiplier = speedSlider.value * 0.3; 
                 window.scrollBy(0, speedMultiplier);
-                
-                // Continua o loop de animação
                 animationFrameId = requestAnimationFrame(scrollStep);
             }
         }
@@ -194,18 +286,17 @@
                 playBtn.textContent = 'PAUSAR';
                 playBtn.classList.remove('paused');
                 playBtn.classList.add('playing');
-                scrollStep(); // Inicia o loop
+                scrollStep();
             } else {
                 playBtn.textContent = 'INICIAR ROLAGEM';
                 playBtn.classList.remove('playing');
                 playBtn.classList.add('paused');
-                cancelAnimationFrame(animationFrameId); // Interrompe o loop
+                cancelAnimationFrame(animationFrameId);
             }
         });
 
-        // Ocultar/Mostrar controles com toque duplo para modo tela cheia de leitura
+        // Ocultar/Mostrar controlo com toque duplo
         document.body.addEventListener('dblclick', function(e) {
-            // Evita que cliques rápidos nos botões disparem a ocultação
             if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
             controls.classList.toggle('hidden');
         });
