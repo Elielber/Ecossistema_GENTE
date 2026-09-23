@@ -4,12 +4,50 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Peixe-Voador: Causalidade e Visão Sistêmica</title>
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <style>
+        @media print {
+    /* Oculta tudo que é interface de controle, cabeçalhos de app e barras */
+    header, 
+    #control-panel, 
+    #gente-comm-module, 
+    button, 
+    input, 
+    .no-print {
+        display: none !important;
+    }
+
+    /* Expande a área de conteúdo para ocupar toda a folha */
+    body, html {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        width: 100% !important;
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    #ferramenta-app, main, #diagram-scroll-area, #pdf-content {
+        display: block !important;
+        position: static !important;
+        overflow: visible !important;
+        width: 100% !important;
+        height: auto !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* Garante que o relatório e o diagrama fiquem bem dispostos */
+    #catwoe-report-area {
+        page-break-before: always; /* Joga o relatório para a página seguinte ou mantém limpo */
+        border: none !important;
+        box-shadow: none !important;
+    }
+}
+
         :root {
             --color-m1-cinza-arcos: #787878;
             --color-m2-azul-gestao: #1D3557;
@@ -180,6 +218,9 @@
             <button id="export-btn" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-1 shadow">
                 📷 Imagem HD
             </button>
+			<button onclick="exportarParaPDF()" class="bg-blue-700 hover:bg-blue-800 text-white font-bold px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-1 shadow">
+                🖨️ Relatório
+            </button>
             <button onclick="checkBiasAndSave()" class="bg-cyan-700 hover:bg-cyan-600 px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-1 shadow">
                 💾 Salvar JSON
             </button>
@@ -232,13 +273,20 @@
 
         <div class="flex-1 bg-[#ffffff] relative overflow-hidden flex flex-col">
             <div id="diagram-scroll-area" class="w-full h-full overflow-auto custom-scrollbar p-10 cursor-grab active:cursor-grabbing">
-                <div id="zoom-wrapper" class="origin-top-left transition-transform duration-200 ease-out">
-                    <div id="diagram-container" class="relative bg-[#ffffff]" style="min-width: 1600px; min-height: 900px;">
-                        <div id="fishbone-diagram" class="w-full h-full relative"></div>
-                    </div>
+			
+                <div id="pdf-content" style="padding: 20px; background-color: #ffffff;">
+            
+            <div id="zoom-wrapper" class="origin-top-left transition-transform duration-200 ease-out">
+                <div id="diagram-container" class="relative bg-[#ffffff]" style="min-width: 1600px; min-height: 900px;">
+                    <div id="fishbone-diagram" class="w-full h-full relative"></div>
                 </div>
             </div>
-        </div>
+            
+            <div id="catwoe-report-area" style="display: none; margin-top: 60px; padding: 40px; border: 1px solid #e2e8f0; background-color: #f8fafc; font-family: 'Inter', sans-serif; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); max-width: 100%; box-sizing: border-box;"></div>
+            
+            </div>	
+         </div>
+       </div>
     </main>
 
     <div id="bias-modal" class="fixed inset-0 z-[60] flex items-center justify-center hidden">
@@ -508,6 +556,7 @@
             renderCategoryBones(container, startX, endX, centerY);
             updateBiasAnalysis();
             renderInputPanels();
+			generateCatwoeReport(diagramData);
         }
 
         function renderCategoryBones(container, spineStart, spineEnd, spineY) {
@@ -822,6 +871,138 @@
             zoomValue.textContent = Math.round(val * 100) + '%';
             zoomWrapper.style.transform = `scale(${val})`;
         });
+		
+		// --- RELATÓRIO SISTÊMICO CATWOE ---
+        function generateCatwoeReport(data) {
+            const reportContainer = document.getElementById('catwoe-report-area');
+            
+            // Tratamento de ausência de dados
+            const effect = data.effect || "Não definido";
+            const rawSector = data.sector || "generic";
+            
+            const sectorMap = {
+                'N': 'Técnico/Científico', 'P': 'Administração Pública', 
+                'C': 'Indústria', 'Q': 'Educação', 'H': 'Transporte', 'generic': 'Não especificado'
+            };
+            const sector = sectorMap[rawSector];
+
+            const causes = data.causes || {};
+            const customers = causes.customers || [];
+            const actors = causes.actors || [];
+            const transformation = causes.transformation || [];
+            const worldview = causes.worldview || [];
+            const owners = causes.owners || [];
+            const environment = causes.environment || [];
+
+            // 1. Extração de Contramedidas (Identificadas pelo prefixo '*')
+            let countermeasures = [];
+            
+            // Função auxiliar para separar itens normais de soluções
+            const extractData = (arr) => {
+                let items = [];
+                arr.forEach(item => {
+                    if (item.text.trim().startsWith('*')) countermeasures.push(item.text.replace('*', '').trim());
+                    else items.push(item.text);
+                });
+                return items;
+            };
+
+            const softVars = [...extractData(customers), ...extractData(actors), ...extractData(worldview)];
+            const hardVars = [...extractData(transformation), ...extractData(owners), ...extractData(environment)];
+            
+            const softCount = softVars.length;
+            const hardCount = hardVars.length;
+            const totalVars = softCount + hardCount;
+
+            // Se o diagrama estiver vazio, esconde o relatório
+            if (totalVars === 0 && effect === "Não definido" && countermeasures.length === 0) {
+                reportContainer.style.display = 'none';
+                return;
+            }
+
+            // 2. Avaliação de Balanço (Hard vs Soft)
+            let balanceStatus = "<strong style='color: #059669;'>Equilíbrio Estável</strong>";
+            if (hardCount >= softCount && effect.toLowerCase().includes("risco")) {
+                balanceStatus = "<strong style='color: #dc2626;'>Tensão Alta / Ruptura Iminente (Viés de Coerção Administrativa)</strong>";
+            } else if (hardCount > softCount + 2) {
+                balanceStatus = "<strong style='color: #d97706;'>Desbalanceado (Foco excessivo em Processos/Estrutura)</strong>";
+            } else if (softCount > hardCount + 2) {
+                balanceStatus = "<strong style='color: #d97706;'>Desbalanceado (Foco excessivo em Pessoas/Cultura)</strong>";
+            }
+
+            // 3. Análise de Comportamento (Regex para resistência) nos atores
+            let hasResistance = false;
+            const regexResistance = /(burla|maquiagem|qualquer jeito|oculta|resistência|imposição|rejeição)/i;
+            actors.forEach(item => { if (regexResistance.test(item.text)) hasResistance = true; });
+
+            // 4. Construção do HTML
+            const dataAtual = new Date().toLocaleDateString('pt-BR');
+            let htmlOutput = `
+                <h2 style="color: #0f4c75; font-size: 1.5rem; font-weight: 800; margin-bottom: 0.5rem; border-bottom: 2px solid #cbd5e1; padding-bottom: 0.5rem;">
+                    RELATÓRIO DE EQUILÍBRIO SISTÊMICO (MÉTODO CATWOE)
+                </h2>
+                <p style="font-size: 0.85rem; color: #64748b; margin-top: 0; margin-bottom: 1.5rem;">Data da Avaliação: ${dataAtual}</p>
+                
+                <div style="background-color: #ffffff; padding: 1rem; border-radius: 0.5rem; border: 1px solid #e2e8f0; margin-bottom: 1.5rem;">
+                    <p style="margin: 0; padding-bottom: 0.5rem;"><strong>Efeito Central (Problema):</strong> ${effect}</p>
+                    <p style="margin: 0;"><strong>Setor de Atuação:</strong> ${sector}</p>
+                </div>
+
+                <h3 style="color: #334155; font-weight: 700; font-size: 1.1rem; margin-bottom: 1rem;">1. Balanço de Forças (Hard vs. Soft)</h3>
+                <p style="color: #475569;">O diagnóstico identificou <strong>${totalVars} variáveis ativas</strong> (excluindo soluções) no ecossistema:</p>
+                <ul style="color: #475569; margin-bottom: 1rem; padding-left: 1.5rem; list-style-type: disc;">
+                    <li><strong>Fatores Hard (Estrutura/Processos - T, O, E):</strong> ${hardCount} variáveis.</li>
+                    <li><strong>Fatores Soft (Cultura/Pessoas - C, A, W):</strong> ${softCount} variáveis.</li>
+                </ul>
+                <p style="background-color: #f1f5f9; padding: 0.75rem; border-radius: 0.25rem;"><strong>Status Sistêmico:</strong> ${balanceStatus}</p>
+
+                <h3 style="color: #334155; font-weight: 700; font-size: 1.1rem; margin-top: 2rem; margin-bottom: 1rem;">2. Avaliação de Comportamento e Risco</h3>
+            `;
+
+            if (hasResistance) {
+                htmlOutput += `
+                    <div style="background-color: #fef2f2; border-left: 4px solid #ef4444; padding: 1rem; color: #991b1b; border-radius: 0.25rem; margin-bottom: 1rem;">
+                        <strong>Alerta Crítico:</strong> A análise detectou indícios de uma "estratégia emergente" de resistência, atrito ou burla de processos no eixo de Atores. Quando há coerção sem compensação informacional, a utilidade marginal do processo pode ser anulada pela distorção dos dados operacionais.
+                    </div>
+                `;
+            } else {
+                htmlOutput += `<p style="color: #475569;">O comportamento descrito dos atores aponta para um desgaste ou falha estrutural, mas sem indícios textuais agudos de resistência oculta ou maquiagem deliberada de dados até o momento.</p>`;
+            }
+
+            htmlOutput += `<h3 style="color: #334155; font-weight: 700; font-size: 1.1rem; margin-top: 2rem; margin-bottom: 1rem;">3. Diagnóstico de Risco e Contramedidas</h3>`;
+            
+            if (countermeasures.length > 0) {
+                htmlOutput += `<p style="color: #475569;">Foram propostas as seguintes intervenções mitigatórias ao longo do fluxo analítico:</p><ul style="padding-left: 1.5rem; margin-top: 0.5rem; list-style-type: square;">`;
+                countermeasures.forEach(medida => {
+                    htmlOutput += `<li style="font-weight: 600; color: #059669; margin-bottom: 0.25rem;">${medida}</li>`;
+                });
+                htmlOutput += `</ul>`;
+            } else {
+                htmlOutput += `
+                    <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 1rem; color: #b45309; border-radius: 0.25rem;">
+                        <strong>Atenção:</strong> Nenhuma contramedida tática (itens sinalizados com '*') foi estruturada nos dados de entrada. Recomenda-se a revisão imediata do escopo em equipe para formulação de um plano de contingência para as causas raízes levantadas.
+                    </div>
+                `;
+            }
+
+            reportContainer.innerHTML = htmlOutput;
+            reportContainer.style.display = 'block';
+        }
+		
+		// --- FUNÇÃO DE EXPORTAÇÃO PARA PDF UNIFICADA ---
+    function exportarParaPDF() {
+    try {
+        // Opcional: Exibe um aviso rápido ou esconde elementos temporariamente se necessário
+        console.log("Preparando documento para exportação...");
+        
+        // Aciona a caixa de diálogo de impressão/salvar PDF nativa do navegador
+        window.print();
+        
+    } catch (error) {
+        console.error("Erro ao acionar a exportação:", error);
+        alert("Não foi possível abrir a janela de impressão automaticamente. Por favor, utilize o atalho Ctrl + P (ou Cmd + P no Mac).");
+    }
+}
 
         // --- 4. VIÉS & EXPORTAÇÃO ---
 
