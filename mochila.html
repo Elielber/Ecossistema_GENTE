@@ -1,0 +1,3942 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>D+1 | Orçamento Doméstico</title>
+    <style>
+        :root {
+            --primary: #1e293b;
+            --secondary: #64748b;
+            --accent: #0ea5e9;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 480px;
+            background: var(--bg-color);
+            position: relative;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .screen {
+            display: none;
+            flex-direction: column;
+            padding: 30px 20px;
+            height: 100%;
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+        .screen.active { display: flex; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .title { font-size: 1.5rem; font-weight: 700; color: var(--primary); margin-bottom: 10px; line-height: 1.3; }
+        .subtitle { font-size: 1rem; color: var(--secondary); margin-bottom: 30px; line-height: 1.5; }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            margin-bottom: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .btn-option {
+            width: 100%;
+            background: var(--card-bg);
+            border: 2px solid #e2e8f0;
+            color: var(--primary);
+            padding: 18px 20px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-align: left;
+            cursor: pointer;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn-option:hover, .btn-option:active {
+            border-color: var(--accent);
+            background: #f0f9ff;
+        }
+
+        .btn-primary {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 18px;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: auto;
+            transition: 0.2s;
+            box-shadow: 0 4px 15px rgba(30, 41, 59, 0.2);
+        }
+        .btn-primary:active { transform: scale(0.98); }
+        .btn-primary:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .fala-avatar {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 14px 16px;
+            background: #f8fafc;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: var(--text-main);
+            border-left: 3px solid var(--accent);
+        }
+        .fala-avatar .icone {
+            font-size: 1.3rem;
+            flex-shrink: 0;
+        }
+        .fala-avatar .texto {
+            flex: 1;
+        }
+
+        .chip-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .chip {
+            padding: 10px 16px;
+            border-radius: 20px;
+            border: 2px solid #e2e8f0;
+            background: white;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.2s;
+            font-weight: 500;
+        }
+        .chip:active { transform: scale(0.97); }
+        .chip.selecionado {
+            border-color: var(--accent);
+            background: #f0f9ff;
+            color: var(--accent);
+        }
+
+        .caixinha { margin-bottom: 20px; }
+        .caixinha-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        .caixinha-header .nome {
+            font-weight: 600;
+            color: var(--primary);
+        }
+        .caixinha-header .valores {
+            font-size: 0.85rem;
+            color: var(--secondary);
+        }
+        .barra-fundo {
+            height: 10px;
+            background: #e2e8f0;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .barra-preenchida {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.4s ease, background 0.4s ease;
+        }
+        .barra-verde { background: #10b981; }
+        .barra-amarela { background: #f59e0b; }
+        .barra-vermelha { background: #ef4444; }
+
+        .btn-flutuante {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            font-size: 2rem;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(30, 41, 59, 0.3);
+            z-index: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+        }
+        .btn-flutuante:active { transform: scale(0.95); }
+
+        .modal-registro {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: flex-end;
+            animation: fadeIn 0.3s;
+        }
+        .modal-registro.ativo { display: flex; }
+        .modal-registro-conteudo {
+            background: white;
+            width: 100%;
+            max-width: 480px;
+            border-radius: 24px 24px 0 0;
+            padding: 30px 25px;
+            animation: slideUp 0.3s ease-out;
+            position: relative;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+
+        .card-resumo-semanal {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            color: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .card-resumo-semanal:active { transform: scale(0.98); }
+        .card-resumo-semanal .titulo {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #38bdf8;
+            margin-bottom: 8px;
+        }
+        .card-resumo-semanal .texto {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        .card-resumo-semanal .btn-ver {
+            background: #38bdf8;
+            color: #0f172a;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .btn-voltar {
+            background: none;
+            border: none;
+            color: var(--secondary);
+            font-size: 0.9rem;
+            cursor: pointer;
+            padding: 5px 0;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .card-escolha {
+            background: var(--card-bg);
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 18px 20px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+        }
+        .card-escolha:hover, .card-escolha:active {
+            border-color: var(--accent);
+            background: #f0f9ff;
+        }
+        .card-escolha.concluida {
+            opacity: 0.5;
+            border-color: #10b981;
+            background: #f0fdf4;
+        }
+        .card-escolha .check {
+            color: #10b981;
+            font-weight: bold;
+            margin-left: auto;
+        }
+
+        /* ===== NÍVEL 2 ===== */
+
+        .card-nivel2 {
+            background: var(--card-bg);
+            border: 2px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 18px 20px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .card-nivel2:hover, .card-nivel2:active {
+            border-color: var(--accent);
+            background: #f0f9ff;
+        }
+        .card-nivel2 .icone-grande {
+            font-size: 1.8rem;
+            flex-shrink: 0;
+        }
+        .card-nivel2 .conteudo { flex: 1; }
+        .card-nivel2 .titulo-card {
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 0.95rem;
+            margin-bottom: 3px;
+        }
+        .card-nivel2 .subtitulo-card {
+            font-size: 0.8rem;
+            color: var(--secondary);
+        }
+        .card-nivel2 .seta {
+            color: var(--secondary);
+            font-size: 1.2rem;
+        }
+
+        .card-transicao-nivel {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+        }
+        .card-transicao-nivel:active { transform: scale(0.98); }
+        .card-transicao-nivel .titulo {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #d1fae5;
+            margin-bottom: 8px;
+        }
+        .card-transicao-nivel .texto {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        .card-transicao-nivel .btn-ver {
+            background: white;
+            color: #065f46;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .secao-titulo {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: var(--secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 25px 0 12px;
+        }
+
+        .categoria-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            padding: 14px 16px;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            border: 1px solid #e2e8f0;
+            font-size: 0.9rem;
+        }
+        .categoria-item .nome-cat {
+            font-weight: 600;
+            color: var(--primary);
+        }
+        .categoria-item .meta-cat {
+            font-size: 0.75rem;
+            color: var(--secondary);
+            margin-top: 2px;
+        }
+        .categoria-item .valor-cat {
+            font-weight: bold;
+            color: var(--primary);
+        }
+        .categoria-item .btn-remover {
+            background: none;
+            border: none;
+            color: #dc2626;
+            font-size: 1.2rem;
+            cursor: pointer;
+            margin-left: 10px;
+            line-height: 1;
+        }
+
+        .totalizador {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            color: #0369a1;
+            text-align: center;
+        }
+        .totalizador strong { color: #0c4a6e; }
+
+        .input-padrao {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 10px;
+            border: 1px solid #cbd5e1;
+            font-size: 1rem;
+            outline: none;
+            margin-bottom: 12px;
+            font-family: inherit;
+        }
+        .input-padrao:focus { border-color: var(--accent); }
+
+        .input-com-prefixo {
+            position: relative;
+            margin-bottom: 12px;
+        }
+        .input-com-prefixo .prefixo {
+            position: absolute;
+            left: 16px;
+            top: 14px;
+            color: var(--secondary);
+            font-weight: bold;
+        }
+        .input-com-prefixo input {
+            padding-left: 45px;
+            margin-bottom: 0;
+        }
+
+        .placeholder-info {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--secondary);
+            font-size: 0.9rem;
+        }
+
+        .btn-sm {
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: none;
+            font-weight: bold;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-sm:active { transform: scale(0.97); }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+
+    <!-- TELA 1: Acolhimento -->
+    <div id="screen-welcome" class="screen active">
+        <div style="font-size: 3rem; margin-bottom: 10px;">🎒</div>
+        <h1 class="title">Seu Orçamento Doméstico</h1>
+        <p class="subtitle">Um passo de cada vez. Aqui você aprende a cuidar do seu dinheiro sem culpa e sem jargão difícil.</p>
+
+        <div class="card">
+            <p style="font-size: 0.9rem; color: var(--secondary); line-height: 1.5;">
+                🔒 Tudo fica salvo no seu próprio celular. Nenhum dado é enviado para bancos ou empresas.
+            </p>
+        </div>
+
+        <div id="welcome-retomar" style="display: none; margin-bottom: 15px;">
+            <button class="btn-option" onclick="retomarJornada()" style="border-color: #10b981; background: #f0fdf4;">
+                <span style="font-size: 1.5rem;">🧭</span>
+                <span>Continuar de onde parei</span>
+            </button>
+        </div>
+
+        <button class="btn-primary" onclick="iniciarJornada()" id="btn-welcome-principal">Começar</button>
+    </div>
+
+    <!-- TELA 2: Porta de entrada do Orçamento -->
+    <div id="screen-orcamento-inicio" class="screen">
+        <button class="btn-voltar" onclick="goToScreen('screen-welcome')">← Voltar</button>
+        <div id="orcamento-conteudo"></div>
+    </div>
+
+    <!-- TELA 3: Resumo Semanal -->
+    <div id="screen-resumo-semanal" class="screen">
+        <button class="btn-voltar" onclick="goToScreen('screen-orcamento-inicio')">← Voltar</button>
+        <div id="resumo-semanal-conteudo"></div>
+    </div>
+
+    <!-- TELA 4: Histórico de Resumos -->
+    <div id="screen-historico-resumos" class="screen">
+        <button class="btn-voltar" onclick="goToScreen('screen-orcamento-inicio')">← Voltar</button>
+        <h2 class="title">Semanas passadas</h2>
+        <div id="historico-resumos-conteudo"></div>
+    </div>
+
+    <!-- TELA 5: Transição de Nível -->
+    <div id="screen-transicao-nivel" class="screen">
+        <button class="btn-voltar" onclick="goToScreen('screen-orcamento-inicio')">← Voltar</button>
+        <div id="transicao-nivel-conteudo"></div>
+    </div>
+
+    <!-- TELA 6: Sua Renda (Nível 2) -->
+    <div id="screen-renda-detalhe" class="screen">
+        <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
+        <div id="renda-detalhe-conteudo"></div>
+    </div>
+
+    <!-- TELA 7: Seus Gastos Fixos (Nível 2) -->
+    <div id="screen-gastos-detalhe" class="screen">
+        <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
+        <div id="gastos-detalhe-conteudo"></div>
+    </div>
+
+    <!-- TELA 8: Sua Dívida e Reserva (Nível 2) -->
+    <div id="screen-divida-detalhe" class="screen">
+        <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
+        <div id="divida-detalhe-conteudo"></div>
+    </div>
+    
+        <!-- TELA 9: Custódias (Nível 3) -->
+    <div id="screen-custodias" class="screen">
+        <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
+        <div id="custodias-conteudo"></div>
+    </div>
+    
+        <!-- TELA 10: Mapa do Mês (Nível 3) -->
+    <div id="screen-mapa-mes" class="screen">
+        <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
+        <div id="mapa-mes-conteudo"></div>
+    </div>
+    
+        <!-- TELA 11: Pagamento de Fatura (Nível 3) -->
+    <div id="screen-pagar-fatura" class="screen">
+        <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
+        <div id="pagar-fatura-conteudo"></div>
+    </div>
+    
+        <!-- TELA 12: Plano de Recuperação (Nível 3) -->
+    <div id="screen-plano-recuperacao" class="screen">
+        <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
+        <div id="plano-recuperacao-conteudo"></div>
+    </div>
+    
+</div>
+
+<!-- MODAL: Registro de gasto -->
+<div id="modal-registro" class="modal-registro">
+    <div class="modal-registro-conteudo">
+        <div id="modal-registro-passo-1">
+            <button onclick="fecharModalRegistro()" style="position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer;">&times;</button>
+            <h3 style="color: var(--primary); margin-bottom: 20px;">Quanto foi?</h3>
+            <div style="position: relative; margin-bottom: 25px;">
+                <span style="position: absolute; left: 15px; top: 15px; color: var(--secondary); font-weight: bold;">R$</span>
+                <input type="number" id="registro-valor" placeholder="0.00" style="width: 100%; padding: 15px 15px 15px 45px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 1.3rem; outline: none; font-weight: bold;">
+            </div>
+            <h3 style="color: var(--primary); margin-bottom: 15px; font-size: 1rem;">Isso é o quê?</h3>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <button class="btn-option" style="flex: 1; flex-direction: column; align-items: center; padding: 15px 10px; margin-bottom: 0; text-align: center;" onclick="registrarGasto('base')">
+                    <span style="font-size: 1.5rem;">🛡️</span>
+                    <span style="font-size: 0.85rem;">Base</span>
+                </button>
+                <button class="btn-option" style="flex: 1; flex-direction: column; align-items: center; padding: 15px 10px; margin-bottom: 0; text-align: center;" onclick="registrarGasto('vida')">
+                    <span style="font-size: 1.5rem;">🌿</span>
+                    <span style="font-size: 0.85rem;">Vida</span>
+                </button>
+                <button class="btn-option" style="flex: 1; flex-direction: column; align-items: center; padding: 15px 10px; margin-bottom: 0; text-align: center;" onclick="registrarGasto('futuro')">
+                    <span style="font-size: 1.5rem;">🔭</span>
+                    <span style="font-size: 0.85rem;">Futuro</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Passo 2A: Categoria (Nível 2) -->
+        <div id="modal-registro-passo-2-categoria" style="display: none;">
+            <h3 style="color: var(--primary); margin-bottom: 15px; font-size: 1rem;">Isso é qual tipo?</h3>
+            <div class="chip-container" id="chips-categorias-registro"></div>
+            <button class="btn-option" style="justify-content: center; border-color: var(--secondary);" onclick="pularCategoria()">
+                Não sei / Outro
+            </button>
+        </div>
+        
+                <!-- Passo 3B: Custódia (Nível 3) -->
+        <div id="modal-registro-passo-3-custodia" style="display: none;">
+            <h3 style="color: var(--primary); margin-bottom: 15px; font-size: 1rem;">De onde saiu?</h3>
+            <div class="chip-container" id="chips-custodias-registro"></div>
+            <button class="btn-option" style="justify-content: center; border-color: var(--secondary);" onclick="pularCustodia()">
+                Não sei / Outro
+            </button>
+        </div>
+
+        <!-- Passo 3: Confirmação -->
+        <div id="modal-registro-passo-3" style="display: none; text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 15px;">✅</div>
+            <div id="modal-registro-fala" class="fala-avatar" style="border-left: none; background: #f0f9ff; text-align: left;"></div>
+            <button class="btn-primary" style="background: var(--primary);" onclick="fecharModalRegistro()">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// CONSTANTES
+// ============================================================
+
+const DIVISOR_SEMANAL = 4.33;
+const CHAVE_STORAGE = 'd_mais_1_orcamento';
+const REGISTROS_PARA_NIVEL2 = 10;
+const SEMANAS_PARA_NIVEL2 = 2;
+
+// ============================================================
+// ESTADO GLOBAL
+// ============================================================
+
+let state = {
+    orcamento: null
+};
+
+// ============================================================
+// PERSISTÊNCIA
+// ============================================================
+
+function salvarEstado() {
+    localStorage.setItem(CHAVE_STORAGE, JSON.stringify(state));
+}
+
+function carregarEstado() {
+    const salvo = localStorage.getItem(CHAVE_STORAGE);
+    if (salvo) {
+        try {
+            state = JSON.parse(salvo);
+            migrarEstado();
+            console.log('[BOOT] Estado carregado:', state);
+        } catch (e) {
+            console.warn('[BOOT] Estado corrompido, iniciando limpo.', e);
+            state = { orcamento: null };
+        }
+    }
+}
+
+// Garante que a estrutura do Nível 2 exista (para usuários do Nível 1)
+
+function migrarEstado() {
+    if (!state.orcamento) return;
+
+    if (typeof state.orcamento.nivel !== 'number') {
+        state.orcamento.nivel = 1;
+    }
+    if (state.orcamento.rendaDetalhe === undefined) {
+        state.orcamento.rendaDetalhe = null;
+    }
+    if (!Array.isArray(state.orcamento.categorias)) {
+        state.orcamento.categorias = [];
+    }
+    if (state.orcamento.dividaReserva === undefined) {
+        state.orcamento.dividaReserva = null;
+    }
+    if (state.orcamento.transicaoNivelPendente === undefined) {
+        state.orcamento.transicaoNivelPendente = null;
+    }
+    if (state.orcamento.categoriasConcluidas === undefined) {
+        state.orcamento.categoriasConcluidas = false;
+    }
+    if (state.orcamento.dividaConcluida === undefined) {
+        state.orcamento.dividaConcluida = false;
+    }
+
+    // Inicializa contador de semanas fechadas
+    if (typeof state.orcamento.semanasFechadas !== 'number') {
+        state.orcamento.semanasFechadas = (state.orcamento.resumos || []).length;
+    }
+    // Migra semanaAtual antiga (sem renda, totalGasto, saldo)
+if (state.orcamento.semanaAtual) {
+    const s = state.orcamento.semanaAtual;
+    if (typeof s.renda !== 'number') {
+        const rendaMensal = state.orcamento.base?.rendaBase || 0;
+        s.renda = rendaMensal / DIVISOR_SEMANAL;
+    }
+    const totalGasto = (s.base?.gasto || 0) + (s.vida?.gasto || 0) + (s.futuro?.gasto || 0);
+    if (typeof s.totalGasto !== 'number') s.totalGasto = totalGasto;
+    if (typeof s.saldo !== 'number') s.saldo = s.renda - totalGasto;
+}
+
+// Migra resumos antigos (sem renda, totalGasto, saldo)
+if (Array.isArray(state.orcamento.resumos)) {
+    state.orcamento.resumos.forEach(r => {
+        if (typeof r.renda !== 'number') {
+            const rendaMensal = state.orcamento.base?.rendaBase || 0;
+            r.renda = rendaMensal / DIVISOR_SEMANAL;
+        }
+        const totalGasto = (r.base?.gasto || 0) + (r.vida?.gasto || 0) + (r.futuro?.gasto || 0);
+        if (typeof r.totalGasto !== 'number') r.totalGasto = totalGasto;
+        if (typeof r.saldo !== 'number') r.saldo = r.renda - totalGasto;
+    });
+}
+    // === NÍVEL 3 — CUSTÓDIAS ===
+    if (!Array.isArray(state.orcamento.custodias)) {
+        state.orcamento.custodias = [];
+    }
+    if (state.orcamento.custodiaPadrao === undefined) {
+        state.orcamento.custodiaPadrao = null;
+    }
+    if (state.orcamento.nivel3LinhaDeBase === undefined) {
+        state.orcamento.nivel3LinhaDeBase = null;
+    }
+    // Garante que custódias antigas (se houver) tenham todos os campos
+    state.orcamento.custodias.forEach(c => {
+        if (c.saldoAtual === undefined) c.saldoAtual = c.saldoInicial || 0;
+        if (c.faturaAcumulada === undefined) c.faturaAcumulada = 0;
+        if (c.criadaEm === undefined) c.criadaEm = new Date().toISOString();
+    });
+        // === NÍVEL 3 — MIGRAÇÃO DE REGISTROS ===
+    if (!Array.isArray(state.orcamento.historicoRegistros)) {
+        state.orcamento.historicoRegistros = [];
+    }
+    state.orcamento.historicoRegistros.forEach(r => {
+        if (!r.tipo) r.tipo = 'gasto_direto';
+        if (r.custodiaId === undefined) r.custodiaId = null;
+        if (r.cartaoId === undefined) r.cartaoId = null;
+        if (r.saldoAtualizado === undefined) r.saldoAtualizado = false;
+    });
+}
+
+// ============================================================
+// NAVEGAÇÃO
+// ============================================================
+
+function goToScreen(id) {
+    document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+
+    const btnFlutuante = document.getElementById('btn-flutuante-orcamento');
+    if (btnFlutuante) {
+        btnFlutuante.style.display = (id === 'screen-orcamento-inicio') ? 'flex' : 'none';
+    }
+}
+
+function voltarParaOrcamento() {
+    renderizarOrcamentoInicio();
+    goToScreen('screen-orcamento-inicio');
+}
+
+// ============================================================
+// INICIALIZAÇÃO
+// ============================================================
+
+function iniciarJornada() {
+    if (!state.orcamento) {
+        state.orcamento = {
+            fase: "inicio",
+            etapasConcluidas: [],
+            guia: null,
+            base: null,
+            vida: null,
+            futuro: null,
+            semanaAtual: null,
+            resumos: [],
+            historicoRegistros: [],
+            nivel: 1,
+            rendaDetalhe: null,
+            categorias: [],
+            dividaReserva: null,
+            transicaoNivelPendente: null,
+            categoriasConcluidas: false,
+            dividaConcluida: false,
+            semanasFechadas: 0,
+            custodiaPadrao: null,
+            nivel3LinhaDeBase: null,
+            custodias: []
+        };
+        salvarEstado();
+    }
+
+    verificarFechamentoSemana();
+
+    if (state.orcamento.semanaAtual && state.orcamento.semanaAtual.fechada && !state.orcamento.semanaAtual.resumoLido) {
+        abrirResumoSemanal();
+        return;
+    }
+
+    if (state.orcamento.semanaAtual && state.orcamento.semanaAtual.fechada) {
+        iniciarNovaSemana();
+    }
+
+    renderizarOrcamentoInicio();
+    goToScreen('screen-orcamento-inicio');
+}
+
+function retomarJornada() {
+    iniciarJornada();
+}
+
+function atualizarBotaoRetomada() {
+    const btnRetomar = document.getElementById('welcome-retomar');
+    const btnPrincipal = document.getElementById('btn-welcome-principal');
+    if (!btnRetomar) return;
+
+    const temJornada = state.orcamento && state.orcamento.etapasConcluidas && state.orcamento.etapasConcluidas.length > 0;
+
+    if (temJornada) {
+        btnRetomar.style.display = 'block';
+        btnPrincipal.innerText = 'Começar de novo';
+        btnPrincipal.style.background = '#94a3b8';
+        btnPrincipal.onclick = comecarDeNovo;
+    } else {
+        btnRetomar.style.display = 'none';
+        btnPrincipal.innerText = 'Começar';
+        btnPrincipal.style.background = '';
+        btnPrincipal.onclick = iniciarJornada;
+    }
+}
+
+function comecarDeNovo() {
+    const confirmar = confirm("Isso vai apagar tudo o que você já registrou. Tem certeza?");
+    if (!confirmar) return;
+    localStorage.removeItem(CHAVE_STORAGE);
+    location.reload();
+}
+
+// ============================================================
+// TELA INICIAL DO ORÇAMENTO
+// ============================================================
+
+function renderizarOrcamentoInicio() {
+    const container = document.getElementById('orcamento-conteudo');
+    const orc = state.orcamento;
+
+    if (orc.etapasConcluidas.length === 3) {
+        renderizarOrcamentoCompleto(container, orc);
+        return;
+    }
+
+    let cardResumo = '';
+    if (orc.semanaAtual && orc.semanaAtual.fechada && !orc.semanaAtual.resumoLido) {
+        cardResumo = `
+            <div class="card-resumo-semanal" onclick="abrirResumoSemanal()">
+                <div class="titulo">📊 Resumo da semana</div>
+                <div class="texto">Seu resumo tá pronto.</div>
+                <button class="btn-ver">Ver agora</button>
+            </div>
+        `;
+    }
+
+    const etapas = [
+        { id: 'base', icone: '🛡️', titulo: 'Quero garantir que minha base está firme.', sub: 'Renda e Fortaleza' },
+        { id: 'vida', icone: '🌿', titulo: 'Quero entender para onde vai o que sobra.', sub: 'Estilo de Vida' },
+        { id: 'futuro', icone: '🔭', titulo: 'Quero ver o caminho para sair da dívida.', sub: 'Futuro e Dívidas' }
+    ];
+
+    let htmlEtapas = '';
+    etapas.forEach(etapa => {
+        const concluida = orc.etapasConcluidas.includes(etapa.id);
+        htmlEtapas += `
+            <div class="card-escolha ${concluida ? 'concluida' : ''}" onclick="${concluida ? '' : `iniciarEtapa('${etapa.id}')`}">
+                <span style="font-size: 1.5rem;">${etapa.icone}</span>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; color: var(--primary); font-size: 0.95rem;">${etapa.titulo}</div>
+                    <div style="font-size: 0.8rem; color: var(--secondary); margin-top: 3px;">${etapa.sub}</div>
+                </div>
+                ${concluida ? '<span class="check">✓</span>' : ''}
+            </div>
+        `;
+    });
+
+    container.innerHTML = `
+        ${cardResumo}
+        <div class="fala-avatar">
+            <span class="icone">🛡️</span>
+            <span class="texto">Vamos detalhar o que você já me disse. Por onde quer começar?</span>
+        </div>
+        ${htmlEtapas}
+    `;
+}
+
+function iniciarEtapa(etapaId) {
+    if (etapaId === 'base') iniciarEtapaBase();
+    else if (etapaId === 'vida') iniciarEtapaVida();
+    else if (etapaId === 'futuro') iniciarEtapaFuturo();
+}
+
+// ============================================================
+// ETAPA BASE (Torres)
+// ============================================================
+
+function iniciarEtapaBase() {
+    const container = document.getElementById('orcamento-conteudo');
+    const rendaAtual = state.orcamento.base?.rendaBase || 2500;
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🛡️</span>
+            <span class="texto">Vamos começar pela sua renda. Quanto entra por mês, no total?</span>
+        </div>
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="number" id="input-renda-valor" class="input-padrao" placeholder="0.00" value="${rendaAtual}">
+        </div>
+        <div class="fala-avatar">
+            <span class="icone">🛡️</span>
+            <span class="texto">Esse valor é sempre igual ou tem mês que muda?</span>
+        </div>
+        <button class="btn-option" onclick="responderRenda('constante')">É sempre igual.</button>
+        <button class="btn-option" onclick="responderRenda('varia_pouco')">Muda um pouco.</button>
+        <button class="btn-option" onclick="responderRenda('varia_muito')">Muda muito.</button>
+    `;
+}
+
+function responderRenda(tipo) {
+    const valorInput = parseFloat(document.getElementById('input-renda-valor').value) || 0;
+    if (valorInput <= 0) {
+        alert("Precisamos saber o valor da sua renda para continuar.");
+        return;
+    }
+
+    if (!state.orcamento.base) state.orcamento.base = {};
+    state.orcamento.base.rendaTipo = tipo;
+    state.orcamento.base.rendaBase = valorInput;
+
+    if (tipo === 'constante') {
+        proximoPassoBase();
+    } else if (tipo === 'varia_pouco') {
+        const container = document.getElementById('orcamento-conteudo');
+        container.innerHTML = `
+            <div class="fala-avatar">
+                <span class="icone">🛡️</span>
+                <span class="texto">Nos meses bons, quanto costuma entrar a mais?</span>
+            </div>
+            <div class="chip-container">
+                <div class="chip" onclick="responderVariacaoRenda(10)">+10%</div>
+                <div class="chip" onclick="responderVariacaoRenda(20)">+20%</div>
+                <div class="chip" onclick="responderVariacaoRenda(30)">+30%</div>
+                <div class="chip" onclick="responderVariacaoRenda(0)">Outro valor</div>
+            </div>
+        `;
+    } else {
+        const container = document.getElementById('orcamento-conteudo');
+        container.innerHTML = `
+            <div class="fala-avatar">
+                <span class="icone">🛡️</span>
+                <span class="texto">Você recebe por semana, por dia, ou de forma imprevisível?</span>
+            </div>
+            <button class="btn-option" onclick="responderPeriodicidade('semanal')">Por semana</button>
+            <button class="btn-option" onclick="responderPeriodicidade('diario')">Por dia</button>
+            <button class="btn-option" onclick="responderPeriodicidade('imprevisivel')">Imprevisível</button>
+        `;
+    }
+}
+function responderVariacaoRenda(percentual) {
+    // Usa o valor que o usuário já digitou como base
+    const baseAtual = state.orcamento.base.rendaBase || 2500;
+    state.orcamento.base.rendaBase = baseAtual * (1 + percentual/100);
+    proximoPassoBase();
+}
+
+function responderPeriodicidade(tipo) {
+    state.orcamento.base.rendaPeriodicidade = tipo;
+    // Não sobrescreve rendaBase — mantém o valor que o usuário digitou
+    proximoPassoBase();
+}
+
+function proximoPassoBase() {
+    const container = document.getElementById('orcamento-conteudo');
+    const rendaBase = state.orcamento.base.rendaBase || 2500;
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🛡️</span>
+            <span class="texto">Sua base é o que não pode faltar. Quanto custa por mês?</span>
+        </div>
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="number" id="input-fortaleza-valor" class="input-padrao" placeholder="0.00" value="${state.orcamento.base?.fortalezaTotal || 1800}">
+        </div>
+        <div class="fala-avatar">
+            <span class="icone">🛡️</span>
+            <span class="texto">Isso inclui o quê?</span>
+        </div>
+        <div class="chip-container" id="chips-fortaleza">
+            <div class="chip" onclick="toggleChip(this)">🏠 Aluguel</div>
+            <div class="chip" onclick="toggleChip(this)">💡 Água e luz</div>
+            <div class="chip" onclick="toggleChip(this)">🛒 Mercado</div>
+            <div class="chip" onclick="toggleChip(this)">🚌 Transporte</div>
+            <div class="chip" onclick="toggleChip(this)">💊 Remédio</div>
+            <div class="chip" onclick="toggleChip(this)">📱 Internet</div>
+        </div>
+        <button class="btn-primary" onclick="concluirEtapaBase()">Continuar</button>
+    `;
+}
+
+function toggleChip(el) {
+    el.classList.toggle('selecionado');
+}
+
+function concluirEtapaBase() {
+    const valor = parseFloat(document.getElementById('input-fortaleza-valor').value) || 0;
+    if (valor <= 0) {
+        alert("A base não pode ser zero. Todo mundo tem um custo básico.");
+        return;
+    }
+
+    const chipsSelecionados = document.querySelectorAll('#chips-fortaleza .chip.selecionado');
+    const categorias = Array.from(chipsSelecionados).map(c => c.textContent.trim());
+    
+    state.orcamento.base.fortalezaCategorias = categorias;
+    state.orcamento.base.fortalezaTotal = valor;
+
+    // Reconstrói os limites da semana atual com o novo valor
+    if (state.orcamento.semanaAtual) {
+        state.orcamento.semanaAtual.base.limite = valor / DIVISOR_SEMANAL;
+    }
+
+    if (!state.orcamento.etapasConcluidas.includes('base')) {
+        state.orcamento.etapasConcluidas.push('base');
+    }
+    salvarEstado();
+    renderizarOrcamentoInicio();
+}
+// ============================================================
+// ETAPA VIDA (Bela)
+// ============================================================
+
+function iniciarEtapaVida() {
+    const container = document.getElementById('orcamento-conteudo');
+    const flexivelAtual = state.orcamento.vida?.total || 700;
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">Agora a parte boa da vida. Quanto você gasta por mês com o que te dá prazer?</span>
+        </div>
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="number" id="input-vida-valor" class="input-padrao" placeholder="0.00" value="${flexivelAtual}">
+        </div>
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">Vamos ver se a gente reconhece junto?</span>
+        </div>
+        <div class="chip-container" id="chips-vida">
+            <div class="chip" onclick="toggleChip(this)">📺 Netflix e streaming</div>
+            <div class="chip" onclick="toggleChip(this)">🍔 iFood e lanches</div>
+            <div class="chip" onclick="toggleChip(this)">🎉 Saídas</div>
+            <div class="chip" onclick="toggleChip(this)">🛍️ Comprinhas</div>
+            <div class="chip" onclick="toggleChip(this)">🚗 App de carro</div>
+            <div class="chip" onclick="toggleChip(this)">☕ Cafezinho</div>
+        </div>
+        <button class="btn-primary" onclick="concluirEtapaVida()">Continuar</button>
+    `;
+}
+
+function concluirEtapaVida() {
+    const valor = parseFloat(document.getElementById('input-vida-valor').value) || 0;
+
+    const chipsSelecionados = document.querySelectorAll('#chips-vida .chip.selecionado');
+    const categorias = Array.from(chipsSelecionados).map(c => c.textContent.trim());
+
+    state.orcamento.vida = {
+        categorias: categorias,
+        total: valor
+    };
+
+    // Reconstrói os limites da semana atual com o novo valor
+    if (state.orcamento.semanaAtual) {
+        state.orcamento.semanaAtual.vida.limite = valor / DIVISOR_SEMANAL;
+    }
+
+    if (!state.orcamento.etapasConcluidas.includes('vida')) {
+        state.orcamento.etapasConcluidas.push('vida');
+    }
+    salvarEstado();
+    renderizarOrcamentoInicio();
+}
+
+// ============================================================
+// ETAPA FUTURO (Zé)
+// ============================================================
+
+function iniciarEtapaFuturo() {
+    const container = document.getElementById('orcamento-conteudo');
+    const rendaBase = state.orcamento.base?.rendaBase || 2500;
+    const fortalezaTotal = state.orcamento.base?.fortalezaTotal || 1800;
+    const vidaTotal = state.orcamento.vida?.total || 700;
+
+    // Quanto sobra por mês para o futuro (dívida + reserva)
+    const sobraMensal = state.orcamento.futuro?.total ?? Math.max(rendaBase - fortalezaTotal - vidaTotal, 0);
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🔭</span>
+            <span class="texto">Sobrou <strong>R$ ${sobraMensal.toFixed(2).replace('.', ',')}</strong> por mês para o Futuro. Esse valor alimenta a dívida e a reserva. Quanto você quer direcionar?</span>
+        </div>
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="number" id="input-futuro-valor" class="input-padrao" placeholder="0.00" value="${sobraMensal.toFixed(2)}">
+        </div>
+        <button class="btn-primary" onclick="concluirEtapaFuturo()">Continuar</button>
+    `;
+}
+function concluirEtapaFuturo() {
+    const valor = parseFloat(document.getElementById('input-futuro-valor').value) || 0;
+
+    if (!state.orcamento.futuro) state.orcamento.futuro = {};
+    state.orcamento.futuro.total = valor;
+
+    // Reconstrói os limites da semana atual
+    if (state.orcamento.semanaAtual) {
+        state.orcamento.semanaAtual.futuro.limite = valor / DIVISOR_SEMANAL;
+    }
+
+    if (!state.orcamento.etapasConcluidas.includes('futuro')) {
+        state.orcamento.etapasConcluidas.push('futuro');
+    }
+    salvarEstado();
+    renderizarOrcamentoInicio();
+}
+
+
+// ============================================================
+// ORÇAMENTO COMPLETO (Nível 1 + Nível 2)
+// ============================================================
+
+function renderizarOrcamentoCompleto(container, orc) {
+    if (!orc.semanaAtual) {
+        iniciarNovaSemana();
+    }
+
+    const semana = orc.semanaAtual;
+
+    // ===== CARD DE RESUMO SEMANAL (se não lido) =====
+    const cardResumo = semana.fechada && !semana.resumoLido ? `
+        <div class="card-resumo-semanal" onclick="abrirResumoSemanal()">
+            <div class="titulo">📊 Resumo da semana</div>
+            <div class="texto">Seu resumo tá pronto.</div>
+            <button class="btn-ver">Ver agora</button>
+        </div>
+    ` : '';
+
+    // ===== CARD DE TRANSIÇÃO DE NÍVEL =====
+    let cardTransicao = '';
+    if (orc.transicaoNivelPendente === 2) {
+        cardTransicao = `
+            <div class="card-transicao-nivel" onclick="abrirTelaTransicao()">
+                <div class="titulo">🎉 Novo passo disponível</div>
+                <div class="texto">Você completou 2 semanas e 10 registros. Quer dar um passo a mais?</div>
+                <button class="btn-ver">Ver o que muda</button>
+            </div>
+        `;
+    }
+
+    // ===== CARD DO PLANO DE RECUPERAÇÃO =====
+    let cardRecuperacao = '';
+    if (orc.nivel >= 3) {
+        const sinal = detectarSinalRecuperacao(orc);
+        if (sinal) {
+            let subRecuperacao = '';
+            if (sinal.s1 && sinal.s2) {
+                subRecuperacao = 'Saldo negativo e contas vencidas';
+            } else if (sinal.s1) {
+                subRecuperacao = 'Saldo negativo essa semana';
+            } else if (sinal.s2) {
+                subRecuperacao = `${sinal.contasVencidas.length} conta${sinal.contasVencidas.length > 1 ? 's' : ''} vencida${sinal.contasVencidas.length > 1 ? 's' : ''}`;
+            }
+
+            cardRecuperacao = `
+                <div class="card-nivel2" onclick="abrirPlanoRecuperacao()" style="border-color: #f59e0b; background: #fffbeb;">
+                    <span class="icone-grande">🧭</span>
+                    <div class="conteudo">
+                        <div class="titulo-card" style="color: #92400e;">Vamos olhar juntos</div>
+                        <div class="subtitulo-card" style="color: #92400e;">${subRecuperacao}</div>
+                    </div>
+                    <span class="seta" style="color: #92400e;">→</span>
+                </div>
+            `;
+        }
+    }
+
+    // ===== AJUSTES (chips) =====
+    // Só mostra chips do Nível 2+ se o nível permite
+    let chipsAjustes = '';
+    if (orc.nivel >= 2) {
+        chipsAjustes = `
+            <div class="secao-titulo">Ajustes</div>
+            <div class="chip-container" style="gap: 8px;">
+                <div class="chip" onclick="abrirDetalheRenda()">📈 Renda</div>
+                <div class="chip" onclick="abrirDetalheGastos('base')">🛡️ Base</div>
+                <div class="chip" onclick="abrirDetalheGastos('vida')">🌿 Vida</div>
+                <div class="chip" onclick="abrirDetalheDivida()">🔭 Dívida</div>
+                ${orc.nivel >= 3 ? `
+                    <div class="chip" onclick="abrirTelaCustodias()">🏦 Custódias</div>
+                    <div class="chip" onclick="abrirTelaMapaMes()">🗓️ Mapa</div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    // ===== BOTÃO DE SEMANAS PASSADAS =====
+    const btnHistorico = `
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+            <button onclick="renderizarHistoricoResumos(); goToScreen('screen-historico-resumos')" style="background: none; border: none; color: var(--secondary); font-size: 0.85rem; cursor: pointer; text-decoration: underline;">Semanas passadas</button>
+        </div>
+    `;
+
+    // ===== LIMITES DA SEMANA =====
+    const limiteBase = semana.base.limite;
+    const limiteVida = semana.vida.limite;
+    const limiteFuturo = semana.futuro.limite;
+
+    // ===== MONTAGEM FINAL =====
+    container.innerHTML = `
+        ${btnHistorico}
+        ${cardResumo}
+        ${cardTransicao}
+
+        <div style="margin-bottom: 20px;">
+            <span style="font-size: 0.8rem; font-weight: bold; color: var(--secondary); text-transform: uppercase;">Essa semana</span>
+            <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--primary);">${formatarData(semana.inicio)} a ${formatarData(semana.fim)}</h2>
+        </div>
+
+        ${renderizarCardSaldo(semana, orc)}
+        ${renderizarCaixinha('base', '🛡️ Base', semana.base.gasto, limiteBase)}
+        ${renderizarCaixinha('vida', '🌿 Vida', semana.vida.gasto, limiteVida)}
+        ${renderizarCaixinha('futuro', '🔭 Futuro', semana.futuro.gasto, limiteFuturo)}
+
+        ${cardRecuperacao}
+
+        ${chipsAjustes}
+    `;
+
+    // Botão flutuante
+    if (!document.getElementById('btn-flutuante-orcamento')) {
+        const btn = document.createElement('button');
+        btn.id = 'btn-flutuante-orcamento';
+        btn.className = 'btn-flutuante';
+        btn.innerText = '+';
+        btn.onclick = abrirModalRegistro;
+        document.body.appendChild(btn);
+    }
+}
+
+function traduzirTipoRenda(tipo) {
+    const mapa = {
+        constante: 'constante',
+        varia_pouco: 'varia pouco',
+        varia_muito: 'varia muito'
+    };
+    return mapa[tipo] || 'não definido';
+}
+
+function renderizarCaixinha(id, nome, gasto, limite) {
+    const limiteSeguro = (limite && limite > 0) ? limite : 0;
+    const percentual = limiteSeguro > 0 
+        ? Math.min((gasto / limiteSeguro) * 100, 100) 
+        : 0;
+
+    let cor = 'barra-verde';
+    let aviso = '';
+
+    if (limiteSeguro === 0) {
+        if (gasto > 0) {
+            cor = 'barra-vermelha';
+            aviso = '<div style="font-size: 0.75rem; color: #991b1b; margin-top: 6px;">Sem orçamento definido. Todo gasto aqui é acima do planejado.</div>';
+        }
+    } else {
+        if (percentual >= 100) cor = 'barra-vermelha';
+        else if (percentual >= 80) cor = 'barra-amarela';
+    }
+
+    return `
+        <div class="caixinha">
+            <div class="caixinha-header">
+                <span class="nome">${nome}</span>
+                <span class="valores">R$ ${gasto.toFixed(2).replace('.', ',')} / R$ ${limiteSeguro.toFixed(2).replace('.', ',')}</span>
+            </div>
+            <div class="barra-fundo">
+                <div class="barra-preenchida ${cor}" style="width: ${percentual}%"></div>
+            </div>
+            ${aviso}
+        </div>
+    `;
+}
+function renderizarCardSaldo(semana, orc, modo = 'em-andamento') {
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // Renda semanal: prioriza a da semana, com fallback pra renda mensal
+    const renda = (typeof semana.renda === 'number' && semana.renda > 0)
+        ? semana.renda
+        : (orc.base?.rendaBase || 0) / DIVISOR_SEMANAL;
+
+    // Total gasto
+    const totalGasto = (semana.base?.gasto || 0)
+                     + (semana.vida?.gasto || 0)
+                     + (semana.futuro?.gasto || 0);
+
+    // Saldo disponível
+    const saldo = renda - totalGasto;
+
+    // ===== LÓGICA DO Pote =====
+    // A barra representa o QUANTO AINDA TEM, não o quanto foi usado.
+    // percentualDisponivel = 100% quando não gastou nada, 0% quando gastou tudo.
+    const percentualDisponivel = renda > 0
+        ? Math.max(0, Math.min((saldo / renda) * 100, 100))
+        : 0;
+
+    // Percentual usado (para o rótulo lateral e para a lógica de cor)
+    const percentualUsado = renda > 0 ? Math.min((totalGasto / renda) * 100, 100) : 0;
+
+    // ===== CORES =====
+    // ATENÇÃO: a lógica de cor é INVERTIDA em relação à barra.
+    // Verde = muito disponível (>30% sobrando)
+    // Amarelo = atenção (10-30% sobrando)
+    // Vermelho = Pote quase vazio (<10% sobrando OU saldo negativo)
+    let corBarra, corBorda, iconeSaldo, falaSaldo, rotuloStatus;
+
+    if (saldo < 0) {
+        // Gastou mais do que entrou — Pote estourou
+        corBarra = 'barra-vermelha';
+        corBorda = '#ef4444';
+        iconeSaldo = '🌿';
+        rotuloStatus = 'Faltou';
+        falaSaldo = `Você gastou ${fmt(Math.abs(saldo))} mais do que entrou. Acontece. Semana que vem a gente ajusta.`;
+    } else if (percentualDisponivel < 10) {
+        // Pote quase vazio
+        corBarra = 'barra-vermelha';
+        corBorda = '#ef4444';
+        iconeSaldo = '🌿';
+        rotuloStatus = 'Disponível';
+        falaSaldo = `Sobrou pouco: ${fmt(saldo)}. Tá no fim do Pote. Foi por pouco.`;
+    } else if (percentualDisponivel < 30) {
+        // Pote na reserva
+        corBarra = 'barra-amarela';
+        corBorda = '#f59e0b';
+        iconeSaldo = '🌿';
+        rotuloStatus = 'Disponível';
+        falaSaldo = `Sobrou ${fmt(saldo)}. Ainda dá, mas o Pote tá na reserva.`;
+    } else {
+        // Pote tranquilo
+        corBarra = 'barra-verde';
+        corBorda = '#10b981';
+        iconeSaldo = '🛡️';
+        rotuloStatus = 'Disponível';
+        falaSaldo = `Sobrou ${fmt(saldo)}. O Pote tá tranquilo. Você usou ${percentualUsado.toFixed(0)}% do que entrou.`;
+    }
+
+    // Se não há renda cadastrada
+    if (renda <= 0) {
+        return `
+            <div class="card" style="border-left: 4px solid #94a3b8; margin-bottom: 20px; background: #f8fafc;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <strong style="color: var(--primary); font-size: 0.95rem;">💰 Saldo da semana</strong>
+                    <span style="font-size: 0.75rem; color: var(--secondary);">—</span>
+                </div>
+                <p style="font-size: 0.85rem; color: var(--secondary); margin-top: 8px; line-height: 1.4;">
+                    Cadastre sua renda para ver o saldo da semana.
+                </p>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="card" style="border-left: 4px solid ${corBorda}; margin-bottom: 20px; padding: 18px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <strong style="color: var(--primary); font-size: 0.95rem;">💰 Saldo da semana</strong>
+                <span style="font-size: 0.75rem; color: var(--secondary);">${percentualUsado.toFixed(0)}% usado</span>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
+                <span style="color: var(--secondary);">Entrou</span>
+                <strong style="color: #10b981;">+ ${fmt(renda)}</strong>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 10px;">
+                <span style="color: var(--secondary);">Saiu</span>
+                <strong style="color: #ef4444;">- ${fmt(totalGasto)}</strong>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-size: 1rem; padding-top: 10px; margin-top: 10px; border-top: 1px solid #e2e8f0;">
+                <span style="font-weight: bold; color: var(--primary);">${rotuloStatus}</span>
+                <strong style="color: ${saldo >= 0 ? '#10b981' : '#ef4444'};">${fmt(Math.abs(saldo))}</strong>
+            </div>
+
+            <!-- Pote DE COMBUSTÍVEL: barra começa cheia e esvazia -->
+            <div class="barra-fundo" style="margin-top: 10px;">
+                <div class="barra-preenchida ${corBarra}" style="width: ${percentualDisponivel}%; transition: width 0.4s ease, background 0.4s ease;"></div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--secondary); margin-top: 6px;">
+                <span>Pote: ${percentualDisponivel.toFixed(0)}% disponível</span>
+                <span>${percentualUsado.toFixed(0)}% usado</span>
+            </div>
+             ${renderizarBlocoProvisao(orc)}
+
+            <div class="fala-avatar" style="border-left-color: ${corBorda}; margin-top: 14px; margin-bottom: 0;">
+                <span class="icone">${iconeSaldo}</span>
+                <span class="texto">${falaSaldo}</span>
+            </div>
+        </div>
+    `;
+}
+function iniciarNovaSemana() {
+    const hoje = new Date();
+    const diaSemana = hoje.getDay();
+    const inicio = new Date(hoje);
+    inicio.setDate(hoje.getDate() - diaSemana);
+    const fim = new Date(inicio);
+    fim.setDate(inicio.getDate() + 6);
+
+    // Valores mensais
+    const rendaMensal = state.orcamento.base?.rendaBase || 0;
+    const baseMensal = (state.orcamento.base && state.orcamento.base.fortalezaTotal) || 0;
+    const vidaMensal = (state.orcamento.vida && state.orcamento.vida.total) || 0;
+    const futuroMensal = (state.orcamento.futuro && state.orcamento.futuro.total) || 0;
+
+    // Limites semanais
+    const limiteBase = baseMensal / DIVISOR_SEMANAL;
+    const limiteVida = vidaMensal / DIVISOR_SEMANAL;
+    const limiteFuturo = futuroMensal / DIVISOR_SEMANAL;
+    const rendaSemanal = rendaMensal / DIVISOR_SEMANAL;
+
+    state.orcamento.semanaAtual = {
+        inicio: inicio.toISOString().split('T')[0],
+        fim: fim.toISOString().split('T')[0],
+        renda: rendaSemanal,
+        base: { limite: limiteBase, gasto: 0, estouro: 0 },
+        vida: { limite: limiteVida, gasto: 0, estouro: 0 },
+        futuro: { limite: limiteFuturo, gasto: 0, estouro: 0 },
+        fechada: false,
+        resumoLido: false
+    };
+
+    salvarEstado();
+}
+
+function formatarData(dataStr) {
+    const [ano, mes, dia] = dataStr.split('-');
+    return `${dia}/${mes}`;
+}
+
+// ============================================================
+// MODAL DE REGISTRO (com passo de categoria no Nível 2)
+// ============================================================
+
+let registroTemporario = null;
+
+function abrirModalRegistro() {
+    const semana = state.orcamento && state.orcamento.semanaAtual;
+    if (semana && semana.fechada) {
+        alert("A semana já fechou. Vamos ver o resumo primeiro antes de registrar mais gastos.");
+        abrirResumoSemanal();
+        return;
+    }
+
+    registroTemporario = { valor: 0, caixa: null };
+
+    document.getElementById('modal-registro').classList.add('ativo');
+        document.getElementById('modal-registro-passo-1').style.display = 'block';
+    document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
+    document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
+    document.getElementById('modal-registro-passo-3').style.display = 'none';
+    
+document.getElementById('registro-valor').value = '';
+}
+
+function fecharModalRegistro() {
+    document.getElementById('modal-registro').classList.remove('ativo');
+    registroTemporario = null;
+}
+
+function registrarGasto(caixa) {
+    const valor = parseFloat(document.getElementById('registro-valor').value) || 0;
+    if (valor <= 0) {
+        alert("Por favor, insira um valor maior que zero.");
+        return;
+    }
+
+    registroTemporario.valor = valor;
+    registroTemporario.caixa = caixa;
+
+       // NÍVEL 3: se há custódias cadastradas, mostra o passo de custódia
+    const custodias = custodiasDisponiveisParaGasto();
+    if (state.orcamento.nivel >= 3 && custodias.length > 1) {
+        mostrarPassoCustodia();
+        return;
+    }
+
+    // Se só há uma custódia, usa ela automaticamente
+    if (state.orcamento.nivel >= 3 && custodias.length === 1) {
+        registroTemporario.custodiaId = custodias[0].id;
+        state.orcamento.custodiaPadrao = custodias[0].id;
+    }
+
+    // Se o nível >= 2 e existem categorias para essa caixa, pergunta a categoria
+    const categoriasDaCaixa = (state.orcamento.categorias || []).filter(c => c.caixa === caixa);
+
+    if (state.orcamento.nivel >= 2 && categoriasDaCaixa.length > 0) {
+        mostrarPassoCategoria(categoriasDaCaixa);
+    } else {
+        confirmarRegistro(null);
+    }
+}
+
+function mostrarPassoCategoria(categorias) {
+    document.getElementById('modal-registro-passo-1').style.display = 'none';
+    document.getElementById('modal-registro-passo-2-categoria').style.display = 'block';
+
+    const containerChips = document.getElementById('chips-categorias-registro');
+    containerChips.innerHTML = '';
+
+    categorias.forEach(cat => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.innerText = cat.nome;
+        chip.onclick = () => confirmarRegistro(cat.nome);
+        containerChips.appendChild(chip);
+    });
+}
+
+function pularCategoria() {
+    confirmarRegistro(null);
+}
+
+function confirmarRegistro(nomeCategoria) {
+ const valor = registroTemporario.valor; 
+ const caixa = registroTemporario.caixa; 
+ const semana = state.orcamento.semanaAtual; 
+ if (!semana || semana.fechada) { 
+ alert("A semana fechou. Vamos ver o resumo primeiro."); fecharModalRegistro(); 
+ abrirResumoSemanal(); 
+ return; 
+ }
+semana[caixa].gasto += valor;
+
+    // NÍVEL 3: se há custódia de origem, subtrai do saldo
+    if (state.orcamento.nivel >= 3 && registroTemporario.custodiaId) {
+        const custodia = state.orcamento.custodias.find(c => c.id === registroTemporario.custodiaId);
+        if (custodia && !TIPOS_CUSTODIA[custodia.tipo].temFatura) {
+            custodia.saldoAtual = (custodia.saldoAtual || 0) - valor;
+        }
+    }
+
+    const percentual = (semana[caixa].gasto / semana[caixa].limite) * 100;
+    let fala = '';
+    let icone = '';
+
+    if (caixa === 'base') {
+        icone = '🛡️';
+        if (percentual >= 100) fala = "Sua base passou do planejado. Isso não é erro seu. Vamos ver juntos no fim da semana.";
+        else if (percentual >= 80) fala = "A base tá em 80% do que você planejou. Ainda cabe, mas tá chegando.";
+        else fala = "Base registrada. Isso é sagrado.";
+    } else if (caixa === 'vida') {
+        icone = '🌿';
+        if (percentual >= 100) fala = "A Vida passou do que você tinha planejado. Acontece. Vou guardar isso pra gente ver no fim da semana.";
+        else if (percentual >= 80) fala = "A Vida tá em 80% do que você planejou. Ainda cabe, mas tá chegando.";
+        else fala = "Anotado. Sem culpa. Só consciência.";
+    } else if (caixa === 'futuro') {
+        icone = '🔭';
+        fala = "Mais um tijolo. Olha a parede crescendo.";
+    }
+
+       if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+    state.orcamento.historicoRegistros.push({
+        id: 'reg_' + Date.now(),
+        data: new Date().toISOString(),
+        tipo: 'gasto_direto',
+        caixa: caixa,
+        categoria: nomeCategoria || null,
+        valor: valor,
+        custodiaId: registroTemporario.custodiaId || null,
+        cartaoId: null,
+        saldoAtualizado: !!registroTemporario.custodiaId
+    });
+
+    // Verifica se o gatilho do Nível 2 foi atingido
+    verificarGatilhoNivel2();
+
+    salvarEstado();
+
+    document.getElementById('modal-registro-passo-1').style.display = 'none';
+    document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
+    document.getElementById('modal-registro-passo-3').style.display = 'block';
+    document.getElementById('modal-registro-fala').innerHTML = `
+        <span class="icone">${icone}</span>
+        <span class="texto">${fala}</span>
+    `;
+
+    renderizarOrcamentoInicio();
+}
+
+// ============================================================
+// GATILHO E TRANSIÇÃO DE NÍVEL
+// ============================================================
+
+function verificarGatilhoNivel2() {
+    const orc = state.orcamento;
+    if (orc.nivel >= 2) return;
+    if (orc.transicaoNivelPendente === 2) return;
+
+    const registros = (orc.historicoRegistros || []).length;
+    const semanasFechadas = orc.semanasFechadas || 0;
+
+    if (registros >= REGISTROS_PARA_NIVEL2 && semanasFechadas >= SEMANAS_PARA_NIVEL2) {
+        orc.transicaoNivelPendente = 2;
+        salvarEstado();
+        console.log('[NÍVEL 2] Gatilho atingido. Transição pendente.');
+    }
+}
+
+function abrirTelaTransicao() {
+    goToScreen('screen-transicao-nivel');
+    const container = document.getElementById('transicao-nivel-conteudo');
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">Já faz duas semanas que a gente tá junto. Você registrou seus gastos e fechou suas contas. Quer dar um passo a mais?</span>
+        </div>
+
+        <div class="card" style="border-left: 4px solid #10b981;">
+            <strong style="color: #065f46; display: block; margin-bottom: 10px;">O que muda no próximo passo:</strong>
+            <ul style="font-size: 0.9rem; color: var(--secondary); margin-left: 20px; line-height: 1.6;">
+                <li>Você detalha sua renda (origem, frequência)</li>
+                <li>Separa seus gastos fixos dos variáveis</li>
+                <li>Monta um plano para a dívida e uma reserva</li>
+            </ul>
+        </div>
+
+        <div class="card" style="background: #f0f9ff; border-color: #bae6fd;">
+            <p style="font-size: 0.85rem; color: #0369a1; line-height: 1.5;">
+                💡 Nada do que você já faz hoje vai sumir. As caixinhas e o diário continuam aqui. A gente só adiciona uma camada por cima.
+            </p>
+        </div>
+
+        <button class="btn-primary" style="background: #10b981;" onclick="aceitarNivel2()">Quero dar o próximo passo</button>
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="adiarNivel2()">
+            Ainda não, deixa como tá
+        </button>
+    `;
+}
+
+function aceitarNivel2() {
+    state.orcamento.nivel = 2;
+    state.orcamento.transicaoNivelPendente = null;
+    salvarEstado();
+    console.log('[NÍVEL 2] Aceito. Nível agora é 2.');
+    renderizarOrcamentoInicio();
+    goToScreen('screen-orcamento-inicio');
+}
+
+function adiarNivel2() {
+    state.orcamento.transicaoNivelPendente = null;
+    salvarEstado();
+    console.log('[NÍVEL 2] Adiado pelo usuário.');
+    renderizarOrcamentoInicio();
+    goToScreen('screen-orcamento-inicio');
+}
+
+// ============================================================
+// SEÇÃO 1: SUA RENDA
+// ============================================================
+
+function abrirDetalheRenda() {
+    goToScreen('screen-renda-detalhe');
+    renderizarDetalheRenda();
+}
+
+function renderizarDetalheRenda() {
+    const container = document.getElementById('renda-detalhe-conteudo');
+    const renda = state.orcamento.rendaDetalhe;
+    const valorBase = state.orcamento.base?.rendaBase || 0;
+
+    // Se ainda não detalhou: fluxo conversacional
+    if (!renda || !renda.fontes || renda.fontes.length === 0) {
+        container.innerHTML = `
+            <div class="fala-avatar">
+                <span class="icone">🌿</span>
+                <span class="texto">No Nível 1, você me disse que ganha <strong>R$ ${valorBase.toFixed(2).replace('.', ',')}</strong>. Agora vamos detalhar de onde vem cada parte.</span>
+            </div>
+            <div class="secao-titulo">De onde vem?</div>
+            <button class="btn-option" onclick="responderOrigemRenda('salario')">💼 Salário fixo</button>
+            <button class="btn-option" onclick="responderOrigemRenda('autonomo')">🛠️ Trabalho autônomo</button>
+            <button class="btn-option" onclick="responderOrigemRenda('misto')">🎨 Um pouco de cada</button>
+        `;
+        return;
+    }
+
+    // Se já detalhou: mostra lista de fontes + adicionar
+    const fontes = renda.fontes || [];
+    const totalFontes = fontes.reduce((s, f) => s + (f.valor || 0), 0);
+    const diferenca = valorBase - totalFontes;
+
+    let htmlFontes = '';
+    fontes.forEach(f => {
+        htmlFontes += `
+            <div class="categoria-item">
+                <div>
+                    <div class="nome-cat">${f.nome}</div>
+                    <div class="meta-cat">${traduzirOrigem(f.origem)} · ${traduzirFrequencia(f.frequencia)}</div>
+                </div>
+                <div style="display: flex; align-items: center;">
+                    <span class="valor-cat">R$ ${(f.valor || 0).toFixed(2).replace('.', ',')}</span>
+                    <button class="btn-remover" onclick="removerFonteRenda('${f.id}')">&times;</button>
+                </div>
+            </div>
+        `;
+    });
+
+    // Aviso se a soma das fontes difere da renda base
+    let avisoDiferenca = '';
+    if (Math.abs(diferenca) > 0.01) {
+        if (diferenca > 0) {
+            avisoDiferenca = `
+                <div style="background: #fef3c7; border-left: 3px solid #f59e0b; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 0.85rem; color: #92400e; margin-bottom: 15px; line-height: 1.4;">
+                    ⚠️ Suas fontes somam <strong>R$ ${totalFontes.toFixed(2).replace('.', ',')}</strong>, mas sua renda base é <strong>R$ ${valorBase.toFixed(2).replace('.', ',')}</strong>. Diferença de <strong>R$ ${Math.abs(diferenca).toFixed(2).replace('.', ',')}</strong>.
+                </div>
+            `;
+        } else {
+            avisoDiferenca = `
+                <div style="background: #fef3c7; border-left: 3px solid #f59e0b; padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 0.85rem; color: #92400e; margin-bottom: 15px; line-height: 1.4;">
+                    ⚠️ Suas fontes somam <strong>R$ ${totalFontes.toFixed(2).replace('.', ',')}</strong>, mais que sua renda base (<strong>R$ ${valorBase.toFixed(2).replace('.', ',')}</strong>). Diferença de <strong>R$ ${Math.abs(diferenca).toFixed(2).replace('.', ',')}</strong>.
+                </div>
+            `;
+        }
+    }
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">Suas fontes de renda. Se mudar algo, é só avisar.</span>
+        </div>
+
+        ${avisoDiferenca}
+        ${htmlFontes}
+
+        <div class="totalizador">
+            Total das fontes: <strong>R$ ${totalFontes.toFixed(2).replace('.', ',')}</strong>
+        </div>
+
+        <button class="btn-primary" style="margin-top: 20px; background: var(--accent);" onclick="abrirFormularioFonteRenda()">
+            + Adicionar fonte de renda
+        </button>
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="refazerDetalheRenda()">
+            Refazer do zero
+        </button>
+    `;
+}
+
+function traduzirOrigem(origem) {
+    return { salario: 'Salário fixo', autonomo: 'Trabalho autônomo', misto: 'Um pouco de cada' }[origem] || '—';
+}
+
+function traduzirFrequencia(freq) {
+    return {
+        mensal: 'Todo mês, mesmo dia',
+        quinzenal: 'Duas vezes por mês',
+        semanal: 'Toda semana',
+        imprevisivel: 'Varia muito'
+    }[freq] || '—';
+}
+
+function responderOrigemRenda(origem) {
+    if (!state.orcamento.rendaDetalhe) state.orcamento.rendaDetalhe = { fontes: [] };
+    if (!state.orcamento.rendaDetalhe.fontes) state.orcamento.rendaDetalhe.fontes = [];
+
+    // Verifica se já existe uma fonte genérica
+    const temGenerica = state.orcamento.rendaDetalhe.fontes.length === 0;
+
+    const container = document.getElementById('renda-detalhe-conteudo');
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">Qual é o nome dessa fonte? (ex: Salário, Bico, Aluguel)</span>
+        </div>
+        <input type="text" id="fonte-nome" class="input-padrao" placeholder="Ex: Salário">
+
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">Quanto por mês?</span>
+        </div>
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="number" id="fonte-valor" class="input-padrao" placeholder="0.00">
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">E cai sempre no mesmo dia ou vem espalhado pelo mês?</span>
+        </div>
+        <div class="chip-container" id="chips-frequencia">
+            <div class="chip" onclick="responderFrequenciaRenda(this, 'mensal')">Todo mês, mesmo dia</div>
+            <div class="chip" onclick="responderFrequenciaRenda(this, 'quinzenal')">Duas vezes por mês</div>
+            <div class="chip" onclick="responderFrequenciaRenda(this, 'semanal')">Toda semana</div>
+            <div class="chip" onclick="responderFrequenciaRenda(this, 'imprevisivel')">Varia muito</div>
+        </div>
+
+        <button class="btn-primary" onclick="salvarFonteRenda('${origem}', ${temGenerica})">Salvar fonte</button>
+    `;
+}
+
+let frequenciaRendaSelecionada = null;
+
+function responderFrequenciaRenda(el, freq) {
+    document.querySelectorAll('#chips-frequencia .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    frequenciaRendaSelecionada = freq;
+}
+function salvarFonteRenda(origem, temGenerica) {
+    const nome = document.getElementById('fonte-nome').value.trim();
+    const valor = parseFloat(document.getElementById('fonte-valor').value) || 0;
+
+    if (nome === '') { alert("Diga o nome da fonte."); return; }
+    if (valor <= 0) { alert("Insira um valor maior que zero."); return; }
+    if (!frequenciaRendaSelecionada) { alert("Escolha como a renda cai."); return; }
+
+    if (!state.orcamento.rendaDetalhe) state.orcamento.rendaDetalhe = { fontes: [] };
+    if (!state.orcamento.rendaDetalhe.fontes) state.orcamento.rendaDetalhe.fontes = [];
+
+    // Se é a primeira fonte, pergunta se quer usar esse valor como renda base
+    if (temGenerica && state.orcamento.base?.rendaBase) {
+        const rendaBaseAtual = state.orcamento.base.rendaBase;
+        const atualizar = confirm(
+            `Sua renda base hoje é R$ ${rendaBaseAtual.toFixed(2).replace('.', ',')}. ` +
+            `Quer usar R$ ${valor.toFixed(2).replace('.', ',')} como nova base?`
+        );
+        if (atualizar) {
+            state.orcamento.base.rendaBase = valor;
+            // Recalcula o limite da semana
+            if (state.orcamento.semanaAtual) {
+                const fortaleza = state.orcamento.base?.fortalezaTotal || 1800;
+                const vida = state.orcamento.vida?.total || 700;
+                const futuro = Math.max(valor - fortaleza - vida, 0);
+                state.orcamento.semanaAtual.futuro.limite = futuro / DIVISOR_SEMANAL;
+            }
+        }
+    }
+
+    state.orcamento.rendaDetalhe.fontes.push({
+        id: 'fonte_' + Date.now(),
+        nome: nome,
+        valor: valor,
+        origem: origem,
+        frequencia: frequenciaRendaSelecionada
+    });
+
+    frequenciaRendaSelecionada = null;
+    salvarEstado();
+    console.log('[NÍVEL 2] Fonte de renda salva:', nome);
+    renderizarDetalheRenda();
+}
+function removerFonteRenda(id) {
+    const confirmar = confirm("Remover esta fonte de renda?");
+    if (!confirmar) return;
+
+    state.orcamento.rendaDetalhe.fontes = (state.orcamento.rendaDetalhe.fontes || []).filter(f => f.id !== id);
+    salvarEstado();
+    renderizarDetalheRenda();
+}
+function abrirFormularioFonteRenda() {
+    const container = document.getElementById('renda-detalhe-conteudo');
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">De onde vem essa nova fonte?</span>
+        </div>
+        <button class="btn-option" onclick="responderOrigemRenda('salario')">💼 Salário fixo</button>
+        <button class="btn-option" onclick="responderOrigemRenda('autonomo')">🛠️ Trabalho autônomo</button>
+        <button class="btn-option" onclick="responderOrigemRenda('misto')">🎨 Um pouco de cada</button>
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary);" onclick="renderizarDetalheRenda()">
+            Cancelar
+        </button>
+    `;
+}
+
+function refazerDetalheRenda() {
+    state.orcamento.rendaDetalhe = null;
+    salvarEstado();
+    renderizarDetalheRenda();
+}
+
+// ============================================================
+// SEÇÃO 2: SEUS GASTOS (Base e Vida)
+// ============================================================
+
+let caixaGastosAtiva = 'base'; // 'base' ou 'vida'
+
+function abrirDetalheGastos(caixa) {
+    caixaGastosAtiva = caixa || 'base';
+    goToScreen('screen-gastos-detalhe');
+    renderizarDetalheGastos();
+}
+
+function renderizarDetalheGastos() {
+    const container = document.getElementById('gastos-detalhe-conteudo');
+    const caixa = caixaGastosAtiva;
+    const categorias = (state.orcamento.categorias || []).filter(c => c.caixa === caixa);
+
+    // Total mensal da caixa
+    const totalMensal = caixa === 'base'
+        ? (state.orcamento.base?.fortalezaTotal || 0)
+        : (state.orcamento.vida?.total || 0);
+
+    const totalCadastrado = categorias.reduce((s, c) => s + (c.valor || 0), 0);
+    const falta = Math.max(totalMensal - totalCadastrado, 0);
+
+    // Avatar e cor condutores
+    const avatar = caixa === 'base'
+        ? { icone: '🛡️', fala: 'Isso é o que sempre volta. Me ajuda a separar?', cor: '#e65100' }
+        : { icone: '🌿', fala: 'Vamos ver para onde vai o que te dá prazer?', cor: '#0ea5e9' };
+
+    let htmlCategorias = '';
+    if (categorias.length === 0) {
+        htmlCategorias = `
+            <div class="placeholder-info">
+                Você ainda não cadastrou nenhuma categoria. Toque abaixo para começar.
+            </div>
+        `;
+    } else {
+        categorias.forEach(cat => {
+            htmlCategorias += `
+                <div class="categoria-item">
+                    <div>
+                        <div class="nome-cat">${cat.nome}</div>
+                        <div class="meta-cat">${cat.tipo}${cat.vencimento ? ' · vence dia ' + cat.vencimento : ''}</div>
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        <span class="valor-cat">R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')}</span>
+                        <button class="btn-remover" onclick="removerCategoria('${cat.id}')">&times;</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    container.innerHTML = `
+        <div class="fala-avatar" style="border-left-color: ${avatar.cor};">
+            <span class="icone">${avatar.icone}</span>
+            <span class="texto">${avatar.fala}</span>
+        </div>
+
+        ${htmlCategorias}
+
+        <div class="totalizador">
+            Total: <strong>R$ ${totalCadastrado.toFixed(2).replace('.', ',')}</strong> de R$ ${totalMensal.toFixed(2).replace('.', ',')}
+            ${falta > 0 ? `<br><span style="font-size: 0.8rem;">Falta detalhar R$ ${falta.toFixed(2).replace('.', ',')}</span>` : '<br><span style="font-size: 0.8rem;">✓ Tudo detalhado</span>'}
+        </div>
+
+        <button class="btn-primary" style="margin-top: 20px; background: var(--accent);" onclick="abrirFormularioCategoria()">
+            + Adicionar categoria
+        </button>
+    `;
+}
+
+function abrirFormularioCategoria() {
+    const container = document.getElementById('gastos-detalhe-conteudo');
+    const caixa = caixaGastosAtiva;
+    const avatar = caixa === 'base' ? '🛡️' : '🌿';
+
+    // Chips sugeridos por caixa
+    const chipsBase = [
+        '🏠 Aluguel', '💡 Água e luz', '🛒 Mercado', '🚌 Transporte',
+        '💊 Remédio', '📱 Internet', '🔥 Gás', '🏢 Condomínio'
+    ];
+    const chipsVida = [
+        '📺 Streaming', '🍔 iFood', '🎉 Saídas', '🛍️ Compras',
+        '🚗 App de carro', '☕ Cafezinho', '🍺 Bar', '🎮 Lazer'
+    ];
+
+    const chips = caixa === 'base' ? chipsBase : chipsVida;
+
+    let htmlChips = '';
+    chips.forEach(c => {
+        htmlChips += `<div class="chip" onclick="preencherNomeCategoria(this)">${c}</div>`;
+    });
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">${avatar}</span>
+            <span class="texto">Qual é o gasto?</span>
+        </div>
+
+        <input type="text" id="nova-cat-nome" class="input-padrao" placeholder="Ex: Aluguel, Luz, Mercado">
+
+        <div class="chip-container">
+            ${htmlChips}
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">${avatar}</span>
+            <span class="texto">Quanto por mês?</span>
+        </div>
+
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="number" id="nova-cat-valor" class="input-padrao" placeholder="0.00">
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">${avatar}</span>
+            <span class="texto">Esse valor é sempre igual ou muda?</span>
+        </div>
+
+        <div class="chip-container" id="chips-tipo-cat">
+            <div class="chip" onclick="selecionarTipoCategoria(this, 'fixo')">Fixo</div>
+            <div class="chip" onclick="selecionarTipoCategoria(this, 'variavel')">Varia</div>
+        </div>
+
+        <div id="bloco-vencimento" style="display: none;">
+            <div class="fala-avatar">
+                <span class="icone">${avatar}</span>
+                <span class="texto">Vence em qual dia do mês?</span>
+            </div>
+            <input type="number" id="nova-cat-vencimento" class="input-padrao" placeholder="Ex: 5" min="1" max="31">
+        </div>
+
+        <button class="btn-primary" onclick="salvarCategoria()">Salvar categoria</button>
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="renderizarDetalheGastos()">
+            Cancelar
+        </button>
+    `;
+}
+
+function preencherNomeCategoria(el) {
+    const nome = el.textContent.trim();
+    // Remove o emoji do começo
+    const semEmoji = nome.replace(/^[^\w]+\s*/, '');
+    document.getElementById('nova-cat-nome').value = semEmoji;
+}
+let tipoCategoriaSelecionado = null;
+
+function selecionarTipoCategoria(el, tipo) {
+    document.querySelectorAll('#chips-tipo-cat .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    tipoCategoriaSelecionado = tipo;
+
+    const blocoVencimento = document.getElementById('bloco-vencimento');
+    blocoVencimento.style.display = 'block';
+}
+
+function salvarCategoria() {
+    const nome = document.getElementById('nova-cat-nome').value.trim();
+    const valor = parseFloat(document.getElementById('nova-cat-valor').value) || 0;
+    const vencimento = parseInt(document.getElementById('nova-cat-vencimento').value) || null;
+    const caixa = caixaGastosAtiva;
+
+    if (nome === '') { alert("Diga o nome do gasto."); return; }
+    if (valor <= 0) { alert("Insira um valor maior que zero."); return; }
+    if (!tipoCategoriaSelecionado) { alert("Escolha se é fixo ou varia."); return; }
+
+    const categoriasExistentes = (state.orcamento.categorias || []).filter(c => c.caixa === caixa);
+
+    // Total mensal atual da caixa (antes de adicionar)
+    const totalMensalAtual = caixa === 'base'
+        ? (state.orcamento.base?.fortalezaTotal || 0)
+        : (state.orcamento.vida?.total || 0);
+
+    // Se é a primeira categoria da caixa, pergunta se quer substituir o valor genérico
+    if (categoriasExistentes.length === 0 && totalMensalAtual > 0) {
+        const atualizar = confirm(
+            `Você tinha um valor genérico de R$ ${totalMensalAtual.toFixed(2).replace('.', ',')} para esta caixa. ` +
+            `Quer substituir por esta categoria detalhada?`
+        );
+        if (atualizar) {
+            if (caixa === 'base') {
+                state.orcamento.base.fortalezaTotal = valor;
+                if (state.orcamento.semanaAtual) {
+                    state.orcamento.semanaAtual.base.limite = valor / DIVISOR_SEMANAL;
+                }
+            } else {
+                state.orcamento.vida.total = valor;
+                if (state.orcamento.semanaAtual) {
+                    state.orcamento.semanaAtual.vida.limite = valor / DIVISOR_SEMANAL;
+                }
+            }
+        }
+    } else if (categoriasExistentes.length > 0) {
+        // Soma o novo valor ao total da caixa
+        if (caixa === 'base') {
+            state.orcamento.base.fortalezaTotal = (state.orcamento.base.fortalezaTotal || 0) + valor;
+            if (state.orcamento.semanaAtual) {
+                state.orcamento.semanaAtual.base.limite = state.orcamento.base.fortalezaTotal / DIVISOR_SEMANAL;
+            }
+        } else {
+            state.orcamento.vida.total = (state.orcamento.vida.total || 0) + valor;
+            if (state.orcamento.semanaAtual) {
+                state.orcamento.semanaAtual.vida.limite = state.orcamento.vida.total / DIVISOR_SEMANAL;
+            }
+        }
+    }
+
+    if (!state.orcamento.categorias) state.orcamento.categorias = [];
+    state.orcamento.categorias.push({
+        id: 'cat_' + Date.now(),
+        nome: nome,
+        valor: valor,
+        tipo: tipoCategoriaSelecionado,
+        vencimento: vencimento,
+        caixa: caixa
+    });
+
+    tipoCategoriaSelecionado = null;
+    salvarEstado();
+    console.log('[NÍVEL 2] Categoria salva:', nome, '| Caixa:', caixa);
+    renderizarDetalheGastos();
+}
+
+
+function removerCategoria(id) {
+    const confirmar = confirm("Remover esta categoria?");
+    if (!confirmar) return;
+
+    const categoria = (state.orcamento.categorias || []).find(c => c.id === id);
+    if (!categoria) return;
+
+    const caixa = categoria.caixa || 'base';
+    const valor = categoria.valor || 0;
+
+    // Subtrai o valor do total da caixa
+    if (caixa === 'base') {
+        state.orcamento.base.fortalezaTotal = Math.max(
+            (state.orcamento.base.fortalezaTotal || 0) - valor,
+            0
+        );
+        if (state.orcamento.semanaAtual) {
+            state.orcamento.semanaAtual.base.limite = state.orcamento.base.fortalezaTotal / DIVISOR_SEMANAL;
+        }
+    } else {
+        state.orcamento.vida.total = Math.max(
+            (state.orcamento.vida.total || 0) - valor,
+            0
+        );
+        if (state.orcamento.semanaAtual) {
+            state.orcamento.semanaAtual.vida.limite = state.orcamento.vida.total / DIVISOR_SEMANAL;
+        }
+    }
+
+    state.orcamento.categorias = (state.orcamento.categorias || []).filter(c => c.id !== id);
+    salvarEstado();
+    renderizarDetalheGastos();
+}
+
+// ============================================================
+// SEÇÃO 3: SUA DÍVIDA E RESERVA
+// ============================================================
+
+function abrirDetalheDivida() {
+    goToScreen('screen-divida-detalhe');
+    renderizarDetalheDivida();
+}
+
+function renderizarDetalheDivida() {
+    const container = document.getElementById('divida-detalhe-conteudo');
+    const divida = state.orcamento.dividaReserva;
+    const credores = [
+        { id: 'cred_1', nome: 'Cartão X', valorTotal: 1500 },
+        { id: 'cred_2', nome: 'Banco Y', valorTotal: 3200 }
+    ];
+
+    // Se ainda não montou: fluxo conversacional
+    if (!divida || !divida.alvoNome) {
+        let listaCredores = '';
+        credores.forEach((c, i) => {
+            listaCredores += `
+                <button class="btn-option" onclick="responderAlvoDivida(${i})">
+                    <span>🎯 ${c.nome}</span>
+                    <span style="margin-left: auto; font-size: 0.8rem; color: var(--secondary);">R$ ${c.valorTotal.toFixed(2).replace('.', ',')}</span>
+                </button>
+            `;
+        });
+
+        container.innerHTML = `
+            <div class="fala-avatar">
+                <span class="icone">🔭</span>
+                <span class="texto">Primeiro, qual dívida te tira o sono?</span>
+            </div>
+            ${listaCredores}
+        `;
+        return;
+    }
+
+    // Se já montou: resumo + reserva
+    const reservaAtual = divida.reservaAtual || 0;
+    const reservaMeta = divida.reservaMeta || 0;
+    const percentualReserva = reservaMeta > 0 ? Math.min((reservaAtual / reservaMeta) * 100, 100) : 0;
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🔭</span>
+            <span class="texto">Já sei qual é o alvo e qual é a sua reserva. Vamos ver como tá indo.</span>
+        </div>
+
+        <div class="card" style="border-left: 4px solid #0ea5e9;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.9rem;">
+                <span style="color: var(--secondary);">🎯 Alvo</span>
+                <strong style="color: var(--primary);">${divida.alvoNome}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.9rem;">
+                <span style="color: var(--secondary);">Valor</span>
+                <strong style="color: var(--primary);">R$ ${(divida.alvoValor || 0).toFixed(2).replace('.', ',')}</strong>
+            </div>
+        </div>
+
+        <div class="card" style="background: #f0fdf4; border-color: #86efac;">
+            <strong style="color: #065f46; display: block; margin-bottom: 10px; font-size: 0.9rem;">💰 Reserva de emergência</strong>
+            <div class="caixinha-header" style="margin-bottom: 8px;">
+                <span class="nome" style="color: #065f46;">Acumulado</span>
+                <span class="valores" style="color: #065f46;">R$ ${reservaAtual.toFixed(2).replace('.', ',')} / R$ ${reservaMeta.toFixed(2).replace('.', ',')}</span>
+            </div>
+            <div class="barra-fundo">
+                <div class="barra-preenchida barra-verde" style="width: ${percentualReserva}%"></div>
+            </div>
+            <button class="btn-sm" style="background: #10b981; color: white; margin-top: 12px; width: 100%;" onclick="contribuirReserva()">
+                + Guardar na reserva
+            </button>
+        </div>
+
+        <button class="btn-option" style="justify-content: center; border-color: var(--accent); color: var(--accent);" onclick="refazerDetalheDivida()">
+            Editar plano
+        </button>
+    `;
+}
+
+function responderAlvoDivida(index) {
+    const credores = [
+        { nome: 'Cartão X', valorTotal: 1500 },
+        { nome: 'Banco Y', valorTotal: 3200 }
+    ];
+
+    if (!state.orcamento.dividaReserva) state.orcamento.dividaReserva = {};
+    state.orcamento.dividaReserva.alvoIndex = index;
+    state.orcamento.dividaReserva.alvoNome = credores[index].nome;
+    state.orcamento.dividaReserva.alvoValor = credores[index].valorTotal;
+
+    const container = document.getElementById('divida-detalhe-conteudo');
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🔭</span>
+            <span class="texto">E se algo der errado? Quanto você queria ter guardado?</span>
+        </div>
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="number" id="reserva-meta-input" class="input-padrao" placeholder="0.00">
+        </div>
+        <button class="btn-primary" onclick="salvarReservaMeta()">Salvar</button>
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="pularReserva()">
+            Agora não, deixa pra depois
+        </button>
+    `;
+}
+
+function salvarReservaMeta() {
+    const meta = parseFloat(document.getElementById('reserva-meta-input').value) || 0;
+
+    if (!state.orcamento.dividaReserva) state.orcamento.dividaReserva = {};
+
+    // Se já havia uma meta genérica, pergunta se quer atualizar
+    if (state.orcamento.dividaReserva.reservaMeta && state.orcamento.dividaReserva.reservaMeta !== meta) {
+        const atualizar = confirm(
+            `Você tinha uma meta de reserva de R$ ${state.orcamento.dividaReserva.reservaMeta.toFixed(2).replace('.', ',')}. ` +
+            `Quer substituir por R$ ${meta.toFixed(2).replace('.', ',')}?`
+        );
+        if (!atualizar) return;
+    }
+
+    state.orcamento.dividaReserva.reservaMeta = meta;
+    state.orcamento.dividaReserva.reservaAtual = state.orcamento.dividaReserva.reservaAtual || 0;
+    if (!state.orcamento.dividaReserva.contribuicoes) state.orcamento.dividaReserva.contribuicoes = [];
+
+    salvarEstado();
+    console.log('[NÍVEL 2] Reserva definida:', meta);
+    renderizarDetalheDivida();
+}
+
+function pularReserva() {
+    if (!state.orcamento.dividaReserva) state.orcamento.dividaReserva = {};
+    state.orcamento.dividaReserva.reservaMeta = 0;
+    state.orcamento.dividaReserva.reservaAtual = 0;
+
+    salvarEstado();
+    renderizarDetalheDivida();
+}
+
+function contribuirReserva() {
+    const valorStr = prompt("Quanto você quer guardar agora? (R$)");
+    if (!valorStr) return;
+    const valor = parseFloat(valorStr) || 0;
+    if (valor <= 0) { alert("Insira um valor maior que zero."); return; }
+
+    if (!state.orcamento.dividaReserva) return;
+    state.orcamento.dividaReserva.reservaAtual = (state.orcamento.dividaReserva.reservaAtual || 0) + valor;
+    if (!state.orcamento.dividaReserva.contribuicoes) state.orcamento.dividaReserva.contribuicoes = [];
+    state.orcamento.dividaReserva.contribuicoes.push({
+        data: new Date().toISOString(),
+        valor: valor
+    });
+
+    salvarEstado();
+    renderizarDetalheDivida();
+}
+
+function refazerDetalheDivida() {
+    // Limpa apenas o alvo, mantém a reserva
+    if (state.orcamento.dividaReserva) {
+        state.orcamento.dividaReserva.alvoIndex = null;
+        state.orcamento.dividaReserva.alvoNome = null;
+        state.orcamento.dividaReserva.alvoValor = null;
+    }
+    salvarEstado();
+    renderizarDetalheDivida();
+}
+
+// ============================================================
+// FECHAMENTO DE SEMANA E RESUMO
+// ============================================================
+
+function verificarFechamentoSemana() {
+    if (!state.orcamento || !state.orcamento.semanaAtual) return;
+    const semana = state.orcamento.semanaAtual;
+    if (semana.fechada) return;
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const fim = new Date(semana.fim + 'T23:59:59-03:00');
+
+    if (hoje > fim) {
+        fecharSemana();
+    }
+}
+
+function fecharSemana() {
+    const semana = state.orcamento.semanaAtual;
+
+    semana.base.estouro = Math.max(0, semana.base.gasto - semana.base.limite);
+    semana.vida.estouro = Math.max(0, semana.vida.gasto - semana.vida.limite);
+    semana.futuro.aceleracao = Math.max(0, semana.futuro.gasto - semana.futuro.limite);
+
+    // Saldo da semana = renda − (base + vida + futuro)
+    const totalGasto = semana.base.gasto + semana.vida.gasto + semana.futuro.gasto;
+    semana.totalGasto = totalGasto;
+    semana.saldo = semana.renda - totalGasto;
+
+    semana.fechada = true;
+    semana.resumoLido = false;
+
+    if (!state.orcamento.resumos) state.orcamento.resumos = [];
+    state.orcamento.resumos.unshift({
+        inicio: semana.inicio,
+        fim: semana.fim,
+        renda: semana.renda,
+        totalGasto: semana.totalGasto,
+        saldo: semana.saldo,
+        base: { ...semana.base },
+        vida: { ...semana.vida },
+        futuro: { ...semana.futuro }
+    });
+
+    state.orcamento.semanasFechadas = (state.orcamento.semanasFechadas || 0) + 1;
+
+    verificarGatilhoNivel2();
+    salvarEstado();
+}
+
+function abrirResumoSemanal() {
+    goToScreen('screen-resumo-semanal');
+    const container = document.getElementById('resumo-semanal-conteudo');
+    const semana = state.orcamento.semanaAtual;
+
+    if (!semana) {
+        container.innerHTML = `
+            <div class="card" style="text-align: center; padding: 40px 20px;">
+                <p style="color: var(--secondary); font-size: 0.95rem;">Ainda não temos uma semana para mostrar. Comece registrando um gasto.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const baseEstouro = semana.base?.estouro || 0;
+    const vidaEstouro = semana.vida?.estouro || 0;
+    const futuroAceleracao = semana.futuro?.aceleracao || 0;
+
+    // Saldo da semana
+    // Garante que renda exista (fallback: calcula da renda mensal)
+const renda = (typeof semana.renda === 'number' && semana.renda > 0)
+    ? semana.renda
+    : (state.orcamento.base?.rendaBase || 0) / DIVISOR_SEMANAL;
+
+// Total gasto (sempre calcula do zero para garantir consistência)
+const totalGasto = (semana.base?.gasto || 0) + (semana.vida?.gasto || 0) + (semana.futuro?.gasto || 0);
+
+// Saldo
+const saldo = renda - totalGasto;
+    const percentualUsado = renda > 0 ? Math.min((totalGasto / renda) * 100, 100) : 0;
+
+    // Cor e fala do saldo
+    let corSaldo = 'barra-verde';
+    let falaSaldo = '';
+    let iconeSaldo = '';
+
+    if (saldo >= 0) {
+        if (percentualUsado < 70) {
+            corSaldo = 'barra-verde';
+            iconeSaldo = '🛡️';
+            falaSaldo = `Sobrou ${fmt(saldo)}. Você usou ${percentualUsado.toFixed(0)}% do que entrou. A base tá firme.`;
+        } else if (percentualUsado < 90) {
+            corSaldo = 'barra-amarela';
+            iconeSaldo = '🌿';
+            falaSaldo = `Sobrou ${fmt(saldo)}, mas você usou ${percentualUsado.toFixed(0)}% do que entrou. Tá no limite. Vale olhar com carinho.`;
+        } else {
+            corSaldo = 'barra-amarela';
+            iconeSaldo = '🌿';
+            falaSaldo = `Sobrou pouco: ${fmt(saldo)}. Você usou ${percentualUsado.toFixed(0)}% do que entrou. Foi por pouco.`;
+        }
+    } else {
+        corSaldo = 'barra-vermelha';
+        iconeSaldo = '🌿';
+        falaSaldo = `Você gastou ${fmt(Math.abs(saldo))} mais do que entrou. Acontece. Semana que vem a gente ajusta.`;
+    }
+
+    // Falas dos 3 avatares (caixinhas)
+    const falaTorres = baseEstouro > 0
+        ? `Sua base passou ${fmt(baseEstouro)} do planejado. Isso não é erro seu.`
+        : `Sua base ficou firme. Ninguém passou fome.`;
+
+    const falaBela = vidaEstouro > 0
+        ? `A Vida passou ${fmt(vidaEstouro)} do que você tinha planejado. Acontece.`
+        : `A Vida ficou no ritmo. Sem culpa, só consciência.`;
+
+    const falaZe = futuroAceleracao > 0
+        ? `Você botou ${fmt(futuroAceleracao)} a mais no Futuro. O caminho encurtou.`
+        : `O Futuro ficou no combinado. Um passo de cada vez.`;
+
+    container.innerHTML = `
+        <div style="margin-bottom: 25px;">
+            <span style="font-size: 0.8rem; font-weight: bold; color: var(--secondary); text-transform: uppercase;">Sua semana</span>
+            <h2 style="font-size: 1.3rem; font-weight: 700; color: var(--primary);">${formatarData(semana.inicio)} a ${formatarData(semana.fim)}</h2>
+        </div>
+
+        <!-- SALDO DA SEMANA -->
+        <div class="card" style="border-left: 4px solid ${corSaldo === 'barra-verde' ? '#10b981' : corSaldo === 'barra-amarela' ? '#f59e0b' : '#ef4444'}; margin-bottom: 25px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <strong style="color: var(--primary); font-size: 1rem;">💰 Saldo da semana</strong>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px;">
+                <span style="color: var(--secondary);">Entrou</span>
+                <strong style="color: #10b981;">+ ${fmt(renda)}</strong>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px;">
+                <span style="color: var(--secondary);">Saiu</span>
+                <strong style="color: #ef4444;">- ${fmt(totalGasto)}</strong>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-size: 1rem; padding-top: 12px; margin-top: 12px; border-top: 1px solid #e2e8f0;">
+                <span style="font-weight: bold; color: var(--primary);">${saldo >= 0 ? 'Sobrou' : 'Faltou'}</span>
+                <strong style="color: ${saldo >= 0 ? '#10b981' : '#ef4444'};">${fmt(Math.abs(saldo))}</strong>
+            </div>
+
+            <div class="barra-fundo" style="margin-top: 12px;">
+                <div class="barra-preenchida ${corSaldo}" style="width: ${percentualUsado}%"></div>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--secondary); text-align: right; margin-top: 6px;">
+                ${percentualUsado.toFixed(0)}% usado
+            </div>
+
+            <div class="fala-avatar" style="border-left-color: ${corSaldo === 'barra-verde' ? '#10b981' : corSaldo === 'barra-amarela' ? '#f59e0b' : '#ef4444'}; margin-top: 15px; margin-bottom: 0;">
+                <span class="icone">${iconeSaldo}</span>
+                <span class="texto">${falaSaldo}</span>
+            </div>
+        </div>
+
+        <!-- CAIXINHAS -->
+        <div class="fala-avatar">
+            <span class="icone">🛡️</span>
+            <span class="texto">${falaTorres}</span>
+        </div>
+        ${renderizarCaixinha('base', '🛡️ Base', semana.base.gasto, semana.base.limite)}
+
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">${falaBela}</span>
+        </div>
+        ${renderizarCaixinha('vida', '🌿 Vida', semana.vida.gasto, semana.vida.limite)}
+
+        <div class="fala-avatar">
+            <span class="icone">🔭</span>
+            <span class="texto">${falaZe}</span>
+        </div>
+        ${renderizarCaixinha('futuro', '🔭 Futuro', semana.futuro.gasto, semana.futuro.limite)}
+
+        <button class="btn-primary" style="margin-top: 30px;" onclick="fecharResumoEIniciarNovaSemana()">Começar nova semana</button>
+    `;
+
+    semana.resumoLido = true;
+    salvarEstado();
+}
+
+function fecharResumoEIniciarNovaSemana() {
+    iniciarNovaSemana();
+    renderizarOrcamentoInicio();
+    goToScreen('screen-orcamento-inicio');
+}
+
+function renderizarHistoricoResumos() {
+    const container = document.getElementById('historico-resumos-conteudo');
+    const resumos = (state.orcamento && state.orcamento.resumos) || [];
+
+    if (resumos.length === 0) {
+        container.innerHTML = `
+            <div class="card" style="text-align: center; padding: 40px 20px;">
+                <p style="color: var(--secondary); font-size: 0.95rem;">Ainda não temos semanas fechadas. Quando a primeira semana terminar, ela vai aparecer aqui.</p>
+            </div>
+        `;
+        return;
+    }
+
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    container.innerHTML = resumos.map(r => {
+        const baseEstouro = (r.base && r.base.estouro) || 0;
+        const vidaEstouro = (r.vida && r.vida.estouro) || 0;
+        const futuroAceleracao = (r.futuro && r.futuro.aceleracao) || 0;
+
+        // Saldo do resumo arquivado
+        const renda = (typeof r.renda === 'number' && r.renda > 0)
+    ? r.renda
+    : (state.orcamento.base?.rendaBase || 0) / DIVISOR_SEMANAL;
+const totalGasto = (typeof r.totalGasto === 'number')
+    ? r.totalGasto
+    : ((r.base?.gasto || 0) + (r.vida?.gasto || 0) + (r.futuro?.gasto || 0));
+const saldo = renda - totalGasto;
+
+        let linhaSaldo = '';
+        if (renda > 0) {
+            linhaSaldo = saldo >= 0
+                ? `<span style="color: #10b981; font-weight: bold;">Sobrou ${fmt(saldo)}</span>`
+                : `<span style="color: #ef4444; font-weight: bold;">Faltou ${fmt(Math.abs(saldo))}</span>`;
+        }
+
+        const resumoLinha = [];
+        if (baseEstouro > 0) resumoLinha.push(`Base passou ${fmt(baseEstouro)}`);
+        else resumoLinha.push('Base firme');
+
+        if (vidaEstouro > 0) resumoLinha.push(`Vida passou ${fmt(vidaEstouro)}`);
+        else resumoLinha.push('Vida no ritmo');
+
+        if (futuroAceleracao > 0) resumoLinha.push(`Futuro acelerou ${fmt(futuroAceleracao)}`);
+        else resumoLinha.push('Futuro no combinado');
+
+        return `
+            <div class="card" style="margin-bottom: 12px; padding: 16px;">
+                <strong style="color: var(--primary); display: block; margin-bottom: 8px;">${formatarData(r.inicio)} a ${formatarData(r.fim)}</strong>
+                ${linhaSaldo ? `<div style="margin-bottom: 8px; font-size: 0.95rem;">${linhaSaldo}</div>` : ''}
+                <span style="font-size: 0.85rem; color: var(--secondary);">${resumoLinha.join(' · ')}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+window.addEventListener('DOMContentLoaded', () => {
+    carregarEstado();
+    atualizarBotaoRetomada();
+    verificarFechamentoSemana();
+
+    if (state.orcamento && state.orcamento.etapasConcluidas && state.orcamento.etapasConcluidas.length > 0) {
+        iniciarJornada();
+    }
+});
+
+// ============================================================
+// NÍVEL 3 — CUSTÓDIAS
+// ============================================================
+
+const TIPOS_CUSTODIA = {
+    conta_corrente: { icone: '🏦', nome: 'Conta corrente',  temSaldo: true,  temFatura: false },
+    poupanca:       { icone: '🐖', nome: 'Poupança',        temSaldo: true,  temFatura: false },
+    dinheiro:       { icone: '💵', nome: 'Dinheiro',        temSaldo: true,  temFatura: false },
+    vale:           { icone: '🎫', nome: 'Vale',            temSaldo: true,  temFatura: false },
+    cartao_credito: { icone: '💳', nome: 'Cartão de crédito', temSaldo: false, temFatura: true  },
+    cartao_debito:  { icone: '💳', nome: 'Cartão de débito',  temSaldo: true,  temFatura: false },
+    outro:          { icone: '📦', nome: 'Outro',           temSaldo: true,  temFatura: false }
+};
+
+function abrirTelaCustodias() {
+    goToScreen('screen-custodias');
+    renderizarCustodias();
+}
+
+function renderizarCustodias() {
+    const container = document.getElementById('custodias-conteudo');
+    const custodias = state.orcamento.custodias || [];
+
+    let htmlLista = '';
+    if (custodias.length === 0) {
+        htmlLista = `
+            <div class="placeholder-info">
+                Você ainda não cadastrou onde guarda seu dinheiro.<br>
+                Vamos começar?
+            </div>
+        `;
+    } else {
+        custodias.forEach(c => {
+            const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
+            let linhaValor = '';
+
+            if (tipo.temFatura) {
+                linhaValor = `<span class="valor-cat">Fatura: R$ ${(c.faturaAcumulada || 0).toFixed(2).replace('.', ',')}</span>`;
+            } else {
+                linhaValor = `<span class="valor-cat">R$ ${(c.saldoAtual || 0).toFixed(2).replace('.', ',')}</span>`;
+            }
+
+            const metaExtra = tipo.temFatura
+                ? `fecha dia ${c.diaFechamento} · vence dia ${c.diaVencimento}`
+                : tipo.nome;
+
+            htmlLista += `
+                <div class="categoria-item" onclick="abrirFormularioCustodia('${c.id}')" style="cursor: pointer;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 1.5rem;">${tipo.icone}</span>
+                        <div>
+                            <div class="nome-cat">${c.nome}</div>
+                            <div class="meta-cat">${metaExtra}</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        ${linhaValor}
+                        <button class="btn-remover" onclick="event.stopPropagation(); removerCustodia('${c.id}')">&times;</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🛡️</span>
+            <span class="texto">Onde você guarda o dinheiro? Conta, carteira, cartão. É só pra gente saber onde cada real mora.</span>
+        </div>
+
+        ${htmlLista}
+
+        <button class="btn-primary" style="margin-top: 20px; background: var(--accent);" onclick="abrirFormularioCustodia(null)">
+            + Adicionar custódia
+        </button>
+    `;
+}
+
+function abrirFormularioCustodia(id) {
+    const container = document.getElementById('custodias-conteudo');
+    const custodia = id ? (state.orcamento.custodias || []).find(c => c.id === id) : null;
+    const editando = !!custodia;
+
+    // Valor inicial padrão
+    const nomeAtual = custodia ? custodia.nome : '';
+    const tipoAtual = custodia ? custodia.tipo : null;
+    const saldoAtual = custodia ? (custodia.saldoInicial || 0) : 0;
+    const fechamentoAtual = custodia ? (custodia.diaFechamento || '') : '';
+    const vencimentoAtual = custodia ? (custodia.diaVencimento || '') : '';
+
+    // Chips de tipo
+    let chipsTipos = '';
+    Object.entries(TIPOS_CUSTODIA).forEach(([chave, info]) => {
+        const selecionado = tipoAtual === chave ? 'selecionado' : '';
+        chipsTipos += `<div class="chip ${selecionado}" data-tipo="${chave}" onclick="selecionarTipoCustodia(this)">${info.icone} ${info.nome}</div>`;
+    });
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🛡️</span>
+            <span class="texto">${editando ? 'Editar custódia' : 'Nova custódia'}</span>
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">🛡️</span>
+            <span class="texto">Como você chama isso?</span>
+        </div>
+        <input type="text" id="cust-nome" class="input-padrao" placeholder="Ex: Nubank, Carteira, Vale" value="${nomeAtual}">
+
+        <div class="fala-avatar">
+            <span class="icone">🛡️</span>
+            <span class="texto">Que tipo de custódia é essa?</span>
+        </div>
+        <div class="chip-container" id="chips-tipo-custodia">
+            ${chipsTipos}
+        </div>
+
+        <div id="bloco-saldo" style="display: ${tipoAtual && TIPOS_CUSTODIA[tipoAtual].temSaldo ? 'block' : 'none'};">
+            <div class="fala-avatar">
+                <span class="icone">🛡️</span>
+                <span class="texto">Quanto tem hoje?</span>
+            </div>
+            <div class="input-com-prefixo">
+                <span class="prefixo">R$</span>
+                <input type="number" id="cust-saldo" class="input-padrao" placeholder="0.00" value="${saldoAtual}">
+            </div>
+        </div>
+
+                <div id="bloco-fatura" style="display: ${tipoAtual === 'cartao_credito' ? 'block' : 'none'};">
+            <div class="fala-avatar">
+                <span class="icone">🛡️</span>
+                <span class="texto">Em que dia a fatura fecha?</span>
+            </div>
+            <input type="number" id="cust-fechamento" class="input-padrao" placeholder="Ex: 15" min="1" max="31" value="${fechamentoAtual}">
+
+            <div class="fala-avatar">
+                <span class="icone">🛡️</span>
+                <span class="texto">E em que dia vence? (a gente chuta 7 dias depois, mas você pode mudar)</span>
+            </div>
+            <input type="number" id="cust-vencimento" class="input-padrao" placeholder="Ex: 22" min="1" max="31" value="${vencimentoAtual}">
+
+            ${editando ? `
+                <div class="card" style="background: #fef3c7; border-color: #fcd34d; margin-top: 15px; margin-bottom: 15px;">
+                    <strong style="color: #92400e; display: block; margin-bottom: 8px; font-size: 0.9rem;">💳 Fatura atual</strong>
+                    <div style="font-size: 1.3rem; font-weight: bold; color: #92400e; margin-bottom: 12px;">
+                        R$ ${(custodia.faturaAcumulada || 0).toFixed(2).replace('.', ',')}
+                    </div>
+                    <button class="btn-primary" style="background: #f59e0b; margin-top: 0;" onclick="abrirPagamentoFatura('${id}')">
+                        Pagar fatura
+                    </button>
+                </div>
+            ` : ''}
+        </div>
+
+        <button class="btn-primary" onclick="salvarCustodia('${id || ''}')">
+            ${editando ? 'Salvar' : 'Adicionar'}
+        </button>
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="renderizarCustodias()">
+            Cancelar
+        </button>
+    `;
+}
+
+let tipoCustodiaSelecionado = null;
+
+function selecionarTipoCustodia(el) {
+    document.querySelectorAll('#chips-tipo-custodia .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    tipoCustodiaSelecionado = el.getAttribute('data-tipo');
+
+    const info = TIPOS_CUSTODIA[tipoCustodiaSelecionado];
+    document.getElementById('bloco-saldo').style.display = info.temSaldo ? 'block' : 'none';
+    document.getElementById('bloco-fatura').style.display = info.temFatura ? 'block' : 'none';
+}
+
+function salvarCustodia(id) {
+    const nome = document.getElementById('cust-nome').value.trim();
+    const tipoEl = document.querySelector('#chips-tipo-custodia .chip.selecionado');
+    const tipo = tipoCustodiaSelecionado || (tipoEl ? tipoEl.getAttribute('data-tipo') : null);
+
+    if (nome === '') { alert('Diga o nome da custódia.'); return; }
+    if (!tipo) { alert('Escolha o tipo.'); return; }
+
+    const info = TIPOS_CUSTODIA[tipo];
+    const saldoInicial = info.temSaldo
+        ? (parseFloat(document.getElementById('cust-saldo').value) || 0)
+        : 0;
+
+    let diaFechamento = null;
+    let diaVencimento = null;
+
+    if (info.temFatura) {
+        diaFechamento = parseInt(document.getElementById('cust-fechamento').value) || 0;
+        diaVencimento = parseInt(document.getElementById('cust-vencimento').value) || 0;
+
+        if (diaFechamento < 1 || diaFechamento > 31) {
+            alert('O dia de fechamento precisa estar entre 1 e 31.');
+            return;
+        }
+        // Se o usuário não preencheu o vencimento, chuta fechamento + 7
+        if (diaVencimento < 1 || diaVencimento > 31) {
+            diaVencimento = diaFechamento + 7;
+            if (diaVencimento > 31) diaVencimento = diaVencimento - 31;
+        }
+    }
+
+    if (id) {
+        // Edição
+        const custodia = state.orcamento.custodias.find(c => c.id === id);
+        if (!custodia) return;
+        custodia.nome = nome;
+        custodia.tipo = tipo;
+        custodia.saldoInicial = saldoInicial;
+        custodia.saldoAtual = saldoInicial; // re-baseline
+        if (info.temFatura) {
+            custodia.diaFechamento = diaFechamento;
+            custodia.diaVencimento = diaVencimento;
+        }
+    } else {
+        // Nova
+        const nova = {
+            id: 'cust_' + Date.now(),
+            nome: nome,
+            tipo: tipo,
+            saldoInicial: saldoInicial,
+            saldoAtual: saldoInicial,
+            criadaEm: new Date().toISOString(),
+            faturaAcumulada: 0
+        };
+        if (info.temFatura) {
+            nova.diaFechamento = diaFechamento;
+            nova.diaVencimento = diaVencimento;
+        }
+        state.orcamento.custodias.push(nova);
+    }
+
+    tipoCustodiaSelecionado = null;
+    salvarEstado();
+    renderizarCustodias();
+}
+
+function removerCustodia(id) {
+    const confirmar = confirm('Remover esta custódia?');
+    if (!confirmar) return;
+
+    state.orcamento.custodias = (state.orcamento.custodias || []).filter(c => c.id !== id);
+    if (state.orcamento.custodiaPadrao === id) {
+        state.orcamento.custodiaPadrao = null;
+    }
+    salvarEstado();
+    renderizarCustodias();
+}
+
+// ============================================================
+// NÍVEL 3 — PAGAMENTO DE FATURA
+// ============================================================
+
+function abrirPagamentoFatura(cartaoId) {
+    origemFaturaSelecionada = null;
+    goToScreen('screen-pagar-fatura');
+    renderizarPagamentoFatura(cartaoId);
+}
+
+function renderizarPagamentoFatura(cartaoId) {
+    const container = document.getElementById('pagar-fatura-conteudo');
+    const cartao = state.orcamento.custodias.find(c => c.id === cartaoId);
+    if (!cartao) {
+        container.innerHTML = '<p>Cartão não encontrado.</p>';
+        return;
+    }
+
+    const fatura = cartao.faturaAcumulada || 0;
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // Custódias disponíveis para pagar (todas exceto o próprio cartão)
+    const custodiaOrigem = (state.orcamento.custodias || []).filter(c => c.id !== cartaoId);
+
+    // Se o usuário tem só o cartão, não há como pagar
+    if (custodiaOrigem.length === 0) {
+        container.innerHTML = `
+            <div class="fala-avatar">
+                <span class="icone">🛡️</span>
+                <span class="texto">Pra pagar a fatura, você precisa de onde tirar o dinheiro. Cadastre uma conta ou outra custódia primeiro.</span>
+            </div>
+            <button class="btn-option" style="justify-content: center; border-color: var(--secondary);" onclick="voltarParaOrcamento()">
+                Voltar
+            </button>
+        `;
+        return;
+    }
+
+    // Chips de custódia de origem
+    let chipsOrigem = '';
+    custodiaOrigem.forEach(c => {
+        const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
+        const saldo = c.tipo === 'cartao_credito' ? `Fatura: ${fmt(c.faturaAcumulada || 0)}` : fmt(c.saldoAtual || 0);
+        chipsOrigem += `
+            <div class="chip" data-custodia-id="${c.id}" onclick="selecionarOrigemFatura(this)">
+                ${tipo.icone} ${c.nome} · ${saldo}
+            </div>
+        `;
+    });
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">💳</span>
+            <span class="texto">Você tá pagando a fatura do <strong>${cartao.nome}</strong>. Isso vira gasto do <strong>Futuro</strong> — porque cartão é empréstimo, não dinheiro.</span>
+        </div>
+
+        <div class="card" style="background: #fef3c7; border-color: #fcd34d;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px;">
+                <span style="color: #92400e;">Fatura acumulada</span>
+                <strong style="color: #92400e;">${fmt(fatura)}</strong>
+            </div>
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">💳</span>
+            <span class="texto">Quanto você quer pagar?</span>
+        </div>
+
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="number" id="fatura-valor" class="input-padrao" placeholder="0.00" value="${fatura.toFixed(2)}">
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">💳</span>
+            <span class="texto">De onde sai esse dinheiro?</span>
+        </div>
+        <div class="chip-container" id="chips-origem-fatura">
+            ${chipsOrigem}
+        </div>
+
+        <button class="btn-primary" onclick="confirmarPagamentoFatura('${cartaoId}')">
+            Pagar fatura
+        </button>
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="voltarParaOrcamento()">
+            Cancelar
+        </button>
+    `;
+}
+
+let origemFaturaSelecionada = null;
+
+function selecionarOrigemFatura(el) {
+    document.querySelectorAll('#chips-origem-fatura .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    origemFaturaSelecionada = el.getAttribute('data-custodia-id');
+}
+
+function confirmarPagamentoFatura(cartaoId) {
+    const cartao = state.orcamento.custodias.find(c => c.id === cartaoId);
+    if (!cartao) return;
+
+    const valor = parseFloat(document.getElementById('fatura-valor').value) || 0;
+    if (valor <= 0) { alert('Insira um valor maior que zero.'); return; }
+    if (!origemFaturaSelecionada) { alert('Escolha de onde sai o dinheiro.'); return; }
+
+    const origem = state.orcamento.custodias.find(c => c.id === origemFaturaSelecionada);
+    if (!origem) { alert('Custódia não encontrada.'); return; }
+
+    // Aviso de estouro do Futuro (opção c)
+    const semana = state.orcamento.semanaAtual;
+    if (semana && !semana.fechada) {
+        const limiteFuturo = semana.futuro.limite;
+        const gastoFuturo = semana.futuro.gasto;
+        const depoisDoPagamento = gastoFuturo + valor;
+
+        if (limiteFuturo > 0 && depoisDoPagamento > limiteFuturo) {
+            const estouro = depoisDoPagamento - limiteFuturo;
+            const confirmar = confirm(
+                `Isso vai estourar o Futuro em R$ ${estouro.toFixed(2).replace('.', ',')}. ` +
+                `Seu limite semanal é R$ ${limiteFuturo.toFixed(2).replace('.', ',')} e você já gastou R$ ${gastoFuturo.toFixed(2).replace('.', ',')}. ` +
+                `Continuar?`
+            );
+            if (!confirmar) return;
+        }
+    }
+
+    // 1. Subtrai da fatura do cartão
+    cartao.faturaAcumulada = Math.max(0, (cartao.faturaAcumulada || 0) - valor);
+
+    // 2. Subtrai do saldo da custódia de origem
+    if (!TIPOS_CUSTODIA[origem.tipo].temFatura) {
+        origem.saldoAtual = (origem.saldoAtual || 0) - valor;
+    }
+
+    // 3. Incrementa o gasto da caixa Futuro
+    if (semana && !semana.fechada) {
+        semana.futuro.gasto += valor;
+    }
+
+    // 4. Registra no histórico
+    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+    state.orcamento.historicoRegistros.push({
+        id: 'reg_' + Date.now(),
+        data: new Date().toISOString(),
+        tipo: 'pagamento_fatura',
+        caixa: 'futuro',
+        categoria: null,
+        valor: valor,
+        custodiaId: origem.id,
+        cartaoId: cartaoId,
+        saldoAtualizado: true
+    });
+
+    origemFaturaSelecionada = null;
+    salvarEstado();
+
+    alert(`Fatura paga. ${cartao.nome} agora tem fatura de R$ ${cartao.faturaAcumulada.toFixed(2).replace('.', ',')}.`);
+    voltarParaOrcamento();
+}
+
+// ============================================================
+// NÍVEL 3 — PLANO DE RECUPERAÇÃO
+// ============================================================
+
+// Detecta os sinais de estouro. Retorna um objeto ou null.
+function detectarSinalRecuperacao(orc) {
+    if (orc.nivel < 3) return null;
+
+    const semana = orc.semanaAtual;
+    if (!semana) return null;
+
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // S1 — Saldo negativo
+    const renda = (typeof semana.renda === 'number' && semana.renda > 0)
+        ? semana.renda
+        : (orc.base?.rendaBase || 0) / DIVISOR_SEMANAL;
+    const totalGasto = (semana.base?.gasto || 0)
+                     + (semana.vida?.gasto || 0)
+                     + (semana.futuro?.gasto || 0);
+    const saldo = renda - totalGasto;
+    const s1 = saldo < 0;
+
+    // S2 — Contas vencidas (vencimento no passado, ainda no orçamento)
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const diaHoje = hoje.getDate();
+
+    const categoriasComVenc = (orc.categorias || []).filter(c => c.vencimento);
+    const contasVencidas = categoriasComVenc.filter(c => c.vencimento < diaHoje);
+    const s2 = contasVencidas.length > 0;
+
+    if (!s1 && !s2) return null;
+
+    return {
+        s1: s1,
+        s2: s2,
+        saldo: saldo,
+        totalGasto: totalGasto,
+        renda: renda,
+        contasVencidas: contasVencidas,
+        totalVencido: contasVencidas.reduce((s, c) => s + (c.valor || 0), 0),
+        fmt: fmt
+    };
+}
+
+function abrirPlanoRecuperacao() {
+    goToScreen('screen-plano-recuperacao');
+    renderizarPlanoRecuperacao();
+}
+
+function renderizarPlanoRecuperacao() {
+    const container = document.getElementById('plano-recuperacao-conteudo');
+    const orc = state.orcamento;
+
+    const sinal = detectarSinalRecuperacao(orc);
+    if (!sinal) {
+        container.innerHTML = `
+            <div class="fala-avatar">
+                <span class="icone">🛡️</span>
+                <span class="texto">Tá tudo em ordem essa semana. Nada estourou, nada venceu. Quando algo apertar, esse plano aparece aqui.</span>
+            </div>
+        `;
+        return;
+    }
+
+    // ===== ESTÁGIO 1: DIAGNÓSTICO =====
+    let blocoS1 = '';
+    if (sinal.s1) {
+        blocoS1 = `
+            <div class="card" style="border-left: 4px solid #ef4444; margin-bottom: 15px;">
+                <strong style="color: #991b1b; font-size: 0.95rem; display: block; margin-bottom: 8px;">
+                    💰 Saldo da semana negativo
+                </strong>
+                <div style="font-size: 0.9rem; color: var(--secondary); line-height: 1.5;">
+                    Você gastou <strong style="color: var(--primary);">${sinal.fmt(Math.abs(sinal.saldo))}</strong> mais do que entrou.
+                    Entrou ${sinal.fmt(sinal.renda)}, saiu ${sinal.fmt(sinal.totalGasto)}.
+                </div>
+            </div>
+        `;
+    }
+
+    let blocoS2 = '';
+    if (sinal.s2) {
+        let listaVencidas = '';
+        sinal.contasVencidas.forEach(c => {
+            const icone = c.caixa === 'base' ? '🛡️' : '🌿';
+            listaVencidas += `
+                <div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 1px solid #f1f5f9;">
+                    <span style="font-size: 0.9rem; color: var(--primary);">${icone} ${c.nome} <span style="color: var(--secondary); font-size: 0.8rem;">(venceu dia ${c.vencimento})</span></span>
+                    <strong style="font-size: 0.9rem; color: var(--primary);">${sinal.fmt(c.valor || 0)}</strong>
+                </div>
+            `;
+        });
+
+        blocoS2 = `
+            <div class="card" style="border-left: 4px solid #f59e0b; margin-bottom: 15px;">
+                <strong style="color: #92400e; font-size: 0.95rem; display: block; margin-bottom: 8px;">
+                    📅 Contas vencidas
+                </strong>
+                <div style="font-size: 0.85rem; color: var(--secondary); line-height: 1.5; margin-bottom: 10px;">
+                    Essas contas já passaram do dia de vencimento. Total: <strong style="color: var(--primary);">${sinal.fmt(sinal.totalVencido)}</strong>.
+                </div>
+                ${listaVencidas}
+            </div>
+        `;
+    }
+
+    // ===== ESTÁGIO 2: PRIORIZAÇÃO =====
+    // Lista todas as contas com vencimento (vencidas + futuras) para o usuário ordenar
+    const categoriasComVenc = (orc.categorias || []).filter(c => c.vencimento);
+    const diaHoje = new Date().getDate();
+
+    let htmlPriorizacao = '';
+    if (categoriasComVenc.length > 0) {
+        // Ordena: vencidas primeiro, depois por dia de vencimento
+        const ordenadas = [...categoriasComVenc].sort((a, b) => {
+            const aVencida = a.vencimento < diaHoje ? 0 : 1;
+            const bVencida = b.vencimento < diaHoje ? 0 : 1;
+            if (aVencida !== bVencida) return aVencida - bVencida;
+            return a.vencimento - b.vencimento;
+        });
+
+        let listaPriorizacao = '';
+        ordenadas.forEach((c, i) => {
+            const icone = c.caixa === 'base' ? '🛡️' : '🌿';
+            const vencida = c.vencimento < diaHoje;
+            const cor = vencida ? '#ef4444' : '#94a3b8';
+            const rotulo = vencida ? 'vencida' : `dia ${c.vencimento}`;
+
+            listaPriorizacao += `
+                <div class="categoria-item" style="border-left: 3px solid ${cor};">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 1.2rem; font-weight: bold; color: var(--secondary); width: 24px;">${i + 1}º</span>
+                        <div>
+                            <div class="nome-cat">${icone} ${c.nome}</div>
+                            <div class="meta-cat">${rotulo}</div>
+                        </div>
+                    </div>
+                    <strong class="valor-cat">${sinal.fmt(c.valor || 0)}</strong>
+                </div>
+            `;
+        });
+
+        htmlPriorizacao = `
+            <div class="secao-titulo">🎯 Em que ordem pagar</div>
+            <div class="fala-avatar">
+                <span class="icone">🛡️</span>
+                <span class="texto">Essa é a ordem que a gente sugere: primeiro o que já venceu, depois o que vence antes. Mas quem decide é você. Se quiser mudar, é só tocar.</span>
+            </div>
+            ${listaPriorizacao}
+        `;
+    }
+
+    container.innerHTML = `
+        <div style="margin-bottom: 20px;">
+            <span style="font-size: 0.8rem; font-weight: bold; color: var(--secondary); text-transform: uppercase;">Plano de recuperação</span>
+            <h2 style="font-size: 1.3rem; font-weight: 700; color: var(--primary); margin-top: 5px;">Vamos olhar juntos</h2>
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">🛡️</span>
+            <span class="texto">Não é sobre culpa. É sobre ver o que tá na frente e escolher por onde começar.</span>
+        </div>
+
+        ${blocoS1}
+        ${blocoS2}
+        ${htmlPriorizacao}
+
+        <div class="card" style="background: #f8fafc; border-color: #e2e8f0; margin-top: 20px;">
+            <p style="font-size: 0.85rem; color: var(--secondary); line-height: 1.5;">
+                💡 Esse plano não faz nada sozinho. Ele só te mostra o que você já sabe, mas organizado. Quem paga é você. Quem decide é você.
+            </p>
+        </div>
+    `;
+}
+// ============================================================
+// NÍVEL 3 — MAPA DO MÊS
+// ============================================================
+
+function abrirTelaMapaMes() {
+    goToScreen('screen-mapa-mes');
+    renderizarMapaMes();
+}
+// ============================================================
+// NÍVEL 3 — REGISTRO COM CUSTÓDIA
+// ============================================================
+
+// Custódias que podem ser usadas como origem de um gasto.
+// Cartão de crédito é incluído, mas o tratamento é diferente (acumula fatura).
+function custodiasDisponiveisParaGasto() {
+    const orc = state.orcamento;
+    if (!orc.custodias || orc.custodias.length === 0) return [];
+
+    // Se o usuário tem só uma custódia, retorna ela (pula o passo)
+    // Se tem várias, retorna todas ordenadas pela última usada
+    const ultimaUsada = orc.custodiaPadrao;
+
+    const ordenadas = [...orc.custodias];
+    if (ultimaUsada) {
+        const idx = ordenadas.findIndex(c => c.id === ultimaUsada);
+        if (idx > 0) {
+            const [ultima] = ordenadas.splice(idx, 1);
+            ordenadas.unshift(ultima);
+        }
+    }
+
+    return ordenadas;
+}
+
+function mostrarPassoCustodia() {
+    document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
+    document.getElementById('modal-registro-passo-3-custodia').style.display = 'block';
+
+    const containerChips = document.getElementById('chips-custodias-registro');
+    containerChips.innerHTML = '';
+
+    const custodias = custodiasDisponiveisParaGasto();
+
+    custodias.forEach(c => {
+        const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.innerHTML = `${tipo.icone} ${c.nome}`;
+        chip.onclick = () => escolherCustodia(c.id);
+        containerChips.appendChild(chip);
+    });
+}
+
+function escolherCustodia(custodiaId) {
+    const custodia = state.orcamento.custodias.find(c => c.id === custodiaId);
+    if (!custodia) return;
+
+    const tipo = TIPOS_CUSTODIA[custodia.tipo];
+
+    // Se for cartão de crédito, o fluxo muda:
+    // o gasto não entra na caixa, vai direto pra fatura.
+    if (tipo.temFatura) {
+        registroTemporario.custodiaId = custodiaId;
+        registroTemporario.cartaoId = custodiaId;
+        confirmarRegistroCartao();
+        return;
+    }
+
+    // Se for custódia normal, marca como padrão e segue para categoria
+    registroTemporario.custodiaId = custodiaId;
+    state.orcamento.custodiaPadrao = custodiaId;
+    salvarEstado();
+
+    // Volta pro passo de categoria (se houver) ou confirma
+    document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
+    const categoriasDaCaixa = (state.orcamento.categorias || []).filter(c => c.caixa === registroTemporario.caixa);
+    if (categoriasDaCaixa.length > 0) {
+        mostrarPassoCategoria(categoriasDaCaixa);
+    } else {
+        confirmarRegistro(null);
+    }
+}
+
+function pularCustodia() {
+    registroTemporario.custodiaId = null;
+    confirmarRegistro(null);
+}
+
+function confirmarRegistroCartao() {
+    const valor = registroTemporario.valor;
+    const cartaoId = registroTemporario.cartaoId;
+    const cartao = state.orcamento.custodias.find(c => c.id === cartaoId);
+
+    if (!cartao) {
+        alert('Cartão não encontrado. Registro cancelado.');
+        fecharModalRegistro();
+        return;
+    }
+
+    // Acumula na fatura
+    cartao.faturaAcumulada = (cartao.faturaAcumulada || 0) + valor;
+
+    // Registra no histórico com tipo "gasto_cartao"
+    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+    state.orcamento.historicoRegistros.push({
+        id: 'reg_' + Date.now(),
+        data: new Date().toISOString(),
+        tipo: 'gasto_cartao',
+        caixa: null, // ainda não é gasto real
+        categoria: null,
+        valor: valor,
+        custodiaId: null,
+        cartaoId: cartaoId,
+        saldoAtualizado: false
+    });
+
+    salvarEstado();
+
+    // Mostra confirmação
+    document.getElementById('modal-registro-passo-1').style.display = 'none';
+    document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
+    document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
+    document.getElementById('modal-registro-passo-3').style.display = 'block';
+    document.getElementById('modal-registro-fala').innerHTML = `
+        <span class="icone">💳</span>
+        <span class="texto">Anotado no cartão. Fatura agora tá em ${cartao.faturaAcumulada.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}. Quando você pagar, isso vira gasto de verdade.</span>
+    `;
+
+    renderizarOrcamentoInicio();
+}
+function renderizarMapaMes() {
+    const container = document.getElementById('mapa-mes-conteudo');
+    const orc = state.orcamento;
+
+    // Categorias com vencimento (só fazem sentido no Nível 3)
+    const categorias = (orc.categorias || []).filter(c => c.vencimento);
+
+    // Janela rolante: 30 dias a partir de hoje
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // Monta um mapa dia → contas
+    const dias = [];
+    for (let i = 0; i < 30; i++) {
+        const d = new Date(hoje);
+        d.setDate(hoje.getDate() + i);
+        const dia = d.getDate();
+
+        const contasDoDia = categorias.filter(c => c.vencimento === dia);
+
+        dias.push({
+            data: d,
+            dia: dia,
+            contas: contasDoDia
+        });
+    }
+
+    // Se não há categorias com vencimento, mostra convite
+    if (categorias.length === 0) {
+        container.innerHTML = `
+            <div class="fala-avatar">
+                <span class="icone">🛡️</span>
+                <span class="texto">Pra montar o mapa, eu preciso saber em que dia cada conta vence. Ainda não tenho isso.</span>
+            </div>
+            <div class="card" style="background: #f0f9ff; border-color: #bae6fd;">
+                <p style="font-size: 0.9rem; color: #0369a1; line-height: 1.5;">
+                    Vá em <strong>Seus Gastos da Base</strong> (ou da Vida) e, ao cadastrar uma categoria, diga em que dia ela vence.
+                </p>
+            </div>
+        `;
+        return;
+    }
+
+    // Constrói a lista de dias
+    let htmlDias = '';
+    dias.forEach(d => {
+        // Só mostra dias que têm contas OU os próximos 7 dias (para dar contexto)
+        const temConta = d.contas.length > 0;
+        const ehHoje = d.dia === hoje.getDate() && d.data.getMonth() === hoje.getMonth();
+        const proximo7 = (d.data - hoje) / (1000 * 60 * 60 * 24) < 7;
+
+        if (!temConta && !proximo7) return;
+
+        // Formata data: "seg, 15/10"
+        const diasSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+        const diaSemana = diasSemana[d.data.getDay()];
+        const dataStr = `${String(d.dia).padStart(2, '0')}/${String(d.data.getMonth() + 1).padStart(2, '0')}`;
+
+        // Cor do dia
+        let corDia = '#94a3b8'; // neutro
+        let rotulo = '';
+        if (ehHoje) {
+            corDia = '#0ea5e9';
+            rotulo = 'hoje';
+        } else if (temConta && d.data < hoje) {
+            corDia = '#ef4444';
+            rotulo = 'atrasado';
+        } else if (temConta && proximo7) {
+            corDia = '#f59e0b';
+        }
+
+        // Linhas de conta
+        let linhasContas = '';
+        if (temConta) {
+            d.contas.forEach(c => {
+                const icone = c.caixa === 'base' ? '🛡️' : '🌿';
+                linhasContas += `
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid #f1f5f9;">
+                        <span style="font-size: 0.85rem; color: var(--primary);">${icone} ${c.nome}</span>
+                        <strong style="font-size: 0.85rem; color: var(--primary);">${fmt(c.valor || 0)}</strong>
+                    </div>
+                `;
+            });
+        }
+
+        htmlDias += `
+            <div class="card" style="padding: 14px 16px; margin-bottom: 10px; border-left: 3px solid ${corDia};">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <strong style="font-size: 0.9rem; color: var(--primary);">${diaSemana}, ${dataStr}</strong>
+                    ${rotulo ? `<span style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: ${corDia}; font-weight: bold;">${rotulo}</span>` : ''}
+                </div>
+                ${temConta ? linhasContas : '<div style="font-size: 0.8rem; color: var(--secondary); padding: 6px 0;">sem contas</div>'}
+            </div>
+        `;
+    });
+
+    // Total do mês
+    const totalMes = categorias.reduce((s, c) => s + (c.valor || 0), 0);
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🛡️</span>
+            <span class="texto">Essas são as contas que vencem nos próximos 30 dias. Não é pra decorar. É pra saber o que vem.</span>
+        </div>
+
+        <div class="totalizador" style="margin-bottom: 20px;">
+            Total do mês: <strong>${fmt(totalMes)}</strong>
+        </div>
+
+        ${htmlDias}
+
+        <div class="card" style="background: #f0f9ff; border-color: #bae6fd; margin-top: 15px;">
+            <p style="font-size: 0.85rem; color: #0369a1; line-height: 1.5;">
+                💡 Se uma conta vence num dia que não tem dinheiro, o app vai te avisar no resumo da semana.
+            </p>
+        </div>
+    `;
+}
+// ============================================================
+// NÍVEL 3 — PROVISÃO
+// ============================================================
+
+function calcularProvisao(orc) {
+    const categorias = (orc.categorias || []).filter(c => c.vencimento);
+    const totalMes = categorias.reduce((s, c) => s + (c.valor || 0), 0);
+    const provisaoSemanal = totalMes / DIVISOR_SEMANAL;
+
+    return {
+        totalMes: totalMes,
+        provisaoSemanal: provisaoSemanal,
+        categorias: categorias
+    };
+}
+
+// Retorna as contas que vencem nos próximos `dias` dias a partir de hoje
+function contasNaJanela(orc, dias) {
+    const categorias = (orc.categorias || []).filter(c => c.vencimento);
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const resultado = [];
+
+    for (let i = 0; i < dias; i++) {
+        const d = new Date(hoje);
+        d.setDate(hoje.getDate() + i);
+        const dia = d.getDate();
+
+        const contasDoDia = categorias.filter(c => c.vencimento === dia);
+        contasDoDia.forEach(c => {
+            resultado.push({
+                ...c,
+                dataVencimento: d,
+                diasAte: i
+            });
+        });
+    }
+
+    return resultado;
+}
+
+function renderizarBlocoProvisao(orc) {
+    if (orc.nivel < 3) return '';
+
+    const prov = calcularProvisao(orc);
+    if (prov.categorias.length === 0) return '';
+
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // --- Aqui entra a decisão (A), (B) ou (C) ---
+    // Por enquanto, deixo o esqueleto com a opção (C) — as duas linhas.
+
+    const contasSemana = contasNaJanela(orc, 7);
+    const totalSemana = contasSemana.reduce((s, c) => s + (c.valor || 0), 0);
+
+    const nomesSemana = contasSemana
+        .map(c => `${c.nome} (dia ${c.vencimento})`)
+        .join(', ');
+
+    // Se não há contas na janela, só mostra a provisão média
+    if (contasSemana.length === 0) {
+        return `
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--secondary);">
+                    <span>💵 Provisão</span>
+                    <strong style="color: var(--primary);">${fmt(prov.provisaoSemanal)}/semana</strong>
+                </div>
+                <div style="font-size: 0.7rem; color: var(--secondary); margin-top: 4px; line-height: 1.4;">
+                    Nenhuma conta vence nos próximos 7 dias.
+                </div>
+            </div>
+        `;
+    }
+
+    // Há contas na janela
+    return `
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e2e8f0;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--secondary); margin-bottom: 6px;">
+                <span>💵 Provisão média</span>
+                <strong style="color: var(--primary);">${fmt(prov.provisaoSemanal)}/semana</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--secondary);">
+                <span>📅 Vence esta semana</span>
+                <strong style="color: ${totalSemana > 0 ? '#ef4444' : 'var(--primary)'};">${fmt(totalSemana)}</strong>
+            </div>
+            <div style="font-size: 0.7rem; color: var(--secondary); margin-top: 4px; line-height: 1.4;">
+                ${nomesSemana}
+            </div>
+        </div>
+    `;
+}
+// ============================================================
+// SIMULADOR DE TEMPO (DEBUG)
+// ============================================================
+// Ativa/desativa com Ctrl+Shift+T (desktop) ou toque longo no logo (mobile)
+
+let modoDebugAtivo = false;
+
+function alternarModoDebug() {
+    modoDebugAtivo = !modoDebugAtivo;
+
+    const painelExistente = document.getElementById('painel-debug');
+
+    if (modoDebugAtivo && !painelExistente) {
+        const painel = document.createElement('div');
+        painel.id = 'painel-debug';
+        painel.style.cssText = `
+            position: fixed;
+            bottom: 100px;
+            left: 15px;
+            right: 15px;
+            max-width: 450px;
+            margin: 0 auto;
+            background: #1e293b;
+            color: white;
+            border-radius: 12px;
+            padding: 16px;
+            z-index: 9998;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            font-size: 0.8rem;
+            max-height: 70vh;
+            overflow-y: auto;
+        `;
+        painel.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <strong style="color: #38bdf8;">🔧 Simulador de Tempo</strong>
+                <button onclick="alternarModoDebug()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+            </div>
+            <div id="debug-status" style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; margin-bottom: 12px; font-size: 0.75rem; line-height: 1.5;"></div>
+
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 6px;">Tempo</div>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
+                <button onclick="debugPassarDias(1)" style="background: #0ea5e9; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">+1 dia</button>
+                <button onclick="debugPassarDias(7)" style="background: #0ea5e9; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">+7 dias (fecha semana)</button>
+                <button onclick="debugPassarDias(14)" style="background: #0ea5e9; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">+14 dias (2 semanas)</button>
+            </div>
+
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 6px;">Nível 1 → 2</div>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
+                <button onclick="debugForcarRegistros(10)" style="background: #f59e0b; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">+10 registros</button>
+                <button onclick="debugForcarGatilhoNivel2()" style="background: #10b981; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">⚡ Forçar gatilho Nível 2</button>
+            </div>
+
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 6px;">Nível 2 → 3</div>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
+                <button onclick="debugForcarGatilhoNivel3()" style="background: #10b981; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">⚡ Forçar gatilho Nível 3</button>
+                <button onclick="debugPularParaNivel3()" style="background: #8b5cf6; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">⏭️ Pular direto pro Nível 3</button>
+                <button onclick="debugCriarCustodiasExemplo()" style="background: #8b5cf6; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">🏦 Criar 3 custódias de exemplo</button>
+                <button onclick="debugCriarCategoriasComVencimento()" style="background: #8b5cf6; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">🗓️ Criar 3 categorias com vencimento</button>
+            </div>
+
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 6px;">Reset</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button onclick="debugResetarNivel()" style="background: #dc2626; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">🔄 Resetar para Nível 1</button>
+                <button onclick="zerarLocalStorage()" style="background: #7f1d1d; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">💥 Zerar tudo</button>
+            </div>
+        `;
+        document.body.appendChild(painel);
+        atualizarDebugStatus();
+        console.log('[DEBUG] Simulador de tempo ATIVO.');
+    } else if (!modoDebugAtivo && painelExistente) {
+        painelExistente.remove();
+        console.log('[DEBUG] Simulador de tempo DESATIVADO.');
+    }
+}
+
+function atualizarDebugStatus() {
+    const el = document.getElementById('debug-status');
+    if (!el || !state.orcamento) return;
+    const orc = state.orcamento;
+    const categoriasComVenc = (orc.categorias || []).filter(c => c.vencimento).length;
+    el.innerHTML = `
+        <div><strong>Nível:</strong> ${orc.nivel || 1}</div>
+        <div><strong>Registros:</strong> ${(orc.historicoRegistros || []).length}</div>
+        <div><strong>Semanas fechadas:</strong> ${orc.semanasFechadas || 0}</div>
+        <div><strong>Categorias:</strong> ${(orc.categorias || []).length} (${categoriasComVenc} com venc.)</div>
+        <div><strong>Custódias:</strong> ${(orc.custodias || []).length}</div>
+        <div><strong>Semana atual:</strong> ${orc.semanaAtual ? orc.semanaAtual.inicio + ' a ' + orc.semanaAtual.fim : '—'}</div>
+        <div><strong>Transição pendente:</strong> ${orc.transicaoNivelPendente || 'não'}</div>
+    `;
+}
+
+function debugPassarDias(dias) {
+    if (!state.orcamento || !state.orcamento.semanaAtual) {
+        alert("Inicie a jornada primeiro.");
+        return;
+    }
+
+    const semana = state.orcamento.semanaAtual;
+    const fim = new Date(semana.fim + 'T23:59:59-03:00');
+    fim.setDate(fim.getDate() + dias);
+
+    semana.fim = fim.toISOString().split('T')[0];
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    if (hoje > fim && !semana.fechada) {
+        fecharSemana();
+        salvarEstado();
+        atualizarDebugStatus();
+        abrirResumoSemanal();
+        console.log('[DEBUG] Semana fechada. Resumo aberto.');
+        return;
+    }
+
+    salvarEstado();
+    atualizarDebugStatus();
+    renderizarOrcamentoInicio();
+    console.log(`[DEBUG] +${dias} dias. Semana:`, state.orcamento.semanaAtual);
+}
+
+function debugForcarRegistros(qtd) {
+    if (!state.orcamento) return;
+    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+
+    for (let i = 0; i < qtd; i++) {
+        state.orcamento.historicoRegistros.push({
+            data: new Date().toISOString(),
+            caixa: 'vida',
+            categoria: null,
+            valor: 10
+        });
+    }
+
+    salvarEstado();
+    atualizarDebugStatus();
+    verificarGatilhoNivel2();
+    renderizarOrcamentoInicio();
+    console.log(`[DEBUG] +${qtd} registros. Total:`, state.orcamento.historicoRegistros.length);
+}
+
+function debugForcarGatilhoNivel2() {
+    if (!state.orcamento) return;
+
+    state.orcamento.semanasFechadas = Math.max(state.orcamento.semanasFechadas || 0, 2);
+    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+    while (state.orcamento.historicoRegistros.length < 10) {
+        state.orcamento.historicoRegistros.push({
+            data: new Date().toISOString(),
+            caixa: 'vida',
+            categoria: null,
+            valor: 10
+        });
+    }
+
+    verificarGatilhoNivel2();
+    salvarEstado();
+    atualizarDebugStatus();
+    renderizarOrcamentoInicio();
+
+    console.log('[DEBUG] Gatilho do Nível 2 forçado. Transição pendente:', state.orcamento.transicaoNivelPendente);
+}
+
+// ============================================================
+// DEBUG — NÍVEL 3
+// ============================================================
+
+function debugForcarGatilhoNivel3() {
+    if (!state.orcamento) return;
+
+    // Garante que o usuário já está no Nível 2
+    if (state.orcamento.nivel < 2) {
+        state.orcamento.nivel = 2;
+    }
+
+    // Cria 3 categorias (se não houver)
+    if ((state.orcamento.categorias || []).length < 3) {
+        const categoriasFaltantes = 3 - (state.orcamento.categorias || []).length;
+        for (let i = 0; i < categoriasFaltantes; i++) {
+            state.orcamento.categorias.push({
+                id: 'cat_debug_' + Date.now() + '_' + i,
+                nome: 'Categoria debug ' + (i + 1),
+                valor: 100,
+                tipo: 'fixo',
+                vencimento: 5 + i * 5,
+                caixa: 'base'
+            });
+        }
+    }
+
+    // Garante pelo menos 2 categorias com vencimento
+    const comVenc = state.orcamento.categorias.filter(c => c.vencimento);
+    if (comVenc.length < 2) {
+        state.orcamento.categorias.forEach((c, i) => {
+            if (!c.vencimento && i < 2) c.vencimento = 10 + i * 10;
+        });
+    }
+
+    // Garante pelo menos 1 semana fechada
+    state.orcamento.semanasFechadas = Math.max(state.orcamento.semanasFechadas || 0, 1);
+
+    // Força transição pendente
+    if (state.orcamento.nivel < 3) {
+        state.orcamento.transicaoNivelPendente = 3;
+    }
+
+    salvarEstado();
+    atualizarDebugStatus();
+    renderizarOrcamentoInicio();
+    console.log('[DEBUG] Gatilho do Nível 3 forçado. Transição pendente:', state.orcamento.transicaoNivelPendente);
+}
+
+function debugPularParaNivel3() {
+    if (!state.orcamento) return;
+
+    state.orcamento.nivel = 3;
+    state.orcamento.transicaoNivelPendente = null;
+    if (!state.orcamento.nivel3LinhaDeBase) {
+        state.orcamento.nivel3LinhaDeBase = new Date().toISOString();
+    }
+    if (!Array.isArray(state.orcamento.custodias)) {
+        state.orcamento.custodias = [];
+    }
+
+    salvarEstado();
+    atualizarDebugStatus();
+    renderizarOrcamentoInicio();
+    console.log('[DEBUG] Pulado para Nível 3. Custódias:', state.orcamento.custodias.length);
+}
+
+function debugCriarCustodiasExemplo() {
+    if (!state.orcamento) return;
+
+    // Garante que está no Nível 3
+    if (state.orcamento.nivel < 3) {
+        state.orcamento.nivel = 3;
+    }
+    if (!Array.isArray(state.orcamento.custodias)) {
+        state.orcamento.custodias = [];
+    }
+
+    // Remove custódias de debug anteriores (para não duplicar)
+    state.orcamento.custodias = state.orcamento.custodias.filter(c => !c.id.startsWith('cust_debug_'));
+
+    const agora = Date.now();
+
+    // Conta corrente com saldo
+    state.orcamento.custodias.push({
+        id: 'cust_debug_cc_' + agora,
+        nome: 'Nubank',
+        tipo: 'conta_corrente',
+        saldoInicial: 850.00,
+        saldoAtual: 850.00,
+        criadaEm: new Date().toISOString(),
+        faturaAcumulada: 0
+    });
+
+    // Cartão de crédito com fechamento e vencimento
+    state.orcamento.custodias.push({
+        id: 'cust_debug_cc2_' + agora,
+        nome: 'Cartão X',
+        tipo: 'cartao_credito',
+        saldoInicial: 0,
+        saldoAtual: 0,
+        criadaEm: new Date().toISOString(),
+        faturaAcumulada: 320.50,
+        diaFechamento: 15,
+        diaVencimento: 22
+    });
+
+    // Vale com saldo
+    state.orcamento.custodias.push({
+        id: 'cust_debug_vale_' + agora,
+        nome: 'Vale alimentação',
+        tipo: 'vale',
+        saldoInicial: 200.00,
+        saldoAtual: 200.00,
+        criadaEm: new Date().toISOString(),
+        faturaAcumulada: 0
+    });
+
+    salvarEstado();
+    atualizarDebugStatus();
+    renderizarOrcamentoInicio();
+    console.log('[DEBUG] 3 custódias de exemplo criadas. Total:', state.orcamento.custodias.length);
+}
+
+function debugCriarCategoriasComVencimento() {
+    if (!state.orcamento) return;
+
+    // Garante que está no Nível 2+
+    if (state.orcamento.nivel < 2) {
+        state.orcamento.nivel = 2;
+    }
+    if (!Array.isArray(state.orcamento.categorias)) {
+        state.orcamento.categorias = [];
+    }
+
+    // Remove categorias de debug anteriores
+    state.orcamento.categorias = state.orcamento.categorias.filter(c => !c.id.startsWith('cat_debug_venc_'));
+
+    const agora = Date.now();
+
+    // Aluguel — vence dia 5, base
+    state.orcamento.categorias.push({
+        id: 'cat_debug_venc_aluguel_' + agora,
+        nome: 'Aluguel',
+        valor: 1200,
+        tipo: 'fixo',
+        vencimento: 5,
+        caixa: 'base'
+    });
+
+    // Luz — vence dia 12, base
+    state.orcamento.categorias.push({
+        id: 'cat_debug_venc_luz_' + agora,
+        nome: 'Luz',
+        valor: 180,
+        tipo: 'variavel',
+        vencimento: 12,
+        caixa: 'base'
+    });
+
+    // Internet — vence dia 20, base
+    state.orcamento.categorias.push({
+        id: 'cat_debug_venc_internet_' + agora,
+        nome: 'Internet',
+        valor: 120,
+        tipo: 'fixo',
+        vencimento: 20,
+        caixa: 'base'
+    });
+
+    // Atualiza o fortalezaTotal da base (soma das categorias)
+    if (state.orcamento.base) {
+        const totalBase = state.orcamento.categorias
+            .filter(c => c.caixa === 'base')
+            .reduce((s, c) => s + (c.valor || 0), 0);
+        state.orcamento.base.fortalezaTotal = totalBase;
+
+        if (state.orcamento.semanaAtual) {
+            state.orcamento.semanaAtual.base.limite = totalBase / DIVISOR_SEMANAL;
+        }
+    }
+
+    salvarEstado();
+    atualizarDebugStatus();
+    renderizarOrcamentoInicio();
+    console.log('[DEBUG] 3 categorias com vencimento criadas (dias 5, 12, 20).');
+}
+
+function debugResetarNivel() {
+    const confirmar = confirm("Isso volta o app para o Nível 1 (mantém os dados do diário). Continuar?");
+    if (!confirmar) return;
+
+    state.orcamento.nivel = 1;
+    state.orcamento.rendaDetalhe = null;
+    state.orcamento.categorias = [];
+    state.orcamento.dividaReserva = null;
+    state.orcamento.transicaoNivelPendente = null;
+    state.orcamento.categoriasConcluidas = false;
+    state.orcamento.dividaConcluida = false;
+    state.orcamento.custodias = [];
+    state.orcamento.custodiaPadrao = null;
+    state.orcamento.nivel3LinhaDeBase = null;
+
+    salvarEstado();
+    atualizarDebugStatus();
+    renderizarOrcamentoInicio();
+    console.log('[DEBUG] Resetado para Nível 1.');
+}
+
+function zerarLocalStorage() {
+    const confirmar = confirm("⚠️ Isso apaga TUDO. Tem certeza?");
+    if (!confirmar) return;
+    localStorage.removeItem(CHAVE_STORAGE);
+    location.reload();
+}
+
+// Atalho de teclado (desktop)
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+        e.preventDefault();
+        alternarModoDebug();
+    }
+});
+
+// Toque longo no logo (mobile) — 2 segundos
+(function prepararToqueLongo() {
+    let timerToque = null;
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            const logo = document.querySelector('#screen-welcome div[style*="font-size: 3rem"]');
+            if (!logo) return;
+
+            const iniciarToque = () => {
+                timerToque = setTimeout(() => {
+                    alternarModoDebug();
+                    if (navigator.vibrate) navigator.vibrate(100);
+                }, 2000);
+            };
+            const cancelarToque = () => {
+                if (timerToque) { clearTimeout(timerToque); timerToque = null; }
+            };
+
+            logo.addEventListener('touchstart', iniciarToque);
+            logo.addEventListener('touchend', cancelarToque);
+            logo.addEventListener('touchcancel', cancelarToque);
+        }, 100);
+    });
+})();
+
+
+</script>
+</body>
+</html>
