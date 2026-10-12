@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>D+1 | Orçamento Doméstico</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎒</text></svg>">
-
+    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     
     <style>
         :root {
@@ -573,40 +574,67 @@
 <!-- MODAL: Registro de gasto -->
 <div id="modal-registro" class="modal-registro">
     <div class="modal-registro-conteudo">
-        <div id="modal-registro-passo-1">
+
+        <!-- PASSO 0: tipo de registro -->
+        <div id="modal-registro-passo-0">
             <button onclick="fecharModalRegistro()" style="position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer;">&times;</button>
-            <h3 style="color: var(--primary); margin-bottom: 20px;">Quanto foi?</h3>
+            <h3 style="color: var(--primary); margin-bottom: 20px;">O que você quer registrar?</h3>
+
+            <button class="btn-option" style="justify-content: flex-start;" onclick="escolherTipoRegistro('gasto')">
+                <span style="font-size: 1.5rem;">💸</span>
+                <span>Gasto</span>
+            </button>
+
+            <button class="btn-option" id="btn-opcao-recebimento" style="justify-content: flex-start; display: none;" onclick="escolherTipoRegistro('recebimento')">
+                <span style="font-size: 1.5rem;">💰</span>
+                <span>Recebimento</span>
+            </button>
+        </div>
+
+        <!-- PASSO 1: valor -->
+        <div id="modal-registro-passo-1" style="display: none;">
+            <button onclick="fecharModalRegistro()" style="position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer;">&times;</button>
+            <h3 id="registro-titulo-passo-1" style="color: var(--primary); margin-bottom: 20px;">Quanto foi?</h3>
             <div style="position: relative; margin-bottom: 25px;">
                 <span style="position: absolute; left: 15px; top: 15px; color: var(--secondary); font-weight: bold;">R$</span>
                 <input type="number" id="registro-valor" placeholder="0.00" style="width: 100%; padding: 15px 15px 15px 45px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 1.3rem; outline: none; font-weight: bold;">
             </div>
-            <h3 style="color: var(--primary); margin-bottom: 15px; font-size: 1rem;">Isso é o quê?</h3>
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                <button class="btn-option" style="flex: 1; flex-direction: column; align-items: center; padding: 15px 10px; margin-bottom: 0; text-align: center;" onclick="registrarGasto('base')">
-                    <span style="font-size: 1.5rem;">🛡️</span>
-                    <span style="font-size: 0.85rem;">Base</span>
-                </button>
-                <button class="btn-option" style="flex: 1; flex-direction: column; align-items: center; padding: 15px 10px; margin-bottom: 0; text-align: center;" onclick="registrarGasto('vida')">
-                    <span style="font-size: 1.5rem;">🌿</span>
-                    <span style="font-size: 0.85rem;">Vida</span>
-                </button>
-                <button class="btn-option" style="flex: 1; flex-direction: column; align-items: center; padding: 15px 10px; margin-bottom: 0; text-align: center;" onclick="registrarGasto('futuro')">
-                    <span style="font-size: 1.5rem;">🔭</span>
-                    <span style="font-size: 0.85rem;">Futuro</span>
-                </button>
+
+            <!-- Opções para GASTO -->
+            <div id="registro-opcoes-gasto">
+                <h3 style="color: var(--primary); margin-bottom: 15px; font-size: 1rem;">Isso é o quê?</h3>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <button class="btn-option" style="flex: 1; flex-direction: column; align-items: center; padding: 15px 10px; margin-bottom: 0; text-align: center;" onclick="registrarGasto('base')">
+                        <span style="font-size: 1.5rem;">🛡️</span>
+                        <span style="font-size: 0.85rem;">Base</span>
+                    </button>
+                    <button class="btn-option" style="flex: 1; flex-direction: column; align-items: center; padding: 15px 10px; margin-bottom: 0; text-align: center;" onclick="registrarGasto('vida')">
+                        <span style="font-size: 1.5rem;">🌿</span>
+                        <span style="font-size: 0.85rem;">Vida</span>
+                    </button>
+                    <button class="btn-option" style="flex: 1; flex-direction: column; align-items: center; padding: 15px 10px; margin-bottom: 0; text-align: center;" onclick="registrarGasto('futuro')">
+                        <span style="font-size: 1.5rem;">🔭</span>
+                        <span style="font-size: 0.85rem;">Futuro</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Opções para RECEBIMENTO -->
+            <div id="registro-opcoes-recebimento" style="display: none;">
+                <button class="btn-primary" onclick="continuarRecebimento()">Continuar</button>
             </div>
         </div>
 
-        <!-- Passo 2A: Categoria (Nível 2) -->
+        <!-- PASSO 2 (gasto): categoria -->
         <div id="modal-registro-passo-2-categoria" style="display: none;">
-            <h3 style="color: var(--primary); margin-bottom: 15px; font-size: 1rem;">Isso é qual tipo?</h3>
+            <h3 id="titulo-passo-2-categoria" style="color: var(--primary); margin-bottom: 15px; font-size: 1rem;">Isso é qual tipo?</h3>
             <div class="chip-container" id="chips-categorias-registro"></div>
-            <button class="btn-option" style="justify-content: center; border-color: var(--secondary);" onclick="pularCategoria()">
+            <button class="btn-option" id="btn-pular-categoria" style="justify-content: center; border-color: var(--secondary);" onclick="pularCategoria()">
                 Não sei / Outro
             </button>
         </div>
-        
-                <!-- Passo 3B: Custódia (Nível 3) -->
+
+        <!-- PASSO 3 (gasto): custódia -->
         <div id="modal-registro-passo-3-custodia" style="display: none;">
             <h3 style="color: var(--primary); margin-bottom: 15px; font-size: 1rem;">De onde saiu?</h3>
             <div class="chip-container" id="chips-custodias-registro"></div>
@@ -615,14 +643,37 @@
             </button>
         </div>
 
-        <!-- Passo 3: Confirmação -->
+        <!-- CONFIRMAÇÃO -->
         <div id="modal-registro-passo-3" style="display: none; text-align: center;">
             <div style="font-size: 3rem; margin-bottom: 15px;">✅</div>
             <div id="modal-registro-fala" class="fala-avatar" style="border-left: none; background: #f0f9ff; text-align: left;"></div>
             <button class="btn-primary" style="background: var(--primary);" onclick="fecharModalRegistro()">Fechar</button>
         </div>
+
     </div>
 </div>
+
+<!-- MODAL: QR Code -->
+<div id="modal-qrcode" class="modal-registro">
+    <div class="modal-registro-conteudo">
+        <button onclick="fecharModalQRCode()" style="position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer;">&times;</button>
+        <h3 style="color: var(--primary); margin-bottom: 10px;">Compartilhar resumo</h3>
+        <p style="font-size: 0.85rem; color: var(--secondary); margin-bottom: 20px; line-height: 1.5;">
+            Quem ler esse QR Code vai ver um retrato da sua semana. Nada sai do seu celular.
+        </p>
+
+        <div id="qrcode-container" style="display: flex; justify-content: center; padding: 15px; background: white; border-radius: 12px; margin-bottom: 20px;"></div>
+
+        <details>
+            <summary style="font-size: 0.85rem; color: var(--secondary); cursor: pointer; padding: 8px 0;">
+                Não consigo escanear — quero copiar o código
+            </summary>
+            <textarea id="qrcode-texto" readonly rows="4" style="width: 100%; margin-top: 8px; padding: 10px; border-radius: 8px; border: 1px solid #ddd; font-family: monospace; font-size: 11px; resize: vertical;"></textarea>
+            <button class="btn-primary" style="margin-top: 8px; padding: 12px; font-size: 14px;" onclick="copiarCodigoQR()">Copiar código</button>
+        </details>
+    </div>
+</div>
+
 
 <script>
 // ============================================================
@@ -690,33 +741,40 @@ function migrarEstado() {
     if (state.orcamento.dividaConcluida === undefined) {
         state.orcamento.dividaConcluida = false;
     }
-
-    // Inicializa contador de semanas fechadas
     if (typeof state.orcamento.semanasFechadas !== 'number') {
         state.orcamento.semanasFechadas = (state.orcamento.resumos || []).length;
     }
-    // Migra semanaAtual antiga (sem renda, totalGasto, saldo)
+    // === MIGRAÇÃO PARA rendaEstimada / rendaReal ===
 if (state.orcamento.semanaAtual) {
     const s = state.orcamento.semanaAtual;
-    if (typeof s.renda !== 'number') {
-        const rendaMensal = state.orcamento.base?.rendaBase || 0;
-        s.renda = rendaMensal / DIVISOR_SEMANAL;
+    if (typeof s.rendaEstimada !== 'number') {
+        s.rendaEstimada = (typeof s.renda === 'number' && s.renda > 0)
+            ? s.renda
+            : (state.orcamento.base?.rendaBase || 0) / DIVISOR_SEMANAL;
     }
+    if (typeof s.rendaReal !== 'number') {
+        s.rendaReal = 0; // opção B: começa em 0
+    }
+    delete s.renda; // limpa o campo antigo
+
     const totalGasto = (s.base?.gasto || 0) + (s.vida?.gasto || 0) + (s.futuro?.gasto || 0);
     if (typeof s.totalGasto !== 'number') s.totalGasto = totalGasto;
-    if (typeof s.saldo !== 'number') s.saldo = s.renda - totalGasto;
+    if (typeof s.saldo !== 'number') s.saldo = s.rendaReal - totalGasto;
 }
 
-// Migra resumos antigos (sem renda, totalGasto, saldo)
 if (Array.isArray(state.orcamento.resumos)) {
     state.orcamento.resumos.forEach(r => {
-        if (typeof r.renda !== 'number') {
-            const rendaMensal = state.orcamento.base?.rendaBase || 0;
-            r.renda = rendaMensal / DIVISOR_SEMANAL;
+        if (typeof r.rendaEstimada !== 'number') {
+            r.rendaEstimada = (typeof r.renda === 'number' && r.renda > 0)
+                ? r.renda
+                : (state.orcamento.base?.rendaBase || 0) / DIVISOR_SEMANAL;
         }
+        if (typeof r.rendaReal !== 'number') r.rendaReal = r.rendaEstimada;
+        delete r.renda;
+
         const totalGasto = (r.base?.gasto || 0) + (r.vida?.gasto || 0) + (r.futuro?.gasto || 0);
         if (typeof r.totalGasto !== 'number') r.totalGasto = totalGasto;
-        if (typeof r.saldo !== 'number') r.saldo = r.renda - totalGasto;
+        if (typeof r.saldo !== 'number') r.saldo = r.rendaReal - totalGasto;
     });
 }
     // === NÍVEL 3 — CUSTÓDIAS ===
@@ -1221,10 +1279,11 @@ function renderizarOrcamentoCompleto(container, orc) {
 
     // ===== BOTÃO DE SEMANAS PASSADAS =====
     const btnHistorico = `
-        <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
-            <button onclick="renderizarHistoricoResumos(); goToScreen('screen-historico-resumos')" style="background: none; border: none; color: var(--secondary); font-size: 0.85rem; cursor: pointer; text-decoration: underline;">Semanas passadas</button>
-        </div>
-    `;
+    <div style="display: flex; justify-content: space-between; margin-bottom: 15px; gap: 10px;">
+        <button onclick="abrirModalQRCode()" style="background: none; border: none; color: var(--accent); font-size: 0.85rem; cursor: pointer; font-weight: 600;">📤 Compartilhar</button>
+        <button onclick="renderizarHistoricoResumos(); goToScreen('screen-historico-resumos')" style="background: none; border: none; color: var(--secondary); font-size: 0.85rem; cursor: pointer; text-decoration: underline;">Semanas passadas</button>
+    </div>
+`;
 
     // ===== LIMITES DA SEMANA =====
     const limiteBase = semana.base.limite;
@@ -1304,83 +1363,69 @@ function renderizarCaixinha(id, nome, gasto, limite) {
         </div>
     `;
 }
-function renderizarCardSaldo(semana, orc, modo = 'em-andamento') {
+function renderizarCardSaldo(semana, orc) {
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    // Renda semanal: prioriza a da semana, com fallback pra renda mensal
-    const renda = (typeof semana.renda === 'number' && semana.renda > 0)
-        ? semana.renda
-        : (orc.base?.rendaBase || 0) / DIVISOR_SEMANAL;
+    const rendaReal     = semana.rendaReal || 0;
+    const rendaEstimada = semana.rendaEstimada || (orc.base?.rendaBase || 0) / DIVISOR_SEMANAL;
 
-    // Total gasto
     const totalGasto = (semana.base?.gasto || 0)
                      + (semana.vida?.gasto || 0)
                      + (semana.futuro?.gasto || 0);
 
-    // Saldo disponível
-    const saldo = renda - totalGasto;
+    const saldo = rendaReal - totalGasto;
 
-    // ===== LÓGICA DO Pote =====
-    // A barra representa o QUANTO AINDA TEM, não o quanto foi usado.
-    // percentualDisponivel = 100% quando não gastou nada, 0% quando gastou tudo.
-    const percentualDisponivel = renda > 0
-        ? Math.max(0, Math.min((saldo / renda) * 100, 100))
-        : 0;
-
-    // Percentual usado (para o rótulo lateral e para a lógica de cor)
-    const percentualUsado = renda > 0 ? Math.min((totalGasto / renda) * 100, 100) : 0;
-
-    // ===== CORES =====
-    // ATENÇÃO: a lógica de cor é INVERTIDA em relação à barra.
-    // Verde = muito disponível (>30% sobrando)
-    // Amarelo = atenção (10-30% sobrando)
-    // Vermelho = Pote quase vazio (<10% sobrando OU saldo negativo)
-    let corBarra, corBorda, iconeSaldo, falaSaldo, rotuloStatus;
-
-    if (saldo < 0) {
-        // Gastou mais do que entrou — Pote estourou
-        corBarra = 'barra-vermelha';
-        corBorda = '#ef4444';
-        iconeSaldo = '🌿';
-        rotuloStatus = 'Faltou';
-        falaSaldo = `Você gastou ${fmt(Math.abs(saldo))} mais do que entrou. Acontece. Semana que vem a gente ajusta.`;
-    } else if (percentualDisponivel < 10) {
-        // Pote quase vazio
-        corBarra = 'barra-vermelha';
-        corBorda = '#ef4444';
-        iconeSaldo = '🌿';
-        rotuloStatus = 'Disponível';
-        falaSaldo = `Sobrou pouco: ${fmt(saldo)}. Tá no fim do Pote. Foi por pouco.`;
-    } else if (percentualDisponivel < 30) {
-        // Pote na reserva
-        corBarra = 'barra-amarela';
-        corBorda = '#f59e0b';
-        iconeSaldo = '🌿';
-        rotuloStatus = 'Disponível';
-        falaSaldo = `Sobrou ${fmt(saldo)}. Ainda dá, mas o Pote tá na reserva.`;
-    } else {
-        // Pote tranquilo
-        corBarra = 'barra-verde';
-        corBorda = '#10b981';
-        iconeSaldo = '🛡️';
-        rotuloStatus = 'Disponível';
-        falaSaldo = `Sobrou ${fmt(saldo)}. O Pote tá tranquilo. Você usou ${percentualUsado.toFixed(0)}% do que entrou.`;
-    }
-
-    // Se não há renda cadastrada
-    if (renda <= 0) {
+    
+    if (rendaReal <= 0) {
         return `
             <div class="card" style="border-left: 4px solid #94a3b8; margin-bottom: 20px; background: #f8fafc;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <strong style="color: var(--primary); font-size: 0.95rem;">💰 Saldo da semana</strong>
-                    <span style="font-size: 0.75rem; color: var(--secondary);">—</span>
+                    <span style="font-size: 0.75rem; color: var(--secondary);">aguardando</span>
                 </div>
-                <p style="font-size: 0.85rem; color: var(--secondary); margin-top: 8px; line-height: 1.4;">
-                    Cadastre sua renda para ver o saldo da semana.
-                </p>
+                <div style="font-size: 0.85rem; color: var(--secondary); line-height: 1.5;">
+                    Você ainda não registrou nenhum recebimento esta semana.
+                    Toque no <strong>+</strong> e escolha <strong>Recebimento</strong> para começar.
+                </div>
+                <div style="font-size: 0.75rem; color: var(--secondary); margin-top: 10px;">
+                    Previsto para a semana: <strong>${fmt(rendaEstimada)}</strong>
+                </div>
             </div>
         `;
     }
+
+    // === Cálculos ===
+    const percentualDisponivel = Math.max(0, Math.min((saldo / rendaReal) * 100, 100));
+    const percentualUsado      = Math.min((totalGasto / rendaReal) * 100, 100);
+    const acimaDoEstimado      = rendaReal > rendaEstimada;
+
+    let corBarra, corBorda, iconeSaldo, falaSaldo, rotuloStatus;
+
+    if (saldo < 0) {
+        corBarra = 'barra-vermelha'; corBorda = '#ef4444'; iconeSaldo = '🌿';
+        rotuloStatus = 'Faltou';
+        falaSaldo = `Você gastou ${fmt(Math.abs(saldo))} mais do que recebeu. Acontece. Semana que vem a gente ajusta.`;
+    } else if (percentualDisponivel < 10) {
+        corBarra = 'barra-vermelha'; corBorda = '#ef4444'; iconeSaldo = '🌿';
+        rotuloStatus = 'Disponível';
+        falaSaldo = `Sobrou pouco: ${fmt(saldo)}. Tá no fim do Pote. Foi por pouco.`;
+    } else if (percentualDisponivel < 30) {
+        corBarra = 'barra-amarela'; corBorda = '#f59e0b'; iconeSaldo = '🌿';
+        rotuloStatus = 'Disponível';
+        falaSaldo = `Sobrou ${fmt(saldo)}. Ainda dá, mas o Pote tá na reserva.`;
+    } else {
+        corBarra = 'barra-verde'; corBorda = '#10b981'; iconeSaldo = '🛡️';
+        rotuloStatus = 'Disponível';
+        falaSaldo = `Sobrou ${fmt(saldo)}. O Pote tá tranquilo. Você usou ${percentualUsado.toFixed(0)}% do que recebeu.`;
+    }
+
+    const linhaEstimado = acimaDoEstimado
+        ? `<div style="font-size: 0.7rem; color: #0369a1; margin-top: 4px;">
+               ↑ Recebido ${fmt(rendaReal - rendaEstimada)} acima do estimado
+           </div>`
+        : `<div style="font-size: 0.7rem; color: var(--secondary); margin-top: 4px;">
+               Estimado para a semana: ${fmt(rendaEstimada)}
+           </div>`;
 
     return `
         <div class="card" style="border-left: 4px solid ${corBorda}; margin-bottom: 20px; padding: 18px 20px;">
@@ -1390,8 +1435,8 @@ function renderizarCardSaldo(semana, orc, modo = 'em-andamento') {
             </div>
 
             <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
-                <span style="color: var(--secondary);">Entrou</span>
-                <strong style="color: #10b981;">+ ${fmt(renda)}</strong>
+                <span style="color: var(--secondary);">Recebido</span>
+                <strong style="color: #10b981;">+ ${fmt(rendaReal)}</strong>
             </div>
 
             <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 10px;">
@@ -1404,7 +1449,6 @@ function renderizarCardSaldo(semana, orc, modo = 'em-andamento') {
                 <strong style="color: ${saldo >= 0 ? '#10b981' : '#ef4444'};">${fmt(Math.abs(saldo))}</strong>
             </div>
 
-            <!-- Pote DE COMBUSTÍVEL: barra começa cheia e esvazia -->
             <div class="barra-fundo" style="margin-top: 10px;">
                 <div class="barra-preenchida ${corBarra}" style="width: ${percentualDisponivel}%; transition: width 0.4s ease, background 0.4s ease;"></div>
             </div>
@@ -1413,7 +1457,9 @@ function renderizarCardSaldo(semana, orc, modo = 'em-andamento') {
                 <span>Pote: ${percentualDisponivel.toFixed(0)}% disponível</span>
                 <span>${percentualUsado.toFixed(0)}% usado</span>
             </div>
-             ${renderizarBlocoProvisao(orc)}
+
+            ${linhaEstimado}
+            ${renderizarBlocoProvisao(orc)}
 
             <div class="fala-avatar" style="border-left-color: ${corBorda}; margin-top: 14px; margin-bottom: 0;">
                 <span class="icone">${iconeSaldo}</span>
@@ -1442,16 +1488,17 @@ function iniciarNovaSemana() {
     const limiteFuturo = futuroMensal / DIVISOR_SEMANAL;
     const rendaSemanal = rendaMensal / DIVISOR_SEMANAL;
 
-    state.orcamento.semanaAtual = {
-        inicio: inicio.toISOString().split('T')[0],
-        fim: fim.toISOString().split('T')[0],
-        renda: rendaSemanal,
-        base: { limite: limiteBase, gasto: 0, estouro: 0 },
-        vida: { limite: limiteVida, gasto: 0, estouro: 0 },
-        futuro: { limite: limiteFuturo, gasto: 0, estouro: 0 },
-        fechada: false,
-        resumoLido: false
-    };
+state.orcamento.semanaAtual = {
+    inicio: inicio.toISOString().split('T')[0],
+    fim: fim.toISOString().split('T')[0],
+    rendaEstimada: rendaSemanal,   // o previsto
+    rendaReal: 0,                  // opção B: começa zerado
+    base:   { limite: limiteBase,   gasto: 0, estouro: 0 },
+    vida:   { limite: limiteVida,   gasto: 0, estouro: 0 },
+    futuro: { limite: limiteFuturo, gasto: 0, estouro: 0 },
+    fechada: false,
+    resumoLido: false
+};
 
     salvarEstado();
 }
@@ -1470,20 +1517,27 @@ let registroTemporario = null;
 function abrirModalRegistro() {
     const semana = state.orcamento && state.orcamento.semanaAtual;
     if (semana && semana.fechada) {
-        alert("A semana já fechou. Vamos ver o resumo primeiro antes de registrar mais gastos.");
+        alert('A semana já fechou. Vamos ver o resumo primeiro antes de registrar mais gastos.');
         abrirResumoSemanal();
         return;
     }
 
-    registroTemporario = { valor: 0, caixa: null };
+    registroTemporario = { valor: 0, caixa: null, tipo: null, custodiaId: null, cartaoId: null, categoriaNome: null };
 
-    document.getElementById('modal-registro').classList.add('ativo');
-        document.getElementById('modal-registro-passo-1').style.display = 'block';
+    // Esconde todos os passos
+    document.getElementById('modal-registro-passo-0').style.display = 'block';
+    document.getElementById('modal-registro-passo-1').style.display = 'none';
     document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
     document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
     document.getElementById('modal-registro-passo-3').style.display = 'none';
-    
-document.getElementById('registro-valor').value = '';
+
+    // Mostra opção de recebimento só a partir do Nível 2
+    const btnReceb = document.getElementById('btn-opcao-recebimento');
+    if (btnReceb) {
+        btnReceb.style.display = (state.orcamento.nivel >= 2) ? 'flex' : 'none';
+    }
+
+    document.getElementById('modal-registro').classList.add('ativo');
 }
 
 function fecharModalRegistro() {
@@ -1610,7 +1664,181 @@ semana[caixa].gasto += valor;
 
     renderizarOrcamentoInicio();
 }
+// ============================================================
+// REGISTRO — TIPO (gasto ou recebimento)
+// ============================================================
 
+function escolherTipoRegistro(tipo) {
+    registroTemporario.tipo = tipo;
+
+    // Esconde passo 0
+    document.getElementById('modal-registro-passo-0').style.display = 'none';
+    document.getElementById('modal-registro-passo-1').style.display = 'block';
+
+    // Ajusta títulos e opções conforme o tipo
+    const titulo = document.getElementById('registro-titulo-passo-1');
+    const opcoesGasto = document.getElementById('registro-opcoes-gasto');
+    const opcoesReceb = document.getElementById('registro-opcoes-recebimento');
+
+    if (tipo === 'gasto') {
+        titulo.textContent = 'Quanto foi?';
+        opcoesGasto.style.display = 'block';
+        opcoesReceb.style.display = 'none';
+    } else {
+        titulo.textContent = 'Quanto entrou?';
+        opcoesGasto.style.display = 'none';
+        opcoesReceb.style.display = 'block';
+    }
+
+    document.getElementById('registro-valor').value = '';
+    document.getElementById('registro-valor').focus();
+}
+
+// ============================================================
+// RECEBIMENTO — fluxo
+// ============================================================
+
+function continuarRecebimento() {
+    const valor = parseFloat(document.getElementById('registro-valor').value) || 0;
+    if (valor <= 0) { alert('Insira um valor maior que zero.'); return; }
+
+    registroTemporario.valor = valor;
+
+    // Nível 2+: se há fontes de renda cadastradas, pergunta qual
+    const fontes = (state.orcamento.rendaDetalhe && state.orcamento.rendaDetalhe.fontes) || [];
+    if (state.orcamento.nivel >= 2 && fontes.length > 0) {
+        mostrarPassoCategoriaRecebimento(fontes);
+        return;
+    }
+
+    // Sem categoria, tenta custódia (Nível 3)
+    tentarPassoCustodiaRecebimento();
+}
+
+function mostrarPassoCategoriaRecebimento(fontes) {
+    document.getElementById('modal-registro-passo-1').style.display = 'none';
+    document.getElementById('modal-registro-passo-2-categoria').style.display = 'block';
+    document.getElementById('titulo-passo-2-categoria').textContent = 'De onde vem?';
+
+    const containerChips = document.getElementById('chips-categorias-registro');
+    containerChips.innerHTML = '';
+
+    fontes.forEach(f => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.innerText = `${f.nome} · R$ ${(f.valor || 0).toFixed(2).replace('.', ',')}`;
+        chip.onclick = () => confirmarRecebimento(f.nome);
+        containerChips.appendChild(chip);
+    });
+
+    // O botão "pular" agora chama confirmarRecebimento sem categoria
+    document.getElementById('btn-pular-categoria').onclick = () => confirmarRecebimento(null);
+}
+
+function tentarPassoCustodiaRecebimento() {
+    // Só no Nível 3 e se houver custódias
+    const custodias = state.orcamento.custodias || [];
+    if (state.orcamento.nivel >= 3 && custodias.length > 0) {
+        mostrarPassoCustodiaRecebimento(custodias);
+        return;
+    }
+    confirmarRecebimento(null, null);
+}
+
+function mostrarPassoCustodiaRecebimento(custodias) {
+    document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
+    document.getElementById('modal-registro-passo-3-custodia').style.display = 'block';
+
+    const containerChips = document.getElementById('chips-custodias-registro');
+    containerChips.innerHTML = '';
+
+    custodias.forEach(c => {
+        const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.innerHTML = `${tipo.icone} ${c.nome}`;
+        chip.onclick = () => confirmarRecebimento(registroTemporario.categoriaNome || null, c.id);
+        containerChips.appendChild(chip);
+    });
+
+    // Botão "pular"
+    const btnPular = document.querySelector('#modal-registro-passo-3-custodia button.btn-option');
+    if (btnPular) {
+        btnPular.onclick = () => confirmarRecebimento(registroTemporario.categoriaNome || null, null);
+    }
+}
+
+function confirmarRecebimento(categoriaNome, custodiaId) {
+    const valor = registroTemporario.valor;
+    const semana = state.orcamento.semanaAtual;
+    if (!semana || semana.fechada) {
+        alert('A semana fechou. Vamos ver o resumo primeiro.');
+        fecharModalRegistro();
+        abrirResumoSemanal();
+        return;
+    }
+
+    // 1. Soma na renda real
+    semana.rendaReal = (semana.rendaReal || 0) + valor;
+
+    // 2. Regra 8: se ultrapassou o estimado, atualiza o estimado
+    if (semana.rendaReal > (semana.rendaEstimada || 0)) {
+        semana.rendaEstimada = semana.rendaReal;
+    }
+
+    // 3. Nível 3: se escolheu custódia de destino, soma no saldo
+    if (state.orcamento.nivel >= 3 && custodiaId) {
+        const custodia = state.orcamento.custodias.find(c => c.id === custodiaId);
+        if (custodia && !TIPOS_CUSTODIA[custodia.tipo].temFatura) {
+            // custodia.saldoAtual = (custodia.saldoAtual || 0) - valor * -1; // soma
+            custodia.saldoAtual = (custodia.saldoAtual || 0) + valor;
+        }
+    }
+
+    // 4. Histórico
+    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+    state.orcamento.historicoRegistros.push({
+        id: 'reg_' + Date.now(),
+        data: new Date().toISOString(),
+        tipo: 'recebimento',
+        caixa: null,
+        categoria: categoriaNome || null,
+        valor: valor,
+        custodiaId: custodiaId || null,
+        cartaoId: null,
+        saldoAtualizado: !!custodiaId
+    });
+
+    // 5. Gatilho do Nível 2 (recebimento conta, mas só se o usuário já está no N2+)
+    verificarGatilhoNivel2();
+
+    salvarEstado();
+
+    // 6. Tela de confirmação
+    document.getElementById('modal-registro-passo-1').style.display = 'none';
+    document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
+    document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
+    document.getElementById('modal-registro-passo-3').style.display = 'block';
+
+    const totalRecebido = semana.rendaReal;
+    const estimado = semana.rendaEstimada;
+    const acima = totalRecebido > estimado;
+
+    document.getElementById('modal-registro-fala').innerHTML = `
+        <span class="icone">💰</span>
+        <span class="texto">
+            Recebido. Você já registrou <strong>R$ ${totalRecebido.toFixed(2).replace('.', ',')}</strong> esta semana.
+            ${acima
+                ? `Já passou do estimado (R$ ${estimado.toFixed(2).replace('.', ',')}). Atualizei a previsão.`
+                : `Estimado: R$ ${estimado.toFixed(2).replace('.', ',')}.`}
+        </span>
+    `;
+
+    // Guarda categoria para eventuais passos seguintes
+    registroTemporario.categoriaNome = categoriaNome;
+
+    renderizarOrcamentoInicio();
+}
 // ============================================================
 // GATILHO E TRANSIÇÃO DE NÍVEL
 // ============================================================
@@ -2359,8 +2587,13 @@ function fecharSemana() {
 
     // Saldo da semana = renda − (base + vida + futuro)
     const totalGasto = semana.base.gasto + semana.vida.gasto + semana.futuro.gasto;
-    semana.totalGasto = totalGasto;
-    semana.saldo = semana.renda - totalGasto;
+semana.totalGasto = totalGasto;
+semana.saldo = (semana.rendaReal || 0) - totalGasto;
+
+// Regra 8: se o real ultrapassou o estimado, o estimado é atualizado
+if ((semana.rendaReal || 0) > (semana.rendaEstimada || 0)) {
+    semana.rendaEstimada = semana.rendaReal;
+}
 
     semana.fechada = true;
     semana.resumoLido = false;
@@ -2369,7 +2602,8 @@ function fecharSemana() {
     state.orcamento.resumos.unshift({
         inicio: semana.inicio,
         fim: semana.fim,
-        renda: semana.renda,
+		rendaEstimada: semana.rendaEstimada,
+        rendaReal: semana.rendaReal,
         totalGasto: semana.totalGasto,
         saldo: semana.saldo,
         base: { ...semana.base },
@@ -2404,18 +2638,11 @@ function abrirResumoSemanal() {
     const futuroAceleracao = semana.futuro?.aceleracao || 0;
 
     // Saldo da semana
-    // Garante que renda exista (fallback: calcula da renda mensal)
-const renda = (typeof semana.renda === 'number' && semana.renda > 0)
-    ? semana.renda
-    : (state.orcamento.base?.rendaBase || 0) / DIVISOR_SEMANAL;
-
-// Total gasto (sempre calcula do zero para garantir consistência)
-const totalGasto = (semana.base?.gasto || 0) + (semana.vida?.gasto || 0) + (semana.futuro?.gasto || 0);
-
-// Saldo
-const saldo = renda - totalGasto;
-    const percentualUsado = renda > 0 ? Math.min((totalGasto / renda) * 100, 100) : 0;
-
+    const rendaReal     = semana.rendaReal || 0;
+    const rendaEstimada = semana.rendaEstimada || (state.orcamento.base?.rendaBase || 0) / DIVISOR_SEMANAL;
+    const totalGasto    = (semana.base?.gasto || 0) + (semana.vida?.gasto || 0) + (semana.futuro?.gasto || 0);
+    const saldo         = rendaReal - totalGasto;
+    const percentualUsado = rendaReal > 0 ? Math.min((totalGasto / rendaReal) * 100, 100) : 0;
     // Cor e fala do saldo
     let corSaldo = 'barra-verde';
     let falaSaldo = '';
@@ -2467,8 +2694,12 @@ const saldo = renda - totalGasto;
             </div>
 
             <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px;">
-                <span style="color: var(--secondary);">Entrou</span>
-                <strong style="color: #10b981;">+ ${fmt(renda)}</strong>
+                <span style="color: var(--secondary);">Recebido</span>
+                <strong style="color: #10b981;">+ ${fmt(rendaReal)}</strong>
+            </div>
+			
+			<div style="font-size: 0.75rem; color: var(--secondary); text-align: center; margin-top: 10px;">
+                Estimado: ${fmt(rendaEstimada)} · Recebido: ${fmt(rendaReal)}
             </div>
 
             <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px;">
@@ -2547,16 +2778,15 @@ function renderizarHistoricoResumos() {
         const futuroAceleracao = (r.futuro && r.futuro.aceleracao) || 0;
 
         // Saldo do resumo arquivado
-        const renda = (typeof r.renda === 'number' && r.renda > 0)
-    ? r.renda
-    : (state.orcamento.base?.rendaBase || 0) / DIVISOR_SEMANAL;
-const totalGasto = (typeof r.totalGasto === 'number')
+    const rendaEstimada = r.rendaEstimada || 0;
+const rendaReal     = (typeof r.rendaReal === 'number') ? r.rendaReal : rendaEstimada;
+const totalGasto    = (typeof r.totalGasto === 'number')
     ? r.totalGasto
     : ((r.base?.gasto || 0) + (r.vida?.gasto || 0) + (r.futuro?.gasto || 0));
-const saldo = renda - totalGasto;
+const saldo = rendaReal - totalGasto;
 
         let linhaSaldo = '';
-        if (renda > 0) {
+        if (rendaReal > 0) {
             linhaSaldo = saldo >= 0
                 ? `<span style="color: #10b981; font-weight: bold;">Sobrou ${fmt(saldo)}</span>`
                 : `<span style="color: #ef4444; font-weight: bold;">Faltou ${fmt(Math.abs(saldo))}</span>`;
@@ -3024,9 +3254,7 @@ function detectarSinalRecuperacao(orc) {
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     // S1 — Saldo negativo
-    const renda = (typeof semana.renda === 'number' && semana.renda > 0)
-        ? semana.renda
-        : (orc.base?.rendaBase || 0) / DIVISOR_SEMANAL;
+    const renda = semana.rendaReal || 0;
     const totalGasto = (semana.base?.gasto || 0)
                      + (semana.vida?.gasto || 0)
                      + (semana.futuro?.gasto || 0);
@@ -3528,6 +3756,101 @@ function renderizarBlocoProvisao(orc) {
         </div>
     `;
 }
+
+// ============================================================
+// QR CODE — geração local
+// ============================================================
+
+function montarResumoParaQR() {
+    const orc = state.orcamento;
+    const semana = orc.semanaAtual;
+    if (!semana) return null;
+
+    const pertenceSemana = (isoStr) => {
+        const d = new Date(isoStr);
+        const ini = new Date(semana.inicio + 'T00:00:00');
+        const fim = new Date(semana.fim + 'T23:59:59');
+        return d >= ini && d <= fim;
+    };
+
+    const registros = (orc.historicoRegistros || []).filter(r => pertenceSemana(r.data));
+
+    const totalGasto = (semana.base?.gasto || 0)
+                     + (semana.vida?.gasto || 0)
+                     + (semana.futuro?.gasto || 0);
+
+    const fmt = (v) => v.toFixed(2);
+
+    return {
+        sem: `${formatarData(semana.inicio)} a ${formatarData(semana.fim)}`,
+        r:  Number(fmt(semana.rendaReal || 0)),
+        rEstimada: Number(fmt(semana.rendaEstimada || 0)),
+        s:  Number(fmt((semana.rendaReal || 0) - totalGasto)),
+        b:  [Number(fmt(semana.base?.gasto   || 0)), Number(fmt(semana.base?.limite   || 0))],
+        vd: [Number(fmt(semana.vida?.gasto   || 0)), Number(fmt(semana.vida?.limite   || 0))],
+        f:  [Number(fmt(semana.futuro?.gasto || 0)), Number(fmt(semana.futuro?.limite || 0))],
+        rr: registros
+            .filter(r => r.tipo === 'recebimento')
+            .map(r => ({ n: r.categoria || 'Recebimento', v: Number(fmt(r.valor)), d: r.data })),
+        lista_base: registros
+            .filter(r => r.tipo === 'gasto_direto' && r.caixa === 'base')
+            .map(r => ({ n: r.categoria || 'Gasto', v: Number(fmt(r.valor)), d: r.data })),
+        lista_vida: registros
+            .filter(r => r.tipo === 'gasto_direto' && r.caixa === 'vida')
+            .map(r => ({ n: r.categoria || 'Gasto', v: Number(fmt(r.valor)), d: r.data })),
+        lista_futuro: registros
+            .filter(r => r.tipo === 'gasto_direto' && r.caixa === 'futuro')
+            .map(r => ({ n: r.categoria || 'Gasto', v: Number(fmt(r.valor)), d: r.data }))
+    };
+}
+
+function abrirModalQRCode() {
+    const resumo = montarResumoParaQR();
+    if (!resumo) {
+        alert('Ainda não há uma semana em andamento para compartilhar.');
+        return;
+    }
+
+    const json = JSON.stringify(resumo);
+    const comprimido = LZString.compressToEncodedURIComponent(json);
+
+    // Guarda no textarea (fallback)
+    document.getElementById('qrcode-texto').value = comprimido;
+
+    // Gera o QR
+    const container = document.getElementById('qrcode-container');
+    container.innerHTML = '';
+
+    try {
+        const qr = qrcode(0, 'L'); // 0 = auto-detecta tamanho, L = correção baixa (cabe mais)
+        qr.addData(comprimido);
+        qr.make();
+
+        // createSvgTag gera um SVG limpo e escalável
+        container.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 4 });
+    } catch (e) {
+        console.error('Erro ao gerar QR:', e);
+        container.innerHTML = '<p style="color: #ef4444; font-size: 0.85rem;">Não foi possível gerar o QR. Use o código abaixo.</p>';
+    }
+
+    document.getElementById('modal-qrcode').classList.add('ativo');
+}
+
+function fecharModalQRCode() {
+    document.getElementById('modal-qrcode').classList.remove('ativo');
+}
+
+function copiarCodigoQR() {
+    const ta = document.getElementById('qrcode-texto');
+    ta.select();
+    ta.setSelectionRange(0, 99999);
+    try {
+        document.execCommand('copy');
+        alert('Código copiado.');
+    } catch (e) {
+        alert('Não foi possível copiar. Selecione manualmente.');
+    }
+}
 // ============================================================
 // SIMULADOR DE TEMPO (DEBUG)
 // ============================================================
@@ -3908,7 +4231,7 @@ function zerarLocalStorage() {
 
 // Atalho de teclado (desktop)
 document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+    if (e.ctrlKey && e.shiftKey && e.key === 'M') {
         e.preventDefault();
         alternarModoDebug();
     }
