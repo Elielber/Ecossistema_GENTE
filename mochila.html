@@ -803,6 +803,18 @@ if (Array.isArray(state.orcamento.resumos)) {
         if (r.cartaoId === undefined) r.cartaoId = null;
         if (r.saldoAtualizado === undefined) r.saldoAtualizado = false;
     });
+	// === FUTURO — categorias (dívida e reserva) ===
+if (!Array.isArray(state.orcamento.categorias)) {
+    state.orcamento.categorias = [];
+}
+// Migra: garante que toda categoria tenha 'caixa'
+state.orcamento.categorias.forEach(c => {
+    if (!c.caixa) c.caixa = 'base';
+    // Nova subdivisão só para o Futuro
+    if (c.caixa === 'futuro' && !c.subtipo) {
+        c.subtipo = 'divida'; // ou 'reserva'
+    }
+});
 }
 
 // ============================================================
@@ -836,7 +848,7 @@ function iniciarJornada() {
             guia: null,
             base: null,
             vida: null,
-            futuro: null,
+            futuro: { total: 0 },
             semanaAtual: null,
             resumos: [],
             historicoRegistros: [],
@@ -1268,7 +1280,7 @@ function renderizarOrcamentoCompleto(container, orc) {
                 <div class="chip" onclick="abrirDetalheRenda()">📈 Renda</div>
                 <div class="chip" onclick="abrirDetalheGastos('base')">🛡️ Base</div>
                 <div class="chip" onclick="abrirDetalheGastos('vida')">🌿 Vida</div>
-                <div class="chip" onclick="abrirDetalheDivida()">🔭 Dívida</div>
+                <div class="chip" onclick="abrirDetalheFuturo('divida')">🔭 Futuro</div>
                 ${orc.nivel >= 3 ? `
                     <div class="chip" onclick="abrirTelaCustodias()">🏦 Custódias</div>
                     <div class="chip" onclick="abrirTelaMapaMes()">🗓️ Mapa</div>
@@ -1582,18 +1594,33 @@ function mostrarPassoCategoria(categorias) {
     document.getElementById('modal-registro-passo-1').style.display = 'none';
     document.getElementById('modal-registro-passo-2-categoria').style.display = 'block';
 
+    const titulo = document.getElementById('titulo-passo-2-categoria');
+    // Ajusta o título conforme a caixa
+    if (registroTemporario.caixa === 'futuro') {
+        titulo.textContent = 'É dívida ou reserva?';
+    } else {
+        titulo.textContent = 'Isso é qual tipo?';
+    }
+
     const containerChips = document.getElementById('chips-categorias-registro');
     containerChips.innerHTML = '';
 
     categorias.forEach(cat => {
         const chip = document.createElement('div');
         chip.className = 'chip';
-        chip.innerText = cat.nome;
+
+        // Se for Futuro, prefixa com ícone do subtipo
+        if (cat.caixa === 'futuro' && cat.subtipo) {
+            const icone = cat.subtipo === 'divida' ? '💳' : '🐖';
+            chip.innerText = `${icone} ${cat.nome}`;
+        } else {
+            chip.innerText = cat.nome;
+        }
+
         chip.onclick = () => confirmarRegistro(cat.nome);
         containerChips.appendChild(chip);
     });
 }
-
 function pularCategoria() {
     confirmarRegistro(null);
 }
@@ -2366,23 +2393,27 @@ function removerCategoria(id) {
     const caixa = categoria.caixa || 'base';
     const valor = categoria.valor || 0;
 
-    // Subtrai o valor do total da caixa
     if (caixa === 'base') {
         state.orcamento.base.fortalezaTotal = Math.max(
-            (state.orcamento.base.fortalezaTotal || 0) - valor,
-            0
+            (state.orcamento.base.fortalezaTotal || 0) - valor, 0
         );
         if (state.orcamento.semanaAtual) {
             state.orcamento.semanaAtual.base.limite = state.orcamento.base.fortalezaTotal / DIVISOR_SEMANAL;
         }
-    } else {
+    } else if (caixa === 'vida') {
         state.orcamento.vida.total = Math.max(
-            (state.orcamento.vida.total || 0) - valor,
-            0
+            (state.orcamento.vida.total || 0) - valor, 0
         );
         if (state.orcamento.semanaAtual) {
             state.orcamento.semanaAtual.vida.limite = state.orcamento.vida.total / DIVISOR_SEMANAL;
         }
+    } else if (caixa === 'futuro') {
+        // Recalcula o total do Futuro inteiro
+        state.orcamento.categorias = (state.orcamento.categorias || []).filter(c => c.id !== id);
+        recalcularTotalFuturo();
+        salvarEstado();
+        renderizarDetalheFuturo();
+        return;
     }
 
     state.orcamento.categorias = (state.orcamento.categorias || []).filter(c => c.id !== id);
@@ -2391,173 +2422,204 @@ function removerCategoria(id) {
 }
 
 // ============================================================
-// SEÇÃO 3: SUA DÍVIDA E RESERVA
+// SEÇÃO 3: FUTURO (Dívidas e Reservas)
 // ============================================================
 
-function abrirDetalheDivida() {
+function abrirDetalheFuturo(subtipo) {
+    caixaFuturoAtiva = subtipo || 'divida';
     goToScreen('screen-divida-detalhe');
-    renderizarDetalheDivida();
+    renderizarDetalheFuturo();
 }
 
-function renderizarDetalheDivida() {
-    const container = document.getElementById('divida-detalhe-conteudo');
-    const divida = state.orcamento.dividaReserva;
-    const credores = [
-        { id: 'cred_1', nome: 'Cartão X', valorTotal: 1500 },
-        { id: 'cred_2', nome: 'Banco Y', valorTotal: 3200 }
-    ];
+let caixaFuturoAtiva = 'divida'; // 'divida' ou 'reserva'
 
-    // Se ainda não montou: fluxo conversacional
-    if (!divida || !divida.alvoNome) {
-        let listaCredores = '';
-        credores.forEach((c, i) => {
-            listaCredores += `
-                <button class="btn-option" onclick="responderAlvoDivida(${i})">
-                    <span>🎯 ${c.nome}</span>
-                    <span style="margin-left: auto; font-size: 0.8rem; color: var(--secondary);">R$ ${c.valorTotal.toFixed(2).replace('.', ',')}</span>
-                </button>
+function renderizarDetalheFuturo() {
+    const container = document.getElementById('divida-detalhe-conteudo');
+    const subtipo = caixaFuturoAtiva;
+
+    const categorias = (state.orcamento.categorias || [])
+        .filter(c => c.caixa === 'futuro' && c.subtipo === subtipo);
+
+    const totalCategoria = categorias.reduce((s, c) => s + (c.valor || 0), 0);
+    const totalGeral = (state.orcamento.futuro && state.orcamento.futuro.total) || 0;
+    const totalGasto = (state.orcamento.semanaAtual?.futuro?.gasto) || 0;
+
+    // Cabeçalho com seletor Dívida / Reserva
+    const header = `
+        <div class="chip-container" style="margin-bottom: 20px;">
+            <div class="chip ${subtipo === 'divida' ? 'selecionado' : ''}" onclick="abrirDetalheFuturo('divida')">
+                💳 Dívidas
+            </div>
+            <div class="chip ${subtipo === 'reserva' ? 'selecionado' : ''}" onclick="abrirDetalheFuturo('reserva')">
+                🐖 Reservas
+            </div>
+        </div>
+    `;
+
+    const avatar = subtipo === 'divida'
+        ? { icone: '🔭', fala: 'Cada dívida é um alvo. Vamos nomear e dimensionar.', cor: '#e65100' }
+        : { icone: '🐖', fala: 'Reserva é o colchão. Vamos construir devagar.', cor: '#0ea5e9' };
+
+    let htmlCategorias = '';
+    if (categorias.length === 0) {
+        htmlCategorias = `
+            <div class="placeholder-info">
+                Nenhuma ${subtipo === 'divida' ? 'dívida' : 'reserva'} cadastrada ainda.<br>
+                Toque abaixo pra começar.
+            </div>
+        `;
+    } else {
+        categorias.forEach(cat => {
+            htmlCategorias += `
+                <div class="categoria-item">
+                    <div>
+                        <div class="nome-cat">${cat.nome}</div>
+                        <div class="meta-cat">${cat.tipo}${cat.vencimento ? ' · vence dia ' + cat.vencimento : ''}</div>
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        <span class="valor-cat">R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')}</span>
+                        <button class="btn-remover" onclick="removerCategoria('${cat.id}')">&times;</button>
+                    </div>
+                </div>
             `;
         });
-
-        container.innerHTML = `
-            <div class="fala-avatar">
-                <span class="icone">🔭</span>
-                <span class="texto">Primeiro, qual dívida te tira o sono?</span>
-            </div>
-            ${listaCredores}
-        `;
-        return;
     }
 
-    // Se já montou: resumo + reserva
-    const reservaAtual = divida.reservaAtual || 0;
-    const reservaMeta = divida.reservaMeta || 0;
-    const percentualReserva = reservaMeta > 0 ? Math.min((reservaAtual / reservaMeta) * 100, 100) : 0;
+    // Totalizador
+    const totalizador = `
+        <div class="totalizador">
+            ${subtipo === 'divida' ? 'Dívidas' : 'Reservas'}: <strong>R$ ${totalCategoria.toFixed(2).replace('.', ',')}</strong>
+            ${totalGeral > 0 ? `<br><span style="font-size: 0.8rem;">Futuro total: R$ ${totalGeral.toFixed(2).replace('.', ',')}</span>` : ''}
+            ${totalGasto > 0 ? `<br><span style="font-size: 0.8rem;">Já gasto essa semana: R$ ${totalGasto.toFixed(2).replace('.', ',')}</span>` : ''}
+        </div>
+    `;
 
     container.innerHTML = `
-        <div class="fala-avatar">
-            <span class="icone">🔭</span>
-            <span class="texto">Já sei qual é o alvo e qual é a sua reserva. Vamos ver como tá indo.</span>
+        ${header}
+        <div class="fala-avatar" style="border-left-color: ${avatar.cor};">
+            <span class="icone">${avatar.icone}</span>
+            <span class="texto">${avatar.fala}</span>
         </div>
 
-        <div class="card" style="border-left: 4px solid #0ea5e9;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.9rem;">
-                <span style="color: var(--secondary);">🎯 Alvo</span>
-                <strong style="color: var(--primary);">${divida.alvoNome}</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.9rem;">
-                <span style="color: var(--secondary);">Valor</span>
-                <strong style="color: var(--primary);">R$ ${(divida.alvoValor || 0).toFixed(2).replace('.', ',')}</strong>
-            </div>
-        </div>
+        ${htmlCategorias}
+        ${totalizador}
 
-        <div class="card" style="background: #f0fdf4; border-color: #86efac;">
-            <strong style="color: #065f46; display: block; margin-bottom: 10px; font-size: 0.9rem;">💰 Reserva de emergência</strong>
-            <div class="caixinha-header" style="margin-bottom: 8px;">
-                <span class="nome" style="color: #065f46;">Acumulado</span>
-                <span class="valores" style="color: #065f46;">R$ ${reservaAtual.toFixed(2).replace('.', ',')} / R$ ${reservaMeta.toFixed(2).replace('.', ',')}</span>
-            </div>
-            <div class="barra-fundo">
-                <div class="barra-preenchida barra-verde" style="width: ${percentualReserva}%"></div>
-            </div>
-            <button class="btn-sm" style="background: #10b981; color: white; margin-top: 12px; width: 100%;" onclick="contribuirReserva()">
-                + Guardar na reserva
-            </button>
-        </div>
-
-        <button class="btn-option" style="justify-content: center; border-color: var(--accent); color: var(--accent);" onclick="refazerDetalheDivida()">
-            Editar plano
+        <button class="btn-primary" style="margin-top: 20px; background: var(--accent);" onclick="abrirFormularioCategoriaFuturo()">
+            + Adicionar ${subtipo === 'divida' ? 'dívida' : 'reserva'}
         </button>
     `;
 }
 
-function responderAlvoDivida(index) {
-    const credores = [
-        { nome: 'Cartão X', valorTotal: 1500 },
-        { nome: 'Banco Y', valorTotal: 3200 }
-    ];
-
-    if (!state.orcamento.dividaReserva) state.orcamento.dividaReserva = {};
-    state.orcamento.dividaReserva.alvoIndex = index;
-    state.orcamento.dividaReserva.alvoNome = credores[index].nome;
-    state.orcamento.dividaReserva.alvoValor = credores[index].valorTotal;
-
+function abrirFormularioCategoriaFuturo() {
     const container = document.getElementById('divida-detalhe-conteudo');
-    container.innerHTML = `
-        <div class="fala-avatar">
-            <span class="icone">🔭</span>
-            <span class="texto">E se algo der errado? Quanto você queria ter guardado?</span>
-        </div>
-        <div class="input-com-prefixo">
-            <span class="prefixo">R$</span>
-            <input type="number" id="reserva-meta-input" class="input-padrao" placeholder="0.00">
-        </div>
-        <button class="btn-primary" onclick="salvarReservaMeta()">Salvar</button>
-        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="pularReserva()">
-            Agora não, deixa pra depois
-        </button>
-    `;
-}
+    const subtipo = caixaFuturoAtiva;
+    const avatar = subtipo === 'divida' ? '🔭' : '🐖';
 
-function salvarReservaMeta() {
-    const meta = parseFloat(document.getElementById('reserva-meta-input').value) || 0;
+    const chipsD = [
+        '💳 Cartão', '🏦 Empréstimo', '👤 Devendo pra alguém',
+        '📱 Conta atrasada', '📄 Boleto atrasado', '🎓 Financiamento'
+    ];
+    const chipsR = [
+        '💰 Reserva de emergência', '🐖 Poupança', '🏖️ Viagem',
+        '🔧 Conserto', '🎓 Educação', '🏠 Entrada'
+    ];
+    const chips = subtipo === 'divida' ? chipsD : chipsR;
 
-    if (!state.orcamento.dividaReserva) state.orcamento.dividaReserva = {};
-
-    // Se já havia uma meta genérica, pergunta se quer atualizar
-    if (state.orcamento.dividaReserva.reservaMeta && state.orcamento.dividaReserva.reservaMeta !== meta) {
-        const atualizar = confirm(
-            `Você tinha uma meta de reserva de R$ ${state.orcamento.dividaReserva.reservaMeta.toFixed(2).replace('.', ',')}. ` +
-            `Quer substituir por R$ ${meta.toFixed(2).replace('.', ',')}?`
-        );
-        if (!atualizar) return;
-    }
-
-    state.orcamento.dividaReserva.reservaMeta = meta;
-    state.orcamento.dividaReserva.reservaAtual = state.orcamento.dividaReserva.reservaAtual || 0;
-    if (!state.orcamento.dividaReserva.contribuicoes) state.orcamento.dividaReserva.contribuicoes = [];
-
-    salvarEstado();
-    console.log('[NÍVEL 2] Reserva definida:', meta);
-    renderizarDetalheDivida();
-}
-
-function pularReserva() {
-    if (!state.orcamento.dividaReserva) state.orcamento.dividaReserva = {};
-    state.orcamento.dividaReserva.reservaMeta = 0;
-    state.orcamento.dividaReserva.reservaAtual = 0;
-
-    salvarEstado();
-    renderizarDetalheDivida();
-}
-
-function contribuirReserva() {
-    const valorStr = prompt("Quanto você quer guardar agora? (R$)");
-    if (!valorStr) return;
-    const valor = parseFloat(valorStr) || 0;
-    if (valor <= 0) { alert("Insira um valor maior que zero."); return; }
-
-    if (!state.orcamento.dividaReserva) return;
-    state.orcamento.dividaReserva.reservaAtual = (state.orcamento.dividaReserva.reservaAtual || 0) + valor;
-    if (!state.orcamento.dividaReserva.contribuicoes) state.orcamento.dividaReserva.contribuicoes = [];
-    state.orcamento.dividaReserva.contribuicoes.push({
-        data: new Date().toISOString(),
-        valor: valor
+    let htmlChips = '';
+    chips.forEach(c => {
+        htmlChips += `<div class="chip" onclick="preencherNomeCategoria(this)">${c}</div>`;
     });
 
-    salvarEstado();
-    renderizarDetalheDivida();
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">${avatar}</span>
+            <span class="texto">Qual é o nome?</span>
+        </div>
+
+        <input type="text" id="nova-cat-nome" class="input-padrao" placeholder="Ex: Cartão X, Reserva de emergência">
+
+        <div class="chip-container">
+            ${htmlChips}
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">${avatar}</span>
+            <span class="texto">Quanto por mês?</span>
+        </div>
+
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="number" id="nova-cat-valor" class="input-padrao" placeholder="0.00">
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">${avatar}</span>
+            <span class="texto">Esse valor é sempre igual ou muda?</span>
+        </div>
+
+        <div class="chip-container" id="chips-tipo-cat">
+            <div class="chip" onclick="selecionarTipoCategoria(this, 'fixo')">Fixo</div>
+            <div class="chip" onclick="selecionarTipoCategoria(this, 'variavel')">Varia</div>
+        </div>
+
+        <div id="bloco-vencimento" style="display: none;">
+            <div class="fala-avatar">
+                <span class="icone">${avatar}</span>
+                <span class="texto">Vence em qual dia do mês?</span>
+            </div>
+            <input type="number" id="nova-cat-vencimento" class="input-padrao" placeholder="Ex: 5" min="1" max="31">
+        </div>
+
+        <button class="btn-primary" onclick="salvarCategoriaFuturo()">Salvar</button>
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="renderizarDetalheFuturo()">
+            Cancelar
+        </button>
+    `;
+
+    // Reaproveita o seletor de tipo já existente
+    tipoCategoriaSelecionado = null;
 }
 
-function refazerDetalheDivida() {
-    // Limpa apenas o alvo, mantém a reserva
-    if (state.orcamento.dividaReserva) {
-        state.orcamento.dividaReserva.alvoIndex = null;
-        state.orcamento.dividaReserva.alvoNome = null;
-        state.orcamento.dividaReserva.alvoValor = null;
-    }
+function salvarCategoriaFuturo() {
+    const nome = document.getElementById('nova-cat-nome').value.trim();
+    const valor = parseFloat(document.getElementById('nova-cat-valor').value) || 0;
+    const vencimento = parseInt(document.getElementById('nova-cat-vencimento').value) || null;
+    const subtipo = caixaFuturoAtiva;
+
+    if (nome === '') { alert('Diga o nome.'); return; }
+    if (valor <= 0) { alert('Insira um valor maior que zero.'); return; }
+    if (!tipoCategoriaSelecionado) { alert('Escolha se é fixo ou varia.'); return; }
+
+    if (!state.orcamento.categorias) state.orcamento.categorias = [];
+    state.orcamento.categorias.push({
+        id: 'cat_' + Date.now(),
+        nome: nome,
+        valor: valor,
+        tipo: tipoCategoriaSelecionado,
+        vencimento: vencimento,
+        caixa: 'futuro',
+        subtipo: subtipo   // 'divida' ou 'reserva'
+    });
+
+    // Atualiza o total do Futuro (dívida + reserva)
+    recalcularTotalFuturo();
+
+    tipoCategoriaSelecionado = null;
     salvarEstado();
-    renderizarDetalheDivida();
+    renderizarDetalheFuturo();
+}
+
+function recalcularTotalFuturo() {
+    const total = (state.orcamento.categorias || [])
+        .filter(c => c.caixa === 'futuro')
+        .reduce((s, c) => s + (c.valor || 0), 0);
+
+    if (!state.orcamento.futuro) state.orcamento.futuro = {};
+    state.orcamento.futuro.total = total;
+
+    if (state.orcamento.semanaAtual) {
+        state.orcamento.semanaAtual.futuro.limite = total / DIVISOR_SEMANAL;
+    }
 }
 
 // ============================================================
@@ -2677,8 +2739,18 @@ function abrirResumoSemanal() {
         ? `A Vida passou ${fmt(vidaEstouro)} do que você tinha planejado. Acontece.`
         : `A Vida ficou no ritmo. Sem culpa, só consciência.`;
 
-    const falaZe = futuroAceleracao > 0
-        ? `Você botou ${fmt(futuroAceleracao)} a mais no Futuro. O caminho encurtou.`
+   const categoriasFuturo = (state.orcamento.categorias || []).filter(c => c.caixa === 'futuro');
+const totalDivida = categoriasFuturo
+    .filter(c => c.subtipo === 'divida')
+    .reduce((s, c) => s + (c.valor || 0), 0);
+const totalReserva = categoriasFuturo
+    .filter(c => c.subtipo === 'reserva')
+    .reduce((s, c) => s + (c.valor || 0), 0);
+
+const falaZe = futuroAceleracao > 0
+    ? `Você botou ${fmt(futuroAceleracao)} a mais no Futuro. O caminho encurtou.`
+    : (totalDivida > 0 || totalReserva > 0)
+        ? `No Futuro: ${fmt(totalDivida)} para dívidas, ${fmt(totalReserva)} para reservas.`
         : `O Futuro ficou no combinado. Um passo de cada vez.`;
 
     container.innerHTML = `
