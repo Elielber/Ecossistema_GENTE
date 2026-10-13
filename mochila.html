@@ -569,6 +569,12 @@
         <div id="plano-recuperacao-conteudo"></div>
     </div>
     
+	<!-- TELA 13: Transferência entre custódias (Nível 3) -->
+<div id="screen-transferencia" class="screen">
+    <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
+    <div id="transferencia-conteudo"></div>
+</div>
+	
 </div>
 
 <!-- MODAL: Registro de gasto -->
@@ -815,6 +821,15 @@ state.orcamento.categorias.forEach(c => {
         c.subtipo = 'divida'; // ou 'reserva'
     }
 });
+// === FUTURO — parcelas ===
+state.orcamento.categorias.forEach(c => {
+    if (c.caixa === 'futuro') {
+        if (typeof c.parcelasPagas !== 'number') c.parcelasPagas = 0;
+        if (c.parcelasTotais === undefined) c.parcelasTotais = null;
+        if (c.valorTotal === undefined) c.valorTotal = null;
+    }
+});
+
 }
 
 // ============================================================
@@ -1497,7 +1512,10 @@ function iniciarNovaSemana() {
     // Limites semanais
     const limiteBase = baseMensal / DIVISOR_SEMANAL;
     const limiteVida = vidaMensal / DIVISOR_SEMANAL;
-    const limiteFuturo = futuroMensal / DIVISOR_SEMANAL;
+    const limiteFuturo = calcularLimiteFuturoSemana({
+    inicio: inicio.toISOString().split('T')[0],
+    fim: fim.toISOString().split('T')[0]
+});
     const rendaSemanal = rendaMensal / DIVISOR_SEMANAL;
 
 state.orcamento.semanaAtual = {
@@ -2470,22 +2488,57 @@ function renderizarDetalheFuturo() {
         `;
     } else {
         categorias.forEach(cat => {
+            const total = cat.parcelasTotais || 0;
+            const pagas = cat.parcelasPagas || 0;
+            const pct = total > 0 ? Math.min((pagas / total) * 100, 100) : 0;
+            const cor = pct >= 100 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+            const rotuloParcelas = total > 0
+                ? `${pagas} / ${total} parcelas`
+                : (pagas > 0 ? `${pagas} pagas` : 'sem parcelamento');
+            const restante = total > 0
+                ? ` · faltam R$ ${(((cat.valor || 0) * (total - pagas))).toFixed(2).replace('.', ',')}`
+                : '';
+
             htmlCategorias += `
-                <div class="categoria-item">
-                    <div>
-                        <div class="nome-cat">${cat.nome}</div>
-                        <div class="meta-cat">${cat.tipo}${cat.vencimento ? ' · vence dia ' + cat.vencimento : ''}</div>
+                <div class="categoria-item" style="display: block;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <div class="nome-cat">${cat.nome}</div>
+                            <div class="meta-cat">${cat.tipo}${cat.vencimento ? ' · vence dia ' + cat.vencimento : ''}</div>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <span class="valor-cat">R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')}</span>
+                            <button class="btn-remover" onclick="removerCategoria('${cat.id}')">&times;</button>
+                        </div>
                     </div>
-                    <div style="display: flex; align-items: center;">
-                        <span class="valor-cat">R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')}</span>
-                        <button class="btn-remover" onclick="removerCategoria('${cat.id}')">&times;</button>
-                    </div>
+
+                    ${total > 0 ? `
+                        <div style="margin-top: 10px;">
+                            <div class="caixinha-header" style="margin-bottom: 6px;">
+                                <span style="font-size: 0.75rem; color: var(--secondary);">${rotuloParcelas}</span>
+                                <span style="font-size: 0.75rem; color: ${cor}; font-weight: bold;">${pct.toFixed(0)}%${restante}</span>
+                            </div>
+                            <div class="barra-fundo" style="height: 6px;">
+                                <div class="barra-preenchida" style="width: ${pct}%; background: ${cor};"></div>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${total > 0 && pagas < total ? `
+                        <button class="btn-sm" style="background: var(--accent); color: white; margin-top: 10px; width: 100%;"
+                                onclick="pagarParcela('${cat.id}')">
+                            + Registrar pagamento (R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')})
+                        </button>
+                    ` : (total > 0 && pagas >= total ? `
+                        <div style="text-align: center; font-size: 0.8rem; color: #10b981; margin-top: 8px; font-weight: bold;">
+                            ✓ Quitada
+                        </div>
+                    ` : '')}
                 </div>
             `;
         });
     }
 
-    // Totalizador
     const totalizador = `
         <div class="totalizador">
             ${subtipo === 'divida' ? 'Dívidas' : 'Reservas'}: <strong>R$ ${totalCategoria.toFixed(2).replace('.', ',')}</strong>
@@ -2509,7 +2562,59 @@ function renderizarDetalheFuturo() {
         </button>
     `;
 }
+function pagarParcela(categoriaId) {
+    const cat = (state.orcamento.categorias || []).find(c => c.id === categoriaId);
+    if (!cat) return;
 
+    const valorParcela = cat.valor || 0;
+    if (valorParcela <= 0) { alert('Valor da parcela inválido.'); return; }
+
+    // Pergunta confirmação (com opção de mudar o valor)
+    const valorStr = prompt(
+        `Registrar pagamento de "${cat.nome}"?`,
+        valorParcela.toFixed(2)
+    );
+    if (valorStr === null) return;
+    const valorPago = parseFloat(valorStr) || 0;
+    if (valorPago <= 0) { alert('Valor inválido.'); return; }
+
+    // 1. Incrementa a parcela
+    cat.parcelasPagas = (cat.parcelasPagas || 0) + 1;
+
+    // 2. Incrementa o gasto da caixa Futuro nesta semana
+    const semana = state.orcamento.semanaAtual;
+    if (semana && !semana.fechada) {
+        semana.futuro.gasto += valorPago;
+    }
+
+    // 3. Registra no histórico
+    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+    state.orcamento.historicoRegistros.push({
+        id: 'reg_' + Date.now(),
+        data: new Date().toISOString(),
+        tipo: cat.subtipo === 'divida' ? 'pagamento_divida' : 'aporte_reserva',
+        caixa: 'futuro',
+        categoriaId: cat.id,
+        categoria: cat.nome,
+        valor: valorPago,
+        custodiaId: null,
+        cartaoId: null,
+        saldoAtualizado: false
+    });
+
+    salvarEstado();
+    renderizarDetalheFuturo();
+
+    const total = cat.parcelasTotais || 0;
+    const pagas = cat.parcelasPagas || 0;
+    if (total > 0 && pagas >= total) {
+        alert(`🎉 "${cat.nome}" quitada!`);
+    } else if (total > 0) {
+        alert(`Parcela registrada. ${pagas} de ${total}.`);
+    } else {
+        alert(`Aporte registrado.`);
+    }
+}
 function abrirFormularioCategoriaFuturo() {
     const container = document.getElementById('divida-detalhe-conteudo');
     const subtipo = caixaFuturoAtiva;
@@ -2569,42 +2674,86 @@ function abrirFormularioCategoriaFuturo() {
             </div>
             <input type="number" id="nova-cat-vencimento" class="input-padrao" placeholder="Ex: 5" min="1" max="31">
         </div>
+		
+		<div class="fala-avatar">
+    <span class="icone">${avatar}</span>
+    <span class="texto">Essa ${subtipo === 'divida' ? 'dívida' : 'reserva'} tem parcelas definidas?</span>
+</div>
+<div class="chip-container" id="chips-parcelamento">
+    <div class="chip" onclick="selecionarParcelamento(this, 'nao')">Não, é contínuo</div>
+    <div class="chip" onclick="selecionarParcelamento(this, 'sim')">Sim, tem um número de parcelas</div>
+</div>
+
+<div id="bloco-parcelas" style="display: none;">
+    <div class="fala-avatar">
+        <span class="icone">${avatar}</span>
+        <span class="texto">Quantas parcelas no total?</span>
+    </div>
+    <input type="number" id="nova-cat-parcelas" class="input-padrao" placeholder="Ex: 12" min="1">
+</div>
 
         <button class="btn-primary" onclick="salvarCategoriaFuturo()">Salvar</button>
         <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="renderizarDetalheFuturo()">
             Cancelar
         </button>
     `;
-
-    // Reaproveita o seletor de tipo já existente
-    tipoCategoriaSelecionado = null;
+	tipoCategoriaSelecionado = null;
+    parcelamentoSelecionado = null;
 }
+
+    
+	let parcelamentoSelecionado = null;
+
+function selecionarParcelamento(el, escolha) {
+    document.querySelectorAll('#chips-parcelamento .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    parcelamentoSelecionado = escolha;
+
+    const blocoParcelas = document.getElementById('bloco-parcelas');
+    blocoParcelas.style.display = escolha === 'sim' ? 'block' : 'none';
+}
+
 
 function salvarCategoriaFuturo() {
     const nome = document.getElementById('nova-cat-nome').value.trim();
     const valor = parseFloat(document.getElementById('nova-cat-valor').value) || 0;
     const vencimento = parseInt(document.getElementById('nova-cat-vencimento').value) || null;
     const subtipo = caixaFuturoAtiva;
+    const parcelasInput = document.getElementById('nova-cat-parcelas');
+    const parcelasTotais = parcelamentoSelecionado === 'sim'
+        ? (parseInt(parcelasInput && parcelasInput.value) || 0)
+        : null;
 
     if (nome === '') { alert('Diga o nome.'); return; }
     if (valor <= 0) { alert('Insira um valor maior que zero.'); return; }
     if (!tipoCategoriaSelecionado) { alert('Escolha se é fixo ou varia.'); return; }
+    if (parcelamentoSelecionado === 'sim' && (!parcelasTotais || parcelasTotais < 1)) {
+        alert('Diga quantas parcelas no total (mínimo 1).');
+        return;
+    }
+    if (!parcelamentoSelecionado) {
+        alert('Diga se tem parcelas definidas.');
+        return;
+    }
 
     if (!state.orcamento.categorias) state.orcamento.categorias = [];
     state.orcamento.categorias.push({
         id: 'cat_' + Date.now(),
         nome: nome,
-        valor: valor,
+        valor: valor,                    // valor da PARCELA (mensal)
         tipo: tipoCategoriaSelecionado,
         vencimento: vencimento,
         caixa: 'futuro',
-        subtipo: subtipo   // 'divida' ou 'reserva'
+        subtipo: subtipo,
+        parcelasPagas: 0,
+        parcelasTotais: parcelasTotais,  // null = contínuo
+        valorTotal: parcelasTotais ? (valor * parcelasTotais) : null
     });
 
-    // Atualiza o total do Futuro (dívida + reserva)
     recalcularTotalFuturo();
 
     tipoCategoriaSelecionado = null;
+    parcelamentoSelecionado = null;
     salvarEstado();
     renderizarDetalheFuturo();
 }
@@ -2618,7 +2767,8 @@ function recalcularTotalFuturo() {
     state.orcamento.futuro.total = total;
 
     if (state.orcamento.semanaAtual) {
-        state.orcamento.semanaAtual.futuro.limite = total / DIVISOR_SEMANAL;
+        state.orcamento.semanaAtual.futuro.limite =
+            calcularLimiteFuturoSemana(state.orcamento.semanaAtual);
     }
 }
 
@@ -2973,6 +3123,9 @@ function renderizarCustodias() {
         <button class="btn-primary" style="margin-top: 20px; background: var(--accent);" onclick="abrirFormularioCustodia(null)">
             + Adicionar custódia
         </button>
+		<button class="btn-primary" style="margin-top: 10px; background: #64748b;" onclick="abrirTransferenciaCustodias()">
+    ↔️ Transferir entre custódias
+</button>
     `;
 }
 
@@ -3150,7 +3303,156 @@ function removerCustodia(id) {
     salvarEstado();
     renderizarCustodias();
 }
+function abrirTransferenciaCustodias() {
+    goToScreen('screen-transferencia');
+    renderizarTransferencia();
+}
 
+function renderizarTransferencia() {
+    const container = document.getElementById('transferencia-conteudo');
+    const custodias = (state.orcamento.custodias || []).filter(
+        c => !TIPOS_CUSTODIA[c.tipo].temFatura   // cartão de crédito não entra como origem/destino
+    );
+
+    if (custodias.length < 2) {
+        container.innerHTML = `
+            <div class="fala-avatar">
+                <span class="icone">↔️</span>
+                <span class="texto">Pra transferir, você precisa de pelo menos duas custódias com saldo (contas, dinheiro, poupança...). Cartão de crédito não entra aqui.</span>
+            </div>
+            <button class="btn-option" style="justify-content: center; border-color: var(--secondary);" onclick="voltarParaOrcamento()">
+                Voltar
+            </button>
+        `;
+        return;
+    }
+
+    // Chips de origem
+    let chipsOrigem = '';
+    custodias.forEach(c => {
+        const tipo = TIPOS_CUSTODIA[c.tipo];
+        chipsOrigem += `
+            <div class="chip" data-custodia-id="${c.id}" onclick="selecionarOrigemTransferencia(this)">
+                ${tipo.icone} ${c.nome} · R$ ${(c.saldoAtual || 0).toFixed(2).replace('.', ',')}
+            </div>
+        `;
+    });
+
+    // Chips de destino (mesma lista, o filtro de "não pode ser a mesma" é no momento de salvar)
+    let chipsDestino = '';
+    custodias.forEach(c => {
+        const tipo = TIPOS_CUSTODIA[c.tipo];
+        chipsDestino += `
+            <div class="chip" data-custodia-id="${c.id}" onclick="selecionarDestinoTransferencia(this)">
+                ${tipo.icone} ${c.nome} · R$ ${(c.saldoAtual || 0).toFixed(2).replace('.', ',')}
+            </div>
+        `;
+    });
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">↔️</span>
+            <span class="texto">Transferir é mover dinheiro de uma custódia pra outra. Não é gasto nem recebimento — o dinheiro só muda de lugar.</span>
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">↔️</span>
+            <span class="texto">De onde sai?</span>
+        </div>
+        <div class="chip-container" id="chips-origem-transf">
+            ${chipsOrigem}
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">↔️</span>
+            <span class="texto">Pra onde vai?</span>
+        </div>
+        <div class="chip-container" id="chips-destino-transf">
+            ${chipsDestino}
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">↔️</span>
+            <span class="texto">Quanto?</span>
+        </div>
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="number" id="transf-valor" class="input-padrao" placeholder="0.00">
+        </div>
+
+        <button class="btn-primary" onclick="confirmarTransferencia()">Transferir</button>
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="voltarParaOrcamento()">
+            Cancelar
+        </button>
+    `;
+
+    origemTransferenciaSelecionada = null;
+    destinoTransferenciaSelecionada = null;
+}
+
+let origemTransferenciaSelecionada = null;
+let destinoTransferenciaSelecionada = null;
+
+function selecionarOrigemTransferencia(el) {
+    document.querySelectorAll('#chips-origem-transf .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    origemTransferenciaSelecionada = el.getAttribute('data-custodia-id');
+}
+
+function selecionarDestinoTransferencia(el) {
+    document.querySelectorAll('#chips-destino-transf .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    destinoTransferenciaSelecionada = el.getAttribute('data-custodia-id');
+}
+
+function confirmarTransferencia() {
+    const valor = parseFloat(document.getElementById('transf-valor').value) || 0;
+
+    if (valor <= 0) { alert('Insira um valor maior que zero.'); return; }
+    if (!origemTransferenciaSelecionada) { alert('Escolha a custódia de origem.'); return; }
+    if (!destinoTransferenciaSelecionada) { alert('Escolha a custódia de destino.'); return; }
+    if (origemTransferenciaSelecionada === destinoTransferenciaSelecionada) {
+        alert('Origem e destino precisam ser diferentes.');
+        return;
+    }
+
+    const origem = state.orcamento.custodias.find(c => c.id === origemTransferenciaSelecionada);
+    const destino = state.orcamento.custodias.find(c => c.id === destinoTransferenciaSelecionada);
+    if (!origem || !destino) { alert('Custódia não encontrada.'); return; }
+
+    // Aviso se está tirando mais do que tem
+    if ((origem.saldoAtual || 0) < valor) {
+        const confirmar = confirm(
+            `A custódia "${origem.nome}" tem só R$ ${(origem.saldoAtual || 0).toFixed(2).replace('.', ',')}. ` +
+            `Vai ficar negativa. Continuar?`
+        );
+        if (!confirmar) return;
+    }
+
+    // Move o dinheiro
+    origem.saldoAtual = (origem.saldoAtual || 0) - valor;
+    destino.saldoAtual = (destino.saldoAtual || 0) + valor;
+
+    // Registra no histórico (tipo próprio, não conta como gasto nem recebimento)
+    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+    state.orcamento.historicoRegistros.push({
+        id: 'reg_' + Date.now(),
+        data: new Date().toISOString(),
+        tipo: 'transferencia',
+        caixa: null,
+        categoria: null,
+        valor: valor,
+        custodiaId: origem.id,
+        cartaoId: null,
+        custodiaDestinoId: destino.id,
+        saldoAtualizado: true
+    });
+
+    salvarEstado();
+    alert(`Transferido: R$ ${valor.toFixed(2).replace('.', ',')} de ${origem.nome} → ${destino.nome}.`);
+    renderizarCustodias();
+    goToScreen('screen-custodias');
+}
 // ============================================================
 // NÍVEL 3 — PAGAMENTO DE FATURA
 // ============================================================
@@ -3828,7 +4130,37 @@ function renderizarBlocoProvisao(orc) {
         </div>
     `;
 }
+// Retorna as categorias do Futuro cujo vencimento cai dentro da semana atual
+function categoriasFuturoNaSemana(semana) {
+    const categorias = (state.orcamento.categorias || []).filter(c => c.caixa === 'futuro');
 
+    if (!semana) return [];
+
+    const ini = new Date(semana.inicio + 'T00:00:00');
+    const fim = new Date(semana.fim + 'T23:59:59');
+
+    return categorias.filter(c => {
+        if (!c.vencimento) return false;
+
+        // Constrói a data de vencimento no mês da semana
+        const ano = ini.getFullYear();
+        const mes = ini.getMonth();
+
+        let venc = new Date(ano, mes, c.vencimento);
+        // Se a semana cruza o fim do mês, o vencimento pode cair no mês seguinte
+        if (venc < ini) {
+            venc = new Date(ano, mes + 1, c.vencimento);
+        }
+
+        return venc >= ini && venc <= fim;
+    });
+}
+
+// Calcula o limite da semana com base no que realmente vence nela
+function calcularLimiteFuturoSemana(semana) {
+    const categorias = categoriasFuturoNaSemana(semana);
+    return categorias.reduce((s, c) => s + (c.valor || 0), 0);
+}
 // ============================================================
 // QR CODE — geração local
 // ============================================================
