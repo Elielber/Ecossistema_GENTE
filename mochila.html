@@ -1585,7 +1585,7 @@ function registrarGasto(caixa) {
     registroTemporario.valor = valor;
     registroTemporario.caixa = caixa;
 
-       // NÍVEL 3: se há custódias cadastradas, mostra o passo de custódia
+    // NÍVEL 3: se há custódias cadastradas, mostra o passo de custódia
     const custodias = custodiasDisponiveisParaGasto();
     if (state.orcamento.nivel >= 3 && custodias.length > 1) {
         mostrarPassoCustodia();
@@ -1598,9 +1598,18 @@ function registrarGasto(caixa) {
         state.orcamento.custodiaPadrao = custodias[0].id;
     }
 
+    // ⚠️ AQUI: verifica cheque especial ANTES de seguir
+    const aviso = verificarChequeEspecial(registroTemporario.custodiaId, valor);
+    if (aviso) {
+        const prosseguir = confirm(aviso);
+        if (!prosseguir) {
+            registroTemporario.valor = 0;
+            return;
+        }
+    }
+
     // Se o nível >= 2 e existem categorias para essa caixa, pergunta a categoria
     const categoriasDaCaixa = (state.orcamento.categorias || []).filter(c => c.caixa === caixa);
-
     if (state.orcamento.nivel >= 2 && categoriasDaCaixa.length > 0) {
         mostrarPassoCategoria(categoriasDaCaixa);
     } else {
@@ -1748,15 +1757,16 @@ function continuarRecebimento() {
     if (valor <= 0) { alert('Insira um valor maior que zero.'); return; }
 
     registroTemporario.valor = valor;
+    registroTemporario.categoriaNome = null; // limpa
 
-    // Nível 2+: se há fontes de renda cadastradas, pergunta qual
+    // Nível 2+: se há fontes de renda cadastradas, pergunta qual primeiro
     const fontes = (state.orcamento.rendaDetalhe && state.orcamento.rendaDetalhe.fontes) || [];
     if (state.orcamento.nivel >= 2 && fontes.length > 0) {
         mostrarPassoCategoriaRecebimento(fontes);
         return;
     }
 
-    // Sem categoria, tenta custódia (Nível 3)
+    // Sem fontes: vai direto pra custódia (se N3) ou confirma
     tentarPassoCustodiaRecebimento();
 }
 
@@ -1772,48 +1782,70 @@ function mostrarPassoCategoriaRecebimento(fontes) {
         const chip = document.createElement('div');
         chip.className = 'chip';
         chip.innerText = `${f.nome} · R$ ${(f.valor || 0).toFixed(2).replace('.', ',')}`;
-        chip.onclick = () => confirmarRecebimento(f.nome);
+        chip.onclick = () => {
+            // ⚠️ Guarda a fonte e SEGUE para a custódia, em vez de confirmar direto
+            registroTemporario.categoriaNome = f.nome;
+            tentarPassoCustodiaRecebimento();
+        };
         containerChips.appendChild(chip);
     });
 
-    // O botão "pular" agora chama confirmarRecebimento sem categoria
-    document.getElementById('btn-pular-categoria').onclick = () => confirmarRecebimento(null);
+    // O botão "pular" também segue para a custódia
+    document.getElementById('btn-pular-categoria').onclick = () => {
+        registroTemporario.categoriaNome = null;
+        tentarPassoCustodiaRecebimento();
+    };
 }
 
 function tentarPassoCustodiaRecebimento() {
-    // Só no Nível 3 e se houver custódias
-    const custodias = state.orcamento.custodias || [];
+    const custodias = (state.orcamento.custodias || [])
+        .filter(c => !TIPOS_CUSTODIA[c.tipo].temFatura); // só conta/dinheiro/poupança/vale
+
     if (state.orcamento.nivel >= 3 && custodias.length > 0) {
         mostrarPassoCustodiaRecebimento(custodias);
         return;
     }
-    confirmarRecebimento(null, null);
+    // Sem custódia elegível: confirma sem destino
+    confirmarRecebimento(registroTemporario.categoriaNome, null);
 }
 
 function mostrarPassoCustodiaRecebimento(custodias) {
     document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
     document.getElementById('modal-registro-passo-3-custodia').style.display = 'block';
 
+    // Filtra: só custódias que aceitam saldo (não cartão de crédito)
+    const elegiveis = custodias.filter(c => !TIPOS_CUSTODIA[c.tipo].temFatura);
+
     const containerChips = document.getElementById('chips-custodias-registro');
     containerChips.innerHTML = '';
 
-    custodias.forEach(c => {
+    elegiveis.forEach(c => {
         const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
         const chip = document.createElement('div');
         chip.className = 'chip';
-        chip.innerHTML = `${tipo.icone} ${c.nome}`;
-        chip.onclick = () => confirmarRecebimento(registroTemporario.categoriaNome || null, c.id);
+        chip.innerHTML = `${tipo.icone} ${c.nome} · R$ ${(c.saldoAtual || 0).toFixed(2).replace('.', ',')}`;
+        chip.onclick = () => {
+            // Atualiza o padrão e confirma
+            state.orcamento.custodiaPadrao = c.id;
+            salvarEstado();
+            confirmarRecebimento(registroTemporario.categoriaNome, c.id);
+        };
         containerChips.appendChild(chip);
     });
 
-    // Botão "pular"
+    // Botão "pular" — recebimento sem custódia definida
     const btnPular = document.querySelector('#modal-registro-passo-3-custodia button.btn-option');
     if (btnPular) {
-        btnPular.onclick = () => confirmarRecebimento(registroTemporario.categoriaNome || null, null);
+        btnPular.onclick = () => confirmarRecebimento(registroTemporario.categoriaNome, null);
     }
 }
 
 function confirmarRecebimento(categoriaNome, custodiaId) {
+    // Fallback: se não veio por argumento, tenta do temporário
+    if (categoriaNome === undefined || categoriaNome === null) {
+        categoriaNome = registroTemporario.categoriaNome || null;
+    }
+
     const valor = registroTemporario.valor;
     const semana = state.orcamento.semanaAtual;
     if (!semana || semana.fechada) {
@@ -1832,11 +1864,12 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
     }
 
     // 3. Nível 3: se escolheu custódia de destino, soma no saldo
+    let custodiaNome = null;
     if (state.orcamento.nivel >= 3 && custodiaId) {
         const custodia = state.orcamento.custodias.find(c => c.id === custodiaId);
         if (custodia && !TIPOS_CUSTODIA[custodia.tipo].temFatura) {
-            // custodia.saldoAtual = (custodia.saldoAtual || 0) - valor * -1; // soma
             custodia.saldoAtual = (custodia.saldoAtual || 0) + valor;
+            custodiaNome = custodia.nome;
         }
     }
 
@@ -1847,19 +1880,17 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
         data: new Date().toISOString(),
         tipo: 'recebimento',
         caixa: null,
-        categoria: categoriaNome || null,
+        categoria: categoriaNome,
         valor: valor,
         custodiaId: custodiaId || null,
         cartaoId: null,
         saldoAtualizado: !!custodiaId
     });
 
-    // 5. Gatilho do Nível 2 (recebimento conta, mas só se o usuário já está no N2+)
     verificarGatilhoNivel2();
-
     salvarEstado();
 
-    // 6. Tela de confirmação
+    // 5. Tela de confirmação — agora menciona a custódia
     document.getElementById('modal-registro-passo-1').style.display = 'none';
     document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
     document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
@@ -1869,6 +1900,10 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
     const estimado = semana.rendaEstimada;
     const acima = totalRecebido > estimado;
 
+    const linhaCustodia = custodiaNome
+        ? `<br>Guardado em <strong>${custodiaNome}</strong>.`
+        : `<br><span style="color:#92400e;">Sem custódia definida — o dinheiro não entrou em nenhum saldo.</span>`;
+
     document.getElementById('modal-registro-fala').innerHTML = `
         <span class="icone">💰</span>
         <span class="texto">
@@ -1876,11 +1911,9 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
             ${acima
                 ? `Já passou do estimado (R$ ${estimado.toFixed(2).replace('.', ',')}). Atualizei a previsão.`
                 : `Estimado: R$ ${estimado.toFixed(2).replace('.', ',')}.`}
+            ${linhaCustodia}
         </span>
     `;
-
-    // Guarda categoria para eventuais passos seguintes
-    registroTemporario.categoriaNome = categoriaNome;
 
     renderizarOrcamentoInicio();
 }
@@ -2578,16 +2611,79 @@ function pagarParcela(categoriaId) {
     const valorPago = parseFloat(valorStr) || 0;
     if (valorPago <= 0) { alert('Valor inválido.'); return; }
 
+    // Monta o registro temporário como se fosse um gasto no Futuro
+    registroTemporario = {
+        valor: valorPago,
+        caixa: 'futuro',
+        tipo: 'gasto',
+        custodiaId: null,
+        cartaoId: null,
+        categoriaNome: cat.nome,
+        origem: 'parcela',
+        categoriaId: cat.id
+    };
+
+    // NÍVEL 3: se há custódias, pergunta de onde saiu
+    const custodias = custodiasDisponiveisParaGasto();
+    if (state.orcamento.nivel >= 3 && custodias.length > 1) {
+        // Reaproveita o passo de custódia do modal
+        document.getElementById('modal-registro').classList.add('ativo');
+        document.getElementById('modal-registro-passo-0').style.display = 'none';
+        document.getElementById('modal-registro-passo-1').style.display = 'none';
+        document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
+        document.getElementById('modal-registro-passo-3').style.display = 'none';
+        mostrarPassoCustodia();
+        return;
+    }
+
+    // Se só há uma custódia, usa ela automaticamente
+    if (state.orcamento.nivel >= 3 && custodias.length === 1) {
+        registroTemporario.custodiaId = custodias[0].id;
+        state.orcamento.custodiaPadrao = custodias[0].id;
+    }
+
+    // Cheque especial
+    const aviso = verificarChequeEspecial(registroTemporario.custodiaId, valorPago);
+    if (aviso) {
+        const prosseguir = confirm(aviso);
+        if (!prosseguir) return;
+    }
+
+    // Confirma direto (N1/N2 ou sem custódias)
+    confirmarPagamentoParcela();
+}
+
+function confirmarPagamentoParcela() {
+    const cat = (state.orcamento.categorias || []).find(c => c.id === registroTemporario.categoriaId);
+    if (!cat) { alert('Categoria não encontrada.'); fecharModalRegistro(); return; }
+
+    const valorPago = registroTemporario.valor;
+    const semana = state.orcamento.semanaAtual;
+
+    if (!semana || semana.fechada) {
+        alert('A semana fechou. Vamos ver o resumo primeiro.');
+        fecharModalRegistro();
+        abrirResumoSemanal();
+        return;
+    }
+
     // 1. Incrementa a parcela
     cat.parcelasPagas = (cat.parcelasPagas || 0) + 1;
 
-    // 2. Incrementa o gasto da caixa Futuro nesta semana
-    const semana = state.orcamento.semanaAtual;
-    if (semana && !semana.fechada) {
-        semana.futuro.gasto += valorPago;
+    // 2. Soma no gasto da caixa Futuro
+    semana.futuro.gasto += valorPago;
+
+    // 3. NÍVEL 3: subtrai da custódia, se houver
+    let custodiaNome = null;
+    if (state.orcamento.nivel >= 3 && registroTemporario.custodiaId) {
+        const custodia = state.orcamento.custodias.find(c => c.id === registroTemporario.custodiaId);
+        if (custodia && !TIPOS_CUSTODIA[custodia.tipo].temFatura) {
+            custodia.saldoAtual = (custodia.saldoAtual || 0) - valorPago;
+            custodiaNome = custodia.nome;
+        }
     }
 
-    // 3. Registra no histórico
+    // 4. Histórico
     if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
     state.orcamento.historicoRegistros.push({
         id: 'reg_' + Date.now(),
@@ -2597,24 +2693,44 @@ function pagarParcela(categoriaId) {
         categoriaId: cat.id,
         categoria: cat.nome,
         valor: valorPago,
-        custodiaId: null,
+        custodiaId: registroTemporario.custodiaId || null,
         cartaoId: null,
-        saldoAtualizado: false
+        saldoAtualizado: !!registroTemporario.custodiaId
     });
 
     salvarEstado();
-    renderizarDetalheFuturo();
+
+    // 5. Confirmação (reaproveita o passo 3 do modal)
+    document.getElementById('modal-registro-passo-1').style.display = 'none';
+    document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
+    document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
+    document.getElementById('modal-registro-passo-3').style.display = 'block';
 
     const total = cat.parcelasTotais || 0;
     const pagas = cat.parcelasPagas || 0;
+    const linhaCustodia = custodiaNome
+        ? `Saiu de <strong>${custodiaNome}</strong>.`
+        : '';
+
+    let falaFinal;
     if (total > 0 && pagas >= total) {
-        alert(`🎉 "${cat.nome}" quitada!`);
+        falaFinal = `🎉 <strong>${cat.nome}</strong> quitada! ${linhaCustodia}`;
     } else if (total > 0) {
-        alert(`Parcela registrada. ${pagas} de ${total}.`);
+        falaFinal = `Parcela registrada: ${pagas} de ${total}. ${linhaCustodia}`;
     } else {
-        alert(`Aporte registrado.`);
+        falaFinal = `Aporte registrado. ${linhaCustodia}`;
     }
+
+    document.getElementById('modal-registro-fala').innerHTML = `
+        <span class="icone">${cat.subtipo === 'divida' ? '💳' : '🐖'}</span>
+        <span class="texto">${falaFinal}</span>
+    `;
+
+    // Limpa contexto e atualiza a tela de fundo
+    registroTemporario = null;
+    renderizarDetalheFuturo();
 }
+
 function abrirFormularioCategoriaFuturo() {
     const container = document.getElementById('divida-detalhe-conteudo');
     const subtipo = caixaFuturoAtiva;
@@ -3847,8 +3963,29 @@ function escolherCustodia(custodiaId) {
 
     const tipo = TIPOS_CUSTODIA[custodia.tipo];
 
-    // Se for cartão de crédito, o fluxo muda:
-    // o gasto não entra na caixa, vai direto pra fatura.
+    // ⚠️ Se a origem é pagamento de parcela, fluxo próprio
+    if (registroTemporario && registroTemporario.origem === 'parcela') {
+        // Cartão de crédito não serve como origem de pagamento de dívida
+        if (tipo.temFatura) {
+            alert('Não dá pra pagar uma dívida com o próprio cartão. Escolha outra custódia.');
+            return;
+        }
+
+        // Cheque especial
+        const aviso = verificarChequeEspecial(custodiaId, registroTemporario.valor);
+        if (aviso) {
+            const prosseguir = confirm(aviso);
+            if (!prosseguir) return;
+        }
+
+        registroTemporario.custodiaId = custodiaId;
+        state.orcamento.custodiaPadrao = custodiaId;
+        salvarEstado();
+        confirmarPagamentoParcela();
+        return;
+    }
+
+    // gasto normal
     if (tipo.temFatura) {
         registroTemporario.custodiaId = custodiaId;
         registroTemporario.cartaoId = custodiaId;
@@ -3856,12 +3993,16 @@ function escolherCustodia(custodiaId) {
         return;
     }
 
-    // Se for custódia normal, marca como padrão e segue para categoria
+    const avisoGasto = verificarChequeEspecial(custodiaId, registroTemporario.valor);
+    if (avisoGasto) {
+        const prosseguir = confirm(avisoGasto);
+        if (!prosseguir) return;
+    }
+
     registroTemporario.custodiaId = custodiaId;
     state.orcamento.custodiaPadrao = custodiaId;
     salvarEstado();
 
-    // Volta pro passo de categoria (se houver) ou confirma
     document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
     const categoriasDaCaixa = (state.orcamento.categorias || []).filter(c => c.caixa === registroTemporario.caixa);
     if (categoriasDaCaixa.length > 0) {
@@ -3871,7 +4012,39 @@ function escolherCustodia(custodiaId) {
     }
 }
 
+// Retorna uma mensagem de alerta se o gasto deixar a custódia negativa, ou null.
+function verificarChequeEspecial(custodiaId, valor) {
+    if (!custodiaId) return null;
+    const custodia = (state.orcamento.custodias || []).find(c => c.id === custodiaId);
+    if (!custodia) return null;
+
+    const tipo = TIPOS_CUSTODIA[custodia.tipo];
+    if (tipo.temFatura) return null; // cartão de crédito não tem saldo
+
+    const saldoAtual = custodia.saldoAtual || 0;
+    const saldoDepois = saldoAtual - valor;
+
+    if (saldoDepois < 0) {
+        const faltando = Math.abs(saldoDepois);
+        return (
+            `Atenção: "${custodia.nome}" tem R$ ${saldoAtual.toFixed(2).replace('.', ',')} ` +
+            `e esse gasto de R$ ${valor.toFixed(2).replace('.', ',')} vai deixar a conta negativa ` +
+            `em R$ ${faltando.toFixed(2).replace('.', ',')}.\n\n` +
+            `Isso pode virar cheque especial ou juros. Continuar?`
+        );
+    }
+    return null;
+}
+
 function pularCustodia() {
+    // Se é pagamento de parcela, confirma sem custódia
+    if (registroTemporario && registroTemporario.origem === 'parcela') {
+        registroTemporario.custodiaId = null;
+        confirmarPagamentoParcela();
+        return;
+    }
+
+    // Comportamento antigo (gasto)
     registroTemporario.custodiaId = null;
     confirmarRegistro(null);
 }
