@@ -574,6 +574,12 @@
     <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
     <div id="transferencia-conteudo"></div>
 </div>
+
+    <!-- TELA 14: Fluxo de Caixa (Nível 2+) — Ciclo 3.9 -->
+    <div id="screen-fluxo-caixa" class="screen">
+        <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
+        <div id="fluxo-caixa-conteudo"></div>
+    </div>
 	
 </div>
 
@@ -829,6 +835,33 @@ state.orcamento.categorias.forEach(c => {
         if (c.valorTotal === undefined) c.valorTotal = null;
     }
 });
+
+    // === CICLO 3.9 — MIGRAÇÃO DE BASE ===
+
+    // 1. diaRecebimento em fontes de renda (N2)
+    if (state.orcamento.rendaDetalhe && Array.isArray(state.orcamento.rendaDetalhe.fontes)) {
+        state.orcamento.rendaDetalhe.fontes.forEach(f => {
+            if (f.diaRecebimento === undefined) f.diaRecebimento = null;
+        });
+    }
+
+    // 2. vencimento em categorias de Vida (N2)
+    //    (Base já exige vencimento; Vida historicamente não pedia)
+    state.orcamento.categorias.forEach(c => {
+        if (c.vencimento === undefined) c.vencimento = null;
+
+        // 3. custodiaPadraoId por categoria (N3)
+        if (c.custodiaPadraoId === undefined) c.custodiaPadraoId = null;
+    });
+
+    // 4. Garante que a estrutura mínima do Ciclo 3.9 exista
+    if (state.orcamento.projecao === undefined) {
+        state.orcamento.projecao = {
+            // Preenchido a partir do Bloco 4 em diante.
+            // Por ora, só garante que o campo existe e é serializável.
+            ultimaSimulacao: null
+        };
+    }
 
 }
 
@@ -2020,20 +2053,24 @@ function renderizarDetalheRenda() {
     const diferenca = valorBase - totalFontes;
 
     let htmlFontes = '';
-    fontes.forEach(f => {
-        htmlFontes += `
-            <div class="categoria-item">
-                <div>
-                    <div class="nome-cat">${f.nome}</div>
-                    <div class="meta-cat">${traduzirOrigem(f.origem)} · ${traduzirFrequencia(f.frequencia)}</div>
-                </div>
-                <div style="display: flex; align-items: center;">
-                    <span class="valor-cat">R$ ${(f.valor || 0).toFixed(2).replace('.', ',')}</span>
-                    <button class="btn-remover" onclick="removerFonteRenda('${f.id}')">&times;</button>
-                </div>
+fontes.forEach(f => {
+    let metaFonte = `${traduzirOrigem(f.origem)} · ${traduzirFrequencia(f.frequencia)}`;
+    const descDia = descreverDiaRecebimento(f.diaRecebimento);
+    if (descDia) metaFonte += ` · ${descDia}`;
+
+    htmlFontes += `
+        <div class="categoria-item">
+            <div>
+                <div class="nome-cat">${f.nome}</div>
+                <div class="meta-cat">${metaFonte}</div>
             </div>
-        `;
-    });
+            <div style="display: flex; align-items: center;">
+                <span class="valor-cat">R$ ${(f.valor || 0).toFixed(2).replace('.', ',')}</span>
+                <button class="btn-remover" onclick="removerFonteRenda('${f.id}')">&times;</button>
+            </div>
+        </div>
+    `;
+});
 
     // Aviso se a soma das fontes difere da renda base
     let avisoDiferenca = '';
@@ -2087,13 +2124,24 @@ function traduzirFrequencia(freq) {
         imprevisivel: 'Varia muito'
     }[freq] || '—';
 }
-
+function descreverDiaRecebimento(dia) {
+    if (dia === null || dia === undefined) return null;
+    if (Array.isArray(dia)) {
+        return `dias ${dia[0]} e ${dia[1]}`;
+    }
+    return `dia ${dia}`;
+}
 function responderOrigemRenda(origem) {
     if (!state.orcamento.rendaDetalhe) state.orcamento.rendaDetalhe = { fontes: [] };
     if (!state.orcamento.rendaDetalhe.fontes) state.orcamento.rendaDetalhe.fontes = [];
 
-    // Verifica se já existe uma fonte genérica
     const temGenerica = state.orcamento.rendaDetalhe.fontes.length === 0;
+
+    // Guarda o escopo para o botão dinâmico
+    origemRendaTemp = origem;
+    temGenericaTemp = temGenerica;
+    frequenciaRendaSelecionada = null;
+    diaRecebimentoTemp = null;
 
     const container = document.getElementById('renda-detalhe-conteudo');
     container.innerHTML = `
@@ -2122,18 +2170,102 @@ function responderOrigemRenda(origem) {
             <div class="chip" onclick="responderFrequenciaRenda(this, 'semanal')">Toda semana</div>
             <div class="chip" onclick="responderFrequenciaRenda(this, 'imprevisivel')">Varia muito</div>
         </div>
-
-        <button class="btn-primary" onclick="salvarFonteRenda('${origem}', ${temGenerica})">Salvar fonte</button>
+        <!-- O botão Salvar é injetado dinamicamente por mostrarBotaoSalvarFonte() -->
     `;
 }
-
 let frequenciaRendaSelecionada = null;
+let diaRecebimentoTemp = null; // número | [d1,d2] | null
 
 function responderFrequenciaRenda(el, freq) {
     document.querySelectorAll('#chips-frequencia .chip').forEach(c => c.classList.remove('selecionado'));
     el.classList.add('selecionado');
     frequenciaRendaSelecionada = freq;
+
+    // Semanais e imprevisíveis não têm dia fixo — segue direto
+    if (freq === 'semanal' || freq === 'imprevisivel') {
+        diaRecebimentoTemp = null;
+        mostrarBotaoSalvarFonte();
+        return;
+    }
+
+    // Mensal ou quinzenal — pergunta o dia
+    mostrarPassoDiaRecebimento(freq);
 }
+
+function mostrarPassoDiaRecebimento(freq) {
+    // Remove qualquer bloco de dia anterior (caso o usuário volte)
+    const antigo = document.getElementById('bloco-dia-recebimento');
+    if (antigo) antigo.remove();
+
+    const container = document.getElementById('renda-detalhe-conteudo');
+    const avatar = '🌿';
+
+    const bloco = document.createElement('div');
+    bloco.id = 'bloco-dia-recebimento';
+
+    if (freq === 'mensal') {
+        bloco.innerHTML = `
+            <div class="fala-avatar">
+                <span class="icone">${avatar}</span>
+                <span class="texto">Em que dia do mês cai?</span>
+            </div>
+            <input type="number" id="fonte-dia" class="input-padrao" placeholder="Ex: 5" min="1" max="31">
+            <button class="btn-option" style="justify-content: center; border-color: var(--secondary);" onclick="pularDiaRecebimento()">
+                Não sei / prefiro não informar
+            </button>
+        `;
+    } else if (freq === 'quinzenal') {
+        bloco.innerHTML = `
+            <div class="fala-avatar">
+                <span class="icone">${avatar}</span>
+                <span class="texto">Quais os dois dias? (ex: 5 e 20)</span>
+            </div>
+            <input type="number" id="fonte-dia-1" class="input-padrao" placeholder="Primeiro dia" min="1" max="31">
+            <input type="number" id="fonte-dia-2" class="input-padrao" placeholder="Segundo dia" min="1" max="31">
+            <button class="btn-option" style="justify-content: center; border-color: var(--secondary);" onclick="pularDiaRecebimento()">
+                Não sei / prefiro não informar
+            </button>
+        `;
+    }
+
+    container.appendChild(bloco);
+
+    // Remove o botão salvar (se já existia) e recria depois do bloco de dia
+    const btnAntigo = document.getElementById('btn-salvar-fonte');
+    if (btnAntigo) btnAntigo.remove();
+    mostrarBotaoSalvarFonte();
+}
+
+function pularDiaRecebimento() {
+    diaRecebimentoTemp = null;
+    const bloco = document.getElementById('bloco-dia-recebimento');
+    if (bloco) bloco.remove();
+    mostrarBotaoSalvarFonte();
+}
+
+function mostrarBotaoSalvarFonte() {
+    // Evita duplicar
+    const existente = document.getElementById('btn-salvar-fonte');
+    if (existente) existente.remove();
+
+    const container = document.getElementById('renda-detalhe-conteudo');
+    const btn = document.createElement('button');
+    btn.id = 'btn-salvar-fonte';
+    btn.className = 'btn-primary';
+    btn.style.marginTop = '16px';
+
+    // Reconstrói o onclick com os argumentos originais (origem e temGenerica
+    // vêm do escopo de responderOrigemRenda — guardamos em variáveis de módulo)
+    btn.innerText = 'Salvar fonte';
+    btn.onclick = () => salvarFonteRenda(origemRendaTemp, temGenericaTemp);
+
+    container.appendChild(btn);
+}
+
+// Guardas de escopo — preenchidas por responderOrigemRenda
+let origemRendaTemp = null;
+let temGenericaTemp = false;
+
 function salvarFonteRenda(origem, temGenerica) {
     const nome = document.getElementById('fonte-nome').value.trim();
     const valor = parseFloat(document.getElementById('fonte-valor').value) || 0;
@@ -2141,6 +2273,45 @@ function salvarFonteRenda(origem, temGenerica) {
     if (nome === '') { alert("Diga o nome da fonte."); return; }
     if (valor <= 0) { alert("Insira um valor maior que zero."); return; }
     if (!frequenciaRendaSelecionada) { alert("Escolha como a renda cai."); return; }
+
+    // Coleta o dia, se aplicável
+    let diaRecebimento = null;
+
+    if (frequenciaRendaSelecionada === 'mensal') {
+        const input = document.getElementById('fonte-dia');
+        if (input && input.value.trim() !== '') {
+            const d = parseInt(input.value);
+            if (isNaN(d) || d < 1 || d > 31) {
+                alert('O dia precisa estar entre 1 e 31.');
+                return;
+            }
+            diaRecebimento = d;
+        }
+    } else if (frequenciaRendaSelecionada === 'quinzenal') {
+        const i1 = document.getElementById('fonte-dia-1');
+        const i2 = document.getElementById('fonte-dia-2');
+
+        const v1 = i1 && i1.value.trim() !== '' ? parseInt(i1.value) : null;
+        const v2 = i2 && i2.value.trim() !== '' ? parseInt(i2.value) : null;
+
+        // Se o usuário preencheu um, precisa preencher o outro
+        if ((v1 !== null || v2 !== null) && (v1 === null || v2 === null)) {
+            alert('Preencha os dois dias ou deixe em branco.');
+            return;
+        }
+        if (v1 !== null && (isNaN(v1) || v1 < 1 || v1 > 31)) {
+            alert('O primeiro dia precisa estar entre 1 e 31.');
+            return;
+        }
+        if (v2 !== null && (isNaN(v2) || v2 < 1 || v2 > 31)) {
+            alert('O segundo dia precisa estar entre 1 e 31.');
+            return;
+        }
+
+        if (v1 !== null && v2 !== null) {
+            diaRecebimento = [v1, v2];
+        }
+    }
 
     if (!state.orcamento.rendaDetalhe) state.orcamento.rendaDetalhe = { fontes: [] };
     if (!state.orcamento.rendaDetalhe.fontes) state.orcamento.rendaDetalhe.fontes = [];
@@ -2154,7 +2325,6 @@ function salvarFonteRenda(origem, temGenerica) {
         );
         if (atualizar) {
             state.orcamento.base.rendaBase = valor;
-            // Recalcula o limite da semana
             if (state.orcamento.semanaAtual) {
                 const fortaleza = state.orcamento.base?.fortalezaTotal || 1800;
                 const vida = state.orcamento.vida?.total || 700;
@@ -2169,12 +2339,17 @@ function salvarFonteRenda(origem, temGenerica) {
         nome: nome,
         valor: valor,
         origem: origem,
-        frequencia: frequenciaRendaSelecionada
+        frequencia: frequenciaRendaSelecionada,
+        diaRecebimento: diaRecebimento
     });
 
     frequenciaRendaSelecionada = null;
+    diaRecebimentoTemp = null;
+    origemRendaTemp = null;
+    temGenericaTemp = false;
+
     salvarEstado();
-    console.log('[NÍVEL 2] Fonte de renda salva:', nome);
+    console.log('[NÍVEL 2] Fonte de renda salva:', nome, '| dia:', diaRecebimento);
     renderizarDetalheRenda();
 }
 function removerFonteRenda(id) {
@@ -4838,7 +5013,29 @@ document.addEventListener('keydown', (e) => {
         }, 100);
     });
 })();
+// ============================================================
+// CICLO 3.9 — FLUXO DE CAIXA (placeholder)
+// ============================================================
+// Bloco 0 apenas declara a tela e o ponto de entrada.
+// Bloco 7 implementa a renderização real.
 
+function abrirTelaFluxoCaixa() {
+    goToScreen('screen-fluxo-caixa');
+    renderizarFluxoCaixa();
+}
+
+function renderizarFluxoCaixa() {
+    const container = document.getElementById('fluxo-caixa-conteudo');
+    if (!container) return;
+
+    // Placeholder — o Bloco 7 substitui este conteúdo.
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🧭</span>
+            <span class="texto">Aqui vai aparecer o fluxo de caixa da sua semana. Ainda estamos montando essa parte.</span>
+        </div>
+    `;
+}
 
 </script>
 </body>
