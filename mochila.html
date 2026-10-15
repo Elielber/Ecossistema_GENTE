@@ -183,6 +183,28 @@
         .barra-verde { background: #10b981; }
         .barra-amarela { background: #f59e0b; }
         .barra-vermelha { background: #ef4444; }
+        
+        .btn-flutuante-topo {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(30, 41, 59, 0.25);
+    z-index: 500;
+    display: none; /* controlado por JS */
+    align-items: center;
+    justify-content: center;
+    transition: 0.2s;
+}
+.btn-flutuante-topo:active { transform: scale(0.95); }
+.btn-flutuante-topo.visivel { display: flex; }
 
         .btn-flutuante {
             position: fixed;
@@ -488,7 +510,7 @@
 
         <div class="card">
             <p style="font-size: 0.9rem; color: var(--secondary); line-height: 1.5;">
-                🔒 Tudo fica salvo no seu próprio celular. Nenhum dado é enviado para bancos ou empresas.
+                🔒 Tudo fica salvo no seu próprio celular. Nenhum dado é enviado para bancos ou empresas. Quando você quiser mandar uma dúvida, reclamação ou sugestão, um botão no topo te leva a um canal anônimo — e você vê exatamente o que vai ser enviado antes de confirmar.
             </p>
         </div>
 
@@ -582,7 +604,8 @@
     </div>
 	
 </div>
-
+<!-- BOTÃO FLUTUANTE: Canal de Feedback (Ciclo 4.0) -->
+<button id="btn-feedback" class="btn-flutuante-topo" onclick="abrirModalFeedback()" aria-label="Enviar feedback">💬</button>
 <!-- MODAL: Registro de gasto -->
 <div id="modal-registro" class="modal-registro">
     <div class="modal-registro-conteudo">
@@ -691,7 +714,97 @@
         </details>
     </div>
 </div>
+<!-- MODAL: Canal de Feedback (Ciclo 4.0) -->
+<div id="modal-feedback" class="modal-registro">
+    <div class="modal-registro-conteudo">
 
+        <!-- PASSO 0: tipo -->
+        <div id="feedback-passo-0">
+            <button onclick="fecharModalFeedback()" style="position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer;">&times;</button>
+            <h3 style="color: var(--primary); margin-bottom: 8px;">Enviar feedback</h3>
+            <p style="font-size: 0.85rem; color: var(--secondary); margin-bottom: 20px; line-height: 1.5;">
+                Escolha o tipo. Sua mensagem é anônima.
+            </p>
+
+            <button class="btn-option" style="justify-content: flex-start;" onclick="escolherTipoFeedback('Dúvida')">
+                <span style="font-size: 1.5rem;">🙋</span>
+                <span>Dúvida</span>
+            </button>
+            <button class="btn-option" style="justify-content: flex-start;" onclick="escolherTipoFeedback('Reclamação')">
+                <span style="font-size: 1.5rem;">😠</span>
+                <span>Reclamação</span>
+            </button>
+            <button class="btn-option" style="justify-content: flex-start;" onclick="escolherTipoFeedback('Sugestão')">
+                <span style="font-size: 1.5rem;">💡</span>
+                <span>Sugestão</span>
+            </button>
+        </div>
+
+        <!-- PASSO 1: texto -->
+        <div id="feedback-passo-1" style="display: none;">
+            <button onclick="fecharModalFeedback()" style="position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer;">&times;</button>
+            <h3 id="feedback-titulo-passo-1" style="color: var(--primary); margin-bottom: 8px;">Conta pra gente</h3>
+            <p id="feedback-sub-passo-1" style="font-size: 0.85rem; color: var(--secondary); margin-bottom: 15px; line-height: 1.5;">
+                Escreva com suas palavras.
+            </p>
+
+            <textarea id="feedback-texto" rows="6" maxlength="800"
+                style="width: 100%; padding: 14px; border-radius: 10px; border: 1px solid #cbd5e1; font-size: 1rem; font-family: inherit; outline: none; resize: vertical; box-sizing: border-box;"
+                placeholder="Escreva aqui..."></textarea>
+
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--secondary); margin-top: 6px; margin-bottom: 15px;">
+                <span id="feedback-min-aviso">Mínimo 10 caracteres</span>
+                <span id="feedback-contador">0 / 800</span>
+            </div>
+
+            <div style="background: #f8fafc; border-left: 3px solid var(--accent); padding: 12px 14px; border-radius: 8px; margin-bottom: 18px;">
+                <p style="font-size: 0.8rem; color: var(--secondary); line-height: 1.5; margin: 0;">
+                    🔒 Só vai o que você escrever aqui, a categoria que escolheu, o nível do seu orçamento e a tela onde você estava. Nenhum valor, nome, categoria financeira ou custódia é enviado. Nada fica ligado à sua identidade.
+                </p>
+            </div>
+
+            <button class="btn-primary" id="feedback-btn-continuar" onclick="irParaConfirmacaoFeedback()" disabled>
+                Continuar
+            </button>
+            <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="voltarParaTipoFeedback()">
+                Voltar
+            </button>
+        </div>
+
+        <!-- PASSO 2: confirmação -->
+        <div id="feedback-passo-2" style="display: none;">
+            <button onclick="fecharModalFeedback()" style="position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer;">&times;</button>
+            <h3 style="color: var(--primary); margin-bottom: 8px;">Confirme antes de enviar</h3>
+            <p style="font-size: 0.85rem; color: var(--secondary); margin-bottom: 15px; line-height: 1.5;">
+                É isto que vai ser enviado:
+            </p>
+
+            <div id="feedback-preview" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; font-family: monospace; font-size: 0.8rem; color: var(--primary); white-space: pre-wrap; line-height: 1.5; margin-bottom: 18px; max-height: 260px; overflow-y: auto;"></div>
+            <div id="feedback-erro" style="display: none; background: #fef2f2; border-left: 3px solid #ef4444; padding: 12px 14px; border-radius: 8px; margin-bottom: 14px;">
+                <p style="font-size: 0.85rem; color: #991b1b; line-height: 1.5; margin: 0;">
+                    ⚠️ Não foi possível enviar. Verifique sua conexão e toque em <strong>Enviar</strong> de novo.
+                </p>
+            </div>
+            <button class="btn-primary" id="feedback-btn-enviar" onclick="enviarFeedback()">
+                Enviar
+            </button>
+            <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="voltarParaTextoFeedback()">
+                Voltar
+            </button>
+        </div>
+
+        <!-- PASSO 3: sucesso -->
+        <div id="feedback-passo-3" style="display: none; text-align: center;">
+            <div style="font-size: 3.5rem; margin-bottom: 12px; color: #10b981;">✓</div>
+            <h3 style="color: var(--primary); margin-bottom: 10px;">Obrigado!</h3>
+            <p id="feedback-sucesso-texto" style="font-size: 0.9rem; color: var(--secondary); margin-bottom: 20px; line-height: 1.5;">
+                Sua mensagem foi enviada anonimamente. Ajuda muito a melhorar o app.
+            </p>
+            <button class="btn-primary" onclick="fecharModalFeedback()">Fechar</button>
+        </div>
+
+    </div>
+</div>
 
 <script>
 // ============================================================
@@ -876,6 +989,27 @@ state.orcamento.categorias.forEach(c => {
 }
 
 // ============================================================
+// CICLO 4.0 — BOTÃO DE FEEDBACK (visibilidade)
+// ============================================================
+
+// Telas onde o botão NÃO aparece
+const TELAS_SEM_FEEDBACK = ['screen-welcome'];
+
+function atualizarBotaoFeedback(screenId) {
+    const btn = document.getElementById('btn-feedback');
+    if (!btn) return;
+
+    const modalAberto = document.getElementById('modal-registro').classList.contains('ativo')
+                     || document.getElementById('modal-qrcode').classList.contains('ativo')
+                     || (document.getElementById('modal-feedback') && document.getElementById('modal-feedback').classList.contains('ativo'));
+
+    const telaBloqueada = TELAS_SEM_FEEDBACK.includes(screenId);
+    const deveAparecer = !telaBloqueada && !modalAberto;
+
+    btn.classList.toggle('visivel', deveAparecer);
+}
+
+// ============================================================
 // NAVEGAÇÃO
 // ============================================================
 
@@ -887,6 +1021,8 @@ function goToScreen(id) {
     if (btnFlutuante) {
         btnFlutuante.style.display = (id === 'screen-orcamento-inicio') ? 'flex' : 'none';
     }
+
+    atualizarBotaoFeedback(id); // Ciclo 4.0
 }
 
 function voltarParaOrcamento() {
@@ -1857,11 +1993,15 @@ function abrirModalRegistro() {
     }
 
     document.getElementById('modal-registro').classList.add('ativo');
+    
+        // Ciclo 4.0: esconde o botão de feedback enquanto o modal está aberto
+    atualizarBotaoFeedback(document.querySelector('.screen.active')?.id || 'screen-orcamento-inicio');
 }
 
 function fecharModalRegistro() {
     document.getElementById('modal-registro').classList.remove('ativo');
     registroTemporario = null;
+    atualizarBotaoFeedback(document.querySelector('.screen.active')?.id || 'screen-orcamento-inicio');
 }
 
 function registrarGasto(caixa) {
@@ -3962,6 +4102,7 @@ const saldo = rendaReal - totalGasto;
 
 window.addEventListener('DOMContentLoaded', () => {
     carregarEstado();
+    atualizarBotaoFeedback('screen-welcome');
     atualizarBotaoRetomada();
     verificarFechamentoSemana();
 
@@ -5366,10 +5507,12 @@ function abrirModalQRCode() {
     }
 
     document.getElementById('modal-qrcode').classList.add('ativo');
+        atualizarBotaoFeedback(document.querySelector('.screen.active')?.id || 'screen-orcamento-inicio');
 }
 
 function fecharModalQRCode() {
     document.getElementById('modal-qrcode').classList.remove('ativo');
+    atualizarBotaoFeedback(document.querySelector('.screen.active')?.id || 'screen-orcamento-inicio');
 }
 
 function copiarCodigoQR() {
@@ -6800,7 +6943,267 @@ function sugerirEquilibrio(gargalos, orc) {
     });
     return sugestoes;
 }
+// ============================================================
+// CICLO 4.0 — CANAL DE FEEDBACK (Bloco 1: modal + estado)
+// ============================================================
 
+const FEEDBACK_VERSAO = '3.9';
+const FEEDBACK_MIN = 10;
+const FEEDBACK_MAX = 800;
+const FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbz1fdCassmVsnTJcbnGRBA7wxscNGqv30bY-vMG6AF_8iKQ5dGdDjBrzRuowx3wIU0y/exec';
+
+let feedbackTemp = {
+    categoria: null,
+    mensagem: '',
+    telaOrigem: null,
+    nivelOrigem: null
+};
+
+function abrirModalFeedback() {
+    // Reseta estado
+    feedbackTemp = {
+        categoria: null,
+        mensagem: '',
+        telaOrigem: document.querySelector('.screen.active')?.id || null,
+        nivelOrigem: (state.orcamento && state.orcamento.nivel) || 1
+    };
+
+    // Esconde todos os passos, mostra o 0
+    document.getElementById('feedback-passo-0').style.display = 'block';
+    document.getElementById('feedback-passo-1').style.display = 'none';
+    document.getElementById('feedback-passo-2').style.display = 'none';
+    document.getElementById('feedback-passo-3').style.display = 'none';
+
+    // Limpa textarea e contador
+    const ta = document.getElementById('feedback-texto');
+    if (ta) ta.value = '';
+    const contador = document.getElementById('feedback-contador');
+    if (contador) contador.textContent = '0 / ' + FEEDBACK_MAX;
+    const btnCont = document.getElementById('feedback-btn-continuar');
+    if (btnCont) btnCont.disabled = true;
+    const btnEnv = document.getElementById('feedback-btn-enviar');
+if (btnEnv) {
+    btnEnv.innerText = 'Enviar';
+    btnEnv.disabled = false;
+}
+    const blocoErro = document.getElementById('feedback-erro');
+    if (blocoErro) blocoErro.style.display = 'none';
+    document.getElementById('modal-feedback').classList.add('ativo');
+
+    // Esconde o botão de feedback enquanto o modal está aberto
+    atualizarBotaoFeedback(feedbackTemp.telaOrigem);
+}
+
+function fecharModalFeedback() {
+    document.getElementById('modal-feedback').classList.remove('ativo');
+
+    const btn = document.getElementById('feedback-btn-enviar');
+    if (btn) {
+        btn.innerText = 'Enviar';
+        btn.disabled = false;
+    }
+
+    const blocoErro = document.getElementById('feedback-erro');
+    if (blocoErro) blocoErro.style.display = 'none';
+
+    // Limpa o estado (defensivo; abrirModalFeedback também reseta)
+    feedbackTemp = {
+        categoria: null,
+        mensagem: '',
+        telaOrigem: null,
+        nivelOrigem: null
+    };
+
+    atualizarBotaoFeedback(document.querySelector('.screen.active')?.id || 'screen-orcamento-inicio');
+}
+// Esc fecha o modal de feedback (só se estiver aberto e sem outros modais)
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const modal = document.getElementById('modal-feedback');
+    if (modal && modal.classList.contains('ativo')) {
+        fecharModalFeedback();
+    }
+});
+function escolherTipoFeedback(categoria) {
+    feedbackTemp.categoria = categoria;
+
+    document.getElementById('feedback-passo-0').style.display = 'none';
+    document.getElementById('feedback-passo-1').style.display = 'block';
+
+    // Ajusta o título conforme a categoria
+    const titulo = document.getElementById('feedback-titulo-passo-1');
+    const sub = document.getElementById('feedback-sub-passo-1');
+    if (categoria === 'Dúvida') {
+        titulo.textContent = 'Qual é a sua dúvida?';
+        sub.textContent = 'Pode escrever do seu jeito. Ninguém vai te julgar.';
+    } else if (categoria === 'Reclamação') {
+        titulo.textContent = 'O que te incomodou?';
+        sub.textContent = 'Conta o que aconteceu. A gente quer consertar.';
+    } else {
+        titulo.textContent = 'Qual é a sua sugestão?';
+        sub.textContent = 'Pode ser grande ou pequena. Tudo ajuda.';
+    }
+
+    // Foca no textarea
+    setTimeout(() => {
+        const ta = document.getElementById('feedback-texto');
+        if (ta) {
+            ta.focus();
+            ta.oninput = atualizarContadorFeedback;
+        }
+    }, 50);
+}
+
+function atualizarContadorFeedback() {
+    const ta = document.getElementById('feedback-texto');
+    const contador = document.getElementById('feedback-contador');
+    const btn = document.getElementById('feedback-btn-continuar');
+    const aviso = document.getElementById('feedback-min-aviso');
+    if (!ta || !contador || !btn) return;
+
+    // Corta o excesso silenciosamente (o maxlength do HTML já ajuda, mas
+    // colar via teclado pode passar por cima; isso garante)
+    if (ta.value.length > FEEDBACK_MAX) {
+        ta.value = ta.value.slice(0, FEEDBACK_MAX);
+    }
+
+    const len = ta.value.trim().length;
+    contador.textContent = len + ' / ' + FEEDBACK_MAX;
+
+    if (len < FEEDBACK_MIN) {
+        btn.disabled = true;
+        if (aviso) {
+            aviso.textContent = 'Mínimo ' + FEEDBACK_MIN + ' caracteres';
+            aviso.style.color = 'var(--secondary)';
+        }
+    } else {
+        btn.disabled = false;
+        if (aviso) {
+            aviso.textContent = '✓ Pronto para continuar';
+            aviso.style.color = '#10b981';
+        }
+    }
+}
+
+function voltarParaTipoFeedback() {
+    document.getElementById('feedback-passo-1').style.display = 'none';
+    document.getElementById('feedback-passo-0').style.display = 'block';
+}
+
+function irParaConfirmacaoFeedback() {
+    const ta = document.getElementById('feedback-texto');
+    if (!ta) return;
+    const texto = ta.value.trim();
+    if (texto.length < FEEDBACK_MIN) {
+        alert('Escreva pelo menos ' + FEEDBACK_MIN + ' caracteres.');
+        return;
+    }
+    feedbackTemp.mensagem = texto;
+
+    // Monta preview
+    const preview = document.getElementById('feedback-preview');
+    if (preview) {
+        preview.textContent = montarTextoFeedbackPreview(feedbackTemp);
+    }
+
+    document.getElementById('feedback-passo-1').style.display = 'none';
+    document.getElementById('feedback-passo-2').style.display = 'block';
+}
+
+function voltarParaTextoFeedback() {
+    // Limpa estado de erro (caso tenha vindo de uma falha de envio)
+    const blocoErro = document.getElementById('feedback-erro');
+    if (blocoErro) blocoErro.style.display = 'none';
+
+    document.getElementById('feedback-passo-2').style.display = 'none';
+    document.getElementById('feedback-passo-1').style.display = 'block';
+
+    const ta = document.getElementById('feedback-texto');
+    if (ta) {
+        ta.focus();
+        ta.oninput = atualizarContadorFeedback;
+    }
+}
+
+function montarTextoFeedbackPreview(f) {
+    // Mostra só o que o usuário vê. Os campos técnicos (Nivel, Tela, Versao)
+    // vão para a planilha no Bloco 2, mas também aparecem aqui para transparência.
+    const linhas = [
+        'Categoria: ' + f.categoria,
+        'Mensagem: ' + f.mensagem,
+        '',
+        '--- contexto técnico (só para reproduzir o problema) ---',
+        'Nivel: ' + f.nivelOrigem,
+        'Tela: ' + (f.telaOrigem || 'desconhecida'),
+        'Versao: ' + FEEDBACK_VERSAO
+    ];
+    return linhas.join('\n');
+}
+
+function enviarFeedback() {
+    if (!feedbackTemp.categoria || !feedbackTemp.mensagem) {
+        alert('Faltou categoria ou mensagem. Refaça o envio.');
+        return;
+    }
+
+    // Esconde erro anterior
+    const blocoErro = document.getElementById('feedback-erro');
+    if (blocoErro) blocoErro.style.display = 'none';
+
+    const btn = document.getElementById('feedback-btn-enviar');
+    if (btn) {
+        btn.innerText = 'Enviando...';
+        btn.disabled = true;
+    }
+
+    const params = new URLSearchParams();
+    params.append('aba', 'aplicativo');
+    params.append('Origem', 'Mochila');
+    params.append('Categoria', feedbackTemp.categoria);
+    params.append('Mensagem', feedbackTemp.mensagem);
+    params.append('Nivel', String(feedbackTemp.nivelOrigem || ''));
+    params.append('Tela', feedbackTemp.telaOrigem || '');
+    params.append('Versao', FEEDBACK_VERSAO);
+
+    console.log('[CICLO 4.0] POST →', FEEDBACK_URL);
+    console.log('[CICLO 4.0] params:', Object.fromEntries(params.entries()));
+
+    fetch(FEEDBACK_URL, {
+        method: 'POST',
+        body: params,
+        mode: 'no-cors'
+    })
+    .then(() => {
+        console.log('[CICLO 4.0] Envio concluído (resposta opaca).');
+        irParaSucessoFeedback();
+    })
+    .catch((error) => {
+        console.error('[CICLO 4.0] Falha no envio:', error);
+        if (btn) {
+            btn.innerText = 'Enviar';
+            btn.disabled = false;
+        }
+        if (blocoErro) blocoErro.style.display = 'block';
+    });
+}
+
+function irParaSucessoFeedback() {
+    // Personaliza a mensagem conforme a categoria escolhida
+    const alvo = document.getElementById('feedback-sucesso-texto');
+    if (alvo) {
+        const cat = feedbackTemp.categoria || 'mensagem';
+        alvo.innerHTML = 'Sua <strong>' + cat + '</strong> foi enviada anonimamente. Ajuda muito a melhorar o app.';
+    }
+
+    document.getElementById('feedback-passo-2').style.display = 'none';
+    document.getElementById('feedback-passo-3').style.display = 'block';
+
+    const btn = document.getElementById('feedback-btn-enviar');
+    if (btn) {
+        btn.innerText = 'Enviar';
+        btn.disabled = false;
+    }
+}
 
 </script>
 </body>
