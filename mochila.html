@@ -607,9 +607,15 @@
         <div id="modal-registro-passo-1" style="display: none;">
             <button onclick="fecharModalRegistro()" style="position: absolute; top: 15px; right: 20px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer;">&times;</button>
             <h3 id="registro-titulo-passo-1" style="color: var(--primary); margin-bottom: 20px;">Quanto foi?</h3>
-            <div style="position: relative; margin-bottom: 25px;">
+            <div style="position: relative; margin-bottom: 12px;">
                 <span style="position: absolute; left: 15px; top: 15px; color: var(--secondary); font-weight: bold;">R$</span>
                 <input type="number" id="registro-valor" placeholder="0.00" style="width: 100%; padding: 15px 15px 15px 45px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 1.3rem; outline: none; font-weight: bold;">
+            </div>
+
+            <!-- Bloco 10: data do registro (retroativa permitida) -->
+            <div style="margin-bottom: 20px;">
+                <label for="registro-data" style="font-size: 0.8rem; color: var(--secondary); display: block; margin-bottom: 6px;">Quando foi? (pode ser um dia anterior)</label>
+                <input type="date" id="registro-data" class="input-padrao" style="margin-bottom: 0;">
             </div>
 
             <!-- Opções para GASTO -->
@@ -814,6 +820,10 @@ if (Array.isArray(state.orcamento.resumos)) {
         if (r.custodiaId === undefined) r.custodiaId = null;
         if (r.cartaoId === undefined) r.cartaoId = null;
         if (r.saldoAtualizado === undefined) r.saldoAtualizado = false;
+        // Bloco 11: dataCompra em gastos de cartão
+        if (r.tipo === 'gasto_cartao' && r.dataCompra === undefined) {
+            r.dataCompra = r.data || null;
+        }
     });
 	// === FUTURO — categorias (dívida e reserva) ===
 if (!Array.isArray(state.orcamento.categorias)) {
@@ -1293,9 +1303,11 @@ function renderizarOrcamentoCompleto(container, orc) {
 
     // ===== CARD DO PLANO DE RECUPERAÇÃO =====
     let cardRecuperacao = '';
+    let recuperacaoAtiva = false;
     if (orc.nivel >= 3) {
         const sinal = detectarSinalRecuperacao(orc);
         if (sinal) {
+            recuperacaoAtiva = true;
             let subRecuperacao = '';
             if (sinal.s1 && sinal.s2) {
                 subRecuperacao = 'Saldo negativo e contas vencidas';
@@ -1305,18 +1317,29 @@ function renderizarOrcamentoCompleto(container, orc) {
                 subRecuperacao = `${sinal.contasVencidas.length} conta${sinal.contasVencidas.length > 1 ? 's' : ''} vencida${sinal.contasVencidas.length > 1 ? 's' : ''}`;
             }
 
+            // Bloco 12: projeção só como rodapé se houver gargalo à frente
+            const rodapeProjecao = renderizarRodapeProjecaoNaRecuperacao(orc);
+
             cardRecuperacao = `
-                <div class="card-nivel2" onclick="abrirPlanoRecuperacao()" style="border-color: #f59e0b; background: #fffbeb;">
-                    <span class="icone-grande">🧭</span>
-                    <div class="conteudo">
-                        <div class="titulo-card" style="color: #92400e;">Vamos olhar juntos</div>
-                        <div class="subtitulo-card" style="color: #92400e;">${subRecuperacao}</div>
+                <div class="card-nivel2" onclick="abrirPlanoRecuperacao()" style="border-color: #f59e0b; background: #fffbeb; flex-direction: column; align-items: stretch;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span class="icone-grande">🧭</span>
+                        <div class="conteudo" style="flex: 1;">
+                            <div class="titulo-card" style="color: #92400e;">Vamos olhar juntos</div>
+                            <div class="subtitulo-card" style="color: #92400e;">${subRecuperacao}</div>
+                        </div>
+                        <span class="seta" style="color: #92400e;">→</span>
                     </div>
-                    <span class="seta" style="color: #92400e;">→</span>
+                    ${rodapeProjecao}
                 </div>
             `;
         }
     }
+
+    // ===== CARD DE PROJEÇÃO (Ciclo 3.9) =====
+    // Recuperação ativa → card de projeção cede o espaço (só rodapé acima).
+    // Recuperação inativa → projeção assume.
+    const cardProjecao = recuperacaoAtiva ? '' : renderizarCardProjecao(orc);
 
     // ===== AJUSTES (chips) =====
     // Só mostra chips do Nível 2+ se o nível permite
@@ -1329,6 +1352,7 @@ function renderizarOrcamentoCompleto(container, orc) {
                 <div class="chip" onclick="abrirDetalheGastos('base')">🛡️ Base</div>
                 <div class="chip" onclick="abrirDetalheGastos('vida')">🌿 Vida</div>
                 <div class="chip" onclick="abrirDetalheFuturo('divida')">🔭 Futuro</div>
+                <div class="chip" onclick="abrirTelaFluxoCaixa()">🧭 Fluxo</div>
                 ${orc.nivel >= 3 ? `
                     <div class="chip" onclick="abrirTelaCustodias()">🏦 Custódias</div>
                     <div class="chip" onclick="abrirTelaMapaMes()">🗓️ Mapa</div>
@@ -1367,6 +1391,7 @@ function renderizarOrcamentoCompleto(container, orc) {
         ${renderizarCaixinha('futuro', '🔭 Futuro', semana.futuro.gasto, limiteFuturo)}
 
         ${cardRecuperacao}
+        ${cardProjecao}
 
         ${chipsAjustes}
     `;
@@ -1585,7 +1610,7 @@ function abrirModalRegistro() {
         return;
     }
 
-    registroTemporario = { valor: 0, caixa: null, tipo: null, custodiaId: null, cartaoId: null, categoriaNome: null };
+    registroTemporario = { valor: 0, caixa: null, tipo: null, custodiaId: null, cartaoId: null, categoriaNome: null, data: null };
 
     // Esconde todos os passos
     document.getElementById('modal-registro-passo-0').style.display = 'block';
@@ -1617,45 +1642,26 @@ function registrarGasto(caixa) {
 
     registroTemporario.valor = valor;
     registroTemporario.caixa = caixa;
+    registroTemporario.data = obterDataRegistroISO();
+    registroTemporario.categoriaId = null;
+    registroTemporario.categoriaNome = null;
 
-    // NÍVEL 3: se há custódias cadastradas, mostra o passo de custódia
-    const custodias = custodiasDisponiveisParaGasto();
-    if (state.orcamento.nivel >= 3 && custodias.length > 1) {
-        mostrarPassoCustodia();
-        return;
-    }
-
-    // Se só há uma custódia, usa ela automaticamente
-    if (state.orcamento.nivel >= 3 && custodias.length === 1) {
-        registroTemporario.custodiaId = custodias[0].id;
-        state.orcamento.custodiaPadrao = custodias[0].id;
-    }
-
-    // ⚠️ AQUI: verifica cheque especial ANTES de seguir
-    const aviso = verificarChequeEspecial(registroTemporario.custodiaId, valor);
-    if (aviso) {
-        const prosseguir = confirm(aviso);
-        if (!prosseguir) {
-            registroTemporario.valor = 0;
-            return;
-        }
-    }
-
-    // Se o nível >= 2 e existem categorias para essa caixa, pergunta a categoria
+    // Bloco 3: categoria ANTES da custódia
     const categoriasDaCaixa = (state.orcamento.categorias || []).filter(c => c.caixa === caixa);
     if (state.orcamento.nivel >= 2 && categoriasDaCaixa.length > 0) {
         mostrarPassoCategoria(categoriasDaCaixa);
-    } else {
-        confirmarRegistro(null);
+        return;
     }
+
+    seguirAposCategoria();
 }
 
 function mostrarPassoCategoria(categorias) {
     document.getElementById('modal-registro-passo-1').style.display = 'none';
     document.getElementById('modal-registro-passo-2-categoria').style.display = 'block';
+    document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
 
     const titulo = document.getElementById('titulo-passo-2-categoria');
-    // Ajusta o título conforme a caixa
     if (registroTemporario.caixa === 'futuro') {
         titulo.textContent = 'É dívida ou reserva?';
     } else {
@@ -1668,33 +1674,71 @@ function mostrarPassoCategoria(categorias) {
     categorias.forEach(cat => {
         const chip = document.createElement('div');
         chip.className = 'chip';
-
-        // Se for Futuro, prefixa com ícone do subtipo
         if (cat.caixa === 'futuro' && cat.subtipo) {
             const icone = cat.subtipo === 'divida' ? '💳' : '🐖';
             chip.innerText = `${icone} ${cat.nome}`;
         } else {
             chip.innerText = cat.nome;
         }
-
-        chip.onclick = () => confirmarRegistro(cat.nome);
+        chip.onclick = () => {
+            registroTemporario.categoriaId = cat.id;
+            registroTemporario.categoriaNome = cat.nome;
+            if (cat.custodiaPadraoId) {
+                const existe = (state.orcamento.custodias || []).some(c => c.id === cat.custodiaPadraoId);
+                if (existe) registroTemporario.custodiaId = cat.custodiaPadraoId;
+            }
+            seguirAposCategoria();
+        };
         containerChips.appendChild(chip);
     });
 }
+
 function pularCategoria() {
-    confirmarRegistro(null);
+    registroTemporario.categoriaId = null;
+    registroTemporario.categoriaNome = null;
+    seguirAposCategoria();
+}
+
+function seguirAposCategoria() {
+    const valor = registroTemporario.valor;
+    const custodias = custodiasDisponiveisParaGasto();
+
+    if (state.orcamento.nivel >= 3 && custodias.length > 1) {
+        mostrarPassoCustodia();
+        return;
+    }
+
+    if (state.orcamento.nivel >= 3 && custodias.length === 1) {
+        registroTemporario.custodiaId = custodias[0].id;
+        state.orcamento.custodiaPadrao = custodias[0].id;
+    }
+
+    const aviso = verificarChequeEspecial(registroTemporario.custodiaId, valor);
+    if (aviso) {
+        const prosseguir = confirm(aviso);
+        if (!prosseguir) {
+            registroTemporario.valor = 0;
+            return;
+        }
+    }
+
+    confirmarRegistro(registroTemporario.categoriaNome || null);
 }
 
 function confirmarRegistro(nomeCategoria) {
  const valor = registroTemporario.valor; 
  const caixa = registroTemporario.caixa; 
+ const dataISO = registroTemporario.data || new Date().toISOString();
  const semana = state.orcamento.semanaAtual; 
  if (!semana || semana.fechada) { 
  alert("A semana fechou. Vamos ver o resumo primeiro."); fecharModalRegistro(); 
  abrirResumoSemanal(); 
  return; 
  }
-semana[caixa].gasto += valor;
+ // Bloco 10: só soma na semana atual se a data cair nela
+ if (dataNaSemanaAtual(dataISO)) {
+    semana[caixa].gasto += valor;
+ }
 
     // NÍVEL 3: se há custódia de origem, subtrai do saldo
     if (state.orcamento.nivel >= 3 && registroTemporario.custodiaId) {
@@ -1726,10 +1770,11 @@ semana[caixa].gasto += valor;
        if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
     state.orcamento.historicoRegistros.push({
         id: 'reg_' + Date.now(),
-        data: new Date().toISOString(),
+        data: dataISO,
         tipo: 'gasto_direto',
         caixa: caixa,
         categoria: nomeCategoria || null,
+        categoriaId: registroTemporario.categoriaId || null,
         valor: valor,
         custodiaId: registroTemporario.custodiaId || null,
         cartaoId: null,
@@ -1741,8 +1786,15 @@ semana[caixa].gasto += valor;
 
     salvarEstado();
 
+    // Bloco 10: nota se a data ficou fora da semana atual
+    if (!dataNaSemanaAtual(dataISO)) {
+        const d = dataISO.split('T')[0].split('-').reverse().join('/');
+        fala += ` Registrado em ${d} (fora desta semana — não entra nas caixinhas de agora).`;
+    }
+
     document.getElementById('modal-registro-passo-1').style.display = 'none';
     document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
+    document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
     document.getElementById('modal-registro-passo-3').style.display = 'block';
     document.getElementById('modal-registro-fala').innerHTML = `
         <span class="icone">${icone}</span>
@@ -1778,7 +1830,57 @@ function escolherTipoRegistro(tipo) {
     }
 
     document.getElementById('registro-valor').value = '';
+    prepararCampoDataRegistro();
     document.getElementById('registro-valor').focus();
+}
+
+/** Bloco 10 — data do registro: default hoje, max hoje, min 90 dias atrás */
+function prepararCampoDataRegistro() {
+    const input = document.getElementById('registro-data');
+    if (!input) return;
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const max = hoje.toISOString().split('T')[0];
+    const minD = new Date(hoje);
+    minD.setDate(minD.getDate() - 90);
+    const min = minD.toISOString().split('T')[0];
+    input.max = max;
+    input.min = min;
+    input.value = max;
+}
+
+/** Lê a data do input; devolve ISO datetime local meio-dia ou agora se inválida. */
+function obterDataRegistroISO() {
+    const input = document.getElementById('registro-data');
+    let ymd = input && input.value ? input.value : null;
+    if (!ymd) {
+        return new Date().toISOString();
+    }
+    // Valida faixa
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const escolhida = new Date(ymd + 'T12:00:00');
+    if (isNaN(escolhida.getTime())) return new Date().toISOString();
+    if (escolhida > hoje) {
+        // futuro não permitido
+        ymd = hoje.toISOString().split('T')[0];
+    }
+    const minD = new Date(hoje);
+    minD.setDate(minD.getDate() - 90);
+    if (escolhida < minD) {
+        ymd = minD.toISOString().split('T')[0];
+    }
+    return new Date(ymd + 'T12:00:00').toISOString();
+}
+
+/** True se a data ISO cai dentro da semana atual (inicio/fim YYYY-MM-DD). */
+function dataNaSemanaAtual(isoStr) {
+    const semana = state.orcamento && state.orcamento.semanaAtual;
+    if (!semana || !semana.inicio || !semana.fim) return true; // sem semana: aplica
+    const d = new Date(isoStr);
+    const ini = new Date(semana.inicio + 'T00:00:00');
+    const fim = new Date(semana.fim + 'T23:59:59');
+    return d >= ini && d <= fim;
 }
 
 // ============================================================
@@ -1790,6 +1892,7 @@ function continuarRecebimento() {
     if (valor <= 0) { alert('Insira um valor maior que zero.'); return; }
 
     registroTemporario.valor = valor;
+    registroTemporario.data = obterDataRegistroISO();
     registroTemporario.categoriaNome = null; // limpa
 
     // Nível 2+: se há fontes de renda cadastradas, pergunta qual primeiro
@@ -1880,6 +1983,7 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
     }
 
     const valor = registroTemporario.valor;
+    const dataISO = registroTemporario.data || new Date().toISOString();
     const semana = state.orcamento.semanaAtual;
     if (!semana || semana.fechada) {
         alert('A semana fechou. Vamos ver o resumo primeiro.');
@@ -1888,15 +1992,16 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
         return;
     }
 
-    // 1. Soma na renda real
-    semana.rendaReal = (semana.rendaReal || 0) + valor;
-
-    // 2. Regra 8: se ultrapassou o estimado, atualiza o estimado
-    if (semana.rendaReal > (semana.rendaEstimada || 0)) {
-        semana.rendaEstimada = semana.rendaReal;
+    // 1. Soma na renda real só se a data cair na semana atual (Bloco 10)
+    if (dataNaSemanaAtual(dataISO)) {
+        semana.rendaReal = (semana.rendaReal || 0) + valor;
+        // Regra 8: se ultrapassou o estimado, atualiza o estimado
+        if (semana.rendaReal > (semana.rendaEstimada || 0)) {
+            semana.rendaEstimada = semana.rendaReal;
+        }
     }
 
-    // 3. Nível 3: se escolheu custódia de destino, soma no saldo
+    // 2. Nível 3: custódia de destino (saldo real, independente da semana)
     let custodiaNome = null;
     if (state.orcamento.nivel >= 3 && custodiaId) {
         const custodia = state.orcamento.custodias.find(c => c.id === custodiaId);
@@ -1906,11 +2011,11 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
         }
     }
 
-    // 4. Histórico
+    // 3. Histórico
     if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
     state.orcamento.historicoRegistros.push({
         id: 'reg_' + Date.now(),
-        data: new Date().toISOString(),
+        data: dataISO,
         tipo: 'recebimento',
         caixa: null,
         categoria: categoriaNome,
@@ -2421,11 +2526,20 @@ function renderizarDetalheGastos() {
         `;
     } else {
         categorias.forEach(cat => {
+            let metaExtra = cat.tipo;
+            if (cat.vencimento) metaExtra += ' · vence dia ' + cat.vencimento;
+            if (cat.custodiaPadraoId) {
+                const cust = (state.orcamento.custodias || []).find(c => c.id === cat.custodiaPadraoId);
+                if (cust) {
+                    const tipoC = TIPOS_CUSTODIA[cust.tipo] || TIPOS_CUSTODIA.outro;
+                    metaExtra += ` · ${tipoC.icone} ${cust.nome}`;
+                }
+            }
             htmlCategorias += `
                 <div class="categoria-item">
                     <div>
                         <div class="nome-cat">${cat.nome}</div>
-                        <div class="meta-cat">${cat.tipo}${cat.vencimento ? ' · vence dia ' + cat.vencimento : ''}</div>
+                        <div class="meta-cat">${metaExtra}</div>
                     </div>
                     <div style="display: flex; align-items: center;">
                         <span class="valor-cat">R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')}</span>
@@ -2460,7 +2574,6 @@ function abrirFormularioCategoria() {
     const caixa = caixaGastosAtiva;
     const avatar = caixa === 'base' ? '🛡️' : '🌿';
 
-    // Chips sugeridos por caixa
     const chipsBase = [
         '🏠 Aluguel', '💡 Água e luz', '🛒 Mercado', '🚌 Transporte',
         '💊 Remédio', '📱 Internet', '🔥 Gás', '🏢 Condomínio'
@@ -2469,82 +2582,141 @@ function abrirFormularioCategoria() {
         '📺 Streaming', '🍔 iFood', '🎉 Saídas', '🛍️ Compras',
         '🚗 App de carro', '☕ Cafezinho', '🍺 Bar', '🎮 Lazer'
     ];
-
     const chips = caixa === 'base' ? chipsBase : chipsVida;
+
+    // Bloco 2: fala diferenciada
+    const falaVencimento = caixa === 'base'
+        ? 'Vence em qual dia do mês?'
+        : 'Tem um dia fixo no mês? (ex: assinatura que renova todo dia 10)';
 
     let htmlChips = '';
     chips.forEach(c => {
         htmlChips += `<div class="chip" onclick="preencherNomeCategoria(this)">${c}</div>`;
     });
 
+    // Bloco 3: custódia padrão (N3)
+    let htmlCustodiaPadrao = '';
+    const custodias = (state.orcamento.nivel >= 3) ? (state.orcamento.custodias || []) : [];
+    if (custodias.length > 0) {
+        let chipsCust = '';
+        custodias.forEach(c => {
+            const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
+            chipsCust += `<div class="chip" data-custodia-id="${c.id}" onclick="selecionarCustodiaPadraoCategoria(this)">${tipo.icone} ${c.nome}</div>`;
+        });
+        htmlCustodiaPadrao = `
+            <div id="bloco-custodia-padrao" style="margin-top: 8px;">
+                <div class="fala-avatar">
+                    <span class="icone">${avatar}</span>
+                    <span class="texto">De onde costuma sair esse gasto? (opcional)</span>
+                </div>
+                <div class="chip-container" id="chips-custodia-padrao-cat">
+                    ${chipsCust}
+                </div>
+                <button class="btn-option" style="justify-content: center; border-color: var(--secondary);" onclick="pularCustodiaPadraoCategoria()">
+                    Não sei / varia
+                </button>
+            </div>
+        `;
+    }
+
     container.innerHTML = `
         <div class="fala-avatar">
             <span class="icone">${avatar}</span>
             <span class="texto">Qual é o gasto?</span>
         </div>
-
         <input type="text" id="nova-cat-nome" class="input-padrao" placeholder="Ex: Aluguel, Luz, Mercado">
-
-        <div class="chip-container">
-            ${htmlChips}
-        </div>
-
+        <div class="chip-container">${htmlChips}</div>
         <div class="fala-avatar">
             <span class="icone">${avatar}</span>
             <span class="texto">Quanto por mês?</span>
         </div>
-
         <div class="input-com-prefixo">
             <span class="prefixo">R$</span>
             <input type="number" id="nova-cat-valor" class="input-padrao" placeholder="0.00">
         </div>
-
         <div class="fala-avatar">
             <span class="icone">${avatar}</span>
             <span class="texto">Esse valor é sempre igual ou muda?</span>
         </div>
-
         <div class="chip-container" id="chips-tipo-cat">
             <div class="chip" onclick="selecionarTipoCategoria(this, 'fixo')">Fixo</div>
             <div class="chip" onclick="selecionarTipoCategoria(this, 'variavel')">Varia</div>
         </div>
-
         <div id="bloco-vencimento" style="display: none;">
             <div class="fala-avatar">
                 <span class="icone">${avatar}</span>
-                <span class="texto">Vence em qual dia do mês?</span>
+                <span class="texto">${falaVencimento}</span>
             </div>
             <input type="number" id="nova-cat-vencimento" class="input-padrao" placeholder="Ex: 5" min="1" max="31">
+            <button class="btn-option" style="justify-content: center; border-color: var(--secondary);" onclick="pularVencimentoCategoria()">
+                Não sei / não tem dia fixo
+            </button>
         </div>
-
+        ${htmlCustodiaPadrao}
         <button class="btn-primary" onclick="salvarCategoria()">Salvar categoria</button>
         <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="renderizarDetalheGastos()">
             Cancelar
         </button>
     `;
+    tipoCategoriaSelecionado = null;
+    custodiaPadraoCategoriaSelecionada = null;
 }
 
 function preencherNomeCategoria(el) {
     const nome = el.textContent.trim();
-    // Remove o emoji do começo
     const semEmoji = nome.replace(/^[^\w]+\s*/, '');
     document.getElementById('nova-cat-nome').value = semEmoji;
 }
 let tipoCategoriaSelecionado = null;
+let custodiaPadraoCategoriaSelecionada = null;
 
 function selecionarTipoCategoria(el, tipo) {
     document.querySelectorAll('#chips-tipo-cat .chip').forEach(c => c.classList.remove('selecionado'));
     el.classList.add('selecionado');
     tipoCategoriaSelecionado = tipo;
-
     const blocoVencimento = document.getElementById('bloco-vencimento');
-    blocoVencimento.style.display = 'block';
+    if (blocoVencimento) {
+        if (tipo === 'fixo') {
+            blocoVencimento.style.display = 'block';
+        } else {
+            blocoVencimento.style.display = 'none';
+            const inputVenc = document.getElementById('nova-cat-vencimento');
+            if (inputVenc) inputVenc.value = '';
+        }
+    }
+}
+
+function pularVencimentoCategoria() {
+    const inputVenc = document.getElementById('nova-cat-vencimento');
+    if (inputVenc) inputVenc.value = '';
+    const bloco = document.getElementById('bloco-vencimento');
+    if (bloco) bloco.style.display = 'none';
+}
+
+function selecionarCustodiaPadraoCategoria(el) {
+    document.querySelectorAll('#chips-custodia-padrao-cat .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    custodiaPadraoCategoriaSelecionada = el.getAttribute('data-custodia-id');
+}
+
+function pularCustodiaPadraoCategoria() {
+    document.querySelectorAll('#chips-custodia-padrao-cat .chip').forEach(c => c.classList.remove('selecionado'));
+    custodiaPadraoCategoriaSelecionada = null;
 }
 
 function salvarCategoria() {
     const nome = document.getElementById('nova-cat-nome').value.trim();
     const valor = parseFloat(document.getElementById('nova-cat-valor').value) || 0;
-    const vencimento = parseInt(document.getElementById('nova-cat-vencimento').value) || null;
+    const inputVenc = document.getElementById('nova-cat-vencimento');
+    let vencimento = null;
+    if (tipoCategoriaSelecionado === 'fixo' && inputVenc && inputVenc.value.trim() !== '') {
+        const d = parseInt(inputVenc.value);
+        if (isNaN(d) || d < 1 || d > 31) {
+            alert('O dia precisa estar entre 1 e 31.');
+            return;
+        }
+        vencimento = d;
+    }
     const caixa = caixaGastosAtiva;
 
     if (nome === '') { alert("Diga o nome do gasto."); return; }
@@ -2599,12 +2771,15 @@ function salvarCategoria() {
         valor: valor,
         tipo: tipoCategoriaSelecionado,
         vencimento: vencimento,
-        caixa: caixa
+        caixa: caixa,
+        custodiaPadraoId: custodiaPadraoCategoriaSelecionada || null
     });
 
+    const custodiaLog = custodiaPadraoCategoriaSelecionada;
     tipoCategoriaSelecionado = null;
+    custodiaPadraoCategoriaSelecionada = null;
     salvarEstado();
-    console.log('[NÍVEL 2] Categoria salva:', nome, '| Caixa:', caixa);
+    console.log('[NÍVEL 2] Categoria salva:', nome, '| Caixa:', caixa, '| Custódia padrão:', custodiaLog);
     renderizarDetalheGastos();
 }
 
@@ -4097,23 +4272,28 @@ function custodiasDisponiveisParaGasto() {
     const orc = state.orcamento;
     if (!orc.custodias || orc.custodias.length === 0) return [];
 
-    // Se o usuário tem só uma custódia, retorna ela (pula o passo)
-    // Se tem várias, retorna todas ordenadas pela última usada
-    const ultimaUsada = orc.custodiaPadrao;
+    let prioridade = null;
+    if (registroTemporario && registroTemporario.custodiaId) {
+        prioridade = registroTemporario.custodiaId;
+    } else if (registroTemporario && registroTemporario.categoriaId) {
+        const cat = (orc.categorias || []).find(c => c.id === registroTemporario.categoriaId);
+        if (cat && cat.custodiaPadraoId) prioridade = cat.custodiaPadraoId;
+    }
+    if (!prioridade) prioridade = orc.custodiaPadrao;
 
     const ordenadas = [...orc.custodias];
-    if (ultimaUsada) {
-        const idx = ordenadas.findIndex(c => c.id === ultimaUsada);
+    if (prioridade) {
+        const idx = ordenadas.findIndex(c => c.id === prioridade);
         if (idx > 0) {
-            const [ultima] = ordenadas.splice(idx, 1);
-            ordenadas.unshift(ultima);
+            const [primeira] = ordenadas.splice(idx, 1);
+            ordenadas.unshift(primeira);
         }
     }
-
     return ordenadas;
 }
 
 function mostrarPassoCustodia() {
+    document.getElementById('modal-registro-passo-1').style.display = 'none';
     document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
     document.getElementById('modal-registro-passo-3-custodia').style.display = 'block';
 
@@ -4121,12 +4301,13 @@ function mostrarPassoCustodia() {
     containerChips.innerHTML = '';
 
     const custodias = custodiasDisponiveisParaGasto();
+    const sugeridaId = registroTemporario && registroTemporario.custodiaId;
 
     custodias.forEach(c => {
         const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
         const chip = document.createElement('div');
-        chip.className = 'chip';
-        chip.innerHTML = `${tipo.icone} ${c.nome}`;
+        chip.className = 'chip' + (sugeridaId === c.id ? ' selecionado' : '');
+        chip.innerHTML = `${tipo.icone} ${c.nome}` + (sugeridaId === c.id ? ' · padrão' : '');
         chip.onclick = () => escolherCustodia(c.id);
         containerChips.appendChild(chip);
     });
@@ -4138,21 +4319,16 @@ function escolherCustodia(custodiaId) {
 
     const tipo = TIPOS_CUSTODIA[custodia.tipo];
 
-    // ⚠️ Se a origem é pagamento de parcela, fluxo próprio
     if (registroTemporario && registroTemporario.origem === 'parcela') {
-        // Cartão de crédito não serve como origem de pagamento de dívida
         if (tipo.temFatura) {
             alert('Não dá pra pagar uma dívida com o próprio cartão. Escolha outra custódia.');
             return;
         }
-
-        // Cheque especial
         const aviso = verificarChequeEspecial(custodiaId, registroTemporario.valor);
         if (aviso) {
             const prosseguir = confirm(aviso);
             if (!prosseguir) return;
         }
-
         registroTemporario.custodiaId = custodiaId;
         state.orcamento.custodiaPadrao = custodiaId;
         salvarEstado();
@@ -4160,7 +4336,6 @@ function escolherCustodia(custodiaId) {
         return;
     }
 
-    // gasto normal
     if (tipo.temFatura) {
         registroTemporario.custodiaId = custodiaId;
         registroTemporario.cartaoId = custodiaId;
@@ -4179,12 +4354,7 @@ function escolherCustodia(custodiaId) {
     salvarEstado();
 
     document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
-    const categoriasDaCaixa = (state.orcamento.categorias || []).filter(c => c.caixa === registroTemporario.caixa);
-    if (categoriasDaCaixa.length > 0) {
-        mostrarPassoCategoria(categoriasDaCaixa);
-    } else {
-        confirmarRegistro(null);
-    }
+    confirmarRegistro(registroTemporario.categoriaNome || null);
 }
 
 // Retorna uma mensagem de alerta se o gasto deixar a custódia negativa, ou null.
@@ -4212,18 +4382,19 @@ function verificarChequeEspecial(custodiaId, valor) {
 }
 
 function pularCustodia() {
-    // Se é pagamento de parcela, confirma sem custódia
     if (registroTemporario && registroTemporario.origem === 'parcela') {
         registroTemporario.custodiaId = null;
         confirmarPagamentoParcela();
         return;
     }
-
-    // Comportamento antigo (gasto)
     registroTemporario.custodiaId = null;
-    confirmarRegistro(null);
+    confirmarRegistro(registroTemporario.categoriaNome || null);
 }
 
+/**
+ * Bloco 11 — gasto no cartão com data da compra (opcional, via campo do Bloco 10).
+ * dataCompra = dia da compra; se houver diaFechamento, informa se cai na fatura atual ou na próxima.
+ */
 function confirmarRegistroCartao() {
     const valor = registroTemporario.valor;
     const cartaoId = registroTemporario.cartaoId;
@@ -4235,17 +4406,21 @@ function confirmarRegistroCartao() {
         return;
     }
 
-    // Acumula na fatura
+    // Acumula na fatura (saldo real do cartão)
     cartao.faturaAcumulada = (cartao.faturaAcumulada || 0) + valor;
 
-    // Registra no histórico com tipo "gasto_cartao"
+    const dataISO = registroTemporario.data || new Date().toISOString();
+    const dataCompra = dataISO; // mesma origem do campo "Quando foi?"
+
     if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
     state.orcamento.historicoRegistros.push({
         id: 'reg_' + Date.now(),
-        data: new Date().toISOString(),
+        data: dataISO,
+        dataCompra: dataCompra,
         tipo: 'gasto_cartao',
-        caixa: null, // ainda não é gasto real
-        categoria: null,
+        caixa: registroTemporario.caixa || null,
+        categoria: registroTemporario.categoriaNome || null,
+        categoriaId: registroTemporario.categoriaId || null,
         valor: valor,
         custodiaId: null,
         cartaoId: cartaoId,
@@ -4254,14 +4429,30 @@ function confirmarRegistroCartao() {
 
     salvarEstado();
 
-    // Mostra confirmação
+    // Nota sobre ciclo da fatura (só se diaFechamento declarado)
+    let notaCiclo = '';
+    const fechamento = cartao.diaFechamento;
+    if (typeof fechamento === 'number' && fechamento >= 1 && fechamento <= 31) {
+        const compra = new Date(dataCompra);
+        const diaCompra = compra.getDate();
+        const dCompraStr = dataCompra.split('T')[0].split('-').reverse().join('/');
+        if (diaCompra > fechamento) {
+            notaCiclo = ` Compra em ${dCompraStr} (depois do fechamento dia ${fechamento}) — tende a cair na <strong>próxima</strong> fatura.`;
+        } else {
+            notaCiclo = ` Compra em ${dCompraStr} (fechamento dia ${fechamento}) — tende a cair na fatura <strong>atual</strong>.`;
+        }
+    } else {
+        const dCompraStr = dataCompra.split('T')[0].split('-').reverse().join('/');
+        notaCiclo = ` Data da compra: ${dCompraStr}.`;
+    }
+
     document.getElementById('modal-registro-passo-1').style.display = 'none';
     document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
     document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
     document.getElementById('modal-registro-passo-3').style.display = 'block';
     document.getElementById('modal-registro-fala').innerHTML = `
         <span class="icone">💳</span>
-        <span class="texto">Anotado no cartão. Fatura agora tá em ${cartao.faturaAcumulada.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}. Quando você pagar, isso vira gasto de verdade.</span>
+        <span class="texto">Anotado no cartão. Fatura agora tá em ${cartao.faturaAcumulada.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.${notaCiclo} Quando você pagar, isso vira gasto de verdade.</span>
     `;
 
     renderizarOrcamentoInicio();
@@ -4981,6 +5172,95 @@ function zerarLocalStorage() {
     location.reload();
 }
 
+// ============================================================
+// DEBUG — CICLO 3.9 (PROJEÇÃO)
+// ============================================================
+
+function debugProjetarFluxo(dias) {
+    dias = dias || 30;
+    const fluxo = projetarFluxo(state.orcamento, { dias: dias });
+    console.log('[DEBUG 3.9] projetarFluxo', fluxo);
+    const gargalos = detectarGargalos(fluxo);
+    console.log('[DEBUG 3.9] gargalos', gargalos);
+    console.log('[DEBUG 3.9] sugestões', sugerirEquilibrio(gargalos, state.orcamento));
+    return fluxo;
+}
+
+function debugProjetarCustodias() {
+    const map = {};
+    (state.orcamento.custodias || []).forEach(c => {
+        map[c.id] = projetarCustodia(state.orcamento, c.id, { dias: 30 });
+    });
+    console.log('[DEBUG 3.9] projetarCustodia (todas)', map);
+    return map;
+}
+
+function debugSimularCenario(overrides) {
+    const r = simularCenario(state.orcamento, overrides || { dias: 30 });
+    console.log('[DEBUG 3.9] simularCenario', r);
+    return r;
+}
+
+function debugSeedProjecaoN2() {
+    // Garante dados mínimos para N2a→N2b
+    if (!state.orcamento.rendaDetalhe) state.orcamento.rendaDetalhe = { fontes: [] };
+    if (state.orcamento.rendaDetalhe.fontes.length === 0) {
+        state.orcamento.rendaDetalhe.fontes.push({
+            id: 'fonte_debug_' + Date.now(),
+            nome: 'Salário (debug)',
+            valor: 3000,
+            diaRecebimento: 5
+        });
+    } else {
+        state.orcamento.rendaDetalhe.fontes.forEach(f => {
+            if (!f.diaRecebimento) f.diaRecebimento = 5;
+        });
+    }
+    if (!(state.orcamento.categorias || []).some(c => c.vencimento)) {
+        debugCriarCategoriasComVencimento();
+    }
+    state.orcamento.nivel = Math.max(state.orcamento.nivel || 1, 2);
+    salvarEstado();
+    renderizarOrcamentoInicio();
+    console.log('[DEBUG 3.9] Seed N2 projeção pronto.');
+}
+
+function debugSeedProjecaoN3() {
+    debugSeedProjecaoN2();
+    if (!(state.orcamento.custodias || []).length) {
+        debugCriarCustodiasExemplo();
+    }
+    // Liga categorias às custódias
+    const cust = (state.orcamento.custodias || []).find(c => !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura);
+    if (cust) {
+        (state.orcamento.categorias || []).forEach(c => {
+            if (!c.custodiaPadraoId) c.custodiaPadraoId = cust.id;
+        });
+    }
+    state.orcamento.nivel = 3;
+    salvarEstado();
+    renderizarOrcamentoInicio();
+    console.log('[DEBUG 3.9] Seed N3 projeção pronto.');
+}
+
+function debugForcarGargaloCustodia() {
+    const cust = (state.orcamento.custodias || []).find(c => !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura);
+    if (!cust) {
+        console.warn('[DEBUG 3.9] Sem custódia de saldo.');
+        return;
+    }
+    cust.saldoAtual = 50;
+    const cat = (state.orcamento.categorias || []).find(c => c.vencimento);
+    if (cat) {
+        cat.valor = 500;
+        cat.custodiaPadraoId = cust.id;
+    }
+    salvarEstado();
+    renderizarOrcamentoInicio();
+    console.log('[DEBUG 3.9] Gargalo de custódia forçado (saldo 50, conta 500).');
+}
+
+
 // Atalho de teclado (desktop)
 document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey && e.key === 'M') {
@@ -5019,23 +5299,919 @@ document.addEventListener('keydown', (e) => {
 // Bloco 0 apenas declara a tela e o ponto de entrada.
 // Bloco 7 implementa a renderização real.
 
-function abrirTelaFluxoCaixa() {
+function abrirTelaFluxoCaixa(custodiaId) {
+    fluxoCustodiaFiltro = custodiaId || null;
     goToScreen('screen-fluxo-caixa');
     renderizarFluxoCaixa();
 }
 
+/**
+ * Bloco 7 — Tela Fluxo de Caixa (N2b).
+ * Simulador temporal: mostra o declarado nos próximos dias.
+ * Não grava nada; não inventa eventos.
+ */
 function renderizarFluxoCaixa() {
     const container = document.getElementById('fluxo-caixa-conteudo');
     if (!container) return;
 
-    // Placeholder — o Bloco 7 substitui este conteúdo.
+    const orc = state.orcamento;
+    if (!orc) {
+        container.innerHTML = '<p style="color: var(--secondary);">Inicie a jornada primeiro.</p>';
+        return;
+    }
+
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fluxo = projetarFluxo(orc, { dias: 30 });
+    let projMapFluxo = {};
+    if ((orc.nivel || 1) >= 3) {
+        (orc.custodias || []).forEach(c => {
+            projMapFluxo[c.id] = projetarCustodia(orc, c.id, { dias: 30 });
+        });
+    }
+    const gargalos = detectarGargalos(fluxo, { custodias: projMapFluxo });
+    const sugestoes = sugerirEquilibrio(gargalos, orc);
+
+    // Resumo do topo
+    let corSaldo = fluxo.totais.saldo >= 0 ? '#10b981' : '#ef4444';
+    let htmlResumo = `
+        <div class="card" style="border-left: 4px solid ${corSaldo}; margin-bottom: 16px;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 8px;">
+                Próximos ${fluxo.dias} dias · só o declarado
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px;">
+                <span style="color: var(--secondary);">Entra</span>
+                <strong style="color: #10b981;">+ ${fmt(fluxo.totais.entradas)}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px;">
+                <span style="color: var(--secondary);">Sai</span>
+                <strong style="color: #ef4444;">− ${fmt(fluxo.totais.saidas)}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 1rem; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+                <span style="font-weight: bold; color: var(--primary);">${fluxo.totais.saldo >= 0 ? 'Sobra projetada' : 'Falta projetada'}</span>
+                <strong style="color: ${corSaldo};">${fmt(Math.abs(fluxo.totais.saldo))}</strong>
+            </div>
+        </div>
+    `;
+
+    // Bloco 8 — seletor de custódia (N3)
+    let htmlSeletorCustodia = '';
+    let htmlProjCustodia = '';
+    if ((orc.nivel || 1) >= 3 && (orc.custodias || []).length > 0) {
+        const custodias = orc.custodias;
+        let chips = `<div class="chip${fluxoCustodiaFiltro ? '' : ' selecionado'}" onclick="fluxoCustodiaFiltro=null;renderizarFluxoCaixa()">Todas</div>`;
+        custodias.forEach(c => {
+            const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
+            const sel = fluxoCustodiaFiltro === c.id ? ' selecionado' : '';
+            chips += `<div class="chip${sel}" onclick="fluxoCustodiaFiltro='${c.id}';renderizarFluxoCaixa()">${tipo.icone} ${c.nome}</div>`;
+        });
+        htmlSeletorCustodia = `
+            <div class="secao-titulo">Ver por custódia</div>
+            <div class="chip-container" style="margin-bottom: 16px;">${chips}</div>
+        `;
+
+        if (fluxoCustodiaFiltro) {
+            const proj = projetarCustodia(orc, fluxoCustodiaFiltro, { dias: 30 });
+            if (proj) {
+                const corC = proj.temFatura
+                    ? '#f59e0b'
+                    : (proj.saldoFinal < 0 ? '#ef4444' : '#10b981');
+                htmlProjCustodia = `
+                    <div class="card" style="border-left: 4px solid ${corC}; margin-bottom: 16px;">
+                        <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 8px;">
+                            ${proj.temFatura ? 'Fatura projetada' : 'Saldo projetado'} · ${proj.nome}
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px;">
+                            <span style="color: var(--secondary);">Hoje</span>
+                            <strong>${fmt(proj.temFatura ? proj.faturaInicial : proj.saldoInicial)}</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 1rem;">
+                            <span style="font-weight: bold; color: var(--primary);">Em 30 dias</span>
+                            <strong style="color: ${corC};">${fmt(proj.temFatura ? proj.faturaFinal : proj.saldoFinal)}</strong>
+                        </div>
+                        ${(proj.eventos || []).length === 0 ? '<div style="font-size: 0.8rem; color: var(--secondary); margin-top: 8px;">Nenhuma conta ligada a esta custódia com vencimento na janela.</div>' : ''}
+                    </div>
+                `;
+            }
+        } else {
+            // Resumo de todas as custódias (saldos projetados)
+            let linhasC = '';
+            custodias.forEach(c => {
+                const proj = projetarCustodia(orc, c.id, { dias: 30 });
+                if (!proj) return;
+                const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
+                const val = proj.temFatura ? proj.faturaFinal : proj.saldoFinal;
+                const cor = proj.temFatura ? '#92400e' : (val < 0 ? '#ef4444' : '#10b981');
+                linhasC += `
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid #f1f5f9; font-size: 0.85rem; cursor: pointer;" onclick="fluxoCustodiaFiltro='${c.id}';renderizarFluxoCaixa()">
+                        <span>${tipo.icone} ${proj.nome}</span>
+                        <strong style="color: ${cor};">${fmt(val)}</strong>
+                    </div>
+                `;
+            });
+            if (linhasC) {
+                htmlProjCustodia = `
+                    <div class="card" style="margin-bottom: 16px; padding: 14px 16px;">
+                        <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 4px;">Custódias em 30 dias</div>
+                        ${linhasC}
+                    </div>
+                `;
+            }
+        }
+    }
+
+    // Lacunas (convite, não alerta)
+    let htmlLacunas = '';
+    if (fluxo.lacunas.fontesSemDia > 0 || fluxo.lacunas.categoriasSemVencimento > 0) {
+        const bits = [];
+        if (fluxo.lacunas.fontesSemDia > 0) bits.push(`${fluxo.lacunas.fontesSemDia} fonte(s) sem dia de recebimento`);
+        if (fluxo.lacunas.categoriasSemVencimento > 0) bits.push(`${fluxo.lacunas.categoriasSemVencimento} categoria(s) sem vencimento`);
+        htmlLacunas = `
+            <div style="background: #f8fafc; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.8rem; color: var(--secondary); line-height: 1.45;">
+                💡 Fora do calendário: ${bits.join(' · ')}. Só entra no fluxo o que tem dia declarado.
+            </div>
+        `;
+    }
+
+    // Gargalos resumidos
+    let htmlGargalos = '';
+    if (gargalos.resumo.temGargalo) {
+        const itens = (sugestoes.length > 0 ? sugestoes : gargalos.gargalos.slice(0, 3)).slice(0, 4);
+        htmlGargalos = `
+            <div class="secao-titulo">Pontos de atenção</div>
+            ${itens.map(s => {
+                const msg = s.mensagem || (s.tipo + (s.data ? ' em ' + s.data : ''));
+                return `<div class="card" style="padding: 12px 14px; margin-bottom: 8px; border-left: 3px solid #f59e0b; font-size: 0.85rem; color: var(--primary); line-height: 1.45;">${msg}</div>`;
+            }).join('')}
+        `;
+    }
+
+    // Timeline por dia (só dias com evento)
+    // Bloco 8: se filtro de custódia, só eventos ligados a ela (ou recebimentos sem custódia ficam de fora)
+    let porDiaView = fluxo.porDia;
+    if (fluxoCustodiaFiltro) {
+        porDiaView = {};
+        Object.keys(fluxo.porDia).forEach(data => {
+            const dia = fluxo.porDia[data];
+            const evs = (dia.eventos || []).filter(e =>
+                e.tipo === 'vencimento' && e.custodiaId === fluxoCustodiaFiltro
+            );
+            if (evs.length === 0) return;
+            const saidas = evs.reduce((s, e) => s + (e.valor || 0), 0);
+            porDiaView[data] = { data: data, entradas: 0, saidas: saidas, eventos: evs };
+        });
+    }
+    const datas = Object.keys(porDiaView).sort();
+    let htmlTimeline = '';
+    if (datas.length === 0) {
+        htmlTimeline = `
+            <div class="placeholder-info">
+                Nenhum recebimento ou vencimento com dia declarado nos próximos 30 dias.
+            </div>
+        `;
+    } else {
+        const diasSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+        htmlTimeline = `<div class="secao-titulo">Calendário declarado</div>`;
+        datas.forEach(data => {
+            const dia = porDiaView[data];
+            const dt = new Date(data + 'T12:00:00');
+            const rotulo = `${diasSemana[dt.getDay()]}, ${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}`;
+            const temDeficit = (dia.saidas || 0) > (dia.entradas || 0);
+            const cor = temDeficit ? '#f59e0b' : '#94a3b8';
+
+            let linhas = '';
+            (dia.eventos || []).forEach(e => {
+                const sinal = e.tipo === 'recebimento' ? '+' : '−';
+                const corEv = e.tipo === 'recebimento' ? '#10b981' : '#ef4444';
+                const icone = e.tipo === 'recebimento' ? '💰' : (e.caixa === 'base' ? '🛡️' : e.caixa === 'vida' ? '🌿' : '🔭');
+                linhas += `
+                    <div style="display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid #f1f5f9; font-size: 0.85rem;">
+                        <span style="color: var(--primary);">${icone} ${e.nome}</span>
+                        <strong style="color: ${corEv};">${sinal} ${fmt(e.valor)}</strong>
+                    </div>
+                `;
+            });
+
+            htmlTimeline += `
+                <div class="card" style="padding: 12px 14px; margin-bottom: 8px; border-left: 3px solid ${cor};">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <strong style="font-size: 0.9rem; color: var(--primary);">${rotulo}</strong>
+                        <span style="font-size: 0.75rem; color: var(--secondary);">
+                            ${dia.entradas ? '↑ ' + fmt(dia.entradas) : ''} ${dia.saidas ? '↓ ' + fmt(dia.saidas) : ''}
+                        </span>
+                    </div>
+                    ${linhas}
+                </div>
+            `;
+        });
+    }
+
     container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+            <span style="font-size: 0.8rem; font-weight: bold; color: var(--secondary); text-transform: uppercase;">Fluxo de caixa</span>
+            <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--primary); margin-top: 4px;">Olhar à frente</h2>
+        </div>
         <div class="fala-avatar">
             <span class="icone">🧭</span>
-            <span class="texto">Aqui vai aparecer o fluxo de caixa da sua semana. Ainda estamos montando essa parte.</span>
+            <span class="texto">Isso não é previsão mágica. É o calendário do que você já me contou — dias de entrada e de vencimento.</span>
+        </div>
+        ${htmlResumo}
+        ${htmlSeletorCustodia}
+        ${htmlProjCustodia}
+        ${htmlLacunas}
+        ${htmlGargalos}
+        ${htmlTimeline}
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 12px;" onclick="voltarParaOrcamento()">
+            Voltar
+        </button>
+    `;
+}
+
+// ============================================================
+// CICLO 3.9 — ANDAIME DE PROJEÇÃO (cards na home)
+// ============================================================
+
+function renderizarCardProjecao(orc) {
+    if (!orc) return '';
+    const nivel = orc.nivel || 1;
+    if (nivel <= 1) return renderizarCardProjecaoN1(orc);
+    if (nivel === 2) return renderizarCardProjecaoN2(orc);
+    if (nivel >= 3) return renderizarCardProjecaoN3(orc);
+    return '';
+}
+
+/** Bloco 5 — N1 motivação */
+function renderizarCardProjecaoN1(orc) {
+    return `
+        <div class="card" style="border-left: 4px solid #38bdf8; margin-top: 8px; margin-bottom: 16px; background: #f0f9ff;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #0369a1; font-weight: bold; margin-bottom: 8px;">
+                🧭 Olhar à frente
+            </div>
+            <p style="font-size: 0.9rem; color: var(--primary); line-height: 1.5; margin-bottom: 10px;">
+                Quando você souber <strong>em que dia</strong> o dinheiro entra e <strong>em que dia</strong> as contas vencem, a gente consegue mostrar a semana antes de apertar.
+            </p>
+            <p style="font-size: 0.8rem; color: var(--secondary); line-height: 1.45; margin-bottom: 0;">
+                Por enquanto, cuide das caixinhas e registre o que sair. O mapa do mês nasce desses detalhes — sem chute e sem culpa.
+            </p>
         </div>
     `;
 }
+
+/**
+ * Bloco 6 — Andaime N2a (coleta).
+ * Se faltam dias declarados (renda ou categorias), convida a preencher.
+ * Se já há dados suficientes para projetar, devolve vazio (Bloco 7 = N2b).
+ */
+function renderizarCardProjecaoN2(orc) {
+    // Só coleta: lacunas de dados declarados
+    const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
+    const categorias = orc.categorias || [];
+
+    const fontesComDia = fontes.filter(f => {
+        const d = f.diaRecebimento;
+        if (d === null || d === undefined) return false;
+        if (Array.isArray(d)) return d.length > 0;
+        return typeof d === 'number' && d >= 1 && d <= 31;
+    });
+    const catsComVenc = categorias.filter(c => typeof c.vencimento === 'number' && c.vencimento >= 1 && c.vencimento <= 31);
+
+    const faltaRenda = fontes.length === 0 || fontesComDia.length < fontes.length || fontesComDia.length === 0;
+    const faltaGastos = categorias.length === 0 || catsComVenc.length === 0;
+
+    // Dados suficientes: pelo menos 1 fonte com dia OU 1 categoria com vencimento
+    // e se há fontes, preferir que todas tenham dia (mas não bloqueia projeção)
+    const temBaseProjecao = fontesComDia.length > 0 || catsComVenc.length > 0;
+
+    if (temBaseProjecao && !faltaRenda && catsComVenc.length > 0) {
+        // Coleta ok → Bloco 7: andaime N2b (semana crítica / fluxo)
+        return renderizarCardProjecaoN2b(orc);
+    }
+
+    // Monta convite específico (só o declarado que falta)
+    let linhas = [];
+    if (fontes.length === 0) {
+        linhas.push('Detalhar de onde vem a renda e em que dia cai');
+    } else if (fontesComDia.length === 0) {
+        linhas.push('Informar o dia de recebimento das suas fontes de renda');
+    } else if (fontesComDia.length < fontes.length) {
+        const n = fontes.length - fontesComDia.length;
+        linhas.push(`Completar o dia de recebimento em ${n} fonte${n > 1 ? 's' : ''}`);
+    }
+
+    if (categorias.length === 0) {
+        linhas.push('Separar os gastos fixos e dizer em que dia vencem');
+    } else if (catsComVenc.length === 0) {
+        linhas.push('Informar o dia de vencimento dos gastos fixos');
+    }
+
+    if (linhas.length === 0) {
+        // Caso residual: tem algo, mas ainda incompleto — convite genérico
+        linhas.push('Completar os dias de entrada e de vencimento');
+    }
+
+    const lista = linhas.map(l => `<li style="margin-bottom: 4px;">${l}</li>`).join('');
+
+    return `
+        <div class="card" style="border-left: 4px solid #0ea5e9; margin-top: 8px; margin-bottom: 16px; background: #f0f9ff;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #0369a1; font-weight: bold; margin-bottom: 8px;">
+                🧭 Para olhar à frente
+            </div>
+            <p style="font-size: 0.9rem; color: var(--primary); line-height: 1.5; margin-bottom: 10px;">
+                Ainda falta um pouco de detalhe para a gente montar o calendário do seu dinheiro. Nada de média nem chute — só o que você declarar.
+            </p>
+            <ul style="font-size: 0.85rem; color: var(--secondary); margin: 0 0 14px 18px; line-height: 1.5;">
+                ${lista}
+            </ul>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <button class="btn-sm" style="background: var(--accent); color: white;" onclick="abrirDetalheRenda()">📈 Renda</button>
+                <button class="btn-sm" style="background: var(--accent); color: white;" onclick="abrirDetalheGastos('base')">🛡️ Base</button>
+                <button class="btn-sm" style="background: #64748b; color: white;" onclick="abrirDetalheGastos('vida')">🌿 Vida</button>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Bloco 7 — Andaime N2b (semana crítica + atalho ao Fluxo).
+ * Só aparece quando há dados declarados suficientes.
+ */
+function renderizarCardProjecaoN2b(orc) {
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fluxo = projetarFluxo(orc, { dias: 30 });
+    const gargalos = detectarGargalos(fluxo);
+
+    // Encontra a "semana crítica": 7 dias consecutivos com pior saldo acumulado
+    let subtitulo = '';
+    let corBorda = '#0ea5e9';
+    let fundo = '#f0f9ff';
+    let titulo = 'Calendário do mês';
+
+    if (gargalos.resumo.temGargalo && gargalos.resumo.piorDia) {
+        const pior = gargalos.resumo.piorDia;
+        const [ano, mes, dia] = pior.split('-');
+        corBorda = '#f59e0b';
+        fundo = '#fffbeb';
+        titulo = 'Semana que merece atenção';
+        const deficit = Math.abs(gargalos.resumo.saldoMinimo || 0);
+        subtitulo = `O aperto projetado chega perto de ${dia}/${mes}` +
+            (deficit > 0 ? ` (${fmt(deficit)} no acumulado)` : '');
+    } else if (fluxo.eventos.length > 0) {
+        subtitulo = `${fluxo.eventos.length} movimento(s) declarado(s) nos próximos 30 dias · saldo ${fmt(fluxo.totais.saldo)}`;
+        if (fluxo.totais.saldo < 0) {
+            corBorda = '#f59e0b';
+            fundo = '#fffbeb';
+            titulo = 'Olhar à frente';
+        } else {
+            titulo = 'Olhar à frente';
+        }
+    } else {
+        subtitulo = 'Há dias cadastrados, mas nenhum evento cai nesta janela.';
+    }
+
+    const htmlCard = `
+        <div class="card-nivel2" onclick="abrirTelaFluxoCaixa()" style="border-color: ${corBorda}; background: ${fundo}; margin-top: 0; margin-bottom: 0;">
+            <span class="icone-grande">🧭</span>
+            <div class="conteudo">
+                <div class="titulo-card" style="color: ${corBorda === '#f59e0b' ? '#92400e' : '#0c4a6e'};">${titulo}</div>
+                <div class="subtitulo-card" style="color: ${corBorda === '#f59e0b' ? '#92400e' : '#0369a1'};">${subtitulo}</div>
+            </div>
+            <span class="seta" style="color: ${corBorda === '#f59e0b' ? '#92400e' : '#0369a1'};">→</span>
+        </div>
+    `;
+
+    // Bloco 12: se o aperto não é crítico (só concentração/dia), card recolhido
+    if (corBorda === '#f59e0b' && projecaoSoConcentracao(orc) && !(gargalos.resumo.saldoMinimo < 0)) {
+        return envolverProjecaoRecolhida(htmlCard, 'Há concentração de saídas — expandir');
+    }
+
+    return `<div style="margin-top: 8px; margin-bottom: 16px;">${htmlCard}</div>`;
+}
+
+/**
+ * Bloco 8 — Andaime N3a (custódia crítica + seletor via Fluxo).
+ * Bloco 9 preenche o caso normalizado (N3b).
+ */
+function renderizarCardProjecaoN3(orc) {
+    const custodias = orc.custodias || [];
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // Sem custódias: convite leve (coleta N3)
+    if (custodias.length === 0) {
+        return `
+            <div class="card" style="border-left: 4px solid #0ea5e9; margin-top: 8px; margin-bottom: 16px; background: #f0f9ff;">
+                <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #0369a1; font-weight: bold; margin-bottom: 8px;">
+                    🧭 Por onde o dinheiro passa
+                </div>
+                <p style="font-size: 0.9rem; color: var(--primary); line-height: 1.5; margin-bottom: 12px;">
+                    Quando você cadastrar onde guarda o dinheiro (conta, vale, cartão), a gente mostra qual custódia aperta primeiro — só com o que estiver ligado às contas.
+                </p>
+                <button class="btn-sm" style="background: var(--accent); color: white;" onclick="abrirTelaCustodias()">🏦 Custódias</button>
+            </div>
+        `;
+    }
+
+    // Projeta cada custódia e detecta negativas
+    const opcoes = { dias: 30 };
+    const projMap = {};
+    custodias.forEach(c => {
+        projMap[c.id] = projetarCustodia(orc, c.id, opcoes);
+    });
+    const fluxo = projetarFluxo(orc, opcoes);
+    const gargalos = detectarGargalos(fluxo, { custodias: projMap });
+    const criticas = gargalos.gargalos.filter(g => g.tipo === 'custodia_negativa');
+
+    // N3a: há custódia que projeta saldo negativo
+    if (criticas.length > 0) {
+        // Pior = menor saldoFinal
+        const pior = criticas.reduce((a, b) => (a.saldoFinal < b.saldoFinal) ? a : b);
+        const dataStr = pior.data ? pior.data.split('-').reverse().slice(0, 2).join('/') : '';
+        return `
+            <div class="card-nivel2" onclick="abrirTelaFluxoCaixa('${pior.custodiaId}')" style="border-color: #f59e0b; background: #fffbeb; margin-top: 8px; margin-bottom: 16px;">
+                <span class="icone-grande">🏦</span>
+                <div class="conteudo">
+                    <div class="titulo-card" style="color: #92400e;">Custódia no limite</div>
+                    <div class="subtitulo-card" style="color: #92400e;">
+                        "${pior.nome}" pode ir a ${fmt(pior.saldoFinal)}${dataStr ? ' por volta de ' + dataStr : ''}
+                    </div>
+                </div>
+                <span class="seta" style="color: #92400e;">→</span>
+            </div>
+        `;
+    }
+
+    // N3b (Bloco 9): situação normalizada — por enquanto reusa o olhar N2b / genérico
+    return renderizarCardProjecaoN3b(orc, fluxo, projMap);
+}
+
+/**
+ * Bloco 9 — Andaime N3b (normalização + ações).
+ * Aparece quando há custódias e nenhuma projeta saldo negativo.
+ * Oferece atalhos úteis sem alarmismo.
+ */
+function renderizarCardProjecaoN3b(orc, fluxo, projMap) {
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    projMap = projMap || {};
+    fluxo = fluxo || projetarFluxo(orc, { dias: 30 });
+
+    // Categorias com vencimento mas sem custódia padrão → convite de ligação
+    const catsSemCustodia = (orc.categorias || []).filter(c =>
+        typeof c.vencimento === 'number' &&
+        c.vencimento >= 1 &&
+        !c.custodiaPadraoId
+    );
+
+    // Resumo de saldos projetados (só custódias com saldo, não fatura)
+    const comSaldo = Object.keys(projMap)
+        .map(id => projMap[id])
+        .filter(p => p && !p.temFatura);
+    const totalProjetado = comSaldo.reduce((s, p) => s + (p.saldoFinal || 0), 0);
+    const nEventos = (fluxo.eventos || []).length;
+
+    let linhaResumo = '';
+    if (comSaldo.length > 0) {
+        linhaResumo = `Saldos projetados em 30 dias: <strong>${fmt(totalProjetado)}</strong>`;
+    } else if (nEventos > 0) {
+        linhaResumo = `${nEventos} movimento(s) no calendário · saldo do fluxo ${fmt(fluxo.totais.saldo)}`;
+    } else {
+        linhaResumo = 'Nenhuma conta com vencimento ligado às custódias nesta janela.';
+    }
+
+    // Ação sugerida: ligar categorias órfãs (só se houver)
+    let blocoLigacao = '';
+    if (catsSemCustodia.length > 0) {
+        const n = catsSemCustodia.length;
+        blocoLigacao = `
+            <p style="font-size: 0.8rem; color: var(--secondary); line-height: 1.45; margin: 10px 0 0;">
+                ${n} conta${n > 1 ? 's' : ''} com dia de vencimento ainda sem custódia padrão.
+                Ao editar a categoria, você pode dizer de onde costuma sair.
+            </p>
+        `;
+    }
+
+    // Gargalos leves (concentração) sem custódia negativa
+    const gargalos = detectarGargalos(fluxo, { custodias: projMap });
+    const concentracao = (gargalos.gargalos || []).filter(g => g.tipo === 'concentracao');
+    let blocoConcentracao = '';
+    if (concentracao.length > 0) {
+        const g = concentracao[0];
+        const dia = g.data ? g.data.split('-').reverse().slice(0, 2).join('/') : '';
+        blocoConcentracao = `
+            <p style="font-size: 0.8rem; color: #92400e; line-height: 1.45; margin: 10px 0 0;">
+                Em ${dia} concentra ${g.percentual.toFixed(0)}% das saídas declaradas. Vale olhar o fluxo.
+            </p>
+        `;
+    }
+
+    return `
+        <div class="card" style="border-left: 4px solid #10b981; margin-top: 8px; margin-bottom: 16px; background: #f0fdf4;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #065f46; font-weight: bold; margin-bottom: 8px;">
+                🧭 Custódias em ordem
+            </div>
+            <p style="font-size: 0.9rem; color: var(--primary); line-height: 1.5; margin-bottom: 4px;">
+                Nenhuma custódia projeta saldo negativo nos próximos 30 dias — só com o que está declarado e ligado.
+            </p>
+            <p style="font-size: 0.85rem; color: var(--secondary); line-height: 1.45; margin: 0;">
+                ${linhaResumo}
+            </p>
+            ${blocoConcentracao}
+            ${blocoLigacao}
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;">
+                <button class="btn-sm" style="background: var(--accent); color: white;" onclick="event.stopPropagation();abrirTelaFluxoCaixa()">🧭 Fluxo</button>
+                <button class="btn-sm" style="background: #64748b; color: white;" onclick="event.stopPropagation();abrirTransferenciaCustodias()">↔️ Transferir</button>
+                <button class="btn-sm" style="background: #64748b; color: white;" onclick="event.stopPropagation();abrirTelaMapaMes()">🗓️ Mapa</button>
+            </div>
+        </div>
+    `;
+}
+
+let fluxoCustodiaFiltro = null; // id ou null = todas
+
+/**
+ * Bloco 12 — Rodapé de projeção dentro do card de recuperação.
+ * Só aparece se houver gargalo à frente (declarado). Sem animação.
+ */
+function renderizarRodapeProjecaoNaRecuperacao(orc) {
+    try {
+        const fluxo = projetarFluxo(orc, { dias: 30 });
+        const projMap = {};
+        (orc.custodias || []).forEach(c => {
+            projMap[c.id] = projetarCustodia(orc, c.id, { dias: 30 });
+        });
+        const gargalos = detectarGargalos(fluxo, { custodias: projMap });
+        const criticos = (gargalos.gargalos || []).filter(g =>
+            g.tipo === 'custodia_negativa' || g.tipo === 'acumulado_negativo'
+        );
+        if (criticos.length === 0) return '';
+
+        const g = criticos[0];
+        let texto = 'Há aperto projetado à frente.';
+        if (g.tipo === 'custodia_negativa') {
+            texto = `"${g.nome}" pode ficar negativa na projeção.`;
+        } else if (g.data) {
+            const d = g.data.split('-').reverse().slice(0, 2).join('/');
+            texto = `Aperto projetado por volta de ${d}.`;
+        }
+
+        return `
+            <div onclick="event.stopPropagation();abrirTelaFluxoCaixa()"
+                 style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #fde68a; font-size: 0.75rem; color: #92400e; line-height: 1.4; cursor: pointer;">
+                🧭 ${texto} <span style="text-decoration: underline;">Ver fluxo</span>
+            </div>
+        `;
+    } catch (e) {
+        return '';
+    }
+}
+
+/**
+ * Bloco 12 — Gargalo só de concentração (não crítico) → card recolhido.
+ * Evita fadiga de alerta.
+ */
+function envolverProjecaoRecolhida(htmlInterno, tituloCurto) {
+    if (!htmlInterno) return '';
+    return `
+        <details style="margin-top: 8px; margin-bottom: 16px; border-left: 3px solid #94a3b8; background: #f8fafc; border-radius: 10px; padding: 10px 14px;">
+            <summary style="cursor: pointer; font-size: 0.85rem; color: var(--secondary); list-style: none; display: flex; align-items: center; gap: 8px;">
+                <span>🧭</span>
+                <span>${tituloCurto || 'Projeção (toque para expandir)'}</span>
+            </summary>
+            <div style="margin-top: 10px;">
+                ${htmlInterno}
+            </div>
+        </details>
+    `;
+}
+
+function projecaoSoConcentracao(orc) {
+    try {
+        const fluxo = projetarFluxo(orc, { dias: 30 });
+        const gargalos = detectarGargalos(fluxo);
+        const lista = gargalos.gargalos || [];
+        if (lista.length === 0) return false;
+        return lista.every(g => g.tipo === 'concentracao' || g.tipo === 'dia_negativo');
+    } catch (e) {
+        return false;
+    }
+}
+
+
+
+// ============================================================
+// CICLO 3.9 — BLOCO 4: FUNÇÕES PURAS DE PROJEÇÃO
+// ============================================================
+
+function _dataNoMes(ano, mes, dia) {
+    const ultimo = new Date(ano, mes + 1, 0).getDate();
+    const d = Math.min(Math.max(1, dia), ultimo);
+    const dt = new Date(ano, mes, d);
+    dt.setHours(0, 0, 0, 0);
+    return dt;
+}
+
+function _diasRecebimento(diaRecebimento) {
+    if (diaRecebimento === null || diaRecebimento === undefined) return [];
+    if (Array.isArray(diaRecebimento)) {
+        return diaRecebimento.filter(d => typeof d === 'number' && d >= 1 && d <= 31).map(d => Math.floor(d));
+    }
+    if (typeof diaRecebimento === 'number' && diaRecebimento >= 1 && diaRecebimento <= 31) {
+        return [Math.floor(diaRecebimento)];
+    }
+    return [];
+}
+
+function _eventosRecebimentoDeclarados(orc, inicio, fim) {
+    const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
+    const eventos = [];
+    fontes.forEach(f => {
+        const dias = _diasRecebimento(f.diaRecebimento);
+        if (dias.length === 0) return;
+        const valorMes = f.valor || 0;
+        if (valorMes <= 0) return;
+        const valorPorOcorrencia = valorMes / dias.length;
+        let cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
+        const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
+        while (cursor <= fimMes) {
+            const ano = cursor.getFullYear();
+            const mes = cursor.getMonth();
+            dias.forEach(dia => {
+                const data = _dataNoMes(ano, mes, dia);
+                if (data >= inicio && data <= fim) {
+                    eventos.push({
+                        tipo: 'recebimento',
+                        data: data.toISOString().split('T')[0],
+                        dia: data.getDate(),
+                        nome: f.nome || 'Recebimento',
+                        fonteId: f.id || null,
+                        valor: valorPorOcorrencia,
+                        caixa: null,
+                        categoriaId: null,
+                        custodiaId: null
+                    });
+                }
+            });
+            cursor = new Date(ano, mes + 1, 1);
+        }
+    });
+    return eventos;
+}
+
+function _eventosVencimentoDeclarados(orc, inicio, fim) {
+    const categorias = (orc.categorias || []).filter(
+        c => typeof c.vencimento === 'number' && c.vencimento >= 1 && c.vencimento <= 31
+    );
+    const eventos = [];
+    let cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
+    const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
+    while (cursor <= fimMes) {
+        const ano = cursor.getFullYear();
+        const mes = cursor.getMonth();
+        categorias.forEach(c => {
+            const data = _dataNoMes(ano, mes, c.vencimento);
+            if (data >= inicio && data <= fim) {
+                eventos.push({
+                    tipo: 'vencimento',
+                    data: data.toISOString().split('T')[0],
+                    dia: data.getDate(),
+                    nome: c.nome || 'Conta',
+                    fonteId: null,
+                    valor: c.valor || 0,
+                    caixa: c.caixa || null,
+                    categoriaId: c.id || null,
+                    custodiaId: c.custodiaPadraoId || null,
+                    subtipo: c.subtipo || null
+                });
+            }
+        });
+        cursor = new Date(ano, mes + 1, 1);
+    }
+    return eventos;
+}
+
+function projetarFluxo(orc, opcoes) {
+    opcoes = opcoes || {};
+    const diasJanela = (typeof opcoes.dias === 'number' && opcoes.dias > 0) ? opcoes.dias : 30;
+    let inicio;
+    if (opcoes.inicio instanceof Date) inicio = new Date(opcoes.inicio);
+    else if (typeof opcoes.inicio === 'string') inicio = new Date(opcoes.inicio + 'T00:00:00');
+    else inicio = new Date();
+    inicio.setHours(0, 0, 0, 0);
+    const fim = new Date(inicio);
+    fim.setDate(inicio.getDate() + diasJanela - 1);
+    fim.setHours(0, 0, 0, 0);
+
+    const recebimentos = _eventosRecebimentoDeclarados(orc, inicio, fim);
+    const vencimentos = _eventosVencimentoDeclarados(orc, inicio, fim);
+    const eventos = recebimentos.concat(vencimentos).sort((a, b) => {
+        if (a.data < b.data) return -1;
+        if (a.data > b.data) return 1;
+        if (a.tipo === 'recebimento' && b.tipo !== 'recebimento') return -1;
+        if (a.tipo !== 'recebimento' && b.tipo === 'recebimento') return 1;
+        return 0;
+    });
+
+    const porDia = {};
+    eventos.forEach(e => {
+        if (!porDia[e.data]) porDia[e.data] = { data: e.data, entradas: 0, saidas: 0, eventos: [] };
+        if (e.tipo === 'recebimento') porDia[e.data].entradas += e.valor;
+        else porDia[e.data].saidas += e.valor;
+        porDia[e.data].eventos.push(e);
+    });
+
+    const entradas = recebimentos.reduce((s, e) => s + e.valor, 0);
+    const saidas = vencimentos.reduce((s, e) => s + e.valor, 0);
+    const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
+    const fontesSemDia = fontes.filter(f => _diasRecebimento(f.diaRecebimento).length === 0).length;
+    const categoriasSemVencimento = (orc.categorias || []).filter(
+        c => c.vencimento === null || c.vencimento === undefined
+    ).length;
+
+    return {
+        inicio: inicio.toISOString().split('T')[0],
+        fim: fim.toISOString().split('T')[0],
+        dias: diasJanela,
+        eventos: eventos,
+        porDia: porDia,
+        totais: { entradas: entradas, saidas: saidas, saldo: entradas - saidas },
+        lacunas: { fontesSemDia: fontesSemDia, categoriasSemVencimento: categoriasSemVencimento }
+    };
+}
+
+function projetarCustodia(orc, custodiaId, opcoes) {
+    const custodias = orc.custodias || [];
+    const custodia = custodias.find(c => c.id === custodiaId);
+    if (!custodia) return null;
+    const tipoInfo = TIPOS_CUSTODIA[custodia.tipo] || TIPOS_CUSTODIA.outro;
+    const fluxo = projetarFluxo(orc, opcoes);
+    const eventosLigados = fluxo.eventos.filter(e => e.tipo === 'vencimento' && e.custodiaId === custodiaId);
+    let saldo = custodia.saldoAtual || 0;
+    let fatura = custodia.faturaAcumulada || 0;
+    const saldoInicial = saldo;
+    const faturaInicial = fatura;
+    const pontos = [];
+    const porData = {};
+    eventosLigados.forEach(e => {
+        if (!porData[e.data]) porData[e.data] = [];
+        porData[e.data].push(e);
+    });
+    Object.keys(porData).sort().forEach(data => {
+        let delta = 0;
+        porData[data].forEach(e => {
+            if (tipoInfo.temFatura) { fatura += e.valor; delta += e.valor; }
+            else { saldo -= e.valor; delta -= e.valor; }
+        });
+        pontos.push({ data: data, saldo: saldo, fatura: fatura, delta: delta, eventos: porData[data] });
+    });
+    return {
+        custodiaId: custodiaId, nome: custodia.nome, tipo: custodia.tipo, temFatura: !!tipoInfo.temFatura,
+        saldoInicial: saldoInicial, faturaInicial: faturaInicial, pontos: pontos,
+        saldoFinal: saldo, faturaFinal: fatura, eventos: eventosLigados
+    };
+}
+
+function _cloneOrcParaSimulacao(orc) {
+    return JSON.parse(JSON.stringify({
+        base: orc.base || null, vida: orc.vida || null, futuro: orc.futuro || null,
+        rendaDetalhe: orc.rendaDetalhe || null, categorias: orc.categorias || [],
+        custodias: orc.custodias || [], custodiaPadrao: orc.custodiaPadrao || null,
+        nivel: orc.nivel || 1, semanaAtual: orc.semanaAtual || null
+    }));
+}
+
+function simularCenario(orc, overrides) {
+    overrides = overrides || {};
+    const clone = _cloneOrcParaSimulacao(orc);
+    if (Array.isArray(overrides.categorias)) clone.categorias = overrides.categorias;
+    if (Array.isArray(overrides.fontes)) {
+        if (!clone.rendaDetalhe) clone.rendaDetalhe = { fontes: [] };
+        clone.rendaDetalhe.fontes = overrides.fontes;
+    }
+    if (Array.isArray(overrides.custodias)) clone.custodias = overrides.custodias;
+    if (overrides.ajustarCategoria && overrides.ajustarCategoria.id) {
+        const cat = (clone.categorias || []).find(c => c.id === overrides.ajustarCategoria.id);
+        if (cat) {
+            if (overrides.ajustarCategoria.valor !== undefined) cat.valor = overrides.ajustarCategoria.valor;
+            if (overrides.ajustarCategoria.vencimento !== undefined) cat.vencimento = overrides.ajustarCategoria.vencimento;
+            if (overrides.ajustarCategoria.custodiaPadraoId !== undefined) cat.custodiaPadraoId = overrides.ajustarCategoria.custodiaPadraoId;
+        }
+    }
+    if (overrides.ajustarFonte && overrides.ajustarFonte.id && clone.rendaDetalhe) {
+        const fonte = (clone.rendaDetalhe.fontes || []).find(f => f.id === overrides.ajustarFonte.id);
+        if (fonte) {
+            if (overrides.ajustarFonte.valor !== undefined) fonte.valor = overrides.ajustarFonte.valor;
+            if (overrides.ajustarFonte.diaRecebimento !== undefined) fonte.diaRecebimento = overrides.ajustarFonte.diaRecebimento;
+        }
+    }
+    if (overrides.ajustarCustodia && overrides.ajustarCustodia.id) {
+        const cust = (clone.custodias || []).find(c => c.id === overrides.ajustarCustodia.id);
+        if (cust) {
+            if (overrides.ajustarCustodia.saldoAtual !== undefined) cust.saldoAtual = overrides.ajustarCustodia.saldoAtual;
+            if (overrides.ajustarCustodia.faturaAcumulada !== undefined) cust.faturaAcumulada = overrides.ajustarCustodia.faturaAcumulada;
+        }
+    }
+    const opcoesFluxo = {};
+    if (overrides.dias !== undefined) opcoesFluxo.dias = overrides.dias;
+    if (overrides.inicio !== undefined) opcoesFluxo.inicio = overrides.inicio;
+    const fluxo = projetarFluxo(clone, opcoesFluxo);
+    const projCustodias = {};
+    (clone.custodias || []).forEach(c => { projCustodias[c.id] = projetarCustodia(clone, c.id, opcoesFluxo); });
+    return { fluxo: fluxo, custodias: projCustodias, overridesAplicados: overrides };
+}
+
+function detectarGargalos(fluxo, opcoes) {
+    opcoes = opcoes || {};
+    const gargalos = [];
+    if (!fluxo || !fluxo.porDia) {
+        return { gargalos: [], resumo: { temGargalo: false, piorDia: null, saldoMinimo: 0 } };
+    }
+    const datas = Object.keys(fluxo.porDia).sort();
+    let acumulado = 0, saldoMinimo = 0, piorDia = null;
+    datas.forEach(data => {
+        const dia = fluxo.porDia[data];
+        const liquido = (dia.entradas || 0) - (dia.saidas || 0);
+        acumulado += liquido;
+        if ((dia.saidas || 0) > (dia.entradas || 0) && (dia.saidas || 0) > 0) {
+            gargalos.push({
+                tipo: 'dia_negativo', data: data,
+                entradas: dia.entradas || 0, saidas: dia.saidas || 0,
+                deficit: (dia.saidas || 0) - (dia.entradas || 0), eventos: dia.eventos || []
+            });
+        }
+        if (acumulado < saldoMinimo) { saldoMinimo = acumulado; piorDia = data; }
+        if (acumulado < 0 && !gargalos.some(g => g.tipo === 'acumulado_negativo' && g.data === data)) {
+            gargalos.push({ tipo: 'acumulado_negativo', data: data, saldoAcumulado: acumulado, entradas: dia.entradas || 0, saidas: dia.saidas || 0 });
+        }
+    });
+    const totalSaidas = fluxo.totais ? fluxo.totais.saidas : 0;
+    if (totalSaidas > 0) {
+        datas.forEach(data => {
+            const saidas = fluxo.porDia[data].saidas || 0;
+            if (saidas / totalSaidas > 0.4) {
+                gargalos.push({ tipo: 'concentracao', data: data, saidas: saidas, percentual: (saidas / totalSaidas) * 100, eventos: fluxo.porDia[data].eventos || [] });
+            }
+        });
+    }
+    if (opcoes.custodias) {
+        Object.keys(opcoes.custodias).forEach(id => {
+            const proj = opcoes.custodias[id];
+            if (!proj || proj.temFatura) return;
+            if (proj.saldoFinal < 0) {
+                let dataQuebra = null;
+                for (let i = 0; i < (proj.pontos || []).length; i++) {
+                    if (proj.pontos[i].saldo < 0) { dataQuebra = proj.pontos[i].data; break; }
+                }
+                gargalos.push({ tipo: 'custodia_negativa', custodiaId: id, nome: proj.nome, saldoInicial: proj.saldoInicial, saldoFinal: proj.saldoFinal, data: dataQuebra || fluxo.fim });
+            }
+        });
+    }
+    return { gargalos: gargalos, resumo: { temGargalo: gargalos.length > 0, piorDia: piorDia, saldoMinimo: saldoMinimo } };
+}
+
+function sugerirEquilibrio(gargalos, orc) {
+    if (!gargalos || !gargalos.gargalos || gargalos.gargalos.length === 0) return [];
+    const sugestoes = [];
+    const lista = gargalos.gargalos;
+    lista.filter(g => g.tipo === 'custodia_negativa').forEach(g => {
+        const outras = (orc.custodias || []).filter(c => c.id !== g.custodiaId && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura);
+        const comSaldo = outras.filter(c => (c.saldoAtual || 0) > 0);
+        if (comSaldo.length > 0) {
+            sugestoes.push({
+                tipo: 'transferencia',
+                mensagem: `"${g.nome}" pode ficar negativa. Você tem saldo em ${comSaldo.map(c => c.nome).join(', ')}.`,
+                dados: { custodiaId: g.custodiaId, saldoFinal: g.saldoFinal, alternativas: comSaldo.map(c => ({ id: c.id, nome: c.nome, saldo: c.saldoAtual || 0 })) }
+            });
+        } else {
+            sugestoes.push({ tipo: 'custodia_apertada', mensagem: `"${g.nome}" projeta saldo negativo (R$ ${Math.abs(g.saldoFinal).toFixed(2).replace('.', ',')}).`, dados: { custodiaId: g.custodiaId, saldoFinal: g.saldoFinal } });
+        }
+    });
+    lista.filter(g => g.tipo === 'concentracao').forEach(g => {
+        const nomes = (g.eventos || []).filter(e => e.tipo === 'vencimento').map(e => e.nome);
+        sugestoes.push({
+            tipo: 'concentracao',
+            mensagem: nomes.length > 0
+                ? `No dia ${g.data.slice(8)} concentra ${g.percentual.toFixed(0)}% das saídas: ${nomes.join(', ')}.`
+                : `No dia ${g.data.slice(8)} concentra ${g.percentual.toFixed(0)}% das saídas da janela.`,
+            dados: { data: g.data, percentual: g.percentual, eventos: g.eventos || [] }
+        });
+    });
+    const acumulados = lista.filter(g => g.tipo === 'acumulado_negativo');
+    if (acumulados.length > 0) {
+        const pior = acumulados.reduce((a, b) => (a.saldoAcumulado < b.saldoAcumulado) ? a : b);
+        sugestoes.push({ tipo: 'janela_apertada', mensagem: `Na janela, o saldo acumulado chega a R$ ${pior.saldoAcumulado.toFixed(2).replace('.', ',')} em ${pior.data.slice(8)}.`, dados: { data: pior.data, saldoAcumulado: pior.saldoAcumulado } });
+    }
+    lista.filter(g => g.tipo === 'dia_negativo').forEach(g => {
+        const jaCoberto = sugestoes.some(s => (s.dados && s.dados.data === g.data));
+        if (jaCoberto) return;
+        const nomes = (g.eventos || []).filter(e => e.tipo === 'vencimento').map(e => e.nome);
+        sugestoes.push({
+            tipo: 'dia_apertado',
+            mensagem: nomes.length > 0
+                ? `Em ${g.data.slice(8)} as saídas passam as entradas em R$ ${g.deficit.toFixed(2).replace('.', ',')}: ${nomes.join(', ')}.`
+                : `Em ${g.data.slice(8)} as saídas passam as entradas em R$ ${g.deficit.toFixed(2).replace('.', ',')}.`,
+            dados: { data: g.data, deficit: g.deficit, eventos: g.eventos || [] }
+        });
+    });
+    return sugestoes;
+}
+
 
 </script>
 </body>
