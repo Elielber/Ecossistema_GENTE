@@ -520,7 +520,10 @@
                 <span>Continuar de onde parei</span>
             </button>
         </div>
-
+        
+<!-- Prévia só leitura da semana atual -->
+    <div id="welcome-previa-semana" style="display: none; margin-bottom: 20px;"></div>
+        
         <button class="btn-primary" onclick="iniciarJornada()" id="btn-welcome-principal">Começar</button>
     </div>
 
@@ -1021,6 +1024,10 @@ function goToScreen(id) {
     if (btnFlutuante) {
         btnFlutuante.style.display = (id === 'screen-orcamento-inicio') ? 'flex' : 'none';
     }
+    
+    if (id === 'screen-welcome') {      
+        renderizarPreviaSemana();
+    }
 
     atualizarBotaoFeedback(id); // Ciclo 4.0
 }
@@ -1080,6 +1087,153 @@ function retomarJornada() {
     iniciarJornada();
 }
 
+// ============================================================
+// PRÉVIA SÓ LEITURA DA SEMANA (tela de abertura)
+// ============================================================
+
+function renderizarPreviaSemana() {
+    const container = document.getElementById('welcome-previa-semana');
+    if (!container) return;
+
+    const orc = state.orcamento;
+    if (!orc || !orc.semanaAtual) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+
+    const semana = orc.semanaAtual;
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    // Renda: usa a real se houver recebimento; senão a estimada
+    const rendaReal     = semana.rendaReal || 0;
+    const rendaEstimada = semana.rendaEstimada || (orc.base?.rendaBase || 0) / DIVISOR_SEMANAL;
+    const rendaMostrar  = rendaReal > 0 ? rendaReal : rendaEstimada;
+    const rotuloRenda   = rendaReal > 0 ? 'Recebido' : 'Previsto';
+
+    const totalGasto = (semana.base?.gasto || 0)
+                     + (semana.vida?.gasto || 0)
+                     + (semana.futuro?.gasto || 0);
+
+    const saldo = rendaMostrar - totalGasto;
+
+    // Barrinha helper (mesma linguagem visual do Olhe)
+    const barra = (nome, gasto, limite) => {
+        const limiteSeg = limite > 0 ? limite : 0;
+        const pct = limiteSeg > 0 ? Math.min((gasto / limiteSeg) * 100, 100) : 0;
+        let cor = 'barra-verde';
+        if (limiteSeg > 0 && gasto > limiteSeg) cor = 'barra-vermelha';
+        else if (limiteSeg > 0 && pct >= 80) cor = 'barra-amarela';
+        return `
+            <div style="margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px;">
+                    <span style="color: var(--primary); font-weight: 600;">${nome}</span>
+                    <span style="color: var(--secondary);">${fmt(gasto)} / ${fmt(limiteSeg)}</span>
+                </div>
+                <div class="barra-fundo" style="height: 6px;">
+                    <div class="barra-preenchida ${cor}" style="width: ${pct}%;"></div>
+                </div>
+            </div>
+        `;
+    };
+
+    // ---- Renda: só mostra barra comparativa quando há recebimento real ----
+    let htmlRenda;
+    if (rendaReal > 0 && rendaEstimada > 0) {
+        // Barra mostra o quanto do previsto já entrou (pode passar de 100%)
+        const pctRenda = Math.min((rendaReal / rendaEstimada) * 100, 100);
+        let corRenda = 'barra-verde';
+        if (rendaReal > rendaEstimada) corRenda = 'barra-verde'; // entrou mais: tudo bem
+        else if (pctRenda < 50) corRenda = 'barra-amarela';
+
+        htmlRenda = `
+            <div style="margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px;">
+                    <span style="color: var(--primary); font-weight: 600;">Renda recebida</span>
+                    <span style="color: var(--secondary);">${fmt(rendaReal)} / previsto ${fmt(rendaEstimada)}</span>
+                </div>
+                <div class="barra-fundo" style="height: 6px;">
+                    <div class="barra-preenchida ${corRenda}" style="width: ${pctRenda}%;"></div>
+                </div>
+            </div>
+        `;
+    } else {
+        // Sem recebimento ainda: mostra só o previsto, sem barra
+        htmlRenda = `
+            <div style="margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px;">
+                    <span style="color: var(--primary); font-weight: 600;">Renda prevista</span>
+                    <span style="color: var(--secondary);">${fmt(rendaEstimada)}</span>
+                </div>
+                <div style="font-size: 0.7rem; color: var(--secondary); line-height: 1.4; margin-top: 2px;">
+                    Ainda sem recebimento registrado nesta semana.
+                </div>
+            </div>
+        `;
+    }
+
+    // ---- Montagem do conteúdo interno (sem o wrapper) ----
+    const conteudoInterno = `
+        <div style="padding: 4px 16px 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px;">
+                <span style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); font-weight: bold;">
+                    Retrato da semana
+                </span>
+                <span style="font-size: 0.75rem; color: var(--secondary);">
+                    ${formatarData(semana.inicio)} a ${formatarData(semana.fim)}
+                </span>
+            </div>
+
+            ${htmlRenda}
+
+            ${barra('🛡️ Base',   semana.base?.gasto   || 0, semana.base?.limite   || 0)}
+            ${barra('🌿 Vida',   semana.vida?.gasto   || 0, semana.vida?.limite   || 0)}
+            ${barra('🔭 Futuro', semana.futuro?.gasto || 0, semana.futuro?.limite || 0)}
+
+            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; padding-top: 10px; margin-top: 10px; border-top: 1px solid #e2e8f0;">
+                <span style="font-weight: bold; color: var(--primary);">
+                    ${saldo >= 0 ? 'Sobrou' : 'Faltou'}
+                </span>
+                <strong style="color: ${saldo >= 0 ? '#10b981' : '#ef4444'};">
+                    ${fmt(Math.abs(saldo))}
+                </strong>
+            </div>
+        </div>
+    `;
+
+    // ---- Acordeon: lê estado persistido ----
+    const chaveAberta = 'welcome_previa_aberta';
+    const aberta = localStorage.getItem(chaveAberta) === '1';
+
+    container.style.display = 'block';
+    container.innerHTML = `
+        <div class="card" style="padding: 0; overflow: hidden;">
+            <details id="detalhes-previa-semana" ${aberta ? 'open' : ''}>
+                <summary style="cursor: pointer; padding: 16px 18px; display: flex; justify-content: space-between; align-items: center; list-style: none; user-select: none;">
+                    <div>
+                        <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); font-weight: bold;">
+                            Essa semana
+                        </div>
+                        <div style="font-size: 0.9rem; font-weight: 600; color: var(--primary); margin-top: 2px;">
+                            ${formatarData(semana.inicio)} a ${formatarData(semana.fim)}
+                        </div>
+                    </div>
+                    <span style="font-size: 0.8rem; color: var(--secondary);">▾</span>
+                </summary>
+                ${conteudoInterno}
+            </details>
+        </div>
+    `;
+
+    // Persiste o estado do acordeon
+    const detalhes = document.getElementById('detalhes-previa-semana');
+    if (detalhes) {
+        detalhes.addEventListener('toggle', () => {
+            localStorage.setItem(chaveAberta, detalhes.open ? '1' : '0');
+        });
+    }
+}
+
 function atualizarBotaoRetomada() {
     const btnRetomar = document.getElementById('welcome-retomar');
     const btnPrincipal = document.getElementById('btn-welcome-principal');
@@ -1092,6 +1246,7 @@ function atualizarBotaoRetomada() {
         btnPrincipal.innerText = 'Começar de novo';
         btnPrincipal.style.background = '#94a3b8';
         btnPrincipal.onclick = comecarDeNovo;
+        renderizarPreviaSemana();
     } else {
         btnRetomar.style.display = 'none';
         btnPrincipal.innerText = 'Começar';
@@ -4104,6 +4259,7 @@ window.addEventListener('DOMContentLoaded', () => {
     carregarEstado();
     atualizarBotaoFeedback('screen-welcome');
     atualizarBotaoRetomada();
+    renderizarPreviaSemana();
     verificarFechamentoSemana();
 
     if (state.orcamento && state.orcamento.etapasConcluidas && state.orcamento.etapasConcluidas.length > 0) {
