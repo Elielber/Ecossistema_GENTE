@@ -962,6 +962,14 @@ if (state.orcamento.semanaAtual) {
     const totalGasto = (s.base?.gasto || 0) + (s.vida?.gasto || 0) + (s.futuro?.gasto || 0);
     if (typeof s.totalGasto !== 'number') s.totalGasto = totalGasto;
     if (typeof s.saldo !== 'number') s.saldo = s.rendaReal - totalGasto;
+    // Continuidade: garante campos de carrego na semana aberta
+    ['base', 'vida', 'futuro'].forEach(k => {
+        if (!s[k]) return;
+        if (typeof s[k].carrego !== 'number') s[k].carrego = 0;
+        if (typeof s[k].sobraAnterior !== 'number') s[k].sobraAnterior = 0;
+        if (typeof s[k].sobra !== 'number') s[k].sobra = 0;
+    });
+    if (!s.carregoCategorias || typeof s.carregoCategorias !== 'object') s.carregoCategorias = {};
 }
 
 if (Array.isArray(state.orcamento.resumos)) {
@@ -1813,9 +1821,10 @@ function renderizarOrcamentoCompleto(container, orc) {
             <h2 style="font-size: 1.2rem; font-weight: 700; color: var(--primary);">${formatarData(semana.inicio)} a ${formatarData(semana.fim)}</h2>
         </div>
 
-        ${renderizarCaixinha('base', '🛡️ Base', semana.base.gasto, limiteBase)}
-        ${renderizarCaixinha('vida', '🌿 Vida', semana.vida.gasto, limiteVida)}
-        ${renderizarCaixinha('futuro', '🔭 Futuro', semana.futuro.gasto, limiteFuturo)}
+        ${renderizarAvisoCarregoVirada(semana)}
+        ${renderizarCaixinha('base', '🛡️ Base', semana.base.gasto, limiteBase, { carrego: semana.base.carrego || 0, sobraAnterior: semana.base.sobraAnterior || 0 })}
+        ${renderizarCaixinha('vida', '🌿 Vida', semana.vida.gasto, limiteVida, { carrego: semana.vida.carrego || 0, sobraAnterior: semana.vida.sobraAnterior || 0 })}
+        ${renderizarCaixinha('futuro', '🔭 Futuro', semana.futuro.gasto, limiteFuturo, { carrego: semana.futuro.carrego || 0, sobraAnterior: semana.futuro.sobraAnterior || 0 })}
 
         ${renderizarCardSaldo(semana, orc)}
 
@@ -1847,17 +1856,32 @@ function traduzirTipoRenda(tipo) {
     return mapa[tipo] || 'não definido';
 }
 
-function renderizarCaixinha(id, nome, gasto, limite) {
+function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
     const limiteSeguro = (limite && limite > 0) ? limite : 0;
-    const percentual = limiteSeguro > 0 
-        ? Math.min((gasto / limiteSeguro) * 100, 100) 
+    const gastoSeguro = Number(gasto) || 0;
+    // Barra = PLANO da semana (decisão B): só gasto desta semana / limite
+    const percentual = limiteSeguro > 0
+        ? Math.min((gastoSeguro / limiteSeguro) * 100, 100)
         : 0;
+
+    // Carrego = déficit herdado (não inclui sobra — decisão C)
+    let carrego = Number(opcoes.carrego) || 0;
+    let sobraAnterior = Number(opcoes.sobraAnterior) || 0;
+    if (id && state.orcamento && state.orcamento.semanaAtual && state.orcamento.semanaAtual[id]) {
+        const cx = state.orcamento.semanaAtual[id];
+        if (!opcoes.carrego && cx.carrego) carrego = Number(cx.carrego) || 0;
+        if (!opcoes.sobraAnterior && cx.sobraAnterior) sobraAnterior = Number(cx.sobraAnterior) || 0;
+    }
+
+    // Situação real: plano − gasto desta semana − carrego (sobra não infla)
+    const consumidoReal = gastoSeguro + carrego;
+    const disponivelReal = limiteSeguro - consumidoReal;
 
     let cor = 'barra-verde';
     let aviso = '';
 
     if (limiteSeguro === 0) {
-        if (gasto > 0) {
+        if (gastoSeguro > 0 || carrego > 0) {
             cor = 'barra-vermelha';
             aviso = '<div style="font-size: 0.75rem; color: #991b1b; margin-top: 6px;">Sem orçamento definido. Todo gasto aqui é acima do planejado.</div>';
         }
@@ -1866,19 +1890,38 @@ function renderizarCaixinha(id, nome, gasto, limite) {
         else if (percentual >= 80) cor = 'barra-amarela';
     }
 
+    const fmt = (v) => v.toFixed(2).replace('.', ',');
+    let linhaReal = '';
+    if (carrego > 0 || sobraAnterior > 0) {
+        const bits = [];
+        if (carrego > 0) {
+            bits.push(`déficit anterior R$ ${fmt(carrego)}`);
+        }
+        if (sobraAnterior > 0) {
+            bits.push(`sobra anterior R$ ${fmt(sobraAnterior)} (não aumenta a meta)`);
+        }
+        const realTxt = disponivelReal >= 0
+            ? `ainda cabe de verdade R$ ${fmt(disponivelReal)}`
+            : `acima do real em R$ ${fmt(Math.abs(disponivelReal))}`;
+        linhaReal = `<div style="font-size: 0.72rem; color: ${disponivelReal < 0 ? '#991b1b' : 'var(--secondary)'}; margin-top: 6px; line-height: 1.35;">
+            Situação real: ${realTxt}${bits.length ? ' · ' + bits.join(' · ') : ''}
+        </div>`;
+    }
+
     const onclickAttr = id ? `onclick="abrirListaRegistros('${id}')"` : '';
 
     return `
         <div class="caixinha" ${onclickAttr} role="button" tabindex="0">
             <div class="caixinha-header">
                 <span class="nome">${nome}</span>
-                <span class="valores">R$ ${gasto.toFixed(2).replace('.', ',')} / R$ ${limiteSeguro.toFixed(2).replace('.', ',')}</span>
+                <span class="valores">R$ ${fmt(gastoSeguro)} / R$ ${fmt(limiteSeguro)} <span style="font-weight: 500; color: var(--secondary);">(plano)</span></span>
             </div>
             <div class="barra-fundo">
                 <div class="barra-preenchida ${cor}" style="width: ${percentual}%"></div>
             </div>
+            ${linhaReal}
             ${aviso}
-            ${id ? '<div style="font-size: 0.7rem; color: var(--secondary); margin-top: 6px;">Toque para ver os registros →</div>' : ''}
+            ${id ? '<div style="font-size: 0.7rem; color: var(--secondary); margin-top: 4px;">Toque para ver os registros →</div>' : ''}
         </div>
     `;
 }
@@ -2327,6 +2370,127 @@ function renderizarCardSaldo(semana, orc) {
         </div>
     `;
 }
+
+// ============================================================
+// CONTINUIDADE SEMANAL — carrego por caixinha e categoria
+// Decisões § 10.7: sobra C, barra B, fallback caixinha, sem rateio
+// ============================================================
+
+/**
+ * Estouro/sobra de uma caixinha no fechamento.
+ * carrego (próxima semana) = só o déficit (estouro).
+ * sobra fica visível, mas NÃO aumenta o "ainda cabe" (decisão C).
+ */
+function _resultadoCaixaNoFechamento(caixaObj) {
+    const limite = (caixaObj && caixaObj.limite) || 0;
+    const gasto = (caixaObj && caixaObj.gasto) || 0;
+    const estouro = Math.max(0, gasto - limite);
+    const sobra = Math.max(0, limite - gasto);
+    return { estouro, sobra, limite, gasto };
+}
+
+/**
+ * Calcula estouro/sobra por categoria na semana (só registros declarados).
+ * Sem rateio: categoria sem meta (valor 0) não gera carrego de meta —
+ * o efeito agregado permanece na caixinha.
+ */
+function calcularCarregoCategoriasDaSemana(semana) {
+    if (!semana || !semana.inicio || !semana.fim) return {};
+    const cats = state.orcamento.categorias || [];
+    const regs = state.orcamento.historicoRegistros || [];
+    const inicio = semana.inicio;
+    const fim = semana.fim;
+    const mapa = {};
+
+    cats.forEach(cat => {
+        if (!cat || !cat.id) return;
+        const metaSem = (Number(cat.valor) || 0) / DIVISOR_SEMANAL;
+        if (metaSem <= 0) return; // sem meta declarada → sem carrego de categoria
+        const gastoSem = regs
+            .filter(r => {
+                if (r.tipo !== 'gasto_direto' && r.tipo !== 'gasto_cartao') return false;
+                const d = (r.data || '').split('T')[0];
+                if (!d || d < inicio || d > fim) return false;
+                if (r.categoriaId && r.categoriaId === cat.id) return true;
+                if (!r.categoriaId && r.categoria && cat.nome && r.categoria === cat.nome) return true;
+                return false;
+            })
+            .reduce((s, r) => s + (Number(r.valor) || 0), 0);
+        const estouro = Math.max(0, gastoSem - metaSem);
+        const sobra = Math.max(0, metaSem - gastoSem);
+        if (estouro > 0 || sobra > 0) {
+            mapa[cat.id] = {
+                nome: cat.nome || '',
+                caixa: cat.caixa || null,
+                metaSem,
+                gastoSem,
+                estouro,
+                sobra
+            };
+        }
+    });
+    return mapa;
+}
+
+/**
+ * Carrego de categoria na semana atual (déficit herdado).
+ */
+function obterCarregoCategoria(categoriaId) {
+    if (!categoriaId) return 0;
+    const semana = state.orcamento && state.orcamento.semanaAtual;
+    if (!semana || !semana.carregoCategorias) return 0;
+    const c = semana.carregoCategorias[categoriaId];
+    return c ? (Number(c.estouro) || 0) : 0;
+}
+
+function obterSobraAnteriorCategoria(categoriaId) {
+    if (!categoriaId) return 0;
+    const semana = state.orcamento && state.orcamento.semanaAtual;
+    if (!semana || !semana.carregoCategorias) return 0;
+    const c = semana.carregoCategorias[categoriaId];
+    return c ? (Number(c.sobra) || 0) : 0;
+}
+
+/**
+ * Há algum carrego (déficit) vindo da semana anterior?
+ */
+function temCarregoSemanaAnterior(semana) {
+    if (!semana) return false;
+    const cBase = (semana.base && semana.base.carrego) || 0;
+    const cVida = (semana.vida && semana.vida.carrego) || 0;
+    const cFut = (semana.futuro && semana.futuro.carrego) || 0;
+    if (cBase > 0 || cVida > 0 || cFut > 0) return true;
+    if ((semana.saldoAnterior || 0) < 0) return true;
+    const cats = semana.carregoCategorias || {};
+    return Object.keys(cats).some(id => (cats[id].estouro || 0) > 0);
+}
+
+function renderizarAvisoCarregoVirada(semana) {
+    if (!semana || !temCarregoSemanaAnterior(semana)) return '';
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const partes = [];
+    const b = (semana.base && semana.base.carrego) || 0;
+    const v = (semana.vida && semana.vida.carrego) || 0;
+    const f = (semana.futuro && semana.futuro.carrego) || 0;
+    if (b > 0) partes.push('Base ' + fmt(b));
+    if (v > 0) partes.push('Vida ' + fmt(v));
+    if (f > 0) partes.push('Futuro ' + fmt(f));
+    const detalhe = partes.length
+        ? ' Déficit na meta: ' + partes.join(' · ') + '.'
+        : ((semana.saldoAnterior || 0) < 0
+            ? ' Saldo anterior: − ' + fmt(Math.abs(semana.saldoAnterior)) + '.'
+            : '');
+    return `
+        <div class="card" style="border-left: 4px solid #0ea5e9; background: #f0f9ff; margin-bottom: 16px; padding: 14px 16px;">
+            <div style="font-size: 0.85rem; color: #0c4a6e; line-height: 1.45;">
+                <strong>A semana mudou; o resultado da anterior veio junto.</strong>${detalhe}
+                A barra mostra o plano desta semana; a linha de baixo mostra a situação real.
+            </div>
+        </div>
+    `;
+}
+
+
 function iniciarNovaSemana() {
     const hoje = new Date();
     const diaSemana = hoje.getDay();
@@ -2353,25 +2517,48 @@ function iniciarNovaSemana() {
     const limiteFuturo = limiteVencimentosFuturo > 0 ? limiteVencimentosFuturo : limiteEnvelopeFuturo;
     const rendaSemanal = rendaMensal / DIVISOR_SEMANAL;
 
-    // Carrega o saldo da semana anterior (carryover)
+    // Carrega o resultado da semana anterior (não zera)
     let saldoAnterior = 0;
+    let carregoBase = 0, carregoVida = 0, carregoFuturo = 0;
+    let sobraBase = 0, sobraVida = 0, sobraFuturo = 0;
+    let carregoCategorias = {};
     if (state.orcamento.resumos && state.orcamento.resumos.length > 0) {
         const ultimoResumo = state.orcamento.resumos[0];
         saldoAnterior = (typeof ultimoResumo.saldo === 'number') ? ultimoResumo.saldo : 0;
+        // Déficit de meta (estouro) vira carrego; sobra só para exibição (decisão C)
+        carregoBase = (ultimoResumo.base && ultimoResumo.base.estouro) || 0;
+        carregoVida = (ultimoResumo.vida && ultimoResumo.vida.estouro) || 0;
+        carregoFuturo = (ultimoResumo.futuro && (ultimoResumo.futuro.estouro || ultimoResumo.futuro.aceleracao)) || 0;
+        sobraBase = (ultimoResumo.base && ultimoResumo.base.sobra) || 0;
+        sobraVida = (ultimoResumo.vida && ultimoResumo.vida.sobra) || 0;
+        sobraFuturo = (ultimoResumo.futuro && ultimoResumo.futuro.sobra) || 0;
+        // Por categoria: só estouro entra como carrego ativo; sobra fica no objeto para UI
+        if (ultimoResumo.carregoCategorias && typeof ultimoResumo.carregoCategorias === 'object') {
+            Object.keys(ultimoResumo.carregoCategorias).forEach(id => {
+                const c = ultimoResumo.carregoCategorias[id] || {};
+                carregoCategorias[id] = {
+                    nome: c.nome || '',
+                    caixa: c.caixa || null,
+                    estouro: Number(c.estouro) || 0,
+                    sobra: Number(c.sobra) || 0
+                };
+            });
+        }
     }
 
-state.orcamento.semanaAtual = {
-    inicio: inicio.toISOString().split('T')[0],
-    fim: fim.toISOString().split('T')[0],
-    rendaEstimada: rendaSemanal,   // o previsto
-    rendaReal: 0,                  
-    saldoAnterior: saldoAnterior,
-    base:   { limite: limiteBase,   gasto: 0, estouro: 0 },
-    vida:   { limite: limiteVida,   gasto: 0, estouro: 0 },
-    futuro: { limite: limiteFuturo, gasto: 0, estouro: 0 },
-    fechada: false,
-    resumoLido: false
-};
+    state.orcamento.semanaAtual = {
+        inicio: inicio.toISOString().split('T')[0],
+        fim: fim.toISOString().split('T')[0],
+        rendaEstimada: rendaSemanal,
+        rendaReal: 0,
+        saldoAnterior: saldoAnterior,
+        base:   { limite: limiteBase,   gasto: 0, estouro: 0, carrego: carregoBase,   sobraAnterior: sobraBase },
+        vida:   { limite: limiteVida,   gasto: 0, estouro: 0, carrego: carregoVida,   sobraAnterior: sobraVida },
+        futuro: { limite: limiteFuturo, gasto: 0, estouro: 0, carrego: carregoFuturo, sobraAnterior: sobraFuturo },
+        carregoCategorias: carregoCategorias,
+        fechada: false,
+        resumoLido: false
+    };
 
     salvarEstado();
 }
@@ -3430,7 +3617,7 @@ function renderizarDetalheGastos() {
             }
             const gastoSem = gastoCategoriaNaSemana(cat.id, cat.nome);
             const metaSem = (cat.valor || 0) / DIVISOR_SEMANAL;
-            const barraHtml = renderizarBarraCategoria(gastoSem, metaSem);
+            const barraHtml = renderizarBarraCategoria(gastoSem, metaSem, cat.id);
             htmlCategorias += `
                 <div class="categoria-item" style="cursor: pointer; display: block;" onclick="abrirFormularioCategoria('${cat.id}')">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -3966,7 +4153,7 @@ function renderizarDetalheFuturo() {
 
             const gastoSemFut = gastoCategoriaNaSemana(cat.id, cat.nome);
             const metaSemFut = (cat.valor || 0) / DIVISOR_SEMANAL;
-            const barraSemFut = renderizarBarraCategoria(gastoSemFut, metaSemFut);
+            const barraSemFut = renderizarBarraCategoria(gastoSemFut, metaSemFut, cat.id);
 
             htmlCategorias += `
                 <div class="categoria-item" style="display: block; cursor: pointer;" onclick="abrirListaRegistrosCategoria('${cat.id}', '${(cat.nome || '').replace(/'/g, "\\'")}')">
@@ -4347,19 +4534,29 @@ function verificarFechamentoSemana() {
 function fecharSemana() {
     const semana = state.orcamento.semanaAtual;
 
-    semana.base.estouro = Math.max(0, semana.base.gasto - semana.base.limite);
-    semana.vida.estouro = Math.max(0, semana.vida.gasto - semana.vida.limite);
-    semana.futuro.aceleracao = Math.max(0, semana.futuro.gasto - semana.futuro.limite);
+    const resBase = _resultadoCaixaNoFechamento(semana.base);
+    const resVida = _resultadoCaixaNoFechamento(semana.vida);
+    const resFuturo = _resultadoCaixaNoFechamento(semana.futuro);
 
-    // Saldo da semana = renda − (base + vida + futuro)
-    const totalGasto = semana.base.gasto + semana.vida.gasto + semana.futuro.gasto;
-semana.totalGasto = totalGasto;
-semana.saldo = (semana.saldoAnterior || 0) + (semana.rendaReal || 0) - totalGasto;
+    semana.base.estouro = resBase.estouro;
+    semana.base.sobra = resBase.sobra;
+    semana.vida.estouro = resVida.estouro;
+    semana.vida.sobra = resVida.sobra;
+    semana.futuro.estouro = resFuturo.estouro;
+    semana.futuro.sobra = resFuturo.sobra;
+    semana.futuro.aceleracao = Math.max(0, (semana.futuro.gasto || 0) - (semana.futuro.limite || 0));
 
-// Regra 8: se o real ultrapassou o estimado, o estimado é atualizado
-if ((semana.rendaReal || 0) > (semana.rendaEstimada || 0)) {
-    semana.rendaEstimada = semana.rendaReal;
-}
+    // Breakdown por categoria (só declarado; sem rateio)
+    semana.carregoCategorias = calcularCarregoCategoriasDaSemana(semana);
+
+    // Saldo da semana = saldoAnterior + renda − gastos
+    const totalGasto = (semana.base.gasto || 0) + (semana.vida.gasto || 0) + (semana.futuro.gasto || 0);
+    semana.totalGasto = totalGasto;
+    semana.saldo = (semana.saldoAnterior || 0) + (semana.rendaReal || 0) - totalGasto;
+
+    if ((semana.rendaReal || 0) > (semana.rendaEstimada || 0)) {
+        semana.rendaEstimada = semana.rendaReal;
+    }
 
     semana.fechada = true;
     semana.resumoLido = false;
@@ -4368,14 +4565,15 @@ if ((semana.rendaReal || 0) > (semana.rendaEstimada || 0)) {
     state.orcamento.resumos.unshift({
         inicio: semana.inicio,
         fim: semana.fim,
-		rendaEstimada: semana.rendaEstimada,
-		saldoAnterior: semana.saldoAnterior || 0,
+        rendaEstimada: semana.rendaEstimada,
+        saldoAnterior: semana.saldoAnterior || 0,
         rendaReal: semana.rendaReal,
         totalGasto: semana.totalGasto,
         saldo: semana.saldo,
         base: { ...semana.base },
         vida: { ...semana.vida },
-        futuro: { ...semana.futuro }
+        futuro: { ...semana.futuro },
+        carregoCategorias: { ...(semana.carregoCategorias || {}) }
     });
 
     state.orcamento.semanasFechadas = (state.orcamento.semanasFechadas || 0) + 1;
@@ -4507,19 +4705,19 @@ const falaZe = futuroAceleracao > 0
             <span class="icone">🛡️</span>
             <span class="texto">${falaTorres}</span>
         </div>
-        ${renderizarCaixinha('base', '🛡️ Base', semana.base.gasto, semana.base.limite)}
+        ${renderizarCaixinha('base', '🛡️ Base', semana.base.gasto, semana.base.limite, { carrego: semana.base.carrego || 0, sobraAnterior: semana.base.sobraAnterior || 0 })}
 
         <div class="fala-avatar">
             <span class="icone">🌿</span>
             <span class="texto">${falaBela}</span>
         </div>
-        ${renderizarCaixinha('vida', '🌿 Vida', semana.vida.gasto, semana.vida.limite)}
+        ${renderizarCaixinha('vida', '🌿 Vida', semana.vida.gasto, semana.vida.limite, { carrego: semana.vida.carrego || 0, sobraAnterior: semana.vida.sobraAnterior || 0 })}
 
         <div class="fala-avatar">
             <span class="icone">🔭</span>
             <span class="texto">${falaZe}</span>
         </div>
-        ${renderizarCaixinha('futuro', '🔭 Futuro', semana.futuro.gasto, semana.futuro.limite)}
+        ${renderizarCaixinha('futuro', '🔭 Futuro', semana.futuro.gasto, semana.futuro.limite, { carrego: semana.futuro.carrego || 0, sobraAnterior: semana.futuro.sobraAnterior || 0 })}
 
         <button class="btn-primary" style="margin-top: 30px;" onclick="fecharResumoEIniciarNovaSemana()">Começar nova semana</button>
     `;
@@ -5314,13 +5512,16 @@ function detectarSinalRecuperacao(orc) {
 
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    // S1 — Saldo negativo
+    // S1 — Situação real negativa (inclui saldoAnterior; alinhado ao card de saldo)
     const renda = semana.rendaReal || 0;
     const totalGasto = (semana.base?.gasto || 0)
                      + (semana.vida?.gasto || 0)
                      + (semana.futuro?.gasto || 0);
-    const saldo = renda - totalGasto;
-    const s1 = saldo < 0;
+    const saldo = (semana.saldoAnterior || 0) + renda - totalGasto;
+    // Carrego de meta alimenta o mesmo sinal só quando a situação real já está no zero/negativo
+    // (evita alerta duplicado quando só há déficit de barra mas o pote ainda aguenta)
+    const carregoMeta = ((semana.base?.carrego) || 0) + ((semana.vida?.carrego) || 0) + ((semana.futuro?.carrego) || 0);
+    const s1 = saldo < 0 || (carregoMeta > 0 && saldo <= 0);
 
     // S2 — Contas vencidas (vencimento no passado, ainda no orçamento)
     const hoje = new Date();
@@ -7990,22 +8191,42 @@ function gastoCategoriaTotal(categoriaId, categoriaNome) {
         .reduce((s, r) => s + (r.valor || 0), 0);
 }
 
-function renderizarBarraCategoria(gasto, limite) {
+function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
     const limiteSeguro = (limite && limite > 0) ? limite : 0;
-    const percentual = limiteSeguro > 0 ? Math.min((gasto / limiteSeguro) * 100, 100) : (gasto > 0 ? 100 : 0);
+    const gastoSeguro = Number(gasto) || 0;
+    // Barra = plano (só esta semana)
+    const percentual = limiteSeguro > 0 ? Math.min((gastoSeguro / limiteSeguro) * 100, 100) : (gastoSeguro > 0 ? 100 : 0);
     let cor = 'barra-verde';
-    if (limiteSeguro === 0 && gasto > 0) cor = 'barra-vermelha';
+    if (limiteSeguro === 0 && gastoSeguro > 0) cor = 'barra-vermelha';
     else if (percentual >= 100) cor = 'barra-vermelha';
     else if (percentual >= 80) cor = 'barra-amarela';
+
+    const carrego = categoriaId ? obterCarregoCategoria(categoriaId) : 0;
+    const sobraAnt = categoriaId ? obterSobraAnteriorCategoria(categoriaId) : 0;
+    const disponivelReal = limiteSeguro - gastoSeguro - carrego;
+    let linhaReal = '';
+    if (carrego > 0 || sobraAnt > 0) {
+        const realTxt = disponivelReal >= 0
+            ? `ainda cabe de verdade ${_fmtBRL(disponivelReal)}`
+            : `acima do real em ${_fmtBRL(Math.abs(disponivelReal))}`;
+        const bits = [];
+        if (carrego > 0) bits.push(`déficit ant. ${_fmtBRL(carrego)}`);
+        if (sobraAnt > 0) bits.push(`sobra ant. ${_fmtBRL(sobraAnt)}`);
+        linhaReal = `<div style="font-size: 0.7rem; color: ${disponivelReal < 0 ? '#991b1b' : 'var(--secondary)'}; margin-top: 4px;">
+            Real: ${realTxt}${bits.length ? ' · ' + bits.join(' · ') : ''}
+        </div>`;
+    }
+
     return `
         <div class="barra-cat">
             <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--secondary); margin-bottom: 4px;">
-                <span>Semana: ${_fmtBRL(gasto)}</span>
+                <span>Semana (plano): ${_fmtBRL(gastoSeguro)}</span>
                 <span>Meta sem.: ${_fmtBRL(limiteSeguro)}</span>
             </div>
             <div class="barra-fundo" style="height: 6px;">
                 <div class="barra-preenchida ${cor}" style="width: ${percentual}%;"></div>
             </div>
+            ${linhaReal}
         </div>
     `;
 }
