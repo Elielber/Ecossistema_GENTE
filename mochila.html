@@ -6079,7 +6079,18 @@ function alternarModoDebug() {
                 <button onclick="debugCriarCustodiasExemplo()" style="background: #8b5cf6; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">🏦 Criar 3 custódias de exemplo</button>
                 <button onclick="debugCriarCategoriasComVencimento()" style="background: #8b5cf6; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">🗓️ Criar 3 categorias com vencimento</button>
             </div>
-
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 6px;">Carryover (teste do saldo anterior)</div>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
+                <button onclick="debugAjustarSaldoAnteriorSemana()" style="background: #f59e0b; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
+                    Ajustar saldoAnterior da semana atual
+                </button>
+                <button onclick="debugAjustarSaldoUltimoResumo()" style="background: #8b5cf6; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
+                    Ajustar saldo do último resumo
+                </button>
+                <button onclick="debugZerarCarryover()" style="background: #64748b; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
+                    Zerar carryover (semana atual + resumos)
+                </button>
+            </div>
             <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 6px;">Reset</div>
             <div style="display: flex; flex-direction: column; gap: 8px;">
                 <button onclick="debugResetarNivel()" style="background: #dc2626; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">🔄 Resetar para Nível 1</button>
@@ -6107,10 +6118,96 @@ function atualizarDebugStatus() {
         <div><strong>Categorias:</strong> ${(orc.categorias || []).length} (${categoriasComVenc} com venc.)</div>
         <div><strong>Custódias:</strong> ${(orc.custodias || []).length}</div>
         <div><strong>Semana atual:</strong> ${orc.semanaAtual ? orc.semanaAtual.inicio + ' a ' + orc.semanaAtual.fim : '—'}</div>
-        <div><strong>Transição pendente:</strong> ${orc.transicaoNivelPendente || 'não'}</div>
+                <div><strong>Transição pendente:</strong> ${orc.transicaoNivelPendente || 'não'}</div>
+        <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.15);">
+            <strong>Carryover:</strong>
+            <div>· Semana atual saldoAnterior: R$ ${((orc.semanaAtual && orc.semanaAtual.saldoAnterior) || 0).toFixed(2)}</div>
+            <div>· Último resumo saldo: R$ ${((orc.resumos && orc.resumos[0] && orc.resumos[0].saldo) || 0).toFixed(2)}</div>
+        </div>
     `;
 }
 
+// ============================================================
+// DEBUG — CARRYOVER (teste do saldo anterior entre semanas)
+// ============================================================
+
+/**
+ * Ajusta o saldoAnterior da SEMANA ATUAL.
+ * Efeito imediato no card "Saldo da semana" da home.
+ * Também afeta o fechamento desta semana (o saldo dela incluirá esse valor).
+ */
+function debugAjustarSaldoAnteriorSemana() {
+    if (!state.orcamento || !state.orcamento.semanaAtual) {
+        alert('Nenhuma semana em andamento. Inicie a jornada primeiro.');
+        return;
+    }
+    const atual = state.orcamento.semanaAtual.saldoAnterior || 0;
+    const entrada = prompt(
+        'Novo saldoAnterior da semana atual (pode ser negativo):\n\n' +
+        'Isso afeta o card da home IMEDIATAMENTE e será somado ao saldo ' +
+        'desta semana quando ela fechar.',
+        atual.toFixed(2)
+    );
+    if (entrada === null) return;
+    const novo = parseFloat(String(entrada).replace(',', '.'));
+    if (isNaN(novo)) {
+        alert('Valor inválido.');
+        return;
+    }
+    state.orcamento.semanaAtual.saldoAnterior = novo;
+    salvarEstado();
+    renderizarOrcamentoInicio();
+    atualizarDebugStatus();
+    console.log('[DEBUG carryover] semanaAtual.saldoAnterior =', novo);
+}
+
+/**
+ * Ajusta o saldo do ÚLTIMO resumo arquivado.
+ * NÃO afeta a semana atual imediatamente.
+ * Só tem efeito quando a próxima semana começar (iniciarNovaSemana lê resumos[0].saldo).
+ */
+function debugAjustarSaldoUltimoResumo() {
+    if (!state.orcamento || !state.orcamento.resumos || state.orcamento.resumos.length === 0) {
+        alert('Nenhum resumo arquivado. Feche uma semana (debug +7 dias) primeiro.');
+        return;
+    }
+    const atual = state.orcamento.resumos[0].saldo || 0;
+    const entrada = prompt(
+        'Novo saldo do último resumo (semana ' +
+        state.orcamento.resumos[0].inicio + ' a ' + state.orcamento.resumos[0].fim + '):\n\n' +
+        'NÃO afeta a semana atual. Só entra em jogo quando a próxima semana começar.',
+        atual.toFixed(2)
+    );
+    if (entrada === null) return;
+    const novo = parseFloat(String(entrada).replace(',', '.'));
+    if (isNaN(novo)) {
+        alert('Valor inválido.');
+        return;
+    }
+    state.orcamento.resumos[0].saldo = novo;
+    salvarEstado();
+    atualizarDebugStatus();
+    console.log('[DEBUG carryover] resumos[0].saldo =', novo);
+}
+
+/**
+ * Zera o carryover em TODOS os lugares (semana atual + todos os resumos).
+ * Útil para voltar a um estado "limpo" sem perder o resto dos dados.
+ */
+function debugZerarCarryover() {
+    if (!state.orcamento) return;
+    if (!confirm('Zerar saldoAnterior da semana atual e saldo de TODOS os resumos?')) return;
+
+    if (state.orcamento.semanaAtual) {
+        state.orcamento.semanaAtual.saldoAnterior = 0;
+    }
+    (state.orcamento.resumos || []).forEach(r => { r.saldo = 0; });
+
+    salvarEstado();
+    renderizarOrcamentoInicio();
+    atualizarDebugStatus();
+    console.log('[DEBUG carryover] zerado (semana atual + resumos).');
+}
 function debugPassarDias(dias) {
     if (!state.orcamento || !state.orcamento.semanaAtual) {
         alert("Inicie a jornada primeiro.");
