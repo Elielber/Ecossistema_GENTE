@@ -1985,41 +1985,147 @@ function renderizarCardsCustodiaHome(orc, semana) {
     return html;
 }
 
+// ============================================================
+// PERSONAGENS DO SALDO — Torres (base firme), Bela (acolhe), Zé (caminho)
+// ============================================================
+function _falaSaldoPersonagem({ saldo, saldoAnterior, rendaReal, totalGasto, percentualDisponivel, fmt }) {
+    const temCarryPos = saldoAnterior > 0;
+    const temCarryNeg = saldoAnterior < 0;
+    const semRecebimento = rendaReal <= 0;
+
+    // === SEM RECEBIMENTO ===
+    if (semRecebimento && temCarryPos && saldo >= 0) {
+        // Zé: caminho andando
+        return {
+            icone: '🔭',
+            corBorda: '#10b981',
+            rotuloStatus: 'Disponível',
+            fala: `Ainda sem recebimento esta semana, mas os ${fmt(saldoAnterior)} da semana passada estão aqui. Depois dos gastos, sobra ${fmt(saldo)}. O caminho tá andando.`
+        };
+    }
+    if (semRecebimento && temCarryPos && saldo < 0) {
+        // Bela: carryover comido pelos gastos
+        return {
+            icone: '🌿',
+            corBorda: '#f59e0b',
+            rotuloStatus: 'Faltou',
+            fala: `Sem recebimento, os gastos comeram o que tinha da semana passada e um pouco mais. Faltam ${fmt(Math.abs(saldo))}. Acontece — vamos olhar juntos.`
+        };
+    }
+    if (semRecebimento && temCarryNeg) {
+        // Bela: carryover negativo e sem recebimento
+        return {
+            icone: '🌿',
+            corBorda: '#ef4444',
+            rotuloStatus: 'Faltou',
+            fala: `Sem recebimento esta semana, e a anterior já tinha ficado negativa. Faltam ${fmt(Math.abs(saldo))} no total. Não é o fim — é o retrato de agora.`
+        };
+    }
+    if (semRecebimento) {
+        // Torres: sem carryover, sem recebimento
+        return {
+            icone: '🛡️',
+            corBorda: totalGasto > 0 ? '#ef4444' : '#94a3b8',
+            rotuloStatus: totalGasto > 0 ? 'Saiu' : 'Aguardando',
+            fala: totalGasto > 0
+                ? `Ainda sem recebimento. Você anotou ${fmt(totalGasto)} em gastos. Quando o dinheiro entrar, eu atualizo.`
+                : `Tudo em ordem. Aguardando o primeiro recebimento da semana.`
+        };
+    }
+
+    // === COM RECEBIMENTO ===
+    if (temCarryNeg && saldo >= 0) {
+        // Torres: virada
+        return {
+            icone: '🛡️',
+            corBorda: '#10b981',
+            rotuloStatus: 'Disponível',
+            fala: `Sobrou ${fmt(saldo)}. Você começou devendo ${fmt(Math.abs(saldoAnterior))} e virou a semana. A base aguentou.`
+        };
+    }
+    if (temCarryNeg && saldo < 0) {
+        // Bela: acumulado no vermelho
+        return {
+            icone: '🌿',
+            corBorda: '#ef4444',
+            rotuloStatus: 'Faltou',
+            fala: `Faltou ${fmt(Math.abs(saldo))} no total. A semana passada já tinha ficado negativa, e esta não conseguiu virar. Não é o fim — é o retrato de agora.`
+        };
+    }
+    if (temCarryPos && saldo >= 0 && percentualDisponivel >= 30) {
+        // Zé: carryover positivo ajudou
+        return {
+            icone: '🔭',
+            corBorda: '#10b981',
+            rotuloStatus: 'Disponível',
+            fala: `Sobrou ${fmt(saldo)} — ${fmt(saldoAnterior)} veio da semana passada. O caminho tá andando. Um passo de cada vez.`
+        };
+    }
+    if (saldo < 0) {
+        // Bela: negativo sem carryover
+        return {
+            icone: '🌿',
+            corBorda: '#ef4444',
+            rotuloStatus: 'Faltou',
+            fala: `Faltou ${fmt(Math.abs(saldo))}. Acontece. Semana que vem a gente ajusta.`
+        };
+    }
+    if (percentualDisponivel < 30) {
+        // Bela: apertado mas positivo
+        return {
+            icone: '🌿',
+            corBorda: '#f59e0b',
+            rotuloStatus: 'Disponível',
+            fala: `Sobrou ${fmt(saldo)}. Tá no fim, mas sobrou. Sem culpa — foi por pouco.`
+        };
+    }
+    // Torres: folgado
+    return {
+        icone: '🛡️',
+        corBorda: '#10b981',
+        rotuloStatus: 'Disponível',
+        fala: `Sobrou ${fmt(saldo)}. A base tá firme.`
+    };
+}
+
 function renderizarCardSaldo(semana, orc) {
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     const rendaReal     = semana.rendaReal || 0;
     const rendaEstimada = semana.rendaEstimada || (orc.base?.rendaBase || 0) / DIVISOR_SEMANAL;
+    const saldoAnterior = semana.saldoAnterior || 0;
 
     const totalGasto = (semana.base?.gasto || 0)
                      + (semana.vida?.gasto || 0)
                      + (semana.futuro?.gasto || 0);
 
-    const saldo = rendaReal - totalGasto;
-
-    
     const nivel = orc.nivel || 1;
 
-    // N1: não há registro de recebimento — usa a renda prevista da configuração
+    // ============================================================
+    // RAMO N1 — base prevista + carryover
+    // ============================================================
     if (rendaReal <= 0 && nivel < 2) {
         const base = rendaEstimada > 0 ? rendaEstimada : 0;
-        const saldoN1 = base - totalGasto;
+        const saldoN1 = saldoAnterior + base - totalGasto;
+
         const pctUsado = base > 0 ? Math.min((totalGasto / base) * 100, 100) : (totalGasto > 0 ? 100 : 0);
-        const pctDisp = base > 0 ? Math.max(0, Math.min((saldoN1 / base) * 100, 100)) : 0;
+        const basePercentual = saldoAnterior + base;
+        const pctDisp = basePercentual > 0 ? Math.max(0, Math.min((saldoN1 / basePercentual) * 100, 100)) : 0;
+
         let corBarra = 'barra-verde';
         let corBorda = '#10b981';
         let fala = '';
         if (base <= 0) {
             corBarra = 'barra-amarela'; corBorda = '#94a3b8';
-            fala = 'Defina sua renda na configuração para ver o Pote da semana. Enquanto isso, use o <strong>+</strong> para anotar os gastos.';
+            fala = 'Ainda não tenho sua renda. Sem ela, não consigo te mostrar o Pote da semana. Toque no <strong>+</strong> para anotar enquanto isso.';
         } else if (saldoN1 < 0) {
             corBarra = 'barra-vermelha'; corBorda = '#ef4444';
-            fala = `Você já anotou ${fmt(Math.abs(saldoN1))} acima do previsto para a semana. Acontece — no fim a gente olha junto.`;
+            fala = `Você anotou ${fmt(Math.abs(saldoN1))} acima do previsto. A base sentiu, mas ainda tá de pé. Vamos olhar juntos no fim da semana.`;
         } else if (pctDisp < 30) {
             corBarra = 'barra-amarela'; corBorda = '#f59e0b';
-            fala = `Pelo previsto, ainda cabe ${fmt(saldoN1)}. Use o <strong>+</strong> para anotar Base, Vida ou Futuro.`;
+            fala = `Pelo previsto, ainda cabe ${fmt(saldoN1)}. Tá no fim, mas cabe. A base aguenta — só não força agora.`;
         } else {
-            fala = `Pelo previsto, ainda cabe ${fmt(saldoN1)}. Toque no <strong>+</strong> para registrar um gasto.`;
+            fala = `Pelo previsto, ainda cabe ${fmt(saldoN1)}. A base tá tranquila. Toque no <strong>+</strong> para registrar o que sair.`;
         }
 
         return `
@@ -2028,6 +2134,12 @@ function renderizarCardSaldo(semana, orc) {
                     <strong style="color: var(--primary); font-size: 0.95rem;">💰 Saldo da semana</strong>
                     <span style="font-size: 0.75rem; color: var(--secondary);">${pctUsado.toFixed(0)}% do previsto</span>
                 </div>
+                ${saldoAnterior !== 0 ? `
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
+                        <span style="color: var(--secondary);">Saldo anterior</span>
+                        <strong style="color: ${saldoAnterior >= 0 ? '#10b981' : '#ef4444'};">${saldoAnterior >= 0 ? '+' : '−'} ${fmt(Math.abs(saldoAnterior))}</strong>
+                    </div>
+                ` : ''}
                 <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
                     <span style="color: var(--secondary);">Previsto</span>
                     <strong style="color: #0369a1;">${fmt(base)}</strong>
@@ -2051,49 +2163,113 @@ function renderizarCardSaldo(semana, orc) {
         `;
     }
 
-    // N2+: ainda sem recebimento registrado nesta semana
+    // ============================================================
+    // RAMO N2+ SEM RECEBIMENTO
+    // - Sem carryover: card "aguardando" (comportamento antigo)
+    // - Com carryover: card normal, com aviso de que não houve recebimento
+    // ============================================================
     if (rendaReal <= 0) {
+        if (saldoAnterior === 0) {
+            return `
+                <div class="card" style="border-left: 4px solid #94a3b8; margin-bottom: 20px; background: #f8fafc; cursor: pointer;" onclick="abrirListaRegistros('renda')" role="button">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <strong style="color: var(--primary); font-size: 0.95rem;">💰 Saldo da semana</strong>
+                        <span style="font-size: 0.75rem; color: var(--secondary);">aguardando</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--secondary); line-height: 1.5;">
+                        Você ainda não registrou nenhum <strong>recebimento</strong> esta semana.
+                        Toque no <strong>+</strong> e escolha <strong>Recebimento</strong> para dizer o que entrou.
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--secondary); margin-top: 10px;">
+                        Previsto para a semana: <strong>${fmt(rendaEstimada)}</strong>
+                    </div>
+                </div>
+            `;
+        }
+
+        const saldo = saldoAnterior - totalGasto;
+        const percentualUsado = saldoAnterior > 0 ? Math.min((totalGasto / saldoAnterior) * 100, 100) : 100;
+        const percentualDisponivel = saldoAnterior > 0
+            ? Math.max(0, Math.min(((saldoAnterior - totalGasto) / saldoAnterior) * 100, 100))
+            : 0;
+
+        const perfil = _falaSaldoPersonagem({
+            saldo,
+            saldoAnterior,
+            rendaReal: 0,
+            totalGasto,
+            percentualDisponivel,
+            fmt
+        });
+
+        let corBarra = 'barra-verde';
+        if (saldoAnterior <= 0 || percentualUsado >= 100) corBarra = 'barra-vermelha';
+        else if (percentualUsado >= 80) corBarra = 'barra-amarela';
+
         return `
-            <div class="card" style="border-left: 4px solid #94a3b8; margin-bottom: 20px; background: #f8fafc; cursor: pointer;" onclick="abrirListaRegistros('renda')" role="button">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div class="card" style="border-left: 4px solid ${perfil.corBorda}; margin-bottom: 20px; padding: 18px 20px; cursor: pointer;" onclick="abrirListaRegistros('renda')" role="button">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                     <strong style="color: var(--primary); font-size: 0.95rem;">💰 Saldo da semana</strong>
-                    <span style="font-size: 0.75rem; color: var(--secondary);">aguardando</span>
+                    <span style="font-size: 0.75rem; color: var(--secondary);">${percentualUsado.toFixed(0)}% do saldo anterior</span>
                 </div>
-                <div style="font-size: 0.85rem; color: var(--secondary); line-height: 1.5;">
-                    Você ainda não registrou nenhum <strong>recebimento</strong> esta semana.
-                    Toque no <strong>+</strong> e escolha <strong>Recebimento</strong> para dizer o que entrou.
+
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
+                    <span style="color: var(--secondary);">Saldo anterior</span>
+                    <strong style="color: ${saldoAnterior >= 0 ? '#10b981' : '#ef4444'};">${saldoAnterior >= 0 ? '+' : '−'} ${fmt(Math.abs(saldoAnterior))}</strong>
                 </div>
-                <div style="font-size: 0.75rem; color: var(--secondary); margin-top: 10px;">
-                    Previsto para a semana: <strong>${fmt(rendaEstimada)}</strong>
+
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 10px;">
+                    <span style="color: var(--secondary);">Saiu</span>
+                    <strong style="color: #ef4444;">− ${fmt(totalGasto)}</strong>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; font-size: 1rem; padding-top: 10px; margin-top: 10px; border-top: 1px solid #e2e8f0;">
+                    <span style="font-weight: bold; color: var(--primary);">${perfil.rotuloStatus}</span>
+                    <strong style="color: ${saldo >= 0 ? '#10b981' : '#ef4444'};">${fmt(Math.abs(saldo))}</strong>
+                </div>
+
+                <div class="barra-fundo" style="margin-top: 10px;">
+                    <div class="barra-preenchida ${corBarra}" style="width: ${percentualDisponivel}%;"></div>
+                </div>
+
+                <div style="font-size: 0.75rem; color: var(--secondary); margin-top: 6px;">
+                    Nenhum <strong>recebimento</strong> registrado esta semana. Toque no <strong>+</strong> para dizer o que entrou.
+                </div>
+
+                <div class="fala-avatar" style="border-left-color: ${perfil.corBorda}; margin-top: 14px; margin-bottom: 0;">
+                    <span class="icone">${perfil.icone}</span>
+                    <span class="texto">${perfil.fala}</span>
                 </div>
             </div>
         `;
     }
 
-    // === Cálculos ===
-    const percentualDisponivel = Math.max(0, Math.min((saldo / rendaReal) * 100, 100));
-    const percentualUsado      = Math.min((totalGasto / rendaReal) * 100, 100);
-    const acimaDoEstimado      = rendaReal > rendaEstimada;
+    // ============================================================
+    // RAMO N2+ COM RECEBIMENTO — carryover como entrada algébrica
+    // ============================================================
+    const saldo = saldoAnterior + rendaReal - totalGasto;
+    const basePercentual = saldoAnterior + rendaReal;
 
-    let corBarra, corBorda, iconeSaldo, falaSaldo, rotuloStatus;
+    const percentualDisponivel = basePercentual > 0
+        ? Math.max(0, Math.min((saldo / basePercentual) * 100, 100))
+        : 0;
+    const percentualUsado = basePercentual > 0
+        ? Math.min((totalGasto / basePercentual) * 100, 100)
+        : 0;
+    const acimaDoEstimado = rendaReal > rendaEstimada;
 
-    if (saldo < 0) {
-        corBarra = 'barra-vermelha'; corBorda = '#ef4444'; iconeSaldo = '🌿';
-        rotuloStatus = 'Faltou';
-        falaSaldo = `Você gastou ${fmt(Math.abs(saldo))} mais do que recebeu. Acontece. Semana que vem a gente ajusta.`;
-    } else if (percentualDisponivel < 10) {
-        corBarra = 'barra-vermelha'; corBorda = '#ef4444'; iconeSaldo = '🌿';
-        rotuloStatus = 'Disponível';
-        falaSaldo = `Sobrou pouco: ${fmt(saldo)}. Tá no fim do Pote. Foi por pouco.`;
-    } else if (percentualDisponivel < 30) {
-        corBarra = 'barra-amarela'; corBorda = '#f59e0b'; iconeSaldo = '🌿';
-        rotuloStatus = 'Disponível';
-        falaSaldo = `Sobrou ${fmt(saldo)}. Ainda dá, mas o Pote tá na reserva.`;
-    } else {
-        corBarra = 'barra-verde'; corBorda = '#10b981'; iconeSaldo = '🛡️';
-        rotuloStatus = 'Disponível';
-        falaSaldo = `Sobrou ${fmt(saldo)}. O Pote tá tranquilo. Você usou ${percentualUsado.toFixed(0)}% do que recebeu.`;
-    }
+    const perfil = _falaSaldoPersonagem({
+        saldo,
+        saldoAnterior,
+        rendaReal,
+        totalGasto,
+        percentualDisponivel,
+        fmt
+    });
+
+    let corBarra = 'barra-verde';
+    if (saldo < 0 || (saldoAnterior < 0 && percentualUsado >= 80)) corBarra = 'barra-vermelha';
+    else if (percentualDisponivel < 30) corBarra = 'barra-amarela';
 
     const linhaEstimado = acimaDoEstimado
         ? `<div style="font-size: 0.7rem; color: #0369a1; margin-top: 4px;">
@@ -2104,11 +2280,18 @@ function renderizarCardSaldo(semana, orc) {
            </div>`;
 
     return `
-        <div class="card" style="border-left: 4px solid ${corBorda}; margin-bottom: 20px; padding: 18px 20px; cursor: pointer;" onclick="abrirListaRegistros('renda')" role="button">
+        <div class="card" style="border-left: 4px solid ${perfil.corBorda}; margin-bottom: 20px; padding: 18px 20px; cursor: pointer;" onclick="abrirListaRegistros('renda')" role="button">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <strong style="color: var(--primary); font-size: 0.95rem;">💰 Saldo da semana</strong>
                 <span style="font-size: 0.75rem; color: var(--secondary);">${percentualUsado.toFixed(0)}% usado</span>
             </div>
+
+            ${saldoAnterior !== 0 ? `
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
+                    <span style="color: var(--secondary);">Saldo anterior</span>
+                    <strong style="color: ${saldoAnterior >= 0 ? '#10b981' : '#ef4444'};">${saldoAnterior >= 0 ? '+' : '−'} ${fmt(Math.abs(saldoAnterior))}</strong>
+                </div>
+            ` : ''}
 
             <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
                 <span style="color: var(--secondary);">Recebido</span>
@@ -2117,11 +2300,11 @@ function renderizarCardSaldo(semana, orc) {
 
             <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 10px;">
                 <span style="color: var(--secondary);">Saiu</span>
-                <strong style="color: #ef4444;">- ${fmt(totalGasto)}</strong>
+                <strong style="color: #ef4444;">− ${fmt(totalGasto)}</strong>
             </div>
 
             <div style="display: flex; justify-content: space-between; font-size: 1rem; padding-top: 10px; margin-top: 10px; border-top: 1px solid #e2e8f0;">
-                <span style="font-weight: bold; color: var(--primary);">${rotuloStatus}</span>
+                <span style="font-weight: bold; color: var(--primary);">${perfil.rotuloStatus}</span>
                 <strong style="color: ${saldo >= 0 ? '#10b981' : '#ef4444'};">${fmt(Math.abs(saldo))}</strong>
             </div>
 
@@ -2137,9 +2320,9 @@ function renderizarCardSaldo(semana, orc) {
             ${linhaEstimado}
             ${renderizarBlocoProvisao(orc)}
 
-            <div class="fala-avatar" style="border-left-color: ${corBorda}; margin-top: 14px; margin-bottom: 0;">
-                <span class="icone">${iconeSaldo}</span>
-                <span class="texto">${falaSaldo}</span>
+            <div class="fala-avatar" style="border-left-color: ${perfil.corBorda}; margin-top: 14px; margin-bottom: 0;">
+                <span class="icone">${perfil.icone}</span>
+                <span class="texto">${perfil.fala}</span>
             </div>
         </div>
     `;
@@ -2170,11 +2353,19 @@ function iniciarNovaSemana() {
     const limiteFuturo = limiteVencimentosFuturo > 0 ? limiteVencimentosFuturo : limiteEnvelopeFuturo;
     const rendaSemanal = rendaMensal / DIVISOR_SEMANAL;
 
+    // Carrega o saldo da semana anterior (carryover)
+    let saldoAnterior = 0;
+    if (state.orcamento.resumos && state.orcamento.resumos.length > 0) {
+        const ultimoResumo = state.orcamento.resumos[0];
+        saldoAnterior = (typeof ultimoResumo.saldo === 'number') ? ultimoResumo.saldo : 0;
+    }
+
 state.orcamento.semanaAtual = {
     inicio: inicio.toISOString().split('T')[0],
     fim: fim.toISOString().split('T')[0],
     rendaEstimada: rendaSemanal,   // o previsto
-    rendaReal: 0,                  // opção B: começa zerado
+    rendaReal: 0,                  
+    saldoAnterior: saldoAnterior,
     base:   { limite: limiteBase,   gasto: 0, estouro: 0 },
     vida:   { limite: limiteVida,   gasto: 0, estouro: 0 },
     futuro: { limite: limiteFuturo, gasto: 0, estouro: 0 },
@@ -4163,7 +4354,7 @@ function fecharSemana() {
     // Saldo da semana = renda − (base + vida + futuro)
     const totalGasto = semana.base.gasto + semana.vida.gasto + semana.futuro.gasto;
 semana.totalGasto = totalGasto;
-semana.saldo = (semana.rendaReal || 0) - totalGasto;
+semana.saldo = (semana.saldoAnterior || 0) + (semana.rendaReal || 0) - totalGasto;
 
 // Regra 8: se o real ultrapassou o estimado, o estimado é atualizado
 if ((semana.rendaReal || 0) > (semana.rendaEstimada || 0)) {
@@ -4178,6 +4369,7 @@ if ((semana.rendaReal || 0) > (semana.rendaEstimada || 0)) {
         inicio: semana.inicio,
         fim: semana.fim,
 		rendaEstimada: semana.rendaEstimada,
+		saldoAnterior: semana.saldoAnterior || 0,
         rendaReal: semana.rendaReal,
         totalGasto: semana.totalGasto,
         saldo: semana.saldo,
