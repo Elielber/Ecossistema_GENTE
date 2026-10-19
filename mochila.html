@@ -1127,7 +1127,12 @@ state.orcamento.categorias.forEach(c => {
     //    (Base já exige vencimento; Vida historicamente não pedia)
     state.orcamento.categorias.forEach(c => {
         if (c.vencimento === undefined) c.vencimento = null;
-
+// Migração N1→N2: 'fixo'/'variavel' → 'conta'/'consumo'
+if (c.tipo === 'fixo') c.tipo = 'conta';
+if (c.tipo === 'variavel') c.tipo = c.vencimento ? 'conta' : 'consumo';
+if (c.tipo !== 'conta' && c.tipo !== 'consumo') {
+    c.tipo = c.vencimento ? 'conta' : 'consumo';
+}
         // 3. custodiaPadraoId por categoria (N3)
         if (c.custodiaPadraoId === undefined) c.custodiaPadraoId = null;
 
@@ -1786,7 +1791,6 @@ function concluirEtapaBase() {
         state.orcamento.base.fortalezaCategorias = categorias;
         state.orcamento.base.fortalezaTotal = valor;
 
-        // Reconstrói limite semanal se a caixinha existir
         if (state.orcamento.semanaAtual) {
             if (!state.orcamento.semanaAtual.base) {
                 state.orcamento.semanaAtual.base = { limite: 0, gasto: 0, carrego: 0, sobraAnterior: 0 };
@@ -1801,6 +1805,34 @@ function concluirEtapaBase() {
             state.orcamento.etapasConcluidas.push('base');
         }
         salvarEstado();
+
+        // Fecho simétrico: só quando Vida já foi feita e a conta fecha negativa
+        const etapas = state.orcamento.etapasConcluidas || [];
+        const vidaFeita = etapas.includes('vida');
+        const rendaBase = state.orcamento.base.rendaBase || 0;
+        const vidaTotal = state.orcamento.vida?.total || 0;
+        const contaReal = rendaBase - valor - vidaTotal;
+
+        if (vidaFeita && rendaBase > 0 && contaReal < 0) {
+            const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            dialogoPushPersonagem('torres',
+                `Renda ${fmt(rendaBase)} − Base ${fmt(valor)} − Vida ${fmt(vidaTotal)} = ${fmt(contaReal)}. A Vida que você anotou antes puxou a conta para o vermelho.`);
+            dialogoPushPersonagem('torres',
+                'Base firme é sobre o que não pode faltar — não sobre caber no bolo. Está anotado. Você pode ajustar depois.');
+
+            const container = document.getElementById('orcamento-conteudo');
+            if (container) {
+                container.innerHTML = renderDialogoThreadHtml() +
+                    renderDialogoComposerHtml(
+                        `<button class="btn-primary" onclick="resetDialogoTurno();renderizarOrcamentoInicio()">Entendi, continuar</button>`,
+                        'Base salva'
+                    );
+                scrollDialogoFim();
+            }
+            return;
+        }
+
+        // Caminho normal
         resetDialogoTurno();
         renderizarOrcamentoInicio();
     } catch (err) {
@@ -1816,15 +1848,35 @@ function iniciarEtapaVida() {
     const container = document.getElementById('orcamento-conteudo');
     const flexivelAtual = state.orcamento.vida?.total || 700;
 
+    const etapas = state.orcamento.etapasConcluidas || [];
+    const baseFeita = etapas.includes('base');
+    const rendaBase = state.orcamento.base?.rendaBase || 0;
+    const fortalezaTotal = state.orcamento.base?.fortalezaTotal || 0;
+
     if (dialogoTurnoAtual.length === 0) resetDialogoTurno();
     dialogoPushPersonagem('bela', 'Sou a Bela. Cuido do que te faz bem, sem culpa. Quanto você gasta por mês com o que te dá prazer?');
     dialogoPushPersonagem('bela', 'Vamos ver se a gente reconhece junto? Marque o que combina.');
+
+    // Nota contextual — só quando há conta para fazer
+    let notaComposer = '';
+    if (baseFeita && rendaBase > 0) {
+        const limiteVida = rendaBase - fortalezaTotal;
+        const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        if (limiteVida > 0) {
+            notaComposer = `Sua Base já está anotada (${fmt(fortalezaTotal)} de ${fmt(rendaBase)}). O que passar de ${fmt(limiteVida)} na Vida vira déficit no Futuro — mas o app aceita, sem bloqueio.`;
+        } else {
+            notaComposer = `Base e renda já se encontram no zero. Qualquer valor aqui vira déficit — decida com consciência.`;
+        }
+    } else if (!baseFeita) {
+        notaComposer = 'A Vida entra na conta final depois da Base. Escolha o que faz sentido pro seu mês — a gente fecha os números quando você voltar pra Base.';
+    }
 
     const composer = `
         <div class="input-com-prefixo">
             <span class="prefixo">R$</span>
             <input type="number" id="input-vida-valor" class="input-padrao" placeholder="0.00" value="${flexivelAtual}">
         </div>
+        ${notaComposer ? `<p style="font-size:0.72rem;color:var(--secondary);margin:6px 0 10px;line-height:1.35;">${notaComposer}</p>` : ''}
         <div class="chip-container" id="chips-vida">
             <div class="chip" onclick="toggleChip(this)">📺 Netflix e streaming</div>
             <div class="chip" onclick="toggleChip(this)">🍔 iFood e lanches</div>
@@ -1870,6 +1922,34 @@ function concluirEtapaVida() {
             state.orcamento.etapasConcluidas.push('vida');
         }
         salvarEstado();
+
+        // Fecho só quando há conta para fechar E a conta está negativa
+        const etapas = state.orcamento.etapasConcluidas || [];
+        const baseFeita = etapas.includes('base');
+        const rendaBase = state.orcamento.base?.rendaBase || 0;
+        const fortalezaTotal = state.orcamento.base?.fortalezaTotal || 0;
+        const contaReal = rendaBase - fortalezaTotal - valor;
+
+        if (baseFeita && rendaBase > 0 && contaReal < 0) {
+            const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            dialogoPushPersonagem('bela',
+                `Renda ${fmt(rendaBase)} − Base ${fmt(fortalezaTotal)} − Vida ${fmt(valor)} = ${fmt(contaReal)}. A conta ficou negativa em ${fmt(Math.abs(contaReal))}.`);
+            dialogoPushPersonagem('bela',
+                'Não é erro seu. É o retrato de agora. Você pode ajustar depois — mas anotar assim já é um passo.');
+
+            const container = document.getElementById('orcamento-conteudo');
+            if (container) {
+                container.innerHTML = renderDialogoThreadHtml() +
+                    renderDialogoComposerHtml(
+                        `<button class="btn-primary" onclick="resetDialogoTurno();renderizarOrcamentoInicio()">Entendi, continuar</button>`,
+                        'Vida salva'
+                    );
+                scrollDialogoFim();
+            }
+            return;
+        }
+
+        // Caminho normal — sem estouro ou Base não feita ainda
         resetDialogoTurno();
         renderizarOrcamentoInicio();
     } catch (err) {
@@ -1997,12 +2077,76 @@ function concluirEtapaFuturo() {
         state.orcamento.etapasConcluidas = [];
     }
     salvarEstado();
+    // Em concluirEtapaFuturo, antes do resetDialogoTurno() do caminho normal:
+const rendaBase = state.orcamento.base?.rendaBase || 0;
+const baseTotal = state.orcamento.base?.fortalezaTotal || 0;
+const vidaTotal = state.orcamento.vida?.total || 0;
+const futuroTotal = state.orcamento.futuro?.total || 0;
+const planoTotal = baseTotal + vidaTotal + futuroTotal;
+
+if (planoTotal > rendaBase && rendaBase > 0) {
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    dialogoPushPersonagem('ze', 
+        `Seu plano total (Base + Vida + Futuro) é ${fmt(planoTotal)}, mas sua renda é ${fmt(rendaBase)}. Faltam ${fmt(planoTotal - rendaBase)} pra tudo isso caber.`);
+    dialogoPushPersonagem('ze', 
+        'O app vai guardar do jeito que você quis, mas o dinheiro não aparece do nada. Fique de olho nas caixinhas.');
+
+    const container = document.getElementById('orcamento-conteudo');
+    container.innerHTML = renderDialogoThreadHtml() +
+        renderDialogoComposerHtml(
+            `<button class="btn-primary" onclick="resetDialogoTurno();renderizarOrcamentoInicio()">Entendi, vamos ver o painel</button>`,
+            'Futuro salvo'
+        );
+    scrollDialogoFim();
+    return;
+}
     resetDialogoTurno();
     renderizarOrcamentoInicio();
     } catch (err) {
         console.error('[concluirEtapaFuturo]', err);
         alert('Não consegui salvar o Futuro. Tente de novo.');
     }
+}
+
+
+/**
+ * Limite de uma categoria NA SEMANA.
+ * Conta: valor inteiro se o vencimento cai na semana, 0 se não.
+ * Consumo: valor mensal diluído por 4,33.
+ */
+function calcularLimiteCategoriaSemana(cat, semana) {
+    if (!cat || !semana) return 0;
+    const valor = Number(cat.valor) || 0;
+    if (valor <= 0) return 0;
+
+    if (cat.tipo === 'conta' && cat.vencimento) {
+        const ini = new Date(semana.inicio + 'T00:00:00');
+        const fim = new Date(semana.fim + 'T23:59:59');
+        const ano = ini.getFullYear();
+        const mes = ini.getMonth();
+        let venc = new Date(ano, mes, cat.vencimento);
+        if (venc < ini) venc = new Date(ano, mes + 1, cat.vencimento);
+        return (venc >= ini && venc <= fim) ? valor : 0;
+    }
+    return valor / DIVISOR_SEMANAL;
+}
+
+/**
+ * Limite TOTAL de uma caixa na semana (soma das categorias).
+ * Fallback para N1 (sem categorias detalhadas): total / 4,33.
+ */
+function calcularLimiteCaixaSemana(caixa, semana) {
+    if (!semana) return 0;
+    const categorias = (state.orcamento.categorias || []).filter(c => c.caixa === caixa);
+
+    if (categorias.length === 0) {
+        if (caixa === 'base') return (state.orcamento.base?.fortalezaTotal || 0) / DIVISOR_SEMANAL;
+        if (caixa === 'vida') return (state.orcamento.vida?.total || 0) / DIVISOR_SEMANAL;
+        if (caixa === 'futuro') return (state.orcamento.futuro?.total || 0) / DIVISOR_SEMANAL;
+        return 0;
+    }
+
+    return categorias.reduce((soma, c) => soma + calcularLimiteCategoriaSemana(c, semana), 0);
 }
 
 /**
@@ -2013,19 +2157,9 @@ function sincronizarLimitesSemanaAtual() {
     const semana = state.orcamento && state.orcamento.semanaAtual;
     if (!semana || semana.fechada) return;
 
-    const baseMensal = (state.orcamento.base && state.orcamento.base.fortalezaTotal) || 0;
-    const vidaMensal = (state.orcamento.vida && state.orcamento.vida.total) || 0;
-    const futuroMensal = (state.orcamento.futuro && state.orcamento.futuro.total) || 0;
-
-    semana.base.limite = baseMensal / DIVISOR_SEMANAL;
-    semana.vida.limite = vidaMensal / DIVISOR_SEMANAL;
-
-    const limiteEnvelope = futuroMensal / DIVISOR_SEMANAL;
-    const limiteVenc = calcularLimiteFuturoSemana({
-        inicio: semana.inicio,
-        fim: semana.fim
-    });
-    semana.futuro.limite = limiteVenc > 0 ? limiteVenc : limiteEnvelope;
+    semana.base.limite = calcularLimiteCaixaSemana('base', semana);
+    semana.vida.limite = calcularLimiteCaixaSemana('vida', semana);
+    semana.futuro.limite = calcularLimiteCaixaSemana('futuro', semana);
 
     const rendaMensal = state.orcamento.base?.rendaBase || 0;
     if (typeof semana.rendaEstimada !== 'number' || semana.rendaEstimada <= 0) {
@@ -2087,24 +2221,43 @@ function calcularDisponivelAgora(orc) {
         };
     }
 
-    // N1 — plano restante
+        // N1 — plano restante, mas limitado pela renda real
     const lim = (semana.base?.limite || 0) + (semana.vida?.limite || 0) + (semana.futuro?.limite || 0);
     const gas = (semana.base?.gasto || 0) + (semana.vida?.gasto || 0) + (semana.futuro?.gasto || 0);
-    const rest = lim - gas;
+    const rendaEstimada = semana.rendaEstimada || 0;
+    
+    // O teto real de gastos é o menor entre o que foi planejado e o que de fato entra.
+    const tetoReal = Math.min(lim, rendaEstimada);
+    const rest = tetoReal - gas;
+
+    let sub = 'No Nível 1 o previsto guia. Quando você detalhar dias e contas, a gente troca pelo real.';
+    let origem = 'plano';
+    
+    // Se o plano estourou a renda, avisa e muda a origem para o app saber que precisa alertar
+    if (lim > rendaEstimada && rendaEstimada > 0) {
+        const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        sub = `Atenção: seu plano aloca ${fmt(lim)} nas caixinhas, mas sua renda na semana é ${fmt(rendaEstimada)}. O app aceita, mas o disponível real é baseado na renda.`;
+        origem = 'plano_estourado';
+    }
+
     return {
         valor: rest,
         rotulo: 'Ainda cabe no plano da semana',
-        sub: 'No Nível 1 o previsto guia. Quando você detalhar dias e contas, a gente troca pelo real.',
-        origem: 'plano'
+        sub: sub,
+        origem: origem
     };
 }
 
 function renderizarCardDisponivelAgora(orc) {
     const d = calcularDisponivelAgora(orc);
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const cor = d.valor >= 0 ? '#065f46' : '#991b1b';
-    const bg = d.valor >= 0 ? '#ecfdf5' : '#fef2f2';
-    const border = d.valor >= 0 ? '#10b981' : '#ef4444';
+    
+    // Vermelho se o saldo for negativo OU se o plano estourou a renda
+    const estourou = d.origem === 'plano_estourado';
+    const cor = (d.valor >= 0 && !estourou) ? '#065f46' : '#991b1b';
+    const bg = (d.valor >= 0 && !estourou) ? '#ecfdf5' : '#fef2f2';
+    const border = (d.valor >= 0 && !estourou) ? '#10b981' : '#ef4444';
+
     return `
         <div class="card" style="padding:16px 18px;margin-bottom:14px;border-left:5px solid ${border};background:${bg};">
             <div style="font-size:0.7rem;font-weight:700;color:${cor};text-transform:uppercase;letter-spacing:0.04em;">${d.rotulo}</div>
@@ -4852,9 +5005,15 @@ function renderizarDetalheGastos() {
             </div>
         `;
     } else {
-        categorias.forEach(cat => {
-            let metaExtra = cat.tipo;
-            if (cat.vencimento) metaExtra += ' · vence dia ' + cat.vencimento;
+                categorias.forEach(cat => {
+            let metaExtra;
+            if (cat.tipo === 'conta') {
+                metaExtra = 'conta';
+                if (cat.vencimento) metaExtra += ' · vence dia ' + cat.vencimento;
+            } else {
+                metaExtra = 'consumo';
+            }
+            
             if (cat.provisionar && provisaoSemanalCategoria(cat) > 0) {
                 metaExtra += ' · provisionar ' + provisaoSemanalCategoria(cat).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) + '/sem';
             }
@@ -4866,7 +5025,9 @@ function renderizarDetalheGastos() {
                 }
             }
             const gastoSem = gastoCategoriaNaSemana(cat.id, cat.nome);
-            const metaSem = (cat.valor || 0) / DIVISOR_SEMANAL;
+            
+            // Agora usa a nova função que calcula se é conta ou consumo
+            const metaSem = calcularLimiteCategoriaSemana(cat, state.orcamento.semanaAtual); 
             const barraHtml = renderizarBarraCategoria(gastoSem, metaSem, cat.id);
             htmlCategorias += `
                 <div class="categoria-item" style="cursor: pointer; display: block;" onclick="abrirFormularioCategoria('${cat.id}')">
@@ -5156,13 +5317,13 @@ function abrirFormularioCategoria(idExistente) {
             <input type="number" id="nova-cat-valor" class="input-padrao" placeholder="0.00">
         </div>
         <div class="fala-avatar">
-            <span class="icone">${avatarForm}</span>
-            <span class="texto">Esse valor é sempre igual ou muda?</span>
-        </div>
-        <div class="chip-container" id="chips-tipo-cat">
-            <div class="chip" data-tipo="fixo" onclick="selecionarTipoCategoria(this, 'fixo')">Fixo</div>
-            <div class="chip" data-tipo="variavel" onclick="selecionarTipoCategoria(this, 'variavel')">Varia</div>
-        </div>
+    <span class="icone">${avatarForm}</span>
+    <span class="texto">Como esse gasto acontece?</span>
+</div>
+<div class="chip-container" id="chips-tipo-cat">
+    <div class="chip" data-tipo="conta" onclick="selecionarTipoCategoria(this, 'conta')">É uma conta (vence uma vez)</div>
+    <div class="chip" data-tipo="consumo" onclick="selecionarTipoCategoria(this, 'consumo')">É consumo (distribuído no mês)</div>
+</div>
         <div id="bloco-vencimento" style="display: none;">
             <div class="fala-avatar">
                 <span class="icone">${avatarForm}</span>
@@ -5262,7 +5423,7 @@ function selecionarTipoCategoria(el, tipo) {
     tipoCategoriaSelecionado = tipo;
     const blocoVencimento = document.getElementById('bloco-vencimento');
     if (blocoVencimento) {
-        if (tipo === 'fixo') {
+        if (tipo === 'conta') {
             blocoVencimento.style.display = 'block';
         } else {
             blocoVencimento.style.display = 'none';
@@ -5291,26 +5452,28 @@ function pularCustodiaPadraoCategoria() {
 }
 
 function salvarCategoria() {
+const caixa = caixaGastosAtiva;
     const nome = document.getElementById('nova-cat-nome').value.trim();
     const valor = parseFloat(document.getElementById('nova-cat-valor').value) || 0;
     const inputVenc = document.getElementById('nova-cat-vencimento');
     let vencimento = null;
-    if (tipoCategoriaSelecionado === 'fixo' && inputVenc && inputVenc.value.trim() !== '') {
-        const d = parseInt(inputVenc.value);
-        if (isNaN(d) || d < 1 || d > 31) {
-            alert('O dia precisa estar entre 1 e 31.');
-            return;
-        }
-        vencimento = d;
+    if (tipoCategoriaSelecionado === 'conta' && inputVenc && inputVenc.value.trim() !== '') {
+    const d = parseInt(inputVenc.value);
+    if (isNaN(d) || d < 1 || d > 31) {
+        alert('O dia precisa estar entre 1 e 31.');
+        return;
     }
-    // Variável: sem dia fixo
-    if (tipoCategoriaSelecionado === 'variavel') vencimento = null;
+    vencimento = d;
+}
+if (tipoCategoriaSelecionado === 'consumo') vencimento = null;
 
-    const caixa = caixaGastosAtiva;
-
-    if (nome === '') { alert("Diga o nome do gasto."); return; }
-    if (valor <= 0) { alert("Insira um valor maior que zero."); return; }
-    if (!tipoCategoriaSelecionado) { alert("Escolha se é fixo ou varia."); return; }
+if (nome === '') { alert("Diga o nome do gasto."); return; }
+if (valor <= 0) { alert("Insira um valor maior que zero."); return; }
+if (!tipoCategoriaSelecionado) { alert("Escolha se é conta ou consumo."); return; }
+if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
+    alert('Conta precisa de um dia de vencimento.');
+    return;
+}
 
     const provisao = _lerProvisaoDoFormulario();
     if (provisao.erro) { alert(provisao.erro); return; }
@@ -5386,9 +5549,7 @@ function salvarCategoria() {
         if (atualizar) {
             if (caixa === 'base') {
                 state.orcamento.base.fortalezaTotal = valor;
-                if (state.orcamento.semanaAtual) {
-                    state.orcamento.semanaAtual.base.limite = valor / DIVISOR_SEMANAL;
-                }
+                if (!state.orcamento.semanaAtual) { iniciarNovaSemana(); } else { sincronizarLimitesSemanaAtual(); }
             } else {
                 state.orcamento.vida.total = valor;
                 if (state.orcamento.semanaAtual) {
@@ -5425,9 +5586,7 @@ function salvarCategoria() {
         // Sem total N1 e sem categorias: define o total com o primeiro valor
         if (caixa === 'base') {
             state.orcamento.base.fortalezaTotal = valor;
-            if (state.orcamento.semanaAtual) {
-                state.orcamento.semanaAtual.base.limite = valor / DIVISOR_SEMANAL;
-            }
+           if (!state.orcamento.semanaAtual) { iniciarNovaSemana(); } else { sincronizarLimitesSemanaAtual(); }
         } else {
             state.orcamento.vida.total = valor;
             if (state.orcamento.semanaAtual) {
@@ -5562,16 +5721,18 @@ function renderizarDetalheFuturo() {
                 ? ` · faltam R$ ${(((cat.valor || 0) * (total - pagas))).toFixed(2).replace('.', ',')}`
                 : '';
 
+                        // No cálculo da barra:
             const gastoSemFut = gastoCategoriaNaSemana(cat.id, cat.nome);
-            const metaSemFut = (cat.valor || 0) / DIVISOR_SEMANAL;
+            const metaSemFut = calcularLimiteCategoriaSemana(cat, state.orcamento.semanaAtual);
             const barraSemFut = renderizarBarraCategoria(gastoSemFut, metaSemFut, cat.id);
 
             htmlCategorias += `
                 <div class="categoria-item" style="display: block; cursor: pointer;" onclick="abrirListaRegistrosCategoria('${cat.id}', '${(cat.nome || '').replace(/'/g, "\\'")}')">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
+                                        // No HTML da categoria (ajuste o tipo para exibir bonito):
                             <div class="nome-cat">${cat.nome}</div>
-                            <div class="meta-cat">${cat.tipo}${cat.vencimento ? ' · vence dia ' + cat.vencimento : ''}</div>
+                            <div class="meta-cat">${cat.tipo === 'conta' ? 'conta' : 'aporte'}${cat.vencimento ? ' · vence dia ' + cat.vencimento : ''}</div>
                         </div>
                         <div style="display: flex; align-items: center;" onclick="event.stopPropagation()">
                             <span class="valor-cat">R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')}</span>
@@ -5815,9 +5976,9 @@ function abrirFormularioCategoriaFuturo() {
             <span class="texto">Esse valor é sempre igual ou muda?</span>
         </div>
 
-        <div class="chip-container" id="chips-tipo-cat">
-            <div class="chip" onclick="selecionarTipoCategoria(this, 'fixo')">Fixo</div>
-            <div class="chip" onclick="selecionarTipoCategoria(this, 'variavel')">Varia</div>
+                <div class="chip-container" id="chips-tipo-cat">
+            <div class="chip" data-tipo="conta" onclick="selecionarTipoCategoria(this, 'conta')">É uma conta</div>
+            <div class="chip" data-tipo="consumo" onclick="selecionarTipoCategoria(this, 'consumo')">É aporte (distribuído)</div>
         </div>
 
         <div id="bloco-vencimento" style="display: none;">
@@ -5877,9 +6038,13 @@ function salvarCategoriaFuturo() {
         ? (parseInt(parcelasInput && parcelasInput.value) || 0)
         : null;
 
-    if (nome === '') { alert('Diga o nome.'); return; }
+        if (nome === '') { alert('Diga o nome.'); return; }
     if (valor <= 0) { alert('Insira um valor maior que zero.'); return; }
-    if (!tipoCategoriaSelecionado) { alert('Escolha se é fixo ou varia.'); return; }
+    if (!tipoCategoriaSelecionado) { alert('Escolha se é conta ou aporte.'); return; }
+    if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
+        alert('Conta precisa de um dia de vencimento.');
+        return;
+    }
     if (parcelamentoSelecionado === 'sim' && (!parcelasTotais || parcelasTotais < 1)) {
         alert('Diga quantas parcelas no total (mínimo 1).');
         return;
@@ -8340,9 +8505,7 @@ function debugCriarCategoriasComVencimento() {
             .reduce((s, c) => s + (c.valor || 0), 0);
         state.orcamento.base.fortalezaTotal = totalBase;
 
-        if (state.orcamento.semanaAtual) {
-            state.orcamento.semanaAtual.base.limite = totalBase / DIVISOR_SEMANAL;
-        }
+        if (!state.orcamento.semanaAtual) { iniciarNovaSemana(); } else { sincronizarLimitesSemanaAtual(); }
     }
 
     salvarEstado();
