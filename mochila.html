@@ -1101,7 +1101,9 @@ state.orcamento.categorias.forEach(c => {
     if (!state.orcamento.uiApoio || typeof state.orcamento.uiApoio !== 'object') {
         state.orcamento.uiApoio = { forcarMostrar: false };
     }
-
+if ('forcarMostrar' in state.orcamento.uiApoio) {
+    delete state.orcamento.uiApoio.forcarMostrar;
+}
 }
 
 // ============================================================
@@ -1745,8 +1747,8 @@ const SEMANAS_PARA_RECUAR_APOIO = 4; // após N semanas no nível, cards de apoi
 
 function deveMostrarApoioExpandido(orc) {
     if (!orc) return true;
-    if (orc.uiApoio && orc.uiApoio.forcarMostrar) return true;
-    if (orc.uiApoio && orc.uiApoio._debugForcarRecuo === true) return false;
+    
+    
     const n = orc.semanasNoNivelAtual || 0;
     // N1 e primeiras semanas: apoio aberto
     if ((orc.nivel || 1) <= 1) return true;
@@ -1754,19 +1756,7 @@ function deveMostrarApoioExpandido(orc) {
     return false;
 }
 
-function toggleApoioHome(forcar) {
-    if (!state.orcamento.uiApoio) state.orcamento.uiApoio = { forcarMostrar: false };
-    state.orcamento.uiApoio.forcarMostrar = !!forcar;
-    salvarEstado();
-    renderizarOrcamentoInicio();
-}
 
-/**
- * Número principal "Disponível agora" — nomeado por nível (não inventa).
- * N1: previsto restante nas caixinhas (plano)
- * N2: situação real da semana (movimento)
- * N3: estoque operacional se houver custódia; senão movimento
- */
 function calcularDisponivelAgora(orc) {
     const semana = orc && orc.semanaAtual;
     const nivel = (orc && orc.nivel) || 1;
@@ -2248,9 +2238,7 @@ function renderizarOrcamentoCompleto(container, orc) {
         // persist after paint
         setTimeout(() => { try { salvarEstado(); } catch (e) {} }, 0);
     }
-    const toggleApoioBtn = (orc.semanasNoNivelAtual || 0) >= SEMANAS_PARA_RECUAR_APOIO
-        ? `<button type="button" class="btn-option" style="justify-content:center;border:none;color:var(--secondary);font-size:0.78rem;margin-bottom:10px;" onclick="toggleApoioHome(${apoioAberto ? 'false' : 'true'})">${apoioAberto ? 'Recolher apoio (modo enxuto)' : 'Mostrar apoio completo'}</button>`
-        : '';
+    
 
     // ===== MONTAGEM FINAL =====
     container.innerHTML = `
@@ -2278,7 +2266,7 @@ function renderizarOrcamentoCompleto(container, orc) {
         ${cardRecuperacao}
 
         ${falaRecuo}
-        ${toggleApoioBtn}
+        
         ${blocoApoio}
 
         ${chipsAjustes}
@@ -4053,7 +4041,7 @@ function aceitarNivel2() {
     state.orcamento.semanasNoNivelAtual = 0;
     state.orcamento.semanasNoNivelAtual = 0;
     state.orcamento.onboardingNivel2 = { etapa: 1, concluido: false };
-    if (state.orcamento.uiApoio) state.orcamento.uiApoio.forcarMostrar = true;
+   
     salvarEstado();
     console.log('[NÍVEL 2] Aceito. Nível agora é 2.');
     renderizarOrcamentoInicio();
@@ -4132,7 +4120,7 @@ function aceitarNivel3() {
         etapa: temCust ? 2 : 1,
         concluido: false
     };
-    if (state.orcamento.uiApoio) state.orcamento.uiApoio.forcarMostrar = true;
+    
     salvarEstado();
     console.log('[NÍVEL 3] Aceito + onboarding.');
     if (!temCust) {
@@ -7629,9 +7617,7 @@ function alternarModoDebug() {
     <button onclick="debugForcarRecuoApoio()" style="background: #0ea5e9; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
         🪜 Forçar recuo do apoio
     </button>
-    <button onclick="debugExpandirApoioForcado()" style="background: #64748b; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
-        📖 Expandir apoio (forçar)
-    </button>
+    
     <button onclick="debugResetarAndaime()" style="background: #64748b; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
         ↺ Resetar andaime
     </button>
@@ -7671,7 +7657,7 @@ function atualizarDebugStatus() {
         </div>
         <div><strong>Andaime:</strong>
     semanas=${orc.semanasNoNivelAtual || 0},
-    forcarMostrar=${(orc.uiApoio && orc.uiApoio.forcarMostrar) || false},
+    
     recuoForcado=${(orc.uiApoio && orc.uiApoio._debugForcarRecuo) || false},
     celebrou=${(orc.uiApoio && orc.uiApoio.celebrouRecuo) || false}
 </div>
@@ -7794,30 +7780,17 @@ function debugForcarRecuoApoio() {
     });
 }
 
-function debugExpandirApoioForcado() {
-    if (!state.orcamento) return;
-    if (!state.orcamento.uiApoio) state.orcamento.uiApoio = {};
-    state.orcamento.uiApoio._debugForcarRecuo = false;
-    state.orcamento.uiApoio.forcarMostrar = true;
-    salvarEstado();
-    renderizarOrcamentoInicio();
-    goToScreen('screen-orcamento-inicio');
-    atualizarDebugStatus();
-    console.log('[DEBUG andaime] forcarMostrar = true');
-}
+
 
 function debugResetarAndaime() {
     if (!state.orcamento) return;
     state.orcamento.semanasNoNivelAtual = 0;
     if (!state.orcamento.uiApoio) state.orcamento.uiApoio = {};
-    state.orcamento.uiApoio._debugForcarRecuo = false;
-    state.orcamento.uiApoio.forcarMostrar = false;
     state.orcamento.uiApoio.celebrouRecuo = false;
     salvarEstado();
     renderizarOrcamentoInicio();
     goToScreen('screen-orcamento-inicio');
     atualizarDebugStatus();
-    console.log('[DEBUG andaime] Resetado.');
 }
 function debugPassarDias(dias) {
     if (!state.orcamento || !state.orcamento.semanaAtual) {
@@ -8795,7 +8768,7 @@ function renderizarRodapeProjecaoNaRecuperacao(orc) {
         return `
             <div onclick="event.stopPropagation();abrirTelaFluxoCaixa()"
                  style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #fde68a; font-size: 0.75rem; color: #92400e; line-height: 1.4; cursor: pointer;">
-                🧭 ${texto} <span style="text-decoration: underline;">Ver fluxo</span>
+                🌿 Bela: ${texto} <span style="text-decoration: underline;">Ver fluxo</span>
             </div>
         `;
     } catch (e) {
