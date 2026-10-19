@@ -523,6 +523,80 @@
             transition: 0.2s;
         }
         .btn-sm:active { transform: scale(0.97); }
+
+        /* ===== DIÁLOGO ESTRUTURADO (piloto N1 etapas) ===== */
+        .dialogo-thread {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 16px;
+            max-height: 52vh;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .bolha-personagem {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            max-width: 92%;
+            align-self: flex-start;
+        }
+        .bolha-personagem .avatar {
+            font-size: 1.35rem;
+            flex-shrink: 0;
+            line-height: 1;
+            margin-top: 2px;
+        }
+        .bolha-personagem .corpo {
+            background: #f1f5f9;
+            border-radius: 4px 16px 16px 16px;
+            padding: 12px 14px;
+            font-size: 0.92rem;
+            line-height: 1.45;
+            color: var(--text-main);
+            border: 1px solid #e2e8f0;
+        }
+        .bolha-personagem .nome {
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--secondary);
+            margin-bottom: 4px;
+        }
+        .bolha-usuario {
+            align-self: flex-end;
+            max-width: 85%;
+            background: #0ea5e9;
+            color: #fff;
+            border-radius: 16px 4px 16px 16px;
+            padding: 11px 14px;
+            font-size: 0.92rem;
+            font-weight: 600;
+            line-height: 1.4;
+            box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
+        }
+        .dialogo-composer {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 14px;
+            margin-bottom: 8px;
+            box-shadow: 0 -2px 12px rgba(15, 23, 42, 0.04);
+        }
+        .dialogo-composer .composer-hint {
+            font-size: 0.72rem;
+            color: var(--secondary);
+            margin-bottom: 8px;
+        }
+        .dialogo-composer .chip-container { margin-bottom: 8px; }
+        .dialogo-composer .btn-option {
+            margin-bottom: 8px;
+            padding: 14px 16px;
+            font-size: 0.95rem;
+        }
+        .dialogo-composer .btn-primary { margin-top: 8px; }
+        .dialogo-composer .input-com-prefixo { margin-bottom: 8px; }
     </style>
 </head>
 <body>
@@ -1378,6 +1452,71 @@ function comecarDeNovo() {
     location.reload();
 }
 
+
+// ============================================================
+// DIÁLOGO ESTRUTURADO — piloto (hub + etapas N1)
+// ============================================================
+
+const PERSONAGENS_DIALOGO = {
+    torres: { nome: 'Torres', icone: '🛡️' },
+    bela:   { nome: 'Bela',   icone: '🌿' },
+    ze:     { nome: 'Zé',     icone: '🔭' }
+};
+
+/** Histórico do turno atual (só em memória de tela; não persiste). */
+let dialogoTurnoAtual = [];
+
+function resetDialogoTurno() {
+    dialogoTurnoAtual = [];
+}
+
+function dialogoPushPersonagem(quem, texto) {
+    const p = PERSONAGENS_DIALOGO[quem] || PERSONAGENS_DIALOGO.torres;
+    dialogoTurnoAtual.push({ lado: 'personagem', quem: quem, nome: p.nome, icone: p.icone, texto: texto });
+}
+
+function dialogoPushUsuario(texto) {
+    dialogoTurnoAtual.push({ lado: 'usuario', texto: texto });
+}
+
+function renderDialogoThreadHtml() {
+    let html = '<div class="dialogo-thread" id="dialogo-thread">';
+    dialogoTurnoAtual.forEach(msg => {
+        if (msg.lado === 'personagem') {
+            html += `
+                <div class="bolha-personagem">
+                    <span class="avatar">${msg.icone}</span>
+                    <div class="corpo">
+                        <div class="nome">${msg.nome}</div>
+                        <div>${msg.texto}</div>
+                    </div>
+                </div>`;
+        } else {
+            html += `<div class="bolha-usuario">${msg.texto}</div>`;
+        }
+    });
+    html += '</div>';
+    return html;
+}
+
+function renderDialogoComposerHtml(innerHtml, hint) {
+    const h = hint
+        ? `<div class="composer-hint">${hint}</div>`
+        : `<div class="composer-hint">Sua resposta</div>`;
+    return `<div class="dialogo-composer">${h}${innerHtml}</div>`;
+}
+
+function scrollDialogoFim() {
+    setTimeout(() => {
+        const el = document.getElementById('dialogo-thread');
+        if (el) el.scrollTop = el.scrollHeight;
+    }, 30);
+}
+
+function _fmtDialogoBRL(v) {
+    return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 // ============================================================
 // TELA INICIAL DO ORÇAMENTO
 // ============================================================
@@ -1408,29 +1547,92 @@ function renderizarOrcamentoInicio() {
         { id: 'futuro', icone: '🔭', titulo: 'Quero ver o caminho para sair da dívida.', sub: 'Futuro e Dívidas' }
     ];
 
-    let htmlEtapas = '';
+    resetDialogoTurno();
+    dialogoPushPersonagem('torres', 'Sou o Torres. Cuido da sua base — o que não pode faltar. Por onde quer começar?');
+
+    let opcoes = '';
     etapas.forEach(etapa => {
         const concluida = orc.etapasConcluidas.includes(etapa.id);
-        htmlEtapas += `
-            <div class="card-escolha ${concluida ? 'concluida' : ''}" onclick="${concluida ? '' : `iniciarEtapa('${etapa.id}')`}">
-                <span style="font-size: 1.5rem;">${etapa.icone}</span>
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; color: var(--primary); font-size: 0.95rem;">${etapa.titulo}</div>
-                    <div style="font-size: 0.8rem; color: var(--secondary); margin-top: 3px;">${etapa.sub}</div>
-                </div>
-                ${concluida ? '<span class="check">✓</span>' : ''}
-            </div>
-        `;
+
+        // Futuro depende de Base e Vida — avisa no sub, mas mantém clicável
+        let sub = etapa.sub;
+        if (etapa.id === 'futuro' && !concluida) {
+            const baseOk = orc.etapasConcluidas.includes('base');
+            const vidaOk = orc.etapasConcluidas.includes('vida');
+            if (!baseOk || !vidaOk) {
+                const falta = (!baseOk && !vidaOk) ? 'Base e Vida' : (!baseOk ? 'Base' : 'Vida');
+                sub = etapa.sub + ' · depois de ' + falta;
+            }
+        }
+
+        if (concluida) {
+            opcoes += `
+                <button class="btn-option" style="opacity:0.55;border-color:#10b981;" disabled>
+                    <span>${etapa.icone}</span>
+                    <span style="flex:1;text-align:left;">
+                        <strong>${etapa.titulo}</strong><br>
+                        <span style="font-size:0.8rem;font-weight:500;color:var(--secondary);">${sub} · pronto ✓</span>
+                    </span>
+                </button>`;
+        } else {
+            opcoes += `
+                <button class="btn-option" onclick="escolherEtapaDialogo('${etapa.id}', '${etapa.titulo.replace(/'/g, "\'")}')">
+                    <span>${etapa.icone}</span>
+                    <span style="flex:1;text-align:left;">
+                        <strong>${etapa.titulo}</strong><br>
+                        <span style="font-size:0.8rem;font-weight:500;color:var(--secondary);">${sub}</span>
+                    </span>
+                </button>`;
+        }
     });
 
     container.innerHTML = `
         ${cardResumo}
-        <div class="fala-avatar">
-            <span class="icone">🛡️</span>
-            <span class="texto">Vamos detalhar o que você já me disse. Por onde quer começar?</span>
-        </div>
-        ${htmlEtapas}
+        ${renderDialogoThreadHtml()}
+        ${renderDialogoComposerHtml(opcoes, 'Escolha um caminho')}
     `;
+    scrollDialogoFim();
+}
+
+function escolherEtapaDialogo(etapaId, tituloEco) {
+    // Eco da escolha primeiro — o usuário precisa ver que o clique foi recebido
+    dialogoPushUsuario(tituloEco || etapaId);
+
+    // Guard: Futuro depende de Base e Vida
+    if (etapaId === 'futuro') {
+        const etapas = state.orcamento.etapasConcluidas || [];
+        const baseOk = etapas.includes('base');
+        const vidaOk = etapas.includes('vida');
+        if (!baseOk || !vidaOk) {
+            const falta = (!baseOk && !vidaOk) ? 'a Base e a Vida'
+                        : (!baseOk ? 'a Base' : 'a Vida');
+
+            dialogoPushPersonagem('ze',
+                'Pra cuidar do caminho, eu preciso saber da Base e da Vida primeiro — é delas que sai a margem que vai pra cá.');
+            dialogoPushPersonagem('ze',
+                `Vamos fazer ${falta} primeiro?`);
+
+            const container = document.getElementById('orcamento-conteudo');
+            if (container) {
+                container.innerHTML = renderDialogoThreadHtml() +
+                    renderDialogoComposerHtml(
+                        `<button class="btn-primary" onclick="renderizarOrcamentoInicio()">Ok, escolher outro caminho</button>`,
+                        'Ordem do fluxo'
+                    );
+                scrollDialogoFim();
+            }
+            return;
+        }
+    }
+
+    // Fluxo normal (Base ou Vida, ou Futuro com pré-requisitos completos)
+    const container = document.getElementById('orcamento-conteudo');
+    if (container) {
+        container.innerHTML = renderDialogoThreadHtml() +
+            renderDialogoComposerHtml('<p style="font-size:0.85rem;color:var(--secondary);text-align:center;">Abrindo…</p>');
+        scrollDialogoFim();
+    }
+    setTimeout(() => iniciarEtapa(etapaId), 280);
 }
 
 function iniciarEtapa(etapaId) {
@@ -1447,23 +1649,26 @@ function iniciarEtapaBase() {
     const container = document.getElementById('orcamento-conteudo');
     const rendaAtual = state.orcamento.base?.rendaBase || 2500;
 
-    container.innerHTML = `
-        <div class="fala-avatar">
-            <span class="icone">🛡️</span>
-            <span class="texto">Vamos começar pela sua renda. Quanto entra por mês, no total?</span>
-        </div>
+    // Mantém eco da escolha do hub se já houver; senão inicia thread da Base
+    if (dialogoTurnoAtual.length === 0) {
+        resetDialogoTurno();
+        dialogoPushPersonagem('torres', 'Vamos começar pela sua renda.');
+    }
+    dialogoPushPersonagem('torres', 'Quanto entra por mês, no total?');
+
+    const composer = `
         <div class="input-com-prefixo">
             <span class="prefixo">R$</span>
             <input type="number" id="input-renda-valor" class="input-padrao" placeholder="0.00" value="${rendaAtual}">
         </div>
-        <div class="fala-avatar">
-            <span class="icone">🛡️</span>
-            <span class="texto">Esse valor é sempre igual ou tem mês que muda?</span>
-        </div>
+        <div class="composer-hint" style="margin-top:4px;">E esse valor…</div>
         <button class="btn-option" onclick="responderRenda('constante')">É sempre igual.</button>
         <button class="btn-option" onclick="responderRenda('varia_pouco')">Muda um pouco.</button>
         <button class="btn-option" onclick="responderRenda('varia_muito')">Muda muito.</button>
     `;
+
+    container.innerHTML = renderDialogoThreadHtml() + renderDialogoComposerHtml(composer, 'Sua renda');
+    scrollDialogoFim();
 }
 
 function responderRenda(tipo) {
@@ -1477,64 +1682,68 @@ function responderRenda(tipo) {
     state.orcamento.base.rendaTipo = tipo;
     state.orcamento.base.rendaBase = valorInput;
 
+    const labels = {
+        constante: 'É sempre igual.',
+        varia_pouco: 'Muda um pouco.',
+        varia_muito: 'Muda muito.'
+    };
+    dialogoPushUsuario(_fmtDialogoBRL(valorInput) + ' · ' + (labels[tipo] || tipo));
+
+    const container = document.getElementById('orcamento-conteudo');
+
     if (tipo === 'constante') {
         proximoPassoBase();
     } else if (tipo === 'varia_pouco') {
-        const container = document.getElementById('orcamento-conteudo');
-        container.innerHTML = `
-            <div class="fala-avatar">
-                <span class="icone">🛡️</span>
-                <span class="texto">Nos meses bons, quanto costuma entrar a mais?</span>
-            </div>
+        dialogoPushPersonagem('torres', 'Nos meses bons, quanto costuma entrar a mais?');
+        const composer = `
             <div class="chip-container">
                 <div class="chip" onclick="responderVariacaoRenda(10)">+10%</div>
                 <div class="chip" onclick="responderVariacaoRenda(20)">+20%</div>
                 <div class="chip" onclick="responderVariacaoRenda(30)">+30%</div>
-                <div class="chip" onclick="responderVariacaoRenda(0)">Outro valor</div>
+                <div class="chip" onclick="responderVariacaoRenda(0)">Deixa como está</div>
             </div>
         `;
+        container.innerHTML = renderDialogoThreadHtml() + renderDialogoComposerHtml(composer, 'Variação');
+        scrollDialogoFim();
     } else {
-        const container = document.getElementById('orcamento-conteudo');
-        container.innerHTML = `
-            <div class="fala-avatar">
-                <span class="icone">🛡️</span>
-                <span class="texto">Você recebe por semana, por dia, ou de forma imprevisível?</span>
-            </div>
+        dialogoPushPersonagem('torres', 'Você recebe por semana, por dia, ou de forma imprevisível?');
+        const composer = `
             <button class="btn-option" onclick="responderPeriodicidade('semanal')">Por semana</button>
             <button class="btn-option" onclick="responderPeriodicidade('diario')">Por dia</button>
             <button class="btn-option" onclick="responderPeriodicidade('imprevisivel')">Imprevisível</button>
         `;
+        container.innerHTML = renderDialogoThreadHtml() + renderDialogoComposerHtml(composer, 'Como entra');
+        scrollDialogoFim();
     }
 }
 function responderVariacaoRenda(percentual) {
-    // Usa o valor que o usuário já digitou como base
     const baseAtual = state.orcamento.base.rendaBase || 2500;
-    state.orcamento.base.rendaBase = baseAtual * (1 + percentual/100);
+    if (percentual > 0) {
+        state.orcamento.base.rendaBase = baseAtual * (1 + percentual / 100);
+        dialogoPushUsuario('+' + percentual + '% nos meses bons');
+    } else {
+        dialogoPushUsuario('Deixa como está');
+    }
     proximoPassoBase();
 }
 
 function responderPeriodicidade(tipo) {
     state.orcamento.base.rendaPeriodicidade = tipo;
-    // Não sobrescreve rendaBase — mantém o valor que o usuário digitou
+    const labels = { semanal: 'Por semana', diario: 'Por dia', imprevisivel: 'Imprevisível' };
+    dialogoPushUsuario(labels[tipo] || tipo);
     proximoPassoBase();
 }
 
 function proximoPassoBase() {
     const container = document.getElementById('orcamento-conteudo');
-    const rendaBase = state.orcamento.base.rendaBase || 2500;
 
-    container.innerHTML = `
-        <div class="fala-avatar">
-            <span class="icone">🛡️</span>
-            <span class="texto">Sua base é o que não pode faltar. Quanto custa por mês?</span>
-        </div>
+    dialogoPushPersonagem('torres', 'Sua base é o que não pode faltar. Quanto custa por mês?');
+    dialogoPushPersonagem('torres', 'Isso inclui o quê? Marque o que fizer sentido.');
+
+    const composer = `
         <div class="input-com-prefixo">
             <span class="prefixo">R$</span>
             <input type="number" id="input-fortaleza-valor" class="input-padrao" placeholder="0.00" value="${state.orcamento.base?.fortalezaTotal || 1800}">
-        </div>
-        <div class="fala-avatar">
-            <span class="icone">🛡️</span>
-            <span class="texto">Isso inclui o quê?</span>
         </div>
         <div class="chip-container" id="chips-fortaleza">
             <div class="chip" onclick="toggleChip(this)">🏠 Aluguel</div>
@@ -1546,6 +1755,8 @@ function proximoPassoBase() {
         </div>
         <button class="btn-primary" onclick="concluirEtapaBase()">Continuar</button>
     `;
+    container.innerHTML = renderDialogoThreadHtml() + renderDialogoComposerHtml(composer, 'Sua base mensal');
+    scrollDialogoFim();
 }
 
 function toggleChip(el) {
@@ -1553,28 +1764,49 @@ function toggleChip(el) {
 }
 
 function concluirEtapaBase() {
-    const valor = parseFloat(document.getElementById('input-fortaleza-valor').value) || 0;
-    if (valor <= 0) {
-        alert("A base não pode ser zero. Todo mundo tem um custo básico.");
-        return;
-    }
+    try {
+        const input = document.getElementById('input-fortaleza-valor');
+        const raw = input ? String(input.value).replace(',', '.').trim() : '';
+        const valor = parseFloat(raw) || 0;
+        if (valor <= 0) {
+            alert("A base não pode ser zero. Todo mundo tem um custo básico.");
+            return;
+        }
 
-    const chipsSelecionados = document.querySelectorAll('#chips-fortaleza .chip.selecionado');
-    const categorias = Array.from(chipsSelecionados).map(c => c.textContent.trim());
-    
-    state.orcamento.base.fortalezaCategorias = categorias;
-    state.orcamento.base.fortalezaTotal = valor;
+        const chipsSelecionados = document.querySelectorAll('#chips-fortaleza .chip.selecionado');
+        const categorias = Array.from(chipsSelecionados).map(c => c.textContent.trim());
 
-    // Reconstrói os limites da semana atual com o novo valor
-    if (state.orcamento.semanaAtual) {
-        state.orcamento.semanaAtual.base.limite = valor / DIVISOR_SEMANAL;
-    }
+        const eco = _fmtDialogoBRL(valor) + (categorias.length ? ' · ' + categorias.join(', ') : '');
+        dialogoPushUsuario(eco);
 
-    if (!state.orcamento.etapasConcluidas.includes('base')) {
-        state.orcamento.etapasConcluidas.push('base');
+        if (!state.orcamento) state.orcamento = {};
+        if (!state.orcamento.base || typeof state.orcamento.base !== 'object') {
+            state.orcamento.base = {};
+        }
+        state.orcamento.base.fortalezaCategorias = categorias;
+        state.orcamento.base.fortalezaTotal = valor;
+
+        // Reconstrói limite semanal se a caixinha existir
+        if (state.orcamento.semanaAtual) {
+            if (!state.orcamento.semanaAtual.base) {
+                state.orcamento.semanaAtual.base = { limite: 0, gasto: 0, carrego: 0, sobraAnterior: 0 };
+            }
+            state.orcamento.semanaAtual.base.limite = valor / DIVISOR_SEMANAL;
+        }
+
+        if (!Array.isArray(state.orcamento.etapasConcluidas)) {
+            state.orcamento.etapasConcluidas = [];
+        }
+        if (!state.orcamento.etapasConcluidas.includes('base')) {
+            state.orcamento.etapasConcluidas.push('base');
+        }
+        salvarEstado();
+        resetDialogoTurno();
+        renderizarOrcamentoInicio();
+    } catch (err) {
+        console.error('[concluirEtapaBase]', err);
+        alert('Não consegui salvar a base. Tente de novo. Se continuar, envie um feedback pelo botão 💬.');
     }
-    salvarEstado();
-    renderizarOrcamentoInicio();
 }
 // ============================================================
 // ETAPA VIDA (Bela)
@@ -1584,18 +1816,14 @@ function iniciarEtapaVida() {
     const container = document.getElementById('orcamento-conteudo');
     const flexivelAtual = state.orcamento.vida?.total || 700;
 
-    container.innerHTML = `
-        <div class="fala-avatar">
-            <span class="icone">🌿</span>
-            <span class="texto">Agora a parte boa da vida. Quanto você gasta por mês com o que te dá prazer?</span>
-        </div>
+    if (dialogoTurnoAtual.length === 0) resetDialogoTurno();
+    dialogoPushPersonagem('bela', 'Sou a Bela. Cuido do que te faz bem, sem culpa. Quanto você gasta por mês com o que te dá prazer?');
+    dialogoPushPersonagem('bela', 'Vamos ver se a gente reconhece junto? Marque o que combina.');
+
+    const composer = `
         <div class="input-com-prefixo">
             <span class="prefixo">R$</span>
             <input type="number" id="input-vida-valor" class="input-padrao" placeholder="0.00" value="${flexivelAtual}">
-        </div>
-        <div class="fala-avatar">
-            <span class="icone">🌿</span>
-            <span class="texto">Vamos ver se a gente reconhece junto?</span>
         </div>
         <div class="chip-container" id="chips-vida">
             <div class="chip" onclick="toggleChip(this)">📺 Netflix e streaming</div>
@@ -1607,29 +1835,47 @@ function iniciarEtapaVida() {
         </div>
         <button class="btn-primary" onclick="concluirEtapaVida()">Continuar</button>
     `;
+    container.innerHTML = renderDialogoThreadHtml() + renderDialogoComposerHtml(composer, 'Sua vida');
+    scrollDialogoFim();
 }
 
 function concluirEtapaVida() {
-    const valor = parseFloat(document.getElementById('input-vida-valor').value) || 0;
+    try {
+        const input = document.getElementById('input-vida-valor');
+        const raw = input ? String(input.value).replace(',', '.').trim() : '';
+        const valor = parseFloat(raw) || 0;
 
-    const chipsSelecionados = document.querySelectorAll('#chips-vida .chip.selecionado');
-    const categorias = Array.from(chipsSelecionados).map(c => c.textContent.trim());
+        const chipsSelecionados = document.querySelectorAll('#chips-vida .chip.selecionado');
+        const categorias = Array.from(chipsSelecionados).map(c => c.textContent.trim());
 
-    state.orcamento.vida = {
-        categorias: categorias,
-        total: valor
-    };
+        dialogoPushUsuario(_fmtDialogoBRL(valor) + (categorias.length ? ' · ' + categorias.join(', ') : ''));
 
-    // Reconstrói os limites da semana atual com o novo valor
-    if (state.orcamento.semanaAtual) {
-        state.orcamento.semanaAtual.vida.limite = valor / DIVISOR_SEMANAL;
+        if (!state.orcamento) state.orcamento = {};
+        state.orcamento.vida = {
+            categorias: categorias,
+            total: valor
+        };
+
+        if (state.orcamento.semanaAtual) {
+            if (!state.orcamento.semanaAtual.vida) {
+                state.orcamento.semanaAtual.vida = { limite: 0, gasto: 0, carrego: 0, sobraAnterior: 0 };
+            }
+            state.orcamento.semanaAtual.vida.limite = valor / DIVISOR_SEMANAL;
+        }
+
+        if (!Array.isArray(state.orcamento.etapasConcluidas)) {
+            state.orcamento.etapasConcluidas = [];
+        }
+        if (!state.orcamento.etapasConcluidas.includes('vida')) {
+            state.orcamento.etapasConcluidas.push('vida');
+        }
+        salvarEstado();
+        resetDialogoTurno();
+        renderizarOrcamentoInicio();
+    } catch (err) {
+        console.error('[concluirEtapaVida]', err);
+        alert('Não consegui salvar a Vida. Tente de novo.');
     }
-
-    if (!state.orcamento.etapasConcluidas.includes('vida')) {
-        state.orcamento.etapasConcluidas.push('vida');
-    }
-    salvarEstado();
-    renderizarOrcamentoInicio();
 }
 
 // ============================================================
@@ -1637,55 +1883,101 @@ function concluirEtapaVida() {
 // ============================================================
 
 function iniciarEtapaFuturo() {
+    // Guard defensivo: só entra aqui se Base e Vida existirem.
+    const etapas = state.orcamento.etapasConcluidas || [];
+    if (!etapas.includes('base') || !etapas.includes('vida')) {
+        const falta = (!etapas.includes('base') && !etapas.includes('vida')) ? 'a Base e a Vida'
+                    : (!etapas.includes('base') ? 'a Base' : 'a Vida');
+        resetDialogoTurno();
+        dialogoPushPersonagem('ze',
+            'Preciso da Base e da Vida primeiro. Vamos por partes?');
+        dialogoPushPersonagem('ze',
+            `Falta ${falta}. Quando você voltar, a gente cuida do Futuro.`);
+        const container = document.getElementById('orcamento-conteudo');
+        if (container) {
+            container.innerHTML = renderDialogoThreadHtml() +
+                renderDialogoComposerHtml(
+                    `<button class="btn-primary" onclick="renderizarOrcamentoInicio()">Ok, escolher outro caminho</button>`,
+                    'Ordem do fluxo'
+                );
+            scrollDialogoFim();
+        }
+        return;
+    }
+
     const container = document.getElementById('orcamento-conteudo');
     const rendaBase = state.orcamento.base?.rendaBase || 0;
     const fortalezaTotal = state.orcamento.base?.fortalezaTotal || 0;
     const vidaTotal = state.orcamento.vida?.total || 0;
 
-    // Sempre calcula a sobra real: renda − base − vida
-    // (futuro.total inicia em 0 no N1, então não pode usar ?? — 0 é valor válido e mascarava a conta)
-    const sobraCalculada = Math.max(rendaBase - fortalezaTotal - vidaTotal, 0);
+    // Conta verdadeira — pode ser negativa
+    const contaReal = rendaBase - fortalezaTotal - vidaTotal;
+
+    // Para o input, só pré-preenche com o que sobrou (nunca negativo)
+    const sobraParaInput = Math.max(contaReal, 0);
+
     const jaConcluida = (state.orcamento.etapasConcluidas || []).includes('futuro');
     const totalSalvo = state.orcamento.futuro && typeof state.orcamento.futuro.total === 'number'
         ? state.orcamento.futuro.total
         : null;
+    const sobraMensal = jaConcluida && totalSalvo !== null ? totalSalvo : sobraParaInput;
 
-    // Na primeira vez (ou se ainda não concluiu): usa a conta.
-    // Se já tinha definido e voltou a editar: mantém o valor salvo, mas mostra a conta ao lado.
-    const sobraMensal = jaConcluida && totalSalvo !== null ? totalSalvo : sobraCalculada;
+    const fmt = (v) => {
+        // toFixed(2) preserva o sinal; só troca ponto por vírgula
+        return v.toFixed(2).replace('.', ',');
+    };
 
-    const fmt = (v) => v.toFixed(2).replace('.', ',');
+    // Linha de conta usa contaReal — o sinal aparece na tela
     let detalheConta = '';
     if (rendaBase > 0) {
-        detalheConta = `
-            <div style="font-size: 0.85rem; color: var(--secondary); line-height: 1.5; margin-bottom: 16px; padding: 12px 14px; background: #f8fafc; border-radius: 10px;">
-                Renda <strong>R$ ${fmt(rendaBase)}</strong>
-                − Base <strong>R$ ${fmt(fortalezaTotal)}</strong>
-                − Vida <strong>R$ ${fmt(vidaTotal)}</strong>
-                = <strong style="color: var(--primary);">R$ ${fmt(sobraCalculada)}</strong> por mês
-            </div>
-        `;
+        detalheConta = `Renda R$ ${fmt(rendaBase)} − Base R$ ${fmt(fortalezaTotal)} − Vida R$ ${fmt(vidaTotal)} = R$ ${fmt(contaReal)}/mês`;
     }
 
-    container.innerHTML = `
-        <div class="fala-avatar">
-            <span class="icone">🔭</span>
-            <span class="texto">
-                ${sobraCalculada > 0
-                    ? `Sobrou <strong>R$ ${fmt(sobraCalculada)}</strong> por mês para o Futuro. Esse valor alimenta a dívida e a reserva. Quanto você quer direcionar?`
-                    : `Com os valores de Base e Vida, não sobrou margem automática para o Futuro. Você ainda pode definir um valor se quiser priorizar dívida ou reserva.`}
-            </span>
-        </div>
-        ${detalheConta}
+    // Fala do Zé com três ramos: sobra positiva / déficit / zero exato
+    let falaZe;
+    if (contaReal > 0) {
+        falaZe = `Sobrou R$ ${fmt(contaReal)} por mês depois da Base e da Vida. Quanto você quer direcionar pro Futuro?`;
+    } else if (contaReal < 0) {
+        falaZe = `Base e Vida consomem mais do que entra — faltam R$ ${fmt(Math.abs(contaReal))} por mês. Você ainda pode separar algo pro Futuro, mas saiba que isso vai sair de outro lugar.`;
+    } else {
+        falaZe = `Renda, Base e Vida fecham no zero. Não sobrou margem automática pro Futuro — mas você pode definir um valor se quiser priorizar dívida ou reserva.`;
+    }
+
+    if (dialogoTurnoAtual.length === 0) resetDialogoTurno();
+    dialogoPushPersonagem('ze', 'Sou o Zé. Cuido do caminho — dívida e futuro. O que sobra depois da Base e da Vida pode ir pra lá.');
+    if (detalheConta) {
+        dialogoPushPersonagem('ze', detalheConta);
+    }
+    dialogoPushPersonagem('ze', falaZe);
+
+    // Nota do composer muda conforme o sinal — mesma frase, peso diferente
+    let notaComposer;
+    if (contaReal > 0) {
+        notaComposer = 'Sugestão baseada no que sobrou. Você pode ajustar — mas lembre que sai do mesmo bolo da Base e da Vida.';
+    } else if (contaReal < 0) {
+        notaComposer = 'A conta está negativa. Qualquer valor aqui significa tirar de outro lugar — decida com consciência.';
+    } else {
+        notaComposer = 'Sem margem automática. Se quiser separar algo, saiba que sai do que você já comprometeu.';
+    }
+
+    const composer = `
         <div class="input-com-prefixo">
             <span class="prefixo">R$</span>
-            <input type="number" id="input-futuro-valor" class="input-padrao" placeholder="0.00" value="${sobraMensal.toFixed(2)}">
+            <input type="number" id="input-futuro-valor" class="input-padrao" placeholder="0.00" value="${sobraMensal}">
         </div>
+        <p style="font-size:0.72rem;color:var(--secondary);margin:6px 0 10px;line-height:1.35;">
+            ${notaComposer}
+        </p>
         <button class="btn-primary" onclick="concluirEtapaFuturo()">Continuar</button>
     `;
+    container.innerHTML = renderDialogoThreadHtml() + renderDialogoComposerHtml(composer, 'Futuro mensal');
+    scrollDialogoFim();
 }
+
 function concluirEtapaFuturo() {
+    try {
     const valor = parseFloat(document.getElementById('input-futuro-valor').value) || 0;
+    dialogoPushUsuario(_fmtDialogoBRL(valor));
 
     if (!state.orcamento.futuro) state.orcamento.futuro = {};
     state.orcamento.futuro.total = valor;
@@ -1701,8 +1993,16 @@ function concluirEtapaFuturo() {
         sincronizarLimitesSemanaAtual();
     }
 
+    if (!Array.isArray(state.orcamento.etapasConcluidas)) {
+        state.orcamento.etapasConcluidas = [];
+    }
     salvarEstado();
+    resetDialogoTurno();
     renderizarOrcamentoInicio();
+    } catch (err) {
+        console.error('[concluirEtapaFuturo]', err);
+        alert('Não consegui salvar o Futuro. Tente de novo.');
+    }
 }
 
 /**
