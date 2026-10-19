@@ -1306,11 +1306,14 @@ function renderizarPreviaSemana() {
     const rendaMostrar  = rendaReal > 0 ? rendaReal : rendaEstimada;
     const rotuloRenda   = rendaReal > 0 ? 'Recebido' : 'Previsto';
 
-    const totalGasto = (semana.base?.gasto || 0)
-                     + (semana.vida?.gasto || 0)
-                     + (semana.futuro?.gasto || 0);
+            const totalGasto = (semana.base?.gasto || 0)
+                         + (semana.vida?.gasto || 0)
+                         + (semana.futuro?.gasto || 0);
 
-    const saldo = (semana.saldoAnterior || 0) + rendaMostrar - totalGasto;
+        // Usa a renda efetiva (N1 = previsto / N2+ = apenas o real recebido)
+        // para não inflar o saldo com dinheiro que ainda não entrou na conta
+        const rendaEfetiva = rendaEfetivaDaSemana(semana, orc);
+        const saldo = (semana.saldoAnterior || 0) + rendaEfetiva.valor - totalGasto;
 
     // Barrinha helper (mesma linguagem visual do Olhe)
     const barra = (nome, gasto, limite) => {
