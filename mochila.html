@@ -1746,6 +1746,7 @@ const SEMANAS_PARA_RECUAR_APOIO = 4; // após N semanas no nível, cards de apoi
 function deveMostrarApoioExpandido(orc) {
     if (!orc) return true;
     if (orc.uiApoio && orc.uiApoio.forcarMostrar) return true;
+    if (orc.uiApoio && orc.uiApoio._debugForcarRecuo === true) return false;
     const n = orc.semanasNoNivelAtual || 0;
     // N1 e primeiras semanas: apoio aberto
     if ((orc.nivel || 1) <= 1) return true;
@@ -3255,10 +3256,8 @@ function abrirConfigCicloSemana() {
         <button class="btn-primary" onclick="renderizarOrcamentoInicio()">Voltar ao controle</button>
     `;
 
-    const container = document.getElementById('orcamento-inicio-conteudo') || document.getElementById('gastos-detalhe-conteudo');
-    // Preferir tela dedicada se existir; senão substitui home temporariamente
     goToScreen('screen-orcamento-inicio');
-    const c = document.getElementById('orcamento-inicio-conteudo');
+    const c = document.getElementById('orcamento-conteudo');   // ← ID correto
     if (c) c.innerHTML = html;
 }
 
@@ -7623,7 +7622,20 @@ function alternarModoDebug() {
                 <button onclick="debugZerarCarryover()" style="background: #64748b; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
                     Zerar carryover (semana atual + resumos)
                 </button>
+                
             </div>
+            <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 6px;">Andaime (recuo do apoio)</div>
+<div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
+    <button onclick="debugForcarRecuoApoio()" style="background: #0ea5e9; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
+        🪜 Forçar recuo do apoio
+    </button>
+    <button onclick="debugExpandirApoioForcado()" style="background: #64748b; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
+        📖 Expandir apoio (forçar)
+    </button>
+    <button onclick="debugResetarAndaime()" style="background: #64748b; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
+        ↺ Resetar andaime
+    </button>
+</div>
             <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 6px;">Reset</div>
             <div style="display: flex; flex-direction: column; gap: 8px;">
                 <button onclick="debugResetarNivel()" style="background: #dc2626; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">🔄 Resetar para Nível 1</button>
@@ -7657,6 +7669,12 @@ function atualizarDebugStatus() {
             <div>· Semana atual saldoAnterior: R$ ${((orc.semanaAtual && orc.semanaAtual.saldoAnterior) || 0).toFixed(2)}</div>
             <div>· Último resumo saldo: R$ ${((orc.resumos && orc.resumos[0] && orc.resumos[0].saldo) || 0).toFixed(2)}</div>
         </div>
+        <div><strong>Andaime:</strong>
+    semanas=${orc.semanasNoNivelAtual || 0},
+    forcarMostrar=${(orc.uiApoio && orc.uiApoio.forcarMostrar) || false},
+    recuoForcado=${(orc.uiApoio && orc.uiApoio._debugForcarRecuo) || false},
+    celebrou=${(orc.uiApoio && orc.uiApoio.celebrouRecuo) || false}
+</div>
     `;
 }
 
@@ -7740,6 +7758,66 @@ function debugZerarCarryover() {
     renderizarOrcamentoInicio();
     atualizarDebugStatus();
     console.log('[DEBUG carryover] zerado (semana atual + resumos).');
+}
+// ============================================================
+// DEBUG — ANDAIME (recuo do apoio expandido)
+// ============================================================
+
+function debugForcarRecuoApoio() {
+    if (!state.orcamento) {
+        alert('Inicie a jornada primeiro.');
+        return;
+    }
+    if (!state.orcamento.uiApoio) state.orcamento.uiApoio = { forcarMostrar: false };
+
+    // Override: força recuo mesmo em N1 (que normalmente exige expandido)
+    state.orcamento.uiApoio._debugForcarRecuo = true;
+    state.orcamento.uiApoio.forcarMostrar = false;
+    state.orcamento.uiApoio.celebrouRecuo = false; // permite ver a fala de recuo de novo
+
+    // Garante que o limiar de semanas também bate (para o toggle aparecer)
+    state.orcamento.semanasNoNivelAtual = Math.max(
+        state.orcamento.semanasNoNivelAtual || 0,
+        SEMANAS_PARA_RECUAR_APOIO
+    );
+
+    salvarEstado();
+    renderizarOrcamentoInicio();
+    goToScreen('screen-orcamento-inicio');
+    atualizarDebugStatus();
+    console.log('[DEBUG andaime] Recuo forçado:', {
+        nivel: state.orcamento.nivel,
+        semanasNoNivelAtual: state.orcamento.semanasNoNivelAtual,
+        _debugForcarRecuo: true,
+        forcarMostrar: false,
+        celebrouRecuo: false
+    });
+}
+
+function debugExpandirApoioForcado() {
+    if (!state.orcamento) return;
+    if (!state.orcamento.uiApoio) state.orcamento.uiApoio = {};
+    state.orcamento.uiApoio._debugForcarRecuo = false;
+    state.orcamento.uiApoio.forcarMostrar = true;
+    salvarEstado();
+    renderizarOrcamentoInicio();
+    goToScreen('screen-orcamento-inicio');
+    atualizarDebugStatus();
+    console.log('[DEBUG andaime] forcarMostrar = true');
+}
+
+function debugResetarAndaime() {
+    if (!state.orcamento) return;
+    state.orcamento.semanasNoNivelAtual = 0;
+    if (!state.orcamento.uiApoio) state.orcamento.uiApoio = {};
+    state.orcamento.uiApoio._debugForcarRecuo = false;
+    state.orcamento.uiApoio.forcarMostrar = false;
+    state.orcamento.uiApoio.celebrouRecuo = false;
+    salvarEstado();
+    renderizarOrcamentoInicio();
+    goToScreen('screen-orcamento-inicio');
+    atualizarDebugStatus();
+    console.log('[DEBUG andaime] Resetado.');
 }
 function debugPassarDias(dias) {
     if (!state.orcamento || !state.orcamento.semanaAtual) {
