@@ -254,6 +254,81 @@
             border-radius: 999px;
             font-size: 0.9rem;
         }
+
+        /* ===== Fase 0 — Drawer lateral ===== */
+        .drawer-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            z-index: 900;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+        }
+        .drawer-backdrop.aberto { opacity: 1; }
+        .drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: min(300px, 86vw);
+            height: 100%;
+            background: var(--card-bg);
+            color: var(--text-main);
+            z-index: 910;
+            transform: translateX(-100%);
+            transition: transform 0.28s ease;
+            box-shadow: 4px 0 24px rgba(0,0,0,0.12);
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+        }
+        .drawer.aberto { transform: translateX(0); }
+        .drawer-header {
+            padding: 24px 20px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .drawer-header .marca {
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+        .drawer-header .contexto {
+            font-size: 0.8rem;
+            color: var(--secondary);
+            line-height: 1.4;
+        }
+        .drawer-nav {
+            padding: 12px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .drawer-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            text-align: left;
+            padding: 14px 14px;
+            border: none;
+            background: transparent;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-main);
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .drawer-item:active,
+        .drawer-item:hover {
+            background: var(--purple-light);
+            color: var(--primary);
+        }
+        .drawer-item .ico { font-size: 1.15rem; width: 1.4em; text-align: center; }
+        .drawer-item--muted { color: var(--secondary); font-weight: 500; }
+
         .home-hero { text-align: center; margin-bottom: 18px; padding: 8px 4px 4px; }
         .home-hero-label {
             font-size: 0.85rem; color: var(--secondary); margin-bottom: 6px; font-weight: 500;
@@ -387,27 +462,31 @@
         .barra-amarela { background: var(--warning); }
         .barra-vermelha { background: var(--progress); }
         
-        .btn-flutuante-topo {
+        /* Fase 2 — feedback flutuante inferior esquerdo (alinhado ao +) */
+        
+        .btn-flutuante-feedback {
             position: fixed;
-            top: 16px;
-            right: 16px;
-            width: 44px;
-            height: 44px;
+            bottom: 30px;
+            left: 30px;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
             background: var(--primary);
             color: white;
             border: none;
-            font-size: 1.25rem;
+            font-size: 1.4rem;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.35);
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
             z-index: 500;
             display: none;
             align-items: center;
             justify-content: center;
             transition: 0.2s;
         }
-        .btn-flutuante-topo:active { transform: scale(0.95); }
-        .btn-flutuante-topo.visivel { display: flex; }
+        
+        .btn-flutuante-feedback:active { transform: scale(0.95); }
+        
+        .btn-flutuante-feedback.visivel { display: flex; }
 
         .btn-flutuante {
             position: fixed;
@@ -919,10 +998,28 @@
         <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
         <div id="notificacoes-conteudo"></div>
     </div>
+
+    <!-- Fase 0 — telas novas (stubs de conteúdo) -->
+    <div id="screen-ajuda" class="screen">
+        <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
+        <div id="ajuda-conteudo"></div>
+    </div>
+    <div id="screen-editar-plano" class="screen">
+        <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
+        <div id="editar-plano-conteudo"></div>
+    </div>
+    <div id="screen-projeto" class="screen">
+        <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
+        <div id="projeto-conteudo"></div>
+    </div>
+    <div id="screen-tutorial" class="screen">
+        <button class="btn-voltar" onclick="abrirTelaAjuda()">← Voltar</button>
+        <div id="tutorial-conteudo"></div>
+    </div>
 	
 </div>
 <!-- BOTÃO FLUTUANTE: Canal de Feedback (Ciclo 4.0) -->
-<button id="btn-feedback" class="btn-flutuante-topo" onclick="abrirModalFeedback()" aria-label="Enviar feedback">💬</button>
+<button id="btn-feedback" class="btn-flutuante-feedback" onclick="abrirModalFeedback()" aria-label="Enviar feedback">💬</button>
 <!-- MODAL: Registro — Ciclo 4.1 Fatia C (conversacional) -->
 <div id="modal-registro" class="modal-registro">
     <div class="modal-registro-conteudo" style="max-height: 92vh; overflow-y: auto; padding-top: 28px;">
@@ -984,6 +1081,7 @@
             <h3 id="lista-registros-titulo" class="home-section-title" style="margin-bottom: 4px; padding-right: 28px;">Registros</h3>
             <p id="lista-registros-sub" class="home-section-sub" style="margin-bottom: 14px;"></p>
             <div id="lista-registros-conteudo"></div>
+          <div id="lista-registros-rodape-edit"></div>
             <button type="button" class="btn-option" style="justify-content: center; margin-top: 14px;" onclick="fecharModalListaRegistros()">
                 Fechar
             </button>
@@ -1017,6 +1115,15 @@
 </div>
 
 <!-- MODAL: Canal de Feedback (Ciclo 4.2-D) -->
+
+<!-- Fase 0 — Modal Saldo da semana (conteúdo nas fases seguintes) -->
+<div id="modal-saldo-semana" class="modal-registro">
+    <div class="modal-registro-conteudo" style="max-height: 88vh; overflow-y: auto; padding-top: 28px;">
+        <button type="button" onclick="fecharModalSaldoSemana()" style="position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer; z-index: 2;" aria-label="Fechar">&times;</button>
+        <div id="modal-saldo-semana-conteudo"></div>
+    </div>
+</div>
+
 <div id="modal-feedback" class="modal-registro">
     <div class="modal-registro-conteudo" style="padding-top: 28px;">
 
@@ -1997,11 +2104,13 @@ function _fmtDialogoBRL(v) {
 // TELA INICIAL DO ORÇAMENTO
 // ============================================================
 
-function renderizarOrcamentoInicio() {
+function renderizarOrcamentoInicio(opcoes) {
+    opcoes = opcoes || {};
+    const forcarHub = !!opcoes.forcarHub;
     const container = document.getElementById('orcamento-conteudo');
     const orc = state.orcamento;
 
-    if (orc.etapasConcluidas.length === 3) {
+    if (!forcarHub && orc.etapasConcluidas && orc.etapasConcluidas.length === 3) {
         renderizarOrcamentoCompleto(container, orc);
         return;
     }
@@ -2024,25 +2133,27 @@ function renderizarOrcamentoInicio() {
     ];
 
     resetDialogoTurno();
-    dialogoPushPersonagem('torres', 'Sou o Torres. Cuido da sua base — o que não pode faltar. Por onde quer começar?');
+    const falaHub = forcarHub
+        ? 'Vamos revisar o que já combinamos. Toque em qualquer etapa para ajustar.'
+        : 'Sou o Torres. Cuido da sua base — o que não pode faltar. Por onde quer começar?';
+    dialogoPushPersonagem('torres', falaHub);
 
-    let opcoes = '';
+    let opcoesHtml = '';
     etapas.forEach(etapa => {
-        const concluida = orc.etapasConcluidas.includes(etapa.id);
+        const concluida = (orc.etapasConcluidas || []).includes(etapa.id);
 
-        // Futuro depende de Base e Vida — avisa no sub, mas mantém clicável
         let sub = etapa.sub;
         if (etapa.id === 'futuro' && !concluida) {
-            const baseOk = orc.etapasConcluidas.includes('base');
-            const vidaOk = orc.etapasConcluidas.includes('vida');
+            const baseOk = (orc.etapasConcluidas || []).includes('base');
+            const vidaOk = (orc.etapasConcluidas || []).includes('vida');
             if (!baseOk || !vidaOk) {
                 const falta = (!baseOk && !vidaOk) ? 'Base e Vida' : (!baseOk ? 'Base' : 'Vida');
                 sub = etapa.sub + ' · depois de ' + falta;
             }
         }
 
-        if (concluida) {
-            opcoes += `
+        if (concluida && !forcarHub) {
+            opcoesHtml += `
                 <button class="btn-option" style="opacity:0.55;border-color:var(--success);" disabled>
                     <span>${etapa.icone}</span>
                     <span style="flex:1;text-align:left;">
@@ -2050,9 +2161,19 @@ function renderizarOrcamentoInicio() {
                         <span style="font-size:0.8rem;font-weight:500;color:var(--secondary);">${sub} · pronto ✓</span>
                     </span>
                 </button>`;
+        } else if (concluida && forcarHub) {
+            // Fase 5 — modo revisão: etapas concluídas clicáveis
+            opcoesHtml += `
+                <button class="btn-option" style="border-color:var(--success);" onclick="escolherEtapaDialogo('${etapa.id}', '${etapa.titulo.replace(/'/g, "\\'")}')">
+                    <span>${etapa.icone}</span>
+                    <span style="flex:1;text-align:left;">
+                        <strong>${etapa.titulo}</strong><br>
+                        <span style="font-size:0.8rem;font-weight:500;color:var(--secondary);">${sub} · pronto ✓ · tocar para revisar</span>
+                    </span>
+                </button>`;
         } else {
-            opcoes += `
-                <button class="btn-option" onclick="escolherEtapaDialogo('${etapa.id}', '${etapa.titulo.replace(/'/g, "\'")}')">
+            opcoesHtml += `
+                <button class="btn-option" onclick="escolherEtapaDialogo('${etapa.id}', '${etapa.titulo.replace(/'/g, "\\'")}')">
                     <span>${etapa.icone}</span>
                     <span style="flex:1;text-align:left;">
                         <strong>${etapa.titulo}</strong><br>
@@ -2062,10 +2183,15 @@ function renderizarOrcamentoInicio() {
         }
     });
 
+    const voltarPainel = forcarHub
+        ? `<button type="button" class="chip" style="margin-bottom:14px;" onclick="voltarParaOrcamento()">← Voltar ao painel</button>`
+        : '';
+
     container.innerHTML = `
+        ${voltarPainel}
         ${cardResumo}
         ${renderDialogoThreadHtml()}
-        ${renderDialogoComposerHtml(opcoes, 'Escolha um caminho')}
+        ${renderDialogoComposerHtml(opcoesHtml, forcarHub ? 'Escolha o que revisar' : 'Escolha um caminho')}
     `;
     scrollDialogoFim();
 }
@@ -2724,8 +2850,9 @@ function renderizarCardDisponivelAgora(orc) {
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const estourou = d.origem === 'plano_estourado';
     const neg = d.valor < 0 || estourou;
+    // Fase 5 — hero clicável sempre
     return `
-        <div class="home-hero">
+        <div class="home-hero" onclick="abrirModalSaldoSemana()" role="button" style="cursor:pointer;" title="Ver saldo da semana">
             <div class="home-hero-label">${d.rotulo}</div>
             <div class="home-hero-value${neg ? ' neg' : ''}">${fmt(d.valor)}</div>
             <div class="home-hero-sub">${d.sub}</div>
@@ -2735,9 +2862,11 @@ function renderizarCardDisponivelAgora(orc) {
 
 /** Pílula de status + ícone de notificações/andaime */
 function renderizarPilulaStatusHome(orc) {
+    // Fase 2: pílula só N2+; 🔔 foi para o topo
+    if (!orc || (orc.nivel || 1) < 2) return '';
     let pill = `<button type="button" class="home-pill" onclick="abrirTelaFluxoCaixa()">✨ Ver horizonte ›</button>`;
     try {
-        if (typeof avaliarLiquidezHorizonte === 'function' && orc && (orc.nivel || 1) >= 2) {
+        if (typeof avaliarLiquidezHorizonte === 'function') {
             const liq = avaliarLiquidezHorizonte(orc, {});
             if (liq && liq.temAlgumEvento) {
                 let cls = 'home-pill';
@@ -2749,10 +2878,7 @@ function renderizarPilulaStatusHome(orc) {
             }
         }
     } catch (_) {}
-    const temAviso = _contarAvisosAndaime(orc) > 0;
-    const badge = temAviso ? '<span class="badge-dot"></span>' : '';
-    const notifBtn = `<button type="button" class="home-icon-btn" title="Avisos e orientações" onclick="abrirTelaNotificacoes()" aria-label="Notificações">${badge}🔔</button>`;
-    return `<div class="home-pill-row">${pill}${notifBtn}</div>`;
+    return `<div class="home-pill-row">${pill}</div>`;
 }
 
 function _contarAvisosAndaime(orc) {
@@ -2773,6 +2899,31 @@ function _contarAvisosAndaime(orc) {
         }
     } catch (_) {}
     return n;
+}
+
+/**
+ * Fase 8 — Badge unificado.
+ * Retorna true se existe pelo menos um aviso que merece um ponto no 🔔:
+ *   1) resumo semanal pronto para ler (fechada && !resumoLido);
+ *   2) qualquer andaime/stale que _contarAvisosAndaime já detecta
+ *      (semana sem renda real, N3 sem custódias, custódia stale ≥7d).
+ * A pílula de liquidez (folga/atenção/aperto) NÃO acende o badge —
+ * é informativa, não um aviso a resolver.
+ */
+function _temAvisoUnificado(orc) {
+    if (!orc) return false;
+
+    // 1. Resumo semanal pronto
+    if (orc.semanaAtual && orc.semanaAtual.fechada && !orc.semanaAtual.resumoLido) {
+        return true;
+    }
+
+    // 2. Conciliação pendente / stale / andaime (já coberto)
+    if (typeof _contarAvisosAndaime === 'function' && _contarAvisosAndaime(orc) > 0) {
+        return true;
+    }
+
+    return false;
 }
 
 /** CTA prioritário único da Home (conciliação pendente ou registrar) */
@@ -2801,18 +2952,21 @@ function renderizarCtaPrioritarioHome(orc) {
     return `<button type="button" class="home-cta" onclick="abrirModalRegistro()">＋ Registrar movimento</button>`;
 }
 
-/** Atalhos rápidos da Home (Mapa · Contas · Renda) */
+/** Fase 3 — Atalhos progressivos sob o CTA */
 function renderizarAtalhosHome(orc) {
     const nivel = (orc && orc.nivel) || 1;
     let html = '<div class="home-atalhos">';
-    if (nivel >= 3) {
+    // N2+: Fluxo e Mapa
+    if (nivel >= 2) {
+        html += `<button type="button" class="home-atalho" onclick="abrirTelaFluxoCaixa()">🧭 Fluxo</button>`;
         html += `<button type="button" class="home-atalho" onclick="abrirTelaMapaMes()">🗓️ Mapa</button>`;
+    }
+    // Sempre: Semanas
+    html += `<button type="button" class="home-atalho" onclick="renderizarHistoricoResumos(); goToScreen('screen-historico-resumos')">📅 Semanas</button>`;
+    // N3+: Contas (lista; não duplica CTA de conciliação)
+    if (nivel >= 3) {
         html += `<button type="button" class="home-atalho" onclick="abrirTelaCustodias()">🏦 Contas</button>`;
     }
-    if (nivel >= 2) {
-        html += `<button type="button" class="home-atalho" onclick="abrirDetalheRenda()">📈 Renda</button>`;
-    }
-    html += `<button type="button" class="home-atalho" onclick="renderizarHistoricoResumos(); goToScreen('screen-historico-resumos')">📅 Semanas</button>`;
     html += '</div>';
     return html;
 }
@@ -3251,12 +3405,15 @@ function renderizarOrcamentoCompleto(container, orc) {
     
 
     // ===== MONTAGEM FINAL — Home enxuta (ajustes + andaime fora) =====
+    // Fase 2 + Fase 8 — topo: 🔔 + ☰, badge unificado (resumo pronto + andaime/stale)
+const temAvisoHeader = (typeof _temAvisoUnificado === 'function' && _temAvisoUnificado(orc));
+const badgeHeader = temAvisoHeader ? '<span class="badge-dot"></span>' : '';
     const headerHome = `
         <div class="home-header">
             <div class="home-brand">D+1 <span>Mochila</span></div>
             <div class="home-header-actions">
-                <button type="button" class="home-icon-btn" title="Semanas" onclick="renderizarHistoricoResumos(); goToScreen('screen-historico-resumos')">📅</button>
-                <button type="button" class="home-icon-btn" title="Ajustes" onclick="abrirTelaAjustes()">⚙️</button>
+                <button type="button" class="home-icon-btn" title="Avisos" onclick="abrirTelaNotificacoes()" aria-label="Avisos">${badgeHeader}🔔</button>
+                <button type="button" class="home-icon-btn" title="Menu" onclick="abrirDrawer()" aria-label="Menu">☰</button>
             </div>
         </div>
         <div style="text-align:center;font-size:0.75rem;color:var(--secondary);margin:-8px 0 12px;">
@@ -3274,6 +3431,7 @@ function renderizarOrcamentoCompleto(container, orc) {
         ${renderizarCardDisponivelAgora(orc)}
         ${renderizarPilulaStatusHome(orc)}
         ${renderizarCtaPrioritarioHome(orc)}
+        ${renderizarAtalhosHome(orc)}
 
         ${renderizarAvisoCarregoVirada(semana)}
 
@@ -3342,6 +3500,406 @@ function aplicarTemaSalvo() {
 }
 
 /** Ciclo 4.2-C — cabeçalho padrão das telas secundárias */
+
+// ============================================================
+// FASE 0/1 — Drawer + stubs de telas (conteúdo nas fases 4+)
+// ============================================================
+
+let _drawerEscHandler = null;
+let _drawerPopHandler = null;
+let _drawerHistoryPushed = false;
+
+function montarDrawerHTML() {
+    const orc = (state && state.orcamento) || {};
+    const nivel = orc.nivel || 1;
+    const semana = orc.semanaAtual;
+    let contexto = 'Nível ' + nivel;
+    if (nivel === 1) {
+        contexto = 'Nível 1 · começando';
+    } else if (semana && semana.inicio && semana.fim && typeof formatarData === 'function') {
+        contexto = 'Nível ' + nivel + ' · ' + formatarData(semana.inicio) + '–' + formatarData(semana.fim);
+    } else {
+        contexto = 'Nível ' + nivel;
+    }
+
+    let itens = '';
+    // Ajuda — sempre primeiro
+    itens += `<button type="button" class="drawer-item" onclick="fecharDrawer(); abrirTelaAjuda()">
+        <span class="ico">🆘</span><span>Ajuda</span>
+    </button>`;
+    // Editar plano — só N2+
+    if (nivel >= 2) {
+        itens += `<button type="button" class="drawer-item" onclick="fecharDrawer(); abrirTelaEditarPlano()">
+            <span class="ico">✏️</span><span>Editar plano</span>
+        </button>`;
+    }
+    itens += `<button type="button" class="drawer-item" onclick="fecharDrawer(); abrirTelaAjustes()">
+        <span class="ico">⚙️</span><span>Ajustes</span>
+    </button>`;
+    itens += `<button type="button" class="drawer-item" onclick="fecharDrawer(); abrirTelaProjeto()">
+        <span class="ico">📖</span><span>Projeto</span>
+    </button>`;
+
+    return `
+        <div class="drawer-backdrop" id="drawer-backdrop" onclick="fecharDrawer()"></div>
+        <aside class="drawer" id="drawer-panel" role="dialog" aria-label="Menu">
+            <div class="drawer-header">
+                <div class="marca">D+1 Mochila</div>
+                <div class="contexto">${contexto}</div>
+            </div>
+            <nav class="drawer-nav">
+                ${itens}
+            </nav>
+        </aside>
+    `;
+}
+
+function abrirDrawer() {
+    if (document.getElementById('drawer-app')) {
+        fecharDrawer();
+        return;
+    }
+
+    const wrap = document.createElement('div');
+    wrap.id = 'drawer-app';
+    wrap.innerHTML = montarDrawerHTML();
+    document.body.appendChild(wrap);
+
+    // força reflow antes da classe de animação
+    void wrap.offsetWidth;
+    const backdrop = document.getElementById('drawer-backdrop');
+    const panel = document.getElementById('drawer-panel');
+    if (backdrop) backdrop.classList.add('aberto');
+    if (panel) panel.classList.add('aberto');
+
+    _drawerEscHandler = function (e) {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            fecharDrawer();
+        }
+    };
+    document.addEventListener('keydown', _drawerEscHandler);
+
+    // Back Android: pushState ao abrir; popstate fecha o drawer
+    try {
+        history.pushState({ d1Drawer: true }, '');
+        _drawerHistoryPushed = true;
+        _drawerPopHandler = function () {
+            _drawerHistoryPushed = false;
+            fecharDrawer(true);
+        };
+        window.addEventListener('popstate', _drawerPopHandler);
+    } catch (_) {
+        _drawerHistoryPushed = false;
+    }
+}
+
+function fecharDrawer(fromPopstate) {
+    const wrap = document.getElementById('drawer-app');
+    if (!wrap) return;
+
+    const backdrop = document.getElementById('drawer-backdrop');
+    const panel = document.getElementById('drawer-panel');
+    if (backdrop) backdrop.classList.remove('aberto');
+    if (panel) panel.classList.remove('aberto');
+
+    if (_drawerEscHandler) {
+        document.removeEventListener('keydown', _drawerEscHandler);
+        _drawerEscHandler = null;
+    }
+    if (_drawerPopHandler) {
+        window.removeEventListener('popstate', _drawerPopHandler);
+        _drawerPopHandler = null;
+    }
+
+    // Se fechou por botão/backdrop e havia pushState, volta o history sem re-disparar
+    if (!fromPopstate && _drawerHistoryPushed) {
+        _drawerHistoryPushed = false;
+        try { history.back(); } catch (_) {}
+    } else {
+        _drawerHistoryPushed = false;
+    }
+
+    setTimeout(function () {
+        const el = document.getElementById('drawer-app');
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+    }, 280);
+}
+
+function renderizarAjuda() {
+    const el = document.getElementById('ajuda-conteudo');
+    if (!el) return;
+    const nivel = (state.orcamento && state.orcamento.nivel) || 1;
+    let tuts = `
+        <button type="button" class="chip" onclick="abrirTelaTutorial(1)">🎬 Como o N1 funciona</button>
+    `;
+    if (nivel >= 2) {
+        tuts += `<button type="button" class="chip" onclick="abrirTelaTutorial(2)">🎬 Como o N2 funciona</button>`;
+    }
+    if (nivel >= 3) {
+        tuts += `<button type="button" class="chip" onclick="abrirTelaTutorial(3)">🎬 Como o N3 funciona</button>`;
+    }
+    el.innerHTML = `
+        ${cabecalhoTelaSecundaria('Ajuda', 'Tutoriais e orientações')}
+        <div class="ajustes-grid" style="margin-bottom:20px;">${tuts}</div>
+        <div class="card" style="text-align:center;">
+            <p style="font-size:0.9rem;color:var(--secondary);margin-bottom:12px;">Não achou o que precisava?</p>
+            <button type="button" class="btn-primary" style="margin-top:0;" onclick="abrirModalFeedback()">💬 Enviar feedback</button>
+        </div>
+    `;
+}
+function renderizarEditarPlano() {
+    const el = document.getElementById('editar-plano-conteudo');
+    if (!el) return;
+    const nivel = (state.orcamento && state.orcamento.nivel) || 1;
+    let chips = `
+        <button type="button" class="chip" onclick="abrirDetalheRenda()">📈 Renda</button>
+        <button type="button" class="chip" onclick="abrirDetalheGastos('base')">🛡️ Base</button>
+        <button type="button" class="chip" onclick="abrirDetalheGastos('vida')">🌿 Vida</button>
+        <button type="button" class="chip" onclick="abrirDetalheFuturo('divida')">🔭 Futuro</button>
+    `;
+    if (nivel >= 3) {
+        chips += `<button type="button" class="chip" onclick="abrirTelaCustodias()">🏦 Contas</button>`;
+    }
+    el.innerHTML = `
+        ${cabecalhoTelaSecundaria('Editar plano', 'Renda, envelopes e contas')}
+        <div class="ajustes-grid">${chips}</div>
+    `;
+}
+function renderizarProjeto() {
+    const el = document.getElementById('projeto-conteudo');
+    if (!el) return;
+    el.innerHTML = `
+        ${cabecalhoTelaSecundaria('Projeto', 'Por que o D+1 existe')}
+        <div class="card" style="margin-bottom:14px;">
+            <div style="font-size:1.15rem;font-weight:800;color:var(--primary);margin-bottom:6px;">D+1 · Mochila</div>
+            <p style="font-size:0.95rem;line-height:1.55;color:var(--text-main);margin:0;">
+                Um ambiente seguro para reorganizar suas finanças — no seu ritmo.
+            </p>
+        </div>
+        <div class="card" style="margin-bottom:14px;">
+            <div style="font-weight:700;margin-bottom:8px;">Por que existe</div>
+            <p style="font-size:0.9rem;line-height:1.55;color:var(--secondary);margin:0 0 10px;">
+                Não é anotador de gastos. Não é app de educação financeira genérico. Não é jogo.
+            </p>
+            <p style="font-size:0.9rem;line-height:1.55;color:var(--text-main);margin:0;">
+                É uma travessia: sair da fragmentação — a conta que não fecha, a vergonha, a primeira oferta que se aceita sem entender — e chegar a saber o que entra, o que sai, o que é seu.
+            </p>
+        </div>
+        <div class="card" style="margin-bottom:14px;">
+            <div style="font-weight:700;margin-bottom:8px;">Para quem</div>
+            <p style="font-size:0.9rem;line-height:1.55;color:var(--text-main);margin:0;">
+                Para a pessoa descrita pela Lei 14.181/2021: leiga, de boa-fé, envergonhada, que muitas vezes não pede ajuda. O app não trata você como ignorante.
+            </p>
+        </div>
+        <div class="card" style="margin-bottom:14px;">
+            <div style="font-weight:700;margin-bottom:8px;">O que faz</div>
+            <p style="font-size:0.9rem;line-height:1.55;color:var(--text-main);margin:0;">
+                Ensina enquanto você decide. Devolve os conceitos na hora em que precisa. Termina quando você sabe.
+            </p>
+        </div>
+        <div class="card" style="margin-bottom:14px;">
+            <div style="font-weight:700;margin-bottom:8px;">O que não faz</div>
+            <p style="font-size:0.9rem;line-height:1.55;color:var(--text-main);margin:0;">
+                Não decide por você. Não fideliza com pontos ou badges. Não vende crédito. Não inventa taxa, saldo ou média — só o que você declarar.
+            </p>
+        </div>
+        <div class="card" style="margin-bottom:14px;">
+            <div style="font-weight:700;margin-bottom:8px;">Privacidade</div>
+            <p style="font-size:0.9rem;line-height:1.55;color:var(--text-main);margin:0;">
+                Tudo fica no seu celular. O único canal que sai é o feedback (💬) — anônimo e opt-in. Você é dono dos seus dados.
+            </p>
+        </div>
+        <div class="card" style="border-left:4px solid var(--primary);">
+            <p style="font-size:0.95rem;line-height:1.55;color:var(--text-main);margin:0;font-weight:600;">
+                O D+1 termina quando você sabe.<br>
+                <span style="font-weight:500;color:var(--secondary);">Se um dia ele deixar de ser necessário, é sinal de que funcionou.</span>
+            </p>
+        </div>
+    `;
+}
+function renderizarTutorial(nivel) {
+    const el = document.getElementById('tutorial-conteudo');
+    if (!el) return;
+    nivel = Number(nivel) || 1;
+    if (nivel < 1 || nivel > 3) nivel = 1;
+
+    const TUTS = {
+        1: {
+            subtitulo: 'Como o Nível 1 funciona',
+            intro: 'Um passo de cada vez. Aqui você aprende a base — sem jargão de banco, sem culpa.',
+            blocos: [
+                {
+                    icone: '🎭',
+                    titulo: 'Os três personagens',
+                    corpo: '<strong>Torres 🛡️</strong> cuida da Base — o que não pode faltar.<br><strong>Bela 🌿</strong> cuida da Vida — o que te faz bem, sem culpa.<br><strong>Zé 🔭</strong> cuida do Futuro — o caminho para sair da dívida.<br>Eles aparecem nas conversas, mas não decidem por você.'
+                },
+                {
+                    icone: '📦',
+                    titulo: 'As 3 caixinhas',
+                    corpo: '<strong>Base</strong> — o que é sagrado: aluguel, comida, contas do mês.<br><strong>Vida</strong> — o que te dá prazer: streaming, saídas, cafezinho.<br><strong>Futuro</strong> — dívida e reserva: pagar o que deve, guardar para depois.<br>Cada uma tem um teto combinado pra semana.'
+                },
+                {
+                    icone: '🗓️',
+                    titulo: 'O ciclo semanal',
+                    corpo: 'A semana vai de <strong>domingo a sábado</strong> (por padrão).<br>A divisão é por <strong>~4,33</strong> — um mês tem cerca de 4 semanas e meia.<br>Se sua Base do mês é R$ 1.800, a semana fica em torno de R$ 415.<br>Você pensa em semanas — que é como o dinheiro costuma sair.'
+                },
+                {
+                    icone: '🔒',
+                    titulo: 'O que o app NÃO faz',
+                    corpo: 'Não conecta ao seu banco.<br>Não manda seus dados para ninguém.<br>Não vende crédito, não cobra juros, não inventa número.<br>Só trabalha com o que você declara — e tudo fica no seu celular.'
+                },
+                {
+                    icone: '➕',
+                    titulo: 'Quando quiser, toque em +',
+                    corpo: 'Toda vez que algo sair ou entrar, toque no botão <strong>+</strong>.<br>Registre o valor e o envelope. O app atualiza as caixinhas na hora.<br>Não precisa ser perfeito — só precisa ser honesto.'
+                }
+            ]
+        },
+        2: {
+            subtitulo: 'Como o Nível 2 funciona',
+            intro: 'Agora o app sabe mais. Você detalha renda, separa gastos fixos e começa a olhar para frente.',
+            blocos: [
+                {
+                    icone: '📈',
+                    titulo: 'Renda detalhada',
+                    corpo: 'Você cadastra cada fonte de renda (salário, bico, aluguel) com o dia em que cai.<br>O app usa isso para projetar quando o dinheiro entra — sem chute, só o que você declarou.'
+                },
+                {
+                    icone: '🧾',
+                    titulo: 'Gastos fixos × consumo',
+                    corpo: '<strong>Conta</strong> — tem dia de vencimento (aluguel, luz, internet).<br><strong>Consumo</strong> — é distribuído no mês (mercado, transporte).<br>Cada categoria pode ter sua conta padrão (de onde sai) e seu dia de vencimento.'
+                },
+                {
+                    icone: '💳',
+                    titulo: 'Dívida e Reserva',
+                    corpo: 'O Futuro se divide em <strong>Dívida</strong> (o que você deve) e <strong>Reserva</strong> (o colchão).<br>Cada uma pode ter parcelas, vencimento e valor mensal.<br>O app acompanha o progresso — sem julgar.'
+                },
+                {
+                    icone: '🧭',
+                    titulo: 'Fluxo de caixa',
+                    corpo: 'A tela de <strong>Fluxo</strong> mostra o que está declarado para os próximos 30 dias.<br>Entradas, saídas, dias de aperto.<br>Não é previsão mágica — é o calendário do que você já contou.'
+                }
+            ]
+        },
+        3: {
+            subtitulo: 'Como o Nível 3 funciona',
+            intro: 'Agora o dinheiro tem endereço. Você cadastra onde ele mora e acompanha o saldo real.',
+            blocos: [
+                {
+                    icone: '🏦',
+                    titulo: 'Contas (custódias)',
+                    corpo: 'Cadastre onde o dinheiro mora: conta corrente, carteira, cartão, poupança.<br>No <strong>+</strong>, cada gasto ou recebimento pergunta <strong>de onde saiu</strong> ou <strong>onde entrou</strong>.<br>Assim o app consegue mostrar quanto tem em cada lugar.'
+                },
+                {
+                    icone: '🎯',
+                    titulo: 'Conciliação',
+                    corpo: 'De vez em quando o app vai te convidar a <strong>alinhar o saldo real</strong> ao do banco.<br>Não é obrigatório — é opt-in.<br>Quando você reconcilia, o app ajusta o estoque sem inventar gasto ou receita de envelope.'
+                },
+                {
+                    icone: '💳',
+                    titulo: 'Fatura do cartão',
+                    corpo: 'Gasto no <strong>cartão de crédito</strong> entra na meta da semana e sobe na fatura.<br>O dinheiro só sai da conta quando você paga a fatura — e o app sabe a diferença.<br>Assim você não conta a mesma compra duas vezes.'
+                },
+                {
+                    icone: '🧭',
+                    titulo: 'Plano de recuperação',
+                    corpo: 'Quando o saldo da semana fica negativo ou tem conta vencida, o app oferece um <strong>Plano de Recuperação</strong>.<br>Ele organiza o que já venceu e sugere uma ordem — mas quem decide é você.<br>Sem culpa, sem julgamento. Só clareza.'
+                }
+            ]
+        }
+    };
+
+    const t = TUTS[nivel] || TUTS[1];
+
+    const htmlBlocos = t.blocos.map((b, i) => `
+        <div class="card" style="padding:16px 18px;margin-bottom:12px;border-left:3px solid var(--primary);">
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+                <span style="font-size:1.4rem;flex-shrink:0;">${b.icone}</span>
+                <div style="flex:1;">
+                    <div style="font-size:0.72rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
+                        Bloco ${i + 1} de ${t.blocos.length}
+                    </div>
+                    <div style="font-weight:700;color:var(--text-main);margin-bottom:8px;">${b.titulo}</div>
+                    <div style="font-size:0.88rem;color:var(--secondary);line-height:1.55;">
+                        ${b.corpo}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    el.innerHTML = `
+        ${cabecalhoTelaSecundaria('Tutorial N' + nivel, t.subtitulo)}
+        <div class="fala-avatar">
+            <span class="icone">🎬</span>
+            <span class="texto">${t.intro}</span>
+        </div>
+        ${htmlBlocos}
+        <button type="button" class="btn-primary" style="margin-top:12px;" onclick="abrirTelaAjuda()">Entendi</button>
+    `;
+}
+function abrirModalSaldoSemana() {
+    const m = document.getElementById('modal-saldo-semana');
+    const c = document.getElementById('modal-saldo-semana-conteudo');
+    if (!m || !c) return;
+    const orc = state.orcamento;
+    if (!orc) return;
+    if (!orc.semanaAtual) {
+        try { iniciarNovaSemana(); } catch (_) {}
+    }
+    const semana = orc.semanaAtual;
+    const nivel = orc.nivel || 1;
+    const card = (typeof renderizarCardSaldo === 'function')
+        ? renderizarCardSaldo(semana, orc, { semOnclick: true })
+        : '';
+
+    let destinoEditar = '';
+    if (nivel < 2) {
+        destinoEditar = "fecharModalSaldoSemana(); renderizarOrcamentoInicio({ forcarHub: true }); goToScreen('screen-orcamento-inicio');";
+    } else {
+        // N2/N3: abre lista de renda (link Sua renda na Fase 7)
+        destinoEditar = "fecharModalSaldoSemana(); abrirListaRegistros('renda');";
+    }
+
+    c.innerHTML = `
+        <div style="margin-bottom:8px;">
+            <div class="home-section-title" style="margin-bottom:4px;">Saldo da semana</div>
+            <div class="home-section-sub" style="margin-bottom:12px;">Toque em Editar para ajustar</div>
+        </div>
+        ${card}
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
+            <button type="button" class="btn-primary" style="margin-top:0;" onclick="${destinoEditar}">✏️ Editar</button>
+            <button type="button" class="chip" style="width:100%;justify-content:center;padding:14px;" onclick="fecharModalSaldoSemana()">Fechar</button>
+        </div>
+    `;
+    m.classList.add('ativo');
+    try { atualizarBotaoFeedback('modal-saldo-semana'); } catch (_) {}
+}
+function fecharModalSaldoSemana() {
+    const m = document.getElementById('modal-saldo-semana');
+    if (m) m.classList.remove('ativo');
+    try {
+        atualizarBotaoFeedback(document.querySelector('.screen.active')?.id || 'screen-orcamento-inicio');
+    } catch (_) {}
+}
+function abrirTelaAjuda() {
+    try { renderizarAjuda(); } catch (_) {}
+    goToScreen('screen-ajuda');
+}
+function abrirTelaEditarPlano() {
+    try { renderizarEditarPlano(); } catch (_) {}
+    goToScreen('screen-editar-plano');
+}
+function abrirTelaProjeto() {
+    try { renderizarProjeto(); } catch (_) {}
+    goToScreen('screen-projeto');
+}
+function abrirTelaTutorial(nivel) {
+    try { renderizarTutorial(nivel); } catch (_) {}
+    goToScreen('screen-tutorial');
+}
+
 function abrirTelaAjustes() {
     renderizarTelaAjustes();
     goToScreen('screen-ajustes');
@@ -3350,42 +3908,16 @@ function abrirTelaAjustes() {
 function renderizarTelaAjustes() {
     const el = document.getElementById('ajustes-conteudo');
     if (!el) return;
-    const orc = state.orcamento || {};
-    const nivel = orc.nivel || 1;
     const temaAtual = (state && state.theme) === 'dark' ? 'dark' : 'light';
     const labelTema = temaAtual === 'dark' ? '☀️ Tema claro' : '🌙 Tema escuro';
-
-    let chips = `
+    // Fase 4 — só preferências leves (edição e tutoriais migraram)
+    const chips = `
         <button type="button" class="chip" id="chip-tema" onclick="alternarTemaHome()">${labelTema}</button>
-    `;
-    if (nivel >= 2) {
-        chips += `
-            <button type="button" class="chip" onclick="abrirDetalheRenda()">📈 Renda</button>
-            <button type="button" class="chip" onclick="abrirDetalheGastos('base')">🛡️ Base</button>
-            <button type="button" class="chip" onclick="abrirDetalheGastos('vida')">🌿 Vida</button>
-            <button type="button" class="chip" onclick="abrirDetalheFuturo('divida')">🔭 Futuro</button>
-            <button type="button" class="chip" onclick="abrirTelaFluxoCaixa()">🧭 Fluxo</button>
-            <button type="button" class="chip" onclick="abrirConfigCicloSemana()">🗓️ Ciclo da semana</button>
-        `;
-        if (nivel === 2) {
-            chips += `<button type="button" class="chip" onclick="reiniciarOnboardingNivel2()">🎬 Ver tutorial N2 de novo</button>`;
-        }
-        if (nivel >= 3) {
-            chips += `
-                <button type="button" class="chip" onclick="abrirTelaCustodias()">🏦 Contas</button>
-                <button type="button" class="chip" onclick="abrirTelaMapaMes()">🗓️ Mapa</button>
-                <button type="button" class="chip" onclick="reiniciarOnboardingNivel3()">🎬 Ver tutorial N3 de novo</button>
-            `;
-        }
-    }
-    chips += `
-        <button type="button" class="chip" onclick="abrirTelaN0()">🌱 N0 Acolhimento</button>
-        <button type="button" class="chip" onclick="abrirTelaN4()">🧭 N4 Estratégias</button>
+        <button type="button" class="chip" onclick="abrirConfigCicloSemana()">🗓️ Ciclo da semana</button>
         <button type="button" class="chip" onclick="abrirModalQRCode()">📤 Compartilhar</button>
     `;
-
     el.innerHTML = `
-        ${cabecalhoTelaSecundaria('Ajustes', 'Atalhos e preferências')}
+        ${cabecalhoTelaSecundaria('Ajustes', 'Preferências')}
         <div class="ajustes-grid">${chips}</div>
     `;
 }
@@ -3779,8 +4311,10 @@ function _falaSaldoPersonagem({ saldo, saldoAnterior, rendaReal, totalGasto, per
     };
 }
 
-function renderizarCardSaldo(semana, orc) {
+function renderizarCardSaldo(semana, orc, opcoes) {
+    opcoes = opcoes || {};
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    // Fase 5: opcoes.semOnclick desliga o clique no card (modal da Home)
 
     const rendaReal     = semana.rendaReal || 0;
     const rendaEstimada = semana.rendaEstimada || (orc.base?.rendaBase || 0) / DIVISOR_SEMANAL;
@@ -3820,7 +4354,7 @@ function renderizarCardSaldo(semana, orc) {
         }
 
         return `
-            <div class="card" style="border-left: 4px solid ${corBorda}; margin-bottom: 20px; padding: 18px 20px; cursor: pointer;" onclick="abrirListaRegistros('renda')" role="button">
+            <div class="card" style="border-left: 4px solid ${corBorda}; margin-bottom: 20px; padding: 18px 20px; ${opcoes.semOnclick ? 'cursor:default;"' : 'cursor:pointer;" onclick="abrirListaRegistros(\'renda\')" role="button"'}>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                     <strong style="color: var(--primary); font-size: 0.95rem;">💰 Saldo da semana</strong>
                     <span style="font-size: 0.75rem; color: var(--secondary);">${pctUsado.toFixed(0)}% do previsto</span>
@@ -3862,7 +4396,7 @@ function renderizarCardSaldo(semana, orc) {
     if (rendaReal <= 0) {
         if (saldoAnterior === 0) {
             return `
-                <div class="card" style="border-left: 4px solid var(--secondary); margin-bottom: 20px; background: var(--bg-color); cursor: pointer;" onclick="abrirListaRegistros('renda')" role="button">
+                <div class="card" style="border-left: 4px solid var(--secondary); margin-bottom: 20px; background: var(--bg-color); ${opcoes.semOnclick ? 'cursor:default;"' : 'cursor:pointer;" onclick="abrirListaRegistros(\'renda\')" role="button"'}>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <strong style="color: var(--primary); font-size: 0.95rem;">💰 Saldo da semana</strong>
                         <span style="font-size: 0.75rem; color: var(--secondary);">aguardando</span>
@@ -3898,7 +4432,7 @@ function renderizarCardSaldo(semana, orc) {
         else if (percentualUsado >= 80) corBarra = 'barra-amarela';
 
         return `
-            <div class="card" style="border-left: 4px solid ${perfil.corBorda}; margin-bottom: 20px; padding: 18px 20px; cursor: pointer;" onclick="abrirListaRegistros('renda')" role="button">
+            <div class="card" style="border-left: 4px solid ${perfil.corBorda}; margin-bottom: 20px; padding: 18px 20px; ${opcoes.semOnclick ? 'cursor:default;"' : 'cursor:pointer;" onclick="abrirListaRegistros(\'renda\')" role="button"'}>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                     <strong style="color: var(--primary); font-size: 0.95rem;">💰 Saldo da semana</strong>
                     <span style="font-size: 0.75rem; color: var(--secondary);">${percentualUsado.toFixed(0)}% do saldo anterior</span>
@@ -3971,7 +4505,7 @@ function renderizarCardSaldo(semana, orc) {
            </div>`;
 
     return `
-        <div class="card" style="border-left: 4px solid ${perfil.corBorda}; margin-bottom: 20px; padding: 18px 20px; cursor: pointer;" onclick="abrirListaRegistros('renda')" role="button">
+        <div class="card" style="border-left: 4px solid ${perfil.corBorda}; margin-bottom: 20px; padding: 18px 20px; ${opcoes.semOnclick ? 'cursor:default;"' : 'cursor:pointer;" onclick="abrirListaRegistros(\'renda\')" role="button"'}>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <strong style="color: var(--primary); font-size: 0.95rem;">💰 Saldo da semana</strong>
                 <span style="font-size: 0.75rem; color: var(--secondary);">${percentualUsado.toFixed(0)}% usado</span>
@@ -5470,6 +6004,7 @@ function renderizarDetalheRenda() {
     const renda = state.orcamento.rendaDetalhe;
     const valorBase = state.orcamento.base?.rendaBase || 0;
 
+    
     // Se ainda não detalhou: fluxo conversacional
     if (!renda || !renda.fontes || renda.fontes.length === 0) {
         container.innerHTML = `
@@ -5538,28 +6073,33 @@ fontes.forEach(f => {
             `;
         }
     }
-
+const nivel = (state.orcamento && state.orcamento.nivel) || 1;
+const linkContas = nivel >= 3
+    ? `<button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--text-main);margin-top:16px;" onclick="abrirTelaCustodias()">🏦 Contas — Onde o dinheiro mora</button>`
+    : '';
     container.innerHTML = `
-        ${cabecalhoTelaSecundaria('Sua renda', 'De onde o dinheiro entra')}
-        <div class="fala-avatar">
-            <span class="icone">🌿</span>
-            <span class="texto">Suas fontes de renda. Se mudar algo, é só avisar.</span>
-        </div>
+    ${cabecalhoTelaSecundaria('Sua renda', 'De onde o dinheiro entra')}
+    <div class="fala-avatar">
+        <span class="icone">🌿</span>
+        <span class="texto">Suas fontes de renda. Se mudar algo, é só avisar.</span>
+    </div>
 
-        ${avisoDiferenca}
-        ${htmlFontes}
+    ${avisoDiferenca}
+    ${htmlFontes}
 
-        <div class="totalizador">
-            Total das fontes: <strong>R$ ${totalFontes.toFixed(2).replace('.', ',')}</strong>
-        </div>
+    <div class="totalizador">
+        Total das fontes: <strong>R$ ${totalFontes.toFixed(2).replace('.', ',')}</strong>
+    </div>
 
-        <button class="btn-primary" style="margin-top: 20px; background: var(--accent);" onclick="abrirFormularioFonteRenda()">
-            + Adicionar fonte de renda
-        </button>
-        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="refazerDetalheRenda()">
-            Refazer do zero
-        </button>
-    `;
+    ${linkContas}
+
+    <button class="btn-primary" style="margin-top: 20px; background: var(--accent);" onclick="abrirFormularioFonteRenda()">
+        + Adicionar fonte de renda
+    </button>
+    <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="refazerDetalheRenda()">
+        Refazer do zero
+    </button>
+`;
 }
 
 function traduzirOrigem(origem) {
@@ -8147,7 +8687,54 @@ function confirmarPagamentoFatura(cartaoId) {
     );
     voltarParaOrcamento();
 }
+// ============================================================
+// FASE 11 — CONTA VENCIDA PAGA PARA DE ALARMAR
+// Helpers read-only: reconhecem pagamento no mês corrente via
+// historicoRegistros. Não escrevem em state, não migram nada.
+// ============================================================
 
+/**
+ * Mesma granularidade ano-mês que o sinal s2 usa.
+ * Complementa _pertenceSemanaAtual, sem substituí-la.
+ */
+function _pertenceMesAtual(isoStr) {
+    if (!isoStr) return false;
+    try {
+        const d = new Date(isoStr);
+        if (isNaN(d)) return false;
+        const hoje = new Date();
+        return d.getFullYear() === hoje.getFullYear() && d.getMonth() === hoje.getMonth();
+    } catch (_) {
+        return false;
+    }
+}
+
+/**
+ * Retorna true se existe pelo menos um registro no mês atual
+ * que liquida a conta (cat):
+ *   - tipo em gasto_direto | gasto_cartao | pagamento_divida | aporte_reserva
+ *   - categoriaId === cat.id (preferencial) ou categoria === cat.nome (legado)
+ *   - data cai no mês corrente (janela ano-mês de hoje)
+ *   - registro não anulado
+ *
+ * Read-only. Não adiciona campos, não persiste, não toca em envelope.
+ */
+function _contaEstaPagaNoMes(cat, orc) {
+    if (!cat || !orc) return false;
+    const hist = orc.historicoRegistros || [];
+    const tiposQueLiquidam = ['gasto_direto', 'gasto_cartao', 'pagamento_divida', 'aporte_reserva'];
+
+    for (let i = 0; i < hist.length; i++) {
+        const r = hist[i];
+        if (!r || !r.data) continue;
+        if (r.anulado) continue;                       // anulado = não liquidou
+        if (tiposQueLiquidam.indexOf(r.tipo) === -1) continue;
+        if (!_pertenceMesAtual(r.data)) continue;
+        if (cat.id && r.categoriaId === cat.id) return true;
+        if (cat.nome && r.categoria === cat.nome) return true;
+    }
+    return false;
+}
 // ============================================================
 // NÍVEL 3 — PLANO DE RECUPERAÇÃO
 // ============================================================
@@ -8176,8 +8763,10 @@ function detectarSinalRecuperacao(orc) {
     hoje.setHours(0, 0, 0, 0);
     const diaHoje = hoje.getDate();
 
-    const categoriasComVenc = (orc.categorias || []).filter(c => c.vencimento);
-    const contasVencidas = categoriasComVenc.filter(c => c.vencimento < diaHoje);
+        const categoriasComVenc = (orc.categorias || []).filter(c => c.vencimento);
+    const contasVencidas = categoriasComVenc.filter(c =>
+        c.vencimento < diaHoje && !_contaEstaPagaNoMes(c, orc)
+    );
     const s2 = contasVencidas.length > 0;
 
     if (!s1 && !s2) return null;
@@ -8263,7 +8852,10 @@ function renderizarPlanoRecuperacao() {
 
     // ===== ESTÁGIO 2: PRIORIZAÇÃO =====
     // Lista todas as contas com vencimento (vencidas + futuras) para o usuário ordenar
-    const categoriasComVenc = (orc.categorias || []).filter(c => c.vencimento);
+        // Lista só as contas ainda em aberto (vencidas + futuras), não pagas neste mês
+    const categoriasComVenc = (orc.categorias || []).filter(c =>
+        c.vencimento && !_contaEstaPagaNoMes(c, orc)
+    );
     const diaHoje = new Date().getDate();
 
     let htmlPriorizacao = '';
@@ -8306,7 +8898,34 @@ function renderizarPlanoRecuperacao() {
             ${listaPriorizacao}
         `;
     }
-
+    // Fase 11 — confirmação visual: o app reconheceu como pagas neste mês
+    const contasPagas = (orc.categorias || []).filter(c =>
+        c.vencimento && _contaEstaPagaNoMes(c, orc)
+    );
+    let blocoPagas = '';
+    if (contasPagas.length > 0) {
+        let listaPagas = '';
+        contasPagas.forEach(c => {
+            const icone = c.caixa === 'base' ? '🛡️' : '🌿';
+            listaPagas += `
+                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--border);">
+                    <span style="font-size: 0.85rem; color: var(--primary);">✓ ${icone} ${c.nome}</span>
+                    <strong style="font-size: 0.85rem; color: var(--success);">${sinal.fmt(c.valor || 0)}</strong>
+                </div>
+            `;
+        });
+        blocoPagas = `
+            <div class="card" style="border-left: 4px solid var(--success); background: var(--success-soft); margin-top: 20px; padding: 14px 16px;">
+                <strong style="color: var(--success); font-size: 0.9rem; display: block; margin-bottom: 8px;">
+                    ✓ Pagas este mês
+                </strong>
+                <div style="font-size: 0.8rem; color: var(--secondary); line-height: 1.4; margin-bottom: 8px;">
+                    O app reconheceu o pagamento destas contas neste mês. Elas não estão na priorização.
+                </div>
+                ${listaPagas}
+            </div>
+        `;
+    }
     container.innerHTML = `
         <div style="margin-bottom: 20px;">
             <span style="font-size: 0.8rem; font-weight: bold; color: var(--secondary); text-transform: uppercase;">Plano de recuperação</span>
@@ -8321,6 +8940,7 @@ function renderizarPlanoRecuperacao() {
         ${blocoS1}
         ${blocoS2}
         ${htmlPriorizacao}
+        ${blocoPagas}
 
         <div class="card" style="background: var(--bg-color); border-color: var(--border); margin-top: 20px;">
             <p style="font-size: 0.85rem; color: var(--secondary); line-height: 1.5;">
@@ -10697,6 +11317,37 @@ function abrirListaRegistrosCategoria(categoriaId, categoriaNome) {
     renderizarModalListaRegistros();
 }
 
+/**
+ * Fase 6 — rodapé contextual do modal de registros.
+ * - Modo 'caixa' → botão "Editar" (destino por nível).
+ * - Modo 'renda' → vazio (link "Sua renda" entra na Fase 7).
+ * - Modo 'categoria' → vazio (edição já existe no form da categoria).
+ */
+ 
+function _montarRodapeEdicaoListaRegistros(ctx) {
+    if (!ctx) return '';
+    if (ctx.modo === 'renda') {
+        return `<button type="button" class="btn-option" style="justify-content:center;border-color:var(--primary);color:var(--primary);margin-top:14px;" onclick="fecharModalListaRegistros(); abrirDetalheRenda();">✏️ Sua renda</button>`;
+    }
+
+    if (ctx.modo !== 'caixa') return '';
+
+    const caixa = ctx.caixa;
+    const nivel = (state.orcamento && state.orcamento.nivel) || 1;
+    let acao = '';
+
+    if (nivel < 2) {
+        acao = "fecharModalListaRegistros(); renderizarOrcamentoInicio({ forcarHub: true }); goToScreen('screen-orcamento-inicio');";
+    } else if (caixa === 'base' || caixa === 'vida') {
+        acao = `fecharModalListaRegistros(); abrirDetalheGastos('${caixa}');`;
+    } else if (caixa === 'futuro') {
+        acao = "fecharModalListaRegistros(); abrirDetalheFuturo('divida');";
+    } else {
+        return '';
+    }
+
+    return `<button type="button" class="btn-option" style="justify-content:center;border-color:var(--primary);color:var(--primary);margin-top:14px;" onclick="${acao}">✏️ Editar</button>`;
+}
 function renderizarModalListaRegistros() {
     const ctx = listaRegistrosContexto;
     if (!ctx) return;
@@ -10783,7 +11434,8 @@ function renderizarModalListaRegistros() {
             }).join('')}
         `;
     }
-
+const rodapeListaRegistros = document.getElementById('lista-registros-rodape-edit');
+    if (rodapeListaRegistros) rodapeListaRegistros.innerHTML = _montarRodapeEdicaoListaRegistros(ctx);
     const passoLista = document.getElementById('lista-registros-passo-lista');
     const passoEditar = document.getElementById('lista-registros-passo-editar');
     if (passoLista) passoLista.style.display = 'block';
@@ -10798,6 +11450,11 @@ function fecharModalListaRegistros() {
     document.getElementById('modal-lista-registros').classList.remove('ativo');
     listaRegistrosContexto = null;
     registroEditandoId = null;
+
+    // Fase 6 — limpar rodapé contextual
+    const rodapeFecharRegistros = document.getElementById('lista-registros-rodape-edit');
+    if (rodapeFecharRegistros) rodapeFecharRegistros.innerHTML = '';
+
     const passoLista = document.getElementById('lista-registros-passo-lista');
     const passoEditar = document.getElementById('lista-registros-passo-editar');
     if (passoLista) passoLista.style.display = 'block';
