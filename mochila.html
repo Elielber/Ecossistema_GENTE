@@ -10466,6 +10466,7 @@ function renderizarFluxoCaixa() {
 
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const fluxo = projetarFluxo(orc, { dias: 30 });
+    
     let projMapFluxo = {};
     if ((orc.nivel || 1) >= 3) {
         (orc.custodias || []).forEach(c => {
@@ -10475,31 +10476,54 @@ function renderizarFluxoCaixa() {
     const gargalos = detectarGargalos(fluxo, { custodias: projMapFluxo });
     const sugestoes = sugerirEquilibrio(gargalos, orc);
 
+    // NOVO: Cálculo dos gastos distribuídos (sem data fixa)
+    // Considera a categoria se não tiver vencimento (ou for tipo 'consumo') e respeita o filtro de custódia
+    const categoriasSemVenc = (orc.categorias || []).filter(c => 
+        !c.vencimento && 
+        !_categoriaParcelasQuitada(c) &&
+        (!fluxoCustodiaFiltro || c.custodiaPadraoId === fluxoCustodiaFiltro)
+    );
+    const totalMensalSemVenc = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+    // Proporcional aos 30 dias da janela
+    const gastosDistribuidos = (totalMensalSemVenc / 30) * fluxo.dias;
+    
+    // Calcula a sobra real (considerando o que já tem data + o que é consumo diluído)
+    const sobraAjustada = fluxo.totais.saldo - gastosDistribuidos;
+
     const falaZe = `
         <div class="fala-avatar">
             <span class="icone">🔭</span>
-            <span class="texto"><strong>Zé:</strong> Aqui só entra o que você declarou — dias de recebimento e vencimentos. Sem média e sem chute.</span>
+            <span class="texto"><strong>Zé:</strong> Aqui entra o que você declarou. Os gastos sem data fixa (como mercado e transporte) entram diluídos no período para você ver a sobra real.</span>
         </div>
     `;
 
-    // Resumo do topo
-    let corSaldo = fluxo.totais.saldo >= 0 ? 'var(--success)' : 'var(--danger)';
+    // Resumo do topo atualizado
+    let corSaldo = sobraAjustada >= 0 ? 'var(--success)' : 'var(--danger)';
     let htmlResumo = cabecalhoTelaSecundaria('Fluxo de caixa', 'Só o que você declarou') + falaZe + `
         <div class="card" style="border-left: 4px solid ${corSaldo}; margin-bottom: 16px;">
             <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 8px;">
-                Próximos ${fluxo.dias} dias · só o declarado
+                Próximos ${fluxo.dias} dias
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px;">
-                <span style="color: var(--secondary);">Entra</span>
+                <span style="color: var(--secondary);">Entradas com data</span>
                 <strong style="color: var(--success);">+ ${fmt(fluxo.totais.entradas)}</strong>
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px;">
-                <span style="color: var(--secondary);">Sai</span>
+                <span style="color: var(--secondary);">Saídas com data</span>
                 <strong style="color: var(--danger);">− ${fmt(fluxo.totais.saidas)}</strong>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 1rem; padding-top: 10px; border-top: 1px solid var(--border);">
-                <span style="font-weight: bold; color: var(--primary);">${fluxo.totais.saldo >= 0 ? 'Sobra projetada' : 'Falta projetada'}</span>
-                <strong style="color: ${corSaldo};">${fmt(Math.abs(fluxo.totais.saldo))}</strong>
+            ${gastosDistribuidos > 0 ? `
+            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px;">
+                <span style="color: var(--secondary);">Gastos diluídos (sem data)</span>
+                <strong style="color: var(--warning);">− ${fmt(gastosDistribuidos)}</strong>
+            </div>
+            ` : ''}
+            <div style="display: flex; justify-content: space-between; font-size: 1rem; padding-top: 10px; margin-top: 6px; border-top: 1px solid var(--border);">
+                <span style="font-weight: bold; color: var(--primary);">${sobraAjustada >= 0 ? 'Sobra ajustada' : 'Falta ajustada'}</span>
+                <strong style="color: ${corSaldo};">${fmt(Math.abs(sobraAjustada))}</strong>
+            </div>
+            <div style="font-size: 0.7rem; color: var(--secondary); margin-top: 6px; text-align: right;">
+                *Sobra ajustada inclui os gastos diluídos no período.
             </div>
         </div>
     `;
@@ -10526,6 +10550,11 @@ function renderizarFluxoCaixa() {
                 const corC = proj.temFatura
                     ? 'var(--warning)'
                     : (proj.saldoFinal < 0 ? 'var(--danger)' : 'var(--success)');
+                
+                // Se houver custódia filtrada, calculamos os gastos diluídos só para ela
+                const gastosDistFiltro = (categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0) / 30) * fluxo.dias;
+                const saldoProjAjustado = proj.temFatura ? proj.faturaFinal : (proj.saldoFinal - gastosDistFiltro);
+
                 htmlProjCustodia = `
                     <div class="card" style="border-left: 4px solid ${corC}; margin-bottom: 16px;">
                         <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 8px;">
@@ -10535,11 +10564,16 @@ function renderizarFluxoCaixa() {
                             <span style="color: var(--secondary);">Hoje</span>
                             <strong>${fmt(proj.temFatura ? proj.faturaInicial : proj.saldoInicial)}</strong>
                         </div>
+                        ${(!proj.temFatura && gastosDistFiltro > 0) ? `
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
+                            <span style="color: var(--secondary);">Gastos diluídos (sem data)</span>
+                            <strong style="color: var(--warning);">− ${fmt(gastosDistFiltro)}</strong>
+                        </div>` : ''}
                         <div style="display: flex; justify-content: space-between; font-size: 1rem;">
-                            <span style="font-weight: bold; color: var(--primary);">Em 30 dias</span>
-                            <strong style="color: ${corC};">${fmt(proj.temFatura ? proj.faturaFinal : proj.saldoFinal)}</strong>
+                            <span style="font-weight: bold; color: var(--primary);">Em 30 dias (ajustado)</span>
+                            <strong style="color: ${saldoProjAjustado < 0 && !proj.temFatura ? 'var(--danger)' : corC};">${fmt(saldoProjAjustado)}</strong>
                         </div>
-                        ${(proj.eventos || []).length === 0 ? '<div style="font-size: 0.8rem; color: var(--secondary); margin-top: 8px;">Nenhuma conta ligada a esta custódia com vencimento na janela.</div>' : ''}
+                        ${(proj.eventos || []).length === 0 && gastosDistFiltro === 0 ? '<div style="font-size: 0.8rem; color: var(--secondary); margin-top: 8px;">Nenhuma conta ou consumo ligado a esta custódia.</div>' : ''}
                     </div>
                 `;
             }
@@ -10550,8 +10584,13 @@ function renderizarFluxoCaixa() {
                 const proj = projetarCustodia(orc, c.id, { dias: 30 });
                 if (!proj) return;
                 const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
-                const val = proj.temFatura ? proj.faturaFinal : proj.saldoFinal;
+                
+                const catsDestaCustodia = categoriasSemVenc.filter(cat => cat.custodiaPadraoId === c.id);
+                const gastosDistC = (catsDestaCustodia.reduce((s, cat) => s + (Number(cat.valor) || 0), 0) / 30) * fluxo.dias;
+                
+                const val = proj.temFatura ? proj.faturaFinal : (proj.saldoFinal - gastosDistC);
                 const cor = proj.temFatura ? 'var(--warning)' : (val < 0 ? 'var(--danger)' : 'var(--success)');
+                
                 linhasC += `
                     <div style="display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--border); font-size: 0.85rem; cursor: pointer;" onclick="fluxoCustodiaFiltro='${c.id}';renderizarFluxoCaixa()">
                         <span>${tipo.icone} ${proj.nome}</span>
@@ -10562,7 +10601,7 @@ function renderizarFluxoCaixa() {
             if (linhasC) {
                 htmlProjCustodia = `
                     <div class="card" style="margin-bottom: 16px; padding: 14px 16px;">
-                        <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 4px;">Contas em 30 dias</div>
+                        <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 4px;">Contas em 30 dias (ajustado)</div>
                         ${linhasC}
                     </div>
                 `;
@@ -10575,10 +10614,11 @@ function renderizarFluxoCaixa() {
     if (fluxo.lacunas.fontesSemDia > 0 || fluxo.lacunas.categoriasSemVencimento > 0) {
         const bits = [];
         if (fluxo.lacunas.fontesSemDia > 0) bits.push(`${fluxo.lacunas.fontesSemDia} fonte(s) sem dia de recebimento`);
-        if (fluxo.lacunas.categoriasSemVencimento > 0) bits.push(`${fluxo.lacunas.categoriasSemVencimento} categoria(s) sem vencimento`);
+        if (fluxo.lacunas.categoriasSemVencimento > 0) bits.push(`${fluxo.lacunas.categoriasSemVencimento} categoria(s) de consumo (diluídas no cálculo)`);
+        
         htmlLacunas = `
             <div style="background: var(--bg-color); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.8rem; color: var(--secondary); line-height: 1.45;">
-                💡 Fora do calendário: ${bits.join(' · ')}. Só entra no fluxo o que tem dia declarado.
+                💡 Fora do calendário diário: ${bits.join(' · ')}. As entradas e saídas com data aparecem na linha do tempo abaixo; os gastos de consumo entram no cálculo da "Sobra ajustada" no topo.
             </div>
         `;
     }
@@ -10597,7 +10637,6 @@ function renderizarFluxoCaixa() {
     }
 
     // Timeline por dia (só dias com evento)
-    // Bloco 8: se filtro de custódia, só eventos ligados a ela (ou recebimentos sem custódia ficam de fora)
     let porDiaView = fluxo.porDia;
     if (fluxoCustodiaFiltro) {
         porDiaView = {};
@@ -10676,7 +10715,6 @@ function renderizarFluxoCaixa() {
         </button>
     `;
 }
-
 // ============================================================
 // CICLO 3.9 — ANDAIME DE PROJEÇÃO (cards na home)
 // ============================================================
