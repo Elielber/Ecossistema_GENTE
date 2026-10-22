@@ -6252,6 +6252,13 @@ fontes.forEach(f => {
     let metaFonte = `${traduzirOrigem(f.origem)} · ${traduzirFrequencia(f.frequencia)}`;
     const descDia = descreverDiaRecebimento(f.diaRecebimento);
     if (descDia) metaFonte += ` · ${descDia}`;
+    if (f.custodiaPadraoId) {
+        const cust = (state.orcamento.custodias || []).find(c => c.id === f.custodiaPadraoId);
+        if (cust) {
+            const tipoC = TIPOS_CUSTODIA[cust.tipo] || TIPOS_CUSTODIA.outro;
+            metaFonte += ` · ${tipoC.icone} ${cust.nome}`;
+        }
+    }
 
     // Realizado na semana: recebimentos com mesmo nome de categoria/fonte
     const recebidoSem = (state.orcamento.historicoRegistros || [])
@@ -6353,6 +6360,26 @@ function responderOrigemRenda(origem) {
     temGenericaTemp = temGenerica;
     frequenciaRendaSelecionada = null;
     diaRecebimentoTemp = null;
+    custodiaRendaSelecionada = null;
+
+    let htmlCustodia = '';
+    const custodias = (state.orcamento.nivel >= 3) ? (state.orcamento.custodias || []) : [];
+    if (custodias.length > 0) {
+        let chipsCust = '';
+        custodias.forEach(c => {
+            const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
+            chipsCust += `<div class="chip" data-custodia-id="${c.id}" onclick="selecionarCustodiaRenda(this)">${tipo.icone} ${c.nome}</div>`;
+        });
+        htmlCustodia = `
+            <div class="fala-avatar">
+                <span class="icone">🌿</span>
+                <span class="texto">Onde esse dinheiro costuma cair? (opcional)</span>
+            </div>
+            <div class="chip-container" id="chips-custodia-renda">
+                ${chipsCust}
+            </div>
+        `;
+    }
 
     const container = document.getElementById('renda-detalhe-conteudo');
     container.innerHTML = `
@@ -6381,11 +6408,19 @@ function responderOrigemRenda(origem) {
             <div class="chip" onclick="responderFrequenciaRenda(this, 'semanal')">Toda semana</div>
             <div class="chip" onclick="responderFrequenciaRenda(this, 'imprevisivel')">Varia muito</div>
         </div>
+        ${htmlCustodia}
         <!-- O botão Salvar é injetado dinamicamente por mostrarBotaoSalvarFonte() -->
     `;
 }
 let frequenciaRendaSelecionada = null;
 let diaRecebimentoTemp = null; // número | [d1,d2] | null
+let custodiaRendaSelecionada = null;
+
+function selecionarCustodiaRenda(el) {
+    document.querySelectorAll('#chips-custodia-renda .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    custodiaRendaSelecionada = el.getAttribute('data-custodia-id');
+}
 
 function responderFrequenciaRenda(el, freq) {
     document.querySelectorAll('#chips-frequencia .chip').forEach(c => c.classList.remove('selecionado'));
@@ -6551,13 +6586,15 @@ function salvarFonteRenda(origem, temGenerica) {
         valor: valor,
         origem: origem,
         frequencia: frequenciaRendaSelecionada,
-        diaRecebimento: diaRecebimento
+        diaRecebimento: diaRecebimento,
+        custodiaPadraoId: custodiaRendaSelecionada || null
     });
 if (typeof _tickOnboardingNivel2AposFonte === "function") _tickOnboardingNivel2AposFonte();
     frequenciaRendaSelecionada = null;
     diaRecebimentoTemp = null;
     origemRendaTemp = null;
     temGenericaTemp = false;
+    custodiaRendaSelecionada = null;
 
     salvarEstado();
     console.log('[NÍVEL 2] Fonte de renda salva:', nome, '| dia:', diaRecebimento);
@@ -10611,9 +10648,10 @@ function renderizarFluxoCaixa() {
 
     // Lacunas (convite, não alerta)
     let htmlLacunas = '';
-    if (fluxo.lacunas.fontesSemDia > 0 || fluxo.lacunas.categoriasSemVencimento > 0) {
+    if (fluxo.lacunas.fontesSemDia > 0 || (fluxo.lacunas.fontesSemCustodia || 0) > 0 || fluxo.lacunas.categoriasSemVencimento > 0) {
         const bits = [];
         if (fluxo.lacunas.fontesSemDia > 0) bits.push(`${fluxo.lacunas.fontesSemDia} fonte(s) sem dia de recebimento`);
+        if ((fluxo.lacunas.fontesSemCustodia || 0) > 0) bits.push(`${fluxo.lacunas.fontesSemCustodia} fonte(s) sem conta de destino`);
         if (fluxo.lacunas.categoriasSemVencimento > 0) bits.push(`${fluxo.lacunas.categoriasSemVencimento} categoria(s) de consumo (diluídas no cálculo)`);
         
         htmlLacunas = `
@@ -10642,12 +10680,11 @@ function renderizarFluxoCaixa() {
         porDiaView = {};
         Object.keys(fluxo.porDia).forEach(data => {
             const dia = fluxo.porDia[data];
-            const evs = (dia.eventos || []).filter(e =>
-                e.tipo === 'vencimento' && e.custodiaId === fluxoCustodiaFiltro
-            );
+            const evs = (dia.eventos || []).filter(e => e.custodiaId === fluxoCustodiaFiltro);
             if (evs.length === 0) return;
-            const saidas = evs.reduce((s, e) => s + (e.valor || 0), 0);
-            porDiaView[data] = { data: data, entradas: 0, saidas: saidas, eventos: evs };
+            const entradas = evs.filter(e => e.tipo === 'recebimento').reduce((s, e) => s + (e.valor || 0), 0);
+            const saidas = evs.filter(e => e.tipo === 'vencimento').reduce((s, e) => s + (e.valor || 0), 0);
+            porDiaView[data] = { data: data, entradas: entradas, saidas: saidas, eventos: evs };
         });
     }
     const datas = Object.keys(porDiaView).sort();
@@ -11133,7 +11170,7 @@ function _eventosRecebimentoDeclarados(orc, inicio, fim) {
                         valor: valorPorOcorrencia,
                         caixa: null,
                         categoriaId: null,
-                        custodiaId: null
+                        custodiaId: f.custodiaPadraoId || null
                     });
                 }
             });
@@ -11210,6 +11247,7 @@ function projetarFluxo(orc, opcoes) {
     const saidas = vencimentos.reduce((s, e) => s + e.valor, 0);
     const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
     const fontesSemDia = fontes.filter(f => _diasRecebimento(f.diaRecebimento).length === 0).length;
+    const fontesSemCustodia = fontes.filter(f => !f.custodiaPadraoId).length;
     const categoriasSemVencimento = (orc.categorias || []).filter(
         c => c.vencimento === null || c.vencimento === undefined
     ).length;
@@ -11221,7 +11259,11 @@ function projetarFluxo(orc, opcoes) {
         eventos: eventos,
         porDia: porDia,
         totais: { entradas: entradas, saidas: saidas, saldo: entradas - saidas },
-        lacunas: { fontesSemDia: fontesSemDia, categoriasSemVencimento: categoriasSemVencimento }
+        lacunas: {
+            fontesSemDia: fontesSemDia,
+            fontesSemCustodia: fontesSemCustodia,
+            categoriasSemVencimento: categoriasSemVencimento
+        }
     };
 }
 
@@ -11388,7 +11430,8 @@ function projetarCustodia(orc, custodiaId, opcoes) {
     if (!custodia) return null;
     const tipoInfo = TIPOS_CUSTODIA[custodia.tipo] || TIPOS_CUSTODIA.outro;
     const fluxo = projetarFluxo(orc, opcoes);
-    const eventosLigados = fluxo.eventos.filter(e => e.tipo === 'vencimento' && e.custodiaId === custodiaId);
+    // Recebimentos e vencimentos ligados a esta conta
+    const eventosLigados = fluxo.eventos.filter(e => e.custodiaId === custodiaId);
     let saldo = custodia.saldoAtual || 0;
     let fatura = custodia.faturaAcumulada || 0;
     const saldoInicial = saldo;
@@ -11402,8 +11445,18 @@ function projetarCustodia(orc, custodiaId, opcoes) {
     Object.keys(porData).sort().forEach(data => {
         let delta = 0;
         porData[data].forEach(e => {
-            if (tipoInfo.temFatura) { fatura += e.valor; delta += e.valor; }
-            else { saldo -= e.valor; delta -= e.valor; }
+            if (tipoInfo.temFatura) {
+                // Cartão: só vencimentos (compras) aumentam fatura; recebimento não se aplica
+                if (e.tipo === 'vencimento') {
+                    fatura += e.valor; delta += e.valor;
+                }
+            } else {
+                if (e.tipo === 'recebimento') {
+                    saldo += e.valor; delta += e.valor;
+                } else {
+                    saldo -= e.valor; delta -= e.valor;
+                }
+            }
         });
         pontos.push({ data: data, saldo: saldo, fatura: fatura, delta: delta, eventos: porData[data] });
     });
