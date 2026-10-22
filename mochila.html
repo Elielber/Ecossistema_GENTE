@@ -9643,6 +9643,7 @@ function calcularLimiteFuturoSemana(semana) {
 // ============================================================
 
 function montarResumoParaQR() {
+function montarResumoParaQR() {
     const orc = state.orcamento;
     const semana = orc.semanaAtual;
     if (!semana) return null;
@@ -9660,13 +9661,17 @@ function montarResumoParaQR() {
                      + (semana.vida?.gasto || 0)
                      + (semana.futuro?.gasto || 0);
 
+    // CORREÇÃO: usar a mesma lógica da tela de entrada e do card de saldo
+    const rendaInfo = rendaEfetivaDaSemana(semana, orc);
+    const saldoReal = (semana.saldoAnterior || 0) + rendaInfo.valor - totalGasto;
+
     const fmt = (v) => v.toFixed(2);
 
     return {
         sem: `${formatarData(semana.inicio)} a ${formatarData(semana.fim)}`,
         r:  Number(fmt(semana.rendaReal || 0)),
         rEstimada: Number(fmt(semana.rendaEstimada || 0)),
-        s:  Number(fmt((semana.rendaReal || 0) - totalGasto)),
+        s:  Number(fmt(saldoReal)), // ← agora inclui o saldo anterior
         b:  [Number(fmt(semana.base?.gasto   || 0)), Number(fmt(semana.base?.limite   || 0))],
         vd: [Number(fmt(semana.vida?.gasto   || 0)), Number(fmt(semana.vida?.limite   || 0))],
         f:  [Number(fmt(semana.futuro?.gasto || 0)), Number(fmt(semana.futuro?.limite || 0))],
