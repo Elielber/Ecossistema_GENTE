@@ -5203,6 +5203,8 @@ function formatarData(dataStr) {
 // ============================================================
 
 let registroTemporario = null;
+/** Handoff do + → Futuro: { valor, subtipo } até concluir pagamento/aporte */
+let pendenteRegistroFuturo = null;
 
 /** Personagem do turno conforme envelope / tipo */
 function _personagemRegistro(caixa, tipo) {
@@ -5391,6 +5393,12 @@ function registrarGasto(caixa) {
 
     dialogoPushUsuario(caixa === 'base' ? 'Base' : caixa === 'vida' ? 'Vida' : 'Futuro');
 
+    // Futuro: nunca cria gasto órfão no +. Encaminha para dívida ou reserva.
+    if (caixa === 'futuro') {
+        mostrarHandoffFuturo(valor);
+        return;
+    }
+
     const categoriasDaCaixa = (state.orcamento.categorias || []).filter(c => c.caixa === caixa);
     if (state.orcamento.nivel >= 2 && categoriasDaCaixa.length > 0) {
         mostrarPassoCategoria(categoriasDaCaixa);
@@ -5398,6 +5406,63 @@ function registrarGasto(caixa) {
     }
 
     seguirAposCategoria();
+}
+
+/** + → Futuro: escolher dívida ou reserva (sempre com alvo) */
+function mostrarHandoffFuturo(valor) {
+    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    dialogoPushPersonagem('ze',
+        'Futuro precisa de nome. Os ' + fmt(valor) + ' são para <strong>pagar uma dívida</strong> ou <strong>guardar numa reserva</strong>?');
+    const html = `
+        <button type="button" class="btn-option" onclick="concluirHandoffFuturo('divida')">
+            <span>💳</span>
+            <span style="flex:1;text-align:left;"><strong>Pagar dívida</strong><br>
+            <span style="font-size:0.8rem;color:var(--secondary);font-weight:500;">Abate o que você deve</span></span>
+        </button>
+        <button type="button" class="btn-option" onclick="concluirHandoffFuturo('reserva')">
+            <span>🐖</span>
+            <span style="flex:1;text-align:left;"><strong>Guardar na reserva</strong><br>
+            <span style="font-size:0.8rem;color:var(--secondary);font-weight:500;">Constrói o colchão</span></span>
+        </button>
+        ${_btnVoltarRegistro('registroVoltarAoValor()')}
+    `;
+    _pintarModalRegistroDialogo(html, 'Escolha o destino');
+}
+
+function concluirHandoffFuturo(subtipo) {
+    const valor = (registroTemporario && registroTemporario.valor) || 0;
+    if (!(valor > 0)) {
+        registroVoltarAoValor();
+        return;
+    }
+    pendenteRegistroFuturo = { valor: valor, subtipo: subtipo || 'divida' };
+    dialogoPushUsuario(subtipo === 'reserva' ? 'Guardar na reserva' : 'Pagar dívida');
+    fecharModalRegistro();
+    // Mantém pendente após fechar modal
+    abrirDetalheFuturo(subtipo);
+}
+
+function limparPendenteRegistroFuturo() {
+    pendenteRegistroFuturo = null;
+}
+
+function _bannerPendenteFuturoHtml(subtipo) {
+    if (!pendenteRegistroFuturo || !pendenteRegistroFuturo.valor) return '';
+    if (pendenteRegistroFuturo.subtipo && pendenteRegistroFuturo.subtipo !== subtipo) {
+        // subtipo diferente: ainda mostra, mas orienta a trocar a aba se preciso
+    }
+    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const label = subtipo === 'reserva' ? 'aporte' : 'pagamento';
+    return `
+        <div class="card" style="border-left:4px solid var(--primary);margin-bottom:14px;background:var(--purple-light);">
+            <div style="font-size:0.85rem;font-weight:700;color:var(--primary);margin-bottom:4px;">Continuar do registro</div>
+            <p style="font-size:0.88rem;line-height:1.45;color:var(--text-main);margin:0 0 8px;">
+                Você ia registrar <strong>${fmt(pendenteRegistroFuturo.valor)}</strong> no Futuro.
+                Escolha a ${subtipo === 'reserva' ? 'reserva' : 'dívida'} e confirme o ${label} — ou cadastre uma nova abaixo.
+            </p>
+            <button type="button" class="chip" onclick="limparPendenteRegistroFuturo(); renderizarDetalheFuturo();">Cancelar este valor</button>
+        </div>
+    `;
 }
 
 function mostrarPassoCategoria(categorias) {
@@ -5493,6 +5558,11 @@ function confirmarRegistro(nomeCategoria) {
  const valor = registroTemporario.valor; 
  const caixa = registroTemporario.caixa; 
  const dataISO = registroTemporario.data || new Date().toISOString();
+ // Defesa: Futuro não grava gasto órfão pelo +
+ if (caixa === 'futuro') {
+    mostrarHandoffFuturo(valor);
+    return;
+ }
  const semana = state.orcamento.semanaAtual; 
  if (!semana || semana.fechada) { 
  alert("A semana fechou. Vamos ver o resumo primeiro."); fecharModalRegistro(); 
@@ -7113,6 +7183,16 @@ function renderizarDetalheFuturo() {
         ? { icone: '🔭', fala: 'Cada dívida é um alvo. Vamos nomear e dimensionar.', cor: 'var(--warning)' }
         : { icone: '🐖', fala: 'Reserva é o colchão. Vamos construir devagar.', cor: 'var(--primary)' };
 
+    // Se veio do +: fala orienta a concluir o pagamento/aporte
+    if (pendenteRegistroFuturo && pendenteRegistroFuturo.valor > 0) {
+        const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        if (subtipo === 'divida') {
+            avatar.fala = 'Você trouxe ' + fmt(pendenteRegistroFuturo.valor) + '. Escolha a dívida e registre o pagamento — ou cadastre uma nova.';
+        } else {
+            avatar.fala = 'Você trouxe ' + fmt(pendenteRegistroFuturo.valor) + '. Escolha a reserva e registre o aporte — ou cadastre uma nova.';
+        }
+    }
+
     let htmlCategorias = '';
     if (categorias.length === 0) {
         htmlCategorias = `
@@ -7192,6 +7272,7 @@ function renderizarDetalheFuturo() {
 
     container.innerHTML = `
         ${header}
+        ${_bannerPendenteFuturoHtml(subtipo)}
         <div class="fala-avatar" style="border-left-color: ${avatar.cor};">
             <span class="icone">${avatar.icone}</span>
             <span class="texto">${avatar.fala}</span>
@@ -7213,9 +7294,13 @@ function pagarParcela(categoriaId) {
     if (valorParcela <= 0) { alert('Valor da parcela inválido.'); return; }
 
     // Pergunta confirmação (com opção de mudar o valor)
+    // Se veio do +, sugere o valor digitado no modal
+    const valorSugerido = (pendenteRegistroFuturo && pendenteRegistroFuturo.valor > 0)
+        ? pendenteRegistroFuturo.valor
+        : valorParcela;
     const valorStr = prompt(
         `Registrar pagamento de "${cat.nome}"?`,
-        valorParcela.toFixed(2)
+        Number(valorSugerido).toFixed(2)
     );
     if (valorStr === null) return;
     const valorPago = parseFloat(valorStr) || 0;
@@ -7310,32 +7395,39 @@ function confirmarPagamentoParcela() {
 
     if (typeof _tickOnboardingAposRegistro === "function") _tickOnboardingAposRegistro();
     salvarEstado();
+    limparPendenteRegistroFuturo();
 
     // 5. Confirmação (reaproveita o passo 3 do modal)
-    document.getElementById('modal-registro-passo-1').style.display = 'none';
-    document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
-    document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
-    document.getElementById('modal-registro-passo-3').style.display = 'block';
+    const modalReg = document.getElementById('modal-registro');
+    if (modalReg && modalReg.classList.contains('ativo')) {
+        document.getElementById('modal-registro-passo-1').style.display = 'none';
+        document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
+        document.getElementById('modal-registro-passo-3-custodia').style.display = 'none';
+        document.getElementById('modal-registro-passo-3').style.display = 'block';
 
-    const total = cat.parcelasTotais || 0;
-    const pagas = cat.parcelasPagas || 0;
-    const linhaCustodia = custodiaNome
-        ? `Saiu de <strong>${custodiaNome}</strong>.`
-        : '';
+        const total = cat.parcelasTotais || 0;
+        const pagas = cat.parcelasPagas || 0;
+        const linhaCustodia = custodiaNome
+            ? `Saiu de <strong>${custodiaNome}</strong>.`
+            : '';
 
-    let falaFinal;
-    if (total > 0 && pagas >= total) {
-        falaFinal = `🎉 <strong>${cat.nome}</strong> quitada! ${linhaCustodia}`;
-    } else if (total > 0) {
-        falaFinal = `Parcela registrada: ${pagas} de ${total}. ${linhaCustodia}`;
-    } else {
-        falaFinal = `Aporte registrado. ${linhaCustodia}`;
+        let falaFinal;
+        if (total > 0 && pagas >= total) {
+            falaFinal = `🎉 <strong>${cat.nome}</strong> quitada! ${linhaCustodia}`;
+        } else if (total > 0) {
+            falaFinal = `Parcela registrada: ${pagas} de ${total}. ${linhaCustodia}`;
+        } else {
+            falaFinal = `Aporte registrado. ${linhaCustodia}`;
+        }
+
+        const falaEl = document.getElementById('modal-registro-fala');
+        if (falaEl) {
+            falaEl.innerHTML = `
+                <span class="icone">${cat.subtipo === 'divida' ? '💳' : '🐖'}</span>
+                <span class="texto">${falaFinal}</span>
+            `;
+        }
     }
-
-    document.getElementById('modal-registro-fala').innerHTML = `
-        <span class="icone">${cat.subtipo === 'divida' ? '💳' : '🐖'}</span>
-        <span class="texto">${falaFinal}</span>
-    `;
 
     // Limpa contexto e atualiza a tela de fundo
     registroTemporario = null;
