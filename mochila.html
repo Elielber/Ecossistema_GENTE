@@ -9644,7 +9644,7 @@ function calcularLimiteFuturoSemana(semana) {
 
 	function montarResumoParaQR() {
     const orc = state.orcamento;
-    const semana = orc.semanaAtual;
+    const semana = orc && orc.semanaAtual;
     if (!semana) return null;
 
     const pertenceSemana = (isoStr) => {
@@ -9660,32 +9660,45 @@ function calcularLimiteFuturoSemana(semana) {
                      + (semana.vida?.gasto || 0)
                      + (semana.futuro?.gasto || 0);
 
-    // CORREÇÃO: usar a mesma lógica da tela de entrada e do card de saldo
+    // Mesma lógica da tela de entrada e do card de saldo:
+    // saldoAnterior (carryover) + renda efetiva − gastos anotados
     const rendaInfo = rendaEfetivaDaSemana(semana, orc);
     const saldoReal = (semana.saldoAnterior || 0) + rendaInfo.valor - totalGasto;
 
     const fmt = (v) => v.toFixed(2);
 
+    // Tipos de registro que efetivamente debitam o envelope da caixa.
+    // Base/Vida: gasto_direto e gasto_cartao.
+    // Futuro:    pagamento_divida e aporte_reserva (não existe "gasto_direto" no Futuro).
+    const TIPOS_DEBITAM_ENVELOPE = [
+        'gasto_direto',
+        'gasto_cartao',
+        'pagamento_divida',
+        'aporte_reserva'
+    ];
+
+    const registrosDaCaixa = (caixa) => registros
+        .filter(r => r.caixa === caixa && TIPOS_DEBITAM_ENVELOPE.indexOf(r.tipo) !== -1)
+        .map(r => ({
+            n: r.categoria || 'Gasto',
+            v: Number(fmt(r.valor)),
+            d: r.data
+        }));
+
     return {
         sem: `${formatarData(semana.inicio)} a ${formatarData(semana.fim)}`,
         r:  Number(fmt(semana.rendaReal || 0)),
         rEstimada: Number(fmt(semana.rendaEstimada || 0)),
-        s:  Number(fmt(saldoReal)), // ← agora inclui o saldo anterior
+        s:  Number(fmt(saldoReal)), // inclui saldo anterior (carryover)
         b:  [Number(fmt(semana.base?.gasto   || 0)), Number(fmt(semana.base?.limite   || 0))],
         vd: [Number(fmt(semana.vida?.gasto   || 0)), Number(fmt(semana.vida?.limite   || 0))],
         f:  [Number(fmt(semana.futuro?.gasto || 0)), Number(fmt(semana.futuro?.limite || 0))],
         rr: registros
             .filter(r => r.tipo === 'recebimento')
             .map(r => ({ n: r.categoria || 'Recebimento', v: Number(fmt(r.valor)), d: r.data })),
-        lista_base: registros
-            .filter(r => r.tipo === 'gasto_direto' && r.caixa === 'base')
-            .map(r => ({ n: r.categoria || 'Gasto', v: Number(fmt(r.valor)), d: r.data })),
-        lista_vida: registros
-            .filter(r => r.tipo === 'gasto_direto' && r.caixa === 'vida')
-            .map(r => ({ n: r.categoria || 'Gasto', v: Number(fmt(r.valor)), d: r.data })),
-        lista_futuro: registros
-            .filter(r => r.tipo === 'gasto_direto' && r.caixa === 'futuro')
-            .map(r => ({ n: r.categoria || 'Gasto', v: Number(fmt(r.valor)), d: r.data }))
+        lista_base:   registrosDaCaixa('base'),
+        lista_vida:   registrosDaCaixa('vida'),
+        lista_futuro: registrosDaCaixa('futuro')
     };
 }
 
