@@ -10044,6 +10044,12 @@ function alternarModoDebug() {
                 <button onclick="debugResetarNivel()" style="background: var(--danger); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">🔄 Resetar para Nível 1</button>
                 <button onclick="zerarLocalStorage()" style="background: var(--danger); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">💥 Zerar tudo</button>
             </div>
+                        <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 6px; margin-top: 10px;">Manutenção de Dados</div>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
+                <button onclick="debugLimparResiduoParcelas()" style="background: var(--warning); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
+                    🧹 Limpar Resíduos de Dívidas
+                </button>
+            </div>
         `;
         document.body.appendChild(painel);
         atualizarDebugStatus();
@@ -10208,6 +10214,60 @@ function debugResetarAndaime() {
     renderizarOrcamentoInicio();
     goToScreen('screen-orcamento-inicio');
     atualizarDebugStatus();
+}
+function debugLimparResiduoParcelas() {
+    if (!state.orcamento) return;
+    if (!confirm("Isso vai varrer o histórico e limpar pagamentos de dívidas órfãs (de dívidas excluídas) e recalcular os gastos do Futuro. Continuar?")) return;
+
+    // 1. Limpar registros órfãos de dívidas que foram excluídas
+    const idsCategoriasValidas = new Set((state.orcamento.categorias || []).map(c => c.id));
+    const registrosAntigos = state.orcamento.historicoRegistros || [];
+    
+    let removidos = 0;
+    state.orcamento.historicoRegistros = registrosAntigos.filter(r => {
+        // Se for pagamento de dívida/aporte e a categoria não existe mais
+        if ((r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') && r.categoriaId) {
+            if (!idsCategoriasValidas.has(r.categoriaId)) {
+                removidos++;
+                return false; // Remove o registro órfão
+            }
+        }
+        return true; // Mantém os válidos
+    });
+
+    // 2. Recalcular parcelasPagas de cada categoria com base nos registros reais
+    (state.orcamento.categorias || []).forEach(cat => {
+        if (cat.caixa === 'futuro') {
+            const pagamentos = state.orcamento.historicoRegistros.filter(r => 
+                (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') && 
+                r.categoriaId === cat.id
+            );
+            cat.parcelasPagas = pagamentos.length;
+        }
+    });
+
+    // 3. Recalcular o gasto da semana atual do Futuro
+    const semana = state.orcamento.semanaAtual;
+    if (semana && !semana.fechada) {
+        const gastosFuturoSemana = state.orcamento.historicoRegistros.filter(r => {
+            if (!_pertenceSemanaAtual(r.data)) return false;
+            if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva' || (r.tipo === 'gasto_direto' && r.caixa === 'futuro')) {
+                return true;
+            }
+            return false;
+        });
+        semana.futuro.gasto = gastosFuturoSemana.reduce((s, r) => s + (Number(r.valor) || 0), 0);
+    }
+
+    // 4. Recalcular total do futuro
+    if (typeof recalcularTotalFuturo === 'function') {
+        recalcularTotalFuturo();
+    }
+
+    salvarEstado();
+    renderizarOrcamentoInicio();
+    atualizarDebugStatus();
+    alert(`Limpeza concluída!\n${removidos} registro(s) órfão(s) removido(s).\nValores recalculados.`);
 }
 function debugPassarDias(dias) {
     if (!state.orcamento || !state.orcamento.semanaAtual) {
@@ -12155,6 +12215,27 @@ function _desfazerEfeitosRegistro(r) {
                 cartao.faturaAcumulada = (cartao.faturaAcumulada || 0) + (r.valor || 0);
             }
         }
+    
+    
+        } else if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
+        // Reverter gasto da caixa Futuro
+        if (naSemana && semana && semana.futuro) {
+            semana.futuro.gasto = Math.max(0, (semana.futuro.gasto || 0) - (r.valor || 0));
+        }
+        // Devolver o dinheiro para a custódia
+        if (r.custodiaId && r.saldoAtualizado) {
+            const c = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
+            if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) {
+                c.saldoAtual = (c.saldoAtual || 0) + (r.valor || 0);
+            }
+        }
+        // Reverter contagem de parcelas
+        if (r.categoriaId) {
+            const cat = (state.orcamento.categorias || []).find(c => c.id === r.categoriaId);
+            if (cat && cat.parcelasPagas > 0) {
+                cat.parcelasPagas -= 1;
+            }
+        }
     }
 }
 
@@ -12213,6 +12294,26 @@ function _aplicarEfeitosRegistro(r) {
                 cartao.faturaAcumulada = Math.max(0, (cartao.faturaAcumulada || 0) - (r.valor || 0));
             }
         }
+        } else if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
+        // Aplicar gasto na caixa Futuro
+        if (naSemana && semana && semana.futuro) {
+            semana.futuro.gasto = (semana.futuro.gasto || 0) + (r.valor || 0);
+        }
+        // Subtrair o dinheiro da custódia
+        if (r.custodiaId) {
+            const c = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
+            if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) {
+                c.saldoAtual = (c.saldoAtual || 0) - (r.valor || 0);
+                r.saldoAtualizado = true;
+            }
+        }
+        // Incrementar parcela
+        if (r.categoriaId) {
+            const cat = (state.orcamento.categorias || []).find(c => c.id === r.categoriaId);
+            if (cat) {
+                cat.parcelasPagas = (cat.parcelasPagas || 0) + 1;
+            }
+        }
     }
 }
 
@@ -12247,6 +12348,9 @@ function excluirRegistro(id) {
     if (!confirm('Excluir este registro de ' + _fmtBRL(r.valor) + '?')) return;
 
     _desfazerEfeitosRegistro(r);
+    if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
+    if (typeof recalcularTotalFuturo === 'function') recalcularTotalFuturo();
+}
     lista.splice(idx, 1);
     salvarEstado();
     _atualizarTelasAposRegistro();
