@@ -1124,6 +1124,14 @@
     </div>
 </div>
 
+<!-- Modal Contas (atalho Home N3) — visão "Onde o dinheiro está"; click no gráfico → ajuste -->
+<div id="modal-contas" class="modal-registro">
+    <div class="modal-registro-conteudo" style="max-height: 88vh; overflow-y: auto; padding-top: 28px;">
+        <button type="button" onclick="fecharModalContas()" style="position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer; z-index: 2;" aria-label="Fechar">&times;</button>
+        <div id="modal-contas-conteudo"></div>
+    </div>
+</div>
+
 <div id="modal-feedback" class="modal-registro">
     <div class="modal-registro-conteudo" style="padding-top: 28px;">
 
@@ -1726,6 +1734,17 @@ if (c.tipo !== 'conta' && c.tipo !== 'consumo') {
         if ((state.orcamento.nivel || 1) >= 3 && (state.orcamento.custodias || []).length === 0) {
             state.orcamento.onboardingNivel3 = { etapa: 1, concluido: false };
         }
+    }
+    // Guiado N1 (layout Home): usuários antigos com histórico não são interrompidos
+    if (!state.orcamento.onboardingNivel1 || typeof state.orcamento.onboardingNivel1 !== 'object') {
+        const temHistorico = (state.orcamento.historicoRegistros || []).length > 0;
+        const temSemanaFechada = (state.orcamento.semanasFechadas || 0) > 0
+            || !!(state.orcamento.semanaAtual && state.orcamento.semanaAtual.fechada);
+        const jaUsou = temHistorico || temSemanaFechada;
+        state.orcamento.onboardingNivel1 = {
+            etapa: 1,
+            concluido: jaUsou // true = já conhece o painel
+        };
     }
     if (!state.orcamento.uiApoio || typeof state.orcamento.uiApoio !== 'object') {
         state.orcamento.uiApoio = { forcarMostrar: false };
@@ -2965,7 +2984,7 @@ function renderizarAtalhosHome(orc) {
     html += `<button type="button" class="home-atalho" onclick="renderizarHistoricoResumos(); goToScreen('screen-historico-resumos')">📅 Semanas</button>`;
     // N3+: Contas (lista; não duplica CTA de conciliação)
     if (nivel >= 3) {
-        html += `<button type="button" class="home-atalho" onclick="abrirTelaCustodias()">🏦 Contas</button>`;
+        html += `<button type="button" class="home-atalho" onclick="abrirModalContas()">🏦 Contas</button>`;
     }
     html += '</div>';
     return html;
@@ -3022,7 +3041,7 @@ function renderizarConviteConciliacaoHome(orc) {
 
 
 function renderizarOnboardingNivel2Home(orc) {
-    if (!orc || (orc.nivel || 1) !== 2) return '';
+    if (!orc || (orc.nivel || 1) < 2) return '';
     const ob = orc.onboardingNivel2;
     if (!ob || ob.concluido) return '';
     const etapa = ob.etapa || 1;
@@ -3096,6 +3115,78 @@ function avancarOnboardingNivel2(etapaAtual) {
     salvarEstado();
 }
 
+
+// ============================================================
+// GUIADO N1 — mapa da Home (layout painel)
+// ============================================================
+function renderizarOnboardingNivel1Home(orc) {
+    if (!orc) return '';
+    // Home completa (hub com 3 etapas); disponível em qualquer nível (mapa do painel)
+    if (!orc.etapasConcluidas || orc.etapasConcluidas.length < 3) return '';
+    const ob = orc.onboardingNivel1;
+    if (!ob || ob.concluido) return '';
+    const etapa = ob.etapa || 1;
+    const passos = {
+        1: {
+            titulo: 'Passo 1 de 3 — O que é este número',
+            texto: 'O valor grande é o que ainda cabe no combinado da semana — não é extrato do banco. Enquanto você não anotar nada, as barras das caixinhas ficam no começo.',
+            btn: 'Entendi o número',
+            acao: 'avancarOnboardingNivel1(1)'
+        },
+        2: {
+            titulo: 'Passo 2 de 3 — Onde anotar',
+            texto: 'Toda saída ou entrada começa no botão <strong>+</strong> (canto inferior direito) ou no botão roxo. Você escolhe Base, Vida ou Futuro. Só o que você registrar vira histórico.',
+            btn: 'Ver o botão +',
+            acao: 'avancarOnboardingNivel1(2); abrirModalRegistro()'
+        },
+        3: {
+            titulo: 'Passo 3 de 3 — Como acompanhar',
+            texto: 'As três caixinhas mostram o teto da semana e o que você já anotou. Toque numa delas para ver os lançamentos. Semana a semana você vê se o combinado está cabendo.',
+            btn: 'Concluir guiado',
+            acao: 'concluirOnboardingNivel1()'
+        }
+    };
+    const p = passos[etapa] || passos[1];
+    return `
+        <div class="card" style="border-left:4px solid var(--primary);background:var(--info-soft);margin-bottom:14px;padding:16px;">
+            <div style="display:flex;gap:10px;align-items:flex-start;">
+                <span style="font-size:1.5rem;">🎒</span>
+                <div style="flex:1;">
+                    <div style="font-size:0.75rem;font-weight:700;color:var(--primary);text-transform:uppercase;">Mochila · guiado Nível 1</div>
+                    <div style="font-weight:700;color:var(--primary);margin-top:4px;">${p.titulo}</div>
+                    <p style="font-size:0.85rem;color:var(--secondary);line-height:1.45;margin:6px 0 10px;">${p.texto}</p>
+                    <button class="btn-sm" style="background:var(--primary);color:#fff;" onclick="${p.acao}">${p.btn}</button>
+                    <button class="btn-option" style="margin-top:8px;justify-content:center;border:none;color:var(--secondary);font-size:0.8rem;" onclick="concluirOnboardingNivel1()">Pular guiado</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function avancarOnboardingNivel1(etapaAtual) {
+    if (!state.orcamento.onboardingNivel1) {
+        state.orcamento.onboardingNivel1 = { etapa: 1, concluido: false };
+    }
+    if (etapaAtual === 1) state.orcamento.onboardingNivel1.etapa = 2;
+    else if (etapaAtual === 2) state.orcamento.onboardingNivel1.etapa = 3;
+    else state.orcamento.onboardingNivel1.concluido = true;
+    salvarEstado();
+    renderizarOrcamentoInicio();
+}
+
+function concluirOnboardingNivel1() {
+    if (!state.orcamento.onboardingNivel1) state.orcamento.onboardingNivel1 = {};
+    state.orcamento.onboardingNivel1.concluido = true;
+    salvarEstado();
+    renderizarOrcamentoInicio();
+}
+
+function reiniciarOnboardingNivel1() {
+    state.orcamento.onboardingNivel1 = { etapa: 1, concluido: false };
+    salvarEstado();
+    renderizarOrcamentoInicio();
+    goToScreen('screen-orcamento-inicio');
+}
 
 function reiniciarOnboardingNivel2() {
     state.orcamento.onboardingNivel2 = { etapa: 1, concluido: false };
@@ -3350,11 +3441,11 @@ function renderizarOrcamentoCompleto(container, orc) {
                 <div class="chip" onclick="abrirDetalheFuturo('divida')">🔭 Futuro</div>
                 <div class="chip" onclick="abrirTelaFluxoCaixa()">🧭 Fluxo</div>
                 <div class="chip" onclick="abrirConfigCicloSemana()">🗓️ Ciclo da semana</div>
-                ${orc.nivel === 2 ? `<div class="chip" onclick="reiniciarOnboardingNivel2()">🎬 Ver tutorial N2 de novo</div>` : ''}
+                ${orc.nivel === 2 ? `<div class="chip" onclick="reiniciarOnboardingNivel2()"> ▶️ Ver tutorial N2 de novo</div>` : ''}
                 ${orc.nivel >= 3 ? `
                     <div class="chip" onclick="abrirTelaCustodias()">🏦 Contas</div>
                     <div class="chip" onclick="abrirTelaMapaMes()">🗓️ Mapa</div>
-                    <div class="chip" onclick="reiniciarOnboardingNivel3()">🎬 Ver tutorial N3 de novo</div>
+                    <div class="chip" onclick="reiniciarOnboardingNivel3()">▶️ Ver tutorial N3 de novo</div>
                 ` : ''}
         `;
     }
@@ -3404,6 +3495,14 @@ function renderizarOrcamentoCompleto(container, orc) {
     }
     
 
+    // Garante guiado N1 na primeira vez que a Home completa aparece na sessão
+    if ((orc.nivel || 1) === 1 && orc.etapasConcluidas && orc.etapasConcluidas.length >= 3) {
+        if (!orc.onboardingNivel1 || typeof orc.onboardingNivel1 !== 'object') {
+            const temHist = (orc.historicoRegistros || []).length > 0;
+            orc.onboardingNivel1 = { etapa: 1, concluido: !!temHist };
+        }
+    }
+
     // ===== MONTAGEM FINAL — Home enxuta (ajustes + andaime fora) =====
     // Fase 2 + Fase 8 — topo: 🔔 + ☰, badge unificado (resumo pronto + andaime/stale)
 const temAvisoHeader = (typeof _temAvisoUnificado === 'function' && _temAvisoUnificado(orc));
@@ -3425,6 +3524,7 @@ const badgeHeader = temAvisoHeader ? '<span class="badge-dot"></span>' : '';
         ${headerHome}
         ${cardResumo}
         ${cardTransicao}
+        ${renderizarOnboardingNivel1Home(orc)}
         ${renderizarOnboardingNivel2Home(orc)}
         ${renderizarOnboardingNivel3Home(orc)}
 
@@ -3630,14 +3730,20 @@ function renderizarAjuda() {
     const el = document.getElementById('ajuda-conteudo');
     if (!el) return;
     const nivel = (state.orcamento && state.orcamento.nivel) || 1;
+    // Nível atual e anteriores: tutorial estático + guiado
     let tuts = `
         <button type="button" class="chip" onclick="abrirTelaTutorial(1)">🎬 Como o N1 funciona</button>
+        <button type="button" class="chip" onclick="reiniciarOnboardingNivel1()">▶️ Ver guiado N1 de novo</button>
     `;
     if (nivel >= 2) {
-        tuts += `<button type="button" class="chip" onclick="abrirTelaTutorial(2)">🎬 Como o N2 funciona</button>`;
+        tuts += `
+        <button type="button" class="chip" onclick="abrirTelaTutorial(2)">🎬 Como o N2 funciona</button>
+        <button type="button" class="chip" onclick="reiniciarOnboardingNivel2()">▶️ Ver guiado N2 de novo</button>`;
     }
     if (nivel >= 3) {
-        tuts += `<button type="button" class="chip" onclick="abrirTelaTutorial(3)">🎬 Como o N3 funciona</button>`;
+        tuts += `
+        <button type="button" class="chip" onclick="abrirTelaTutorial(3)">🎬 Como o N3 funciona</button>
+        <button type="button" class="chip" onclick="reiniciarOnboardingNivel3()">▶️ Ver guiado N3 de novo</button>`;
     }
     el.innerHTML = `
         ${cabecalhoTelaSecundaria('Ajuda', 'Tutoriais e orientações')}
@@ -3883,6 +3989,40 @@ function fecharModalSaldoSemana() {
         atualizarBotaoFeedback(document.querySelector('.screen.active')?.id || 'screen-orcamento-inicio');
     } catch (_) {}
 }
+
+/** Modal Contas — exclusivo do atalho 🏦 na Home (N3) */
+function abrirModalContas() {
+    const m = document.getElementById('modal-contas');
+    const c = document.getElementById('modal-contas-conteudo');
+    if (!m || !c) return;
+    const orc = state.orcamento;
+    if (!orc) return;
+    const semana = orc.semanaAtual;
+    const cards = (typeof renderizarCardsCustodiaHome === 'function')
+        ? renderizarCardsCustodiaHome(orc, semana)
+        : '';
+    c.innerHTML = `
+        <div style="margin-bottom:8px;">
+            <div class="home-section-title" style="margin-bottom:4px;">Contas</div>
+            <div class="home-section-sub" style="margin-bottom:12px;">Toque num gráfico para ajustar a conta</div>
+        </div>
+        ${cards || '<div class="card" style="color:var(--secondary);font-size:0.9rem;">Nenhuma conta para mostrar.</div>'}
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
+            <button type="button" class="btn-primary" style="margin-top:0;" onclick="fecharModalContas(); abrirTelaCustodias();">✏️ Gerenciar contas</button>
+            <button type="button" class="chip" style="width:100%;justify-content:center;padding:14px;" onclick="fecharModalContas()">Fechar</button>
+        </div>
+    `;
+    m.classList.add('ativo');
+    try { atualizarBotaoFeedback('modal-contas'); } catch (_) {}
+}
+function fecharModalContas() {
+    const m = document.getElementById('modal-contas');
+    if (m) m.classList.remove('ativo');
+    try {
+        atualizarBotaoFeedback(document.querySelector('.screen.active')?.id || 'screen-orcamento-inicio');
+    } catch (_) {}
+}
+
 function abrirTelaAjuda() {
     try { renderizarAjuda(); } catch (_) {}
     goToScreen('screen-ajuda');
@@ -4132,7 +4272,7 @@ function renderizarCardsCustodiaHome(orc, semana) {
                     2. Nos próximos apontamentos, use o botão <strong>+</strong> e escolha <strong>de onde saiu</strong> ou <strong>onde entrou</strong>.<br>
                     3. Nas categorias (Base/Vida), você pode ligar a origem padrão tocando nelas.
                 </p>
-                <button class="btn-sm" style="background: var(--primary); color: white;" onclick="abrirTelaCustodias()">Cadastrar contas</button>
+                <button class="btn-sm" style="background: var(--primary); color: white;" onclick="irParaAjusteContasDoModal()">Cadastrar contas</button>
             </div>
         `;
     }
@@ -4179,7 +4319,7 @@ function renderizarCardsCustodiaHome(orc, semana) {
             : rotulo;
 
         html += `
-            <div class="caixinha" style="cursor: pointer;" onclick="abrirTelaCustodias()">
+            <div class="caixinha" style="cursor: pointer;" onclick="irParaAjusteContasDoModal()">
                 <div class="caixinha-header">
                     <span class="nome">${tipo.icone} ${c.nome}</span>
                     <span class="valores">${rotulo} ${fmt(valor)}</span>
@@ -8086,6 +8226,11 @@ function abrirReconciliacaoCustodia(custodiaId) {
     }, 50);
 }
 
+
+function irParaAjusteContasDoModal() {
+    try { fecharModalContas(); } catch (_) {}
+    abrirTelaCustodias();
+}
 
 function abrirTelaCustodias() {
     goToScreen('screen-custodias');
