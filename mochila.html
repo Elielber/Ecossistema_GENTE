@@ -1670,6 +1670,7 @@ state.orcamento.categorias.forEach(c => {
         if (c.parcelasTotais === undefined) c.parcelasTotais = null;
         if (c.valorTotal === undefined) c.valorTotal = null;
     }
+    if (c.pagamentoConfirmadoMes === undefined) c.pagamentoConfirmadoMes = null;
 });
 
     // === CICLO 3.9 — MIGRAÇÃO DE BASE ===
@@ -7114,6 +7115,14 @@ function abrirFormularioCategoria(idExistente) {
             <span class="icone">${avatarForm}</span>
             <span class="texto">${tituloFala}</span>
         </div>
+        ${catExistente && catExistente.pagamentoConfirmadoMes === _mesAtualYYYYMM() ? `
+            <div class="card" style="padding:12px 14px;margin-bottom:14px;background:var(--success-soft);border-left:4px solid var(--success);">
+                <div style="font-size:0.85rem;color:var(--success);line-height:1.4;">
+                    ✅ Confirmada como paga este mês.
+                    <button type="button" class="btn-sm" style="background:var(--success);color:white;margin-left:8px;padding:6px 10px;" onclick="desfazerPagamentoConfirmado('${catExistente.id}')">Desfazer</button>
+                </div>
+            </div>
+        ` : ''}
         <input type="text" id="nova-cat-nome" class="input-padrao" placeholder="Ex: Aluguel, Luz, Mercado">
         <div class="chip-container">${htmlChips}</div>
         <div class="fala-avatar">
@@ -7286,6 +7295,38 @@ if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
     const provisao = _lerProvisaoDoFormulario();
     if (provisao.erro) { alert(provisao.erro); return; }
 
+    // === Confirmação de "já paguei" para conta com vencimento no passado ===
+    // Resolve o caso do 1º cadastro: hoje 15/10, criar "Aluguel vence dia 5"
+    // não pode virar alerta imediato só porque o dia 5 já passou.
+    const diaHoje = new Date().getDate();
+    const mesAtual = _mesAtualYYYYMM();
+    const ehContaVencida = tipoCategoriaSelecionado === 'conta' && vencimento && vencimento < diaHoje;
+
+    let pagamentoConfirmadoMes = null;
+
+    if (ehContaVencida) {
+        const catAtual = categoriaEditandoId
+            ? (state.orcamento.categorias || []).find(c => c.id === categoriaEditandoId)
+            : null;
+
+        if (catAtual && catAtual.pagamentoConfirmadoMes === mesAtual) {
+            // Já confirmado neste mês — preserva, sem perguntar
+            pagamentoConfirmadoMes = mesAtual;
+        } else if (catAtual && _temRegistroPagoNoMes(catAtual, state.orcamento)) {
+            // Já há lançamento pago este mês (via +) — sem flag extra
+            pagamentoConfirmadoMes = null;
+        } else {
+            const confirmou = confirm(
+                `O dia ${vencimento} já passou este mês.\n\n` +
+                `Essa conta já foi paga?\n\n` +
+                `OK = Sim, já paguei\n` +
+                `Cancelar = Não, ainda em aberto\n\n` +
+                `(A conta é salva nos dois casos.)`
+            );
+            if (confirmou) pagamentoConfirmadoMes = mesAtual;
+        }
+    }
+
     // ---------- EDIÇÃO ----------
     if (categoriaEditandoId) {
         const cat = (state.orcamento.categorias || []).find(c => c.id === categoriaEditandoId);
@@ -7304,6 +7345,7 @@ if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
         cat.valor = valor;
         cat.tipo = tipoCategoriaSelecionado;
         cat.vencimento = vencimento;
+        cat.pagamentoConfirmadoMes = ehContaVencida ? pagamentoConfirmadoMes : null;
         cat.custodiaPadraoId = custodiaPadraoCategoriaSelecionada || null;
         cat.provisionar = !!provisao.provisionar;
         cat.valorProvisaoTotal = provisao.provisionar ? provisao.valorProvisaoTotal : null;
@@ -7414,7 +7456,8 @@ if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
         custodiaPadraoId: custodiaPadraoCategoriaSelecionada || null,
         provisionar: !!provisao.provisionar,
         valorProvisaoTotal: provisao.provisionar ? provisao.valorProvisaoTotal : null,
-        periodicidadeProvisao: provisao.provisionar ? provisao.periodicidadeProvisao : null
+        periodicidadeProvisao: provisao.provisionar ? provisao.periodicidadeProvisao : null,
+        pagamentoConfirmadoMes: pagamentoConfirmadoMes
     });
 
     const custodiaLog = custodiaPadraoCategoriaSelecionada;
@@ -7429,6 +7472,16 @@ if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
     renderizarDetalheGastos();
 }
 
+
+function desfazerPagamentoConfirmado(catId) {
+    const cat = (state.orcamento.categorias || []).find(c => c.id === catId);
+    if (!cat) return;
+    if (!confirm('Desfazer a confirmação de pagamento?\n\nA conta volta a aparecer como vencida se o dia já passou.')) return;
+
+    cat.pagamentoConfirmadoMes = null;
+    salvarEstado();
+    _atualizarTelasAposRegistro();
+}
 
 function removerCategoria(id) {
     const confirmar = confirm("Remover esta categoria?");
@@ -7894,6 +7947,22 @@ function salvarCategoriaFuturo() {
         return;
     }
 
+    // Confirmação de "já paguei" para conta com vencimento já passado
+    const diaHoje = new Date().getDate();
+    const mesAtual = _mesAtualYYYYMM();
+    let pagamentoConfirmadoMes = null;
+
+    if (tipoCategoriaSelecionado === 'conta' && vencimento && vencimento < diaHoje) {
+        const confirmou = confirm(
+            `O dia ${vencimento} já passou este mês.\n\n` +
+            `Essa conta já foi paga?\n\n` +
+            `OK = Sim, já paguei\n` +
+            `Cancelar = Não, ainda em aberto\n\n` +
+            `(A conta é salva nos dois casos.)`
+        );
+        if (confirmou) pagamentoConfirmadoMes = mesAtual;
+    }
+
     if (!state.orcamento.categorias) state.orcamento.categorias = [];
     state.orcamento.categorias.push({
         id: 'cat_' + Date.now(),
@@ -7905,7 +7974,8 @@ function salvarCategoriaFuturo() {
         subtipo: subtipo,
         parcelasPagas: 0,
         parcelasTotais: parcelasTotais,  // null = contínuo
-        valorTotal: parcelasTotais ? (valor * parcelasTotais) : null
+        valorTotal: parcelasTotais ? (valor * parcelasTotais) : null,
+        pagamentoConfirmadoMes: pagamentoConfirmadoMes
     });
 
     recalcularTotalFuturo();
@@ -9144,30 +9214,50 @@ function _pertenceMesAtual(isoStr) {
 }
 
 /**
- * Retorna true se existe pelo menos um registro no mês atual
- * que liquida a conta (cat):
- *   - tipo em gasto_direto | gasto_cartao | pagamento_divida | aporte_reserva
- *   - categoriaId === cat.id (preferencial) ou categoria === cat.nome (legado)
- *   - data cai no mês corrente (janela ano-mês de hoje)
- *   - registro não anulado
- *
- * Read-only. Não adiciona campos, não persiste, não toca em envelope.
+ * "YYYY-MM" do mês corrente (local). Usado para invalidar o flag
+ * pagamentoConfirmadoMes quando o mês vira.
  */
-function _contaEstaPagaNoMes(cat, orc) {
+function _mesAtualYYYYMM() {
+    const h = new Date();
+    return h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0');
+}
+
+/**
+ * Retorna true se existe pelo menos um registro no mês atual que
+ * liquida a conta (cat) — só histórico, sem considerar o flag.
+ * Extraído de _contaEstaPagaNoMes para permitir reuso na decisão
+ * de quando perguntar "já paguei?".
+ */
+function _temRegistroPagoNoMes(cat, orc) {
     if (!cat || !orc) return false;
     const hist = orc.historicoRegistros || [];
     const tiposQueLiquidam = ['gasto_direto', 'gasto_cartao', 'pagamento_divida', 'aporte_reserva'];
-
     for (let i = 0; i < hist.length; i++) {
         const r = hist[i];
         if (!r || !r.data) continue;
-        if (r.anulado) continue;                       // anulado = não liquidou
+        if (r.anulado) continue;
         if (tiposQueLiquidam.indexOf(r.tipo) === -1) continue;
         if (!_pertenceMesAtual(r.data)) continue;
         if (cat.id && r.categoriaId === cat.id) return true;
         if (cat.nome && r.categoria === cat.nome) return true;
     }
     return false;
+}
+
+/**
+ * Conta paga no mês: flag explícito do usuário (cadastro) OU registro que liquida.
+ * O flag só vale para o mês em que foi dado; mês vira, esquece.
+ */
+function _contaEstaPagaNoMes(cat, orc) {
+    if (!cat || !orc) return false;
+
+    // Fatia nova — confirmação explícita do usuário no cadastro.
+    // "já paguei" para a conta cujo dia já passou neste mês.
+    if (cat.pagamentoConfirmadoMes && cat.pagamentoConfirmadoMes === _mesAtualYYYYMM()) {
+        return true;
+    }
+
+    return _temRegistroPagoNoMes(cat, orc);
 }
 // ============================================================
 // NÍVEL 3 — PLANO DE RECUPERAÇÃO
@@ -9342,11 +9432,15 @@ function renderizarPlanoRecuperacao() {
     if (contasPagas.length > 0) {
         let listaPagas = '';
         contasPagas.forEach(c => {
-            const icone = c.caixa === 'base' ? '🛡️' : '🌿';
+            const icone = c.caixa === 'base' ? '🛡️' : (c.caixa === 'futuro' ? '🔭' : '🌿');
+            const podeDesfazer = c.pagamentoConfirmadoMes === _mesAtualYYYYMM();
             listaPagas += `
-                <div style="display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--border);">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid var(--border);">
                     <span style="font-size: 0.85rem; color: var(--primary);">✓ ${icone} ${c.nome}</span>
-                    <strong style="font-size: 0.85rem; color: var(--success);">${sinal.fmt(c.valor || 0)}</strong>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <strong style="font-size: 0.85rem; color: var(--success);">${sinal.fmt(c.valor || 0)}</strong>
+                        ${podeDesfazer ? `<button type="button" class="btn-sm" style="background: var(--secondary); color: white; font-size: 0.7rem; padding: 4px 8px;" onclick="desfazerPagamentoConfirmado('${c.id}')">Desfazer</button>` : ''}
+                    </div>
                 </div>
             `;
         });
@@ -12368,6 +12462,7 @@ function _atualizarTelasAposRegistro() {
     }
     else if (tela === 'screen-renda-detalhe') renderizarDetalheRenda();
     else if (tela === 'screen-divida-detalhe') renderizarDetalheFuturo();
+    else if (tela === 'screen-plano-recuperacao') renderizarPlanoRecuperacao();
 }
 
 let registroEditandoId = null;
