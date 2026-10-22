@@ -11528,22 +11528,36 @@ function _nomeCustodia(id) {
 
 function _filtrarRegistrosLista(ctx) {
     const todos = state.orcamento.historicoRegistros || [];
+    
+    // Tipos que efetivamente debitam o envelope (Base, Vida e Futuro)
+    const TIPOS_DEBITAM_ENVELOPE = [
+        'gasto_direto',
+        'gasto_cartao',
+        'pagamento_divida',
+        'aporte_reserva'
+    ];
+
     if (ctx.modo === 'renda') {
         return todos.filter(r =>
             (r.tipo === 'recebimento' && _pertenceSemanaAtual(r.data)) ||
             (r.tipo === 'ajuste_semana_anterior' && r.tipoOriginal === 'recebimento' && _pertenceSemanaAtual(r.data))
         );
     }
+    
     if (ctx.modo === 'caixa') {
         return todos.filter(r => {
             if (!_pertenceSemanaAtual(r.data)) return false;
             if (r.tipo === 'ajuste_semana_anterior' && r.caixa === ctx.caixa) return true;
-            return (r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && r.caixa === ctx.caixa;
+            // Agora aceita os 4 tipos (gasto_direto, gasto_cartao, pagamento_divida, aporte_reserva)
+            return TIPOS_DEBITAM_ENVELOPE.indexOf(r.tipo) !== -1 && r.caixa === ctx.caixa;
         });
     }
+    
     if (ctx.modo === 'categoria') {
         return todos.filter(r => {
-            if (r.tipo !== 'gasto_direto' && r.tipo !== 'gasto_cartao' && r.tipo !== 'recebimento') return false;
+            // Aceita os tipos de débito E recebimento
+            if (TIPOS_DEBITAM_ENVELOPE.indexOf(r.tipo) === -1 && r.tipo !== 'recebimento') return false;
+            
             if (ctx.categoriaId && r.categoriaId === ctx.categoriaId) return true;
             if (ctx.categoriaNome && r.categoria === ctx.categoriaNome) return true;
             return false;
