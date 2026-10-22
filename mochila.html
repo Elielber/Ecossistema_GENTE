@@ -2730,8 +2730,18 @@ if (planoTotal > rendaBase && rendaBase > 0) {
  * Conta: valor inteiro se o vencimento cai na semana, 0 se não.
  * Consumo: valor mensal diluído por 4,33.
  */
+/** Dívida/reserva com parcelas definidas e já quitadas — fora do planejamento */
+function _categoriaParcelasQuitada(cat) {
+    if (!cat) return false;
+    const tot = Number(cat.parcelasTotais) || 0;
+    if (tot <= 0) return false;
+    return (Number(cat.parcelasPagas) || 0) >= tot;
+}
+
 function calcularLimiteCategoriaSemana(cat, semana) {
     if (!cat || !semana) return 0;
+    // Quitada: não entra no teto semanal de planejamento
+    if (_categoriaParcelasQuitada(cat)) return 0;
     const valor = Number(cat.valor) || 0;
     if (valor <= 0) return 0;
 
@@ -4751,6 +4761,7 @@ function calcularCarregoCategoriasDaSemana(semana) {
 
     cats.forEach(cat => {
         if (!cat || !cat.id) return;
+        if (_categoriaParcelasQuitada(cat)) return; // quitada não gera carrego/meta
         const metaSem = (Number(cat.valor) || 0) / DIVISOR_SEMANAL;
         if (metaSem <= 0) return; // sem meta declarada → sem carrego de categoria
         const gastoSem = regs
@@ -7300,7 +7311,9 @@ function renderizarDetalheFuturo() {
     const categorias = (state.orcamento.categorias || [])
         .filter(c => c.caixa === 'futuro' && c.subtipo === subtipo);
 
-    const totalCategoria = categorias.reduce((s, c) => s + (c.valor || 0), 0);
+    const totalCategoria = categorias
+        .filter(c => !_categoriaParcelasQuitada(c))
+        .reduce((s, c) => s + (c.valor || 0), 0);
     const totalGeral = (state.orcamento.futuro && state.orcamento.futuro.total) || 0;
     const totalGasto = (state.orcamento.semanaAtual?.futuro?.gasto) || 0;
 
@@ -7504,6 +7517,11 @@ function confirmarPagamentoParcela() {
 
     // 1. Incrementa a parcela
     cat.parcelasPagas = (cat.parcelasPagas || 0) + 1;
+
+    // Atualiza Futuro total (quitada some do planejamento do mês seguinte)
+    if (typeof recalcularTotalFuturo === 'function') {
+        try { recalcularTotalFuturo({ somenteTotal: true }); } catch (_) {}
+    }
 
     // 2. Soma no gasto da caixa Futuro
     semana.futuro.gasto += valorPago;
@@ -7721,15 +7739,17 @@ function salvarCategoriaFuturo() {
     renderizarDetalheFuturo();
 }
 
-function recalcularTotalFuturo() {
+function recalcularTotalFuturo(opcoes) {
+    opcoes = opcoes || {};
     const total = (state.orcamento.categorias || [])
         .filter(c => c.caixa === 'futuro')
+        .filter(c => !_categoriaParcelasQuitada(c))
         .reduce((s, c) => s + (c.valor || 0), 0);
 
     if (!state.orcamento.futuro) state.orcamento.futuro = {};
     state.orcamento.futuro.total = total;
 
-    if (state.orcamento.semanaAtual) {
+    if (state.orcamento.semanaAtual && !opcoes.somenteTotal) {
         state.orcamento.semanaAtual.futuro.limite =
             calcularLimiteFuturoSemana(state.orcamento.semanaAtual);
     }
@@ -9000,7 +9020,9 @@ function detectarSinalRecuperacao(orc) {
     hoje.setHours(0, 0, 0, 0);
     const diaHoje = hoje.getDate();
 
-        const categoriasComVenc = (orc.categorias || []).filter(c => c.vencimento);
+        const categoriasComVenc = (orc.categorias || []).filter(c =>
+        c.vencimento && !_categoriaParcelasQuitada(c)
+    );
     const contasVencidas = categoriasComVenc.filter(c =>
         c.vencimento < diaHoje && !_contaEstaPagaNoMes(c, orc)
     );
@@ -9399,7 +9421,9 @@ function renderizarMapaMes() {
     const orc = state.orcamento;
 
     // Categorias com vencimento (só fazem sentido no Nível 3)
-    const categorias = (orc.categorias || []).filter(c => c.vencimento);
+    const categorias = (orc.categorias || []).filter(c =>
+        c.vencimento && !_categoriaParcelasQuitada(c)
+    );
 
     // Janela rolante: 30 dias a partir de hoje
     const hoje = new Date();
@@ -9520,7 +9544,9 @@ function renderizarMapaMes() {
 // ============================================================
 
 function calcularProvisao(orc) {
-    const categorias = (orc.categorias || []).filter(c => c.vencimento);
+    const categorias = (orc.categorias || []).filter(c =>
+        c.vencimento && !_categoriaParcelasQuitada(c)
+    );
     const totalMes = categorias.reduce((s, c) => s + (c.valor || 0), 0);
     const provisaoSemanal = totalMes / DIVISOR_SEMANAL;
 
@@ -9533,7 +9559,9 @@ function calcularProvisao(orc) {
 
 // Retorna as contas que vencem nos próximos `dias` dias a partir de hoje
 function contasNaJanela(orc, dias) {
-    const categorias = (orc.categorias || []).filter(c => c.vencimento);
+    const categorias = (orc.categorias || []).filter(c =>
+        c.vencimento && !_categoriaParcelasQuitada(c)
+    );
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
@@ -9618,6 +9646,7 @@ function categoriasFuturoNaSemana(semana) {
 
     return categorias.filter(c => {
         if (!c.vencimento) return false;
+        if (_categoriaParcelasQuitada(c)) return false;
 
         // Constrói a data de vencimento no mês da semana
         const ano = ini.getFullYear();
@@ -11078,7 +11107,8 @@ function _eventosRecebimentoDeclarados(orc, inicio, fim) {
 
 function _eventosVencimentoDeclarados(orc, inicio, fim) {
     const categorias = (orc.categorias || []).filter(
-        c => typeof c.vencimento === 'number' && c.vencimento >= 1 && c.vencimento <= 31
+        c => typeof c.vencimento === 'number' && c.vencimento >= 1 && c.vencimento <= 31 &&
+             !_categoriaParcelasQuitada(c)
     );
     const eventos = [];
     let cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
