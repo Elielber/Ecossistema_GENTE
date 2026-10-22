@@ -6274,8 +6274,9 @@ fontes.forEach(f => {
                     <div class="nome-cat">${f.nome}</div>
                     <div class="meta-cat">${metaFonte}</div>
                 </div>
-                <div style="display: flex; align-items: center;" onclick="event.stopPropagation()">
+                <div style="display: flex; align-items: center; gap: 8px;" onclick="event.stopPropagation()">
                     <span class="valor-cat">R$ ${(f.valor || 0).toFixed(2).replace('.', ',')}</span>
+                    <button type="button" class="btn-reg editar" onclick="editarFonteRenda('${f.id}')">Editar</button>
                     <button class="btn-remover" onclick="removerFonteRenda('${f.id}')">&times;</button>
                 </div>
             </div>
@@ -6361,6 +6362,7 @@ function responderOrigemRenda(origem) {
     frequenciaRendaSelecionada = null;
     diaRecebimentoTemp = null;
     custodiaRendaSelecionada = null;
+    fonteRendaEditandoId = null;
 
     let htmlCustodia = '';
     const custodias = (state.orcamento.nivel >= 3) ? (state.orcamento.custodias || []) : [];
@@ -6415,6 +6417,7 @@ function responderOrigemRenda(origem) {
 let frequenciaRendaSelecionada = null;
 let diaRecebimentoTemp = null; // número | [d1,d2] | null
 let custodiaRendaSelecionada = null;
+let fonteRendaEditandoId = null;
 
 function selecionarCustodiaRenda(el) {
     document.querySelectorAll('#chips-custodia-renda .chip').forEach(c => c.classList.remove('selecionado'));
@@ -6430,15 +6433,26 @@ function responderFrequenciaRenda(el, freq) {
     // Semanais e imprevisíveis não têm dia fixo — segue direto
     if (freq === 'semanal' || freq === 'imprevisivel') {
         diaRecebimentoTemp = null;
+        const bloco = document.getElementById('bloco-dia-recebimento');
+        if (bloco) bloco.remove();
         mostrarBotaoSalvarFonte();
         return;
     }
 
-    // Mensal ou quinzenal — pergunta o dia
-    mostrarPassoDiaRecebimento(freq);
+    // Se estiver editando a mesma frequência, mantém os dias
+    let diasExistentes = null;
+    if (fonteRendaEditandoId) {
+        const fonte = (state.orcamento.rendaDetalhe.fontes || []).find(f => f.id === fonteRendaEditandoId);
+        if (fonte && fonte.frequencia === freq) {
+            diasExistentes = fonte.diaRecebimento;
+        }
+    }
+
+    mostrarPassoDiaRecebimento(freq, diasExistentes);
 }
 
-function mostrarPassoDiaRecebimento(freq) {
+function mostrarPassoDiaRecebimento(freq, diasExistentes) {
+    diasExistentes = (diasExistentes === undefined) ? null : diasExistentes;
     // Remove qualquer bloco de dia anterior (caso o usuário volte)
     const antigo = document.getElementById('bloco-dia-recebimento');
     if (antigo) antigo.remove();
@@ -6450,24 +6464,27 @@ function mostrarPassoDiaRecebimento(freq) {
     bloco.id = 'bloco-dia-recebimento';
 
     if (freq === 'mensal') {
+        const d1 = (typeof diasExistentes === 'number') ? diasExistentes : '';
         bloco.innerHTML = `
             <div class="fala-avatar">
                 <span class="icone">${avatar}</span>
                 <span class="texto">Em que dia do mês cai?</span>
             </div>
-            <input type="number" id="fonte-dia" class="input-padrao" placeholder="Ex: 5" min="1" max="31">
+            <input type="number" id="fonte-dia" class="input-padrao" placeholder="Ex: 5" min="1" max="31" value="${d1}">
             <button class="btn-option" style="justify-content: center; border-color: var(--secondary);" onclick="pularDiaRecebimento()">
                 Não sei / prefiro não informar
             </button>
         `;
     } else if (freq === 'quinzenal') {
+        const d1 = Array.isArray(diasExistentes) ? diasExistentes[0] : '';
+        const d2 = Array.isArray(diasExistentes) ? diasExistentes[1] : '';
         bloco.innerHTML = `
             <div class="fala-avatar">
                 <span class="icone">${avatar}</span>
                 <span class="texto">Quais os dois dias? (ex: 5 e 20)</span>
             </div>
-            <input type="number" id="fonte-dia-1" class="input-padrao" placeholder="Primeiro dia" min="1" max="31">
-            <input type="number" id="fonte-dia-2" class="input-padrao" placeholder="Segundo dia" min="1" max="31">
+            <input type="number" id="fonte-dia-1" class="input-padrao" placeholder="Primeiro dia" min="1" max="31" value="${d1 === undefined || d1 === null ? '' : d1}">
+            <input type="number" id="fonte-dia-2" class="input-padrao" placeholder="Segundo dia" min="1" max="31" value="${d2 === undefined || d2 === null ? '' : d2}">
             <button class="btn-option" style="justify-content: center; border-color: var(--secondary);" onclick="pularDiaRecebimento()">
                 Não sei / prefiro não informar
             </button>
@@ -6562,34 +6579,49 @@ function salvarFonteRenda(origem, temGenerica) {
     if (!state.orcamento.rendaDetalhe) state.orcamento.rendaDetalhe = { fontes: [] };
     if (!state.orcamento.rendaDetalhe.fontes) state.orcamento.rendaDetalhe.fontes = [];
 
-    // Se é a primeira fonte, pergunta se quer usar esse valor como renda base
-    if (temGenerica && state.orcamento.base?.rendaBase) {
-        const rendaBaseAtual = state.orcamento.base.rendaBase;
-        const atualizar = confirm(
-            `Sua renda base hoje é R$ ${rendaBaseAtual.toFixed(2).replace('.', ',')}. ` +
-            `Quer usar R$ ${valor.toFixed(2).replace('.', ',')} como nova base?`
-        );
-        if (atualizar) {
-            state.orcamento.base.rendaBase = valor;
-            if (state.orcamento.semanaAtual) {
-                const fortaleza = state.orcamento.base?.fortalezaTotal || 1800;
-                const vida = state.orcamento.vida?.total || 700;
-                const futuro = Math.max(valor - fortaleza - vida, 0);
-                state.orcamento.semanaAtual.futuro.limite = futuro / DIVISOR_SEMANAL;
+    if (fonteRendaEditandoId) {
+        // MODO EDIÇÃO
+        const fonte = state.orcamento.rendaDetalhe.fontes.find(f => f.id === fonteRendaEditandoId);
+        if (fonte) {
+            fonte.nome = nome;
+            fonte.valor = valor;
+            fonte.origem = origem || fonte.origem;
+            fonte.frequencia = frequenciaRendaSelecionada;
+            fonte.diaRecebimento = diaRecebimento;
+            fonte.custodiaPadraoId = custodiaRendaSelecionada || null;
+        }
+        fonteRendaEditandoId = null;
+    } else {
+        // MODO CRIAÇÃO — primeira fonte pode atualizar renda base
+        if (temGenerica && state.orcamento.base?.rendaBase) {
+            const rendaBaseAtual = state.orcamento.base.rendaBase;
+            const atualizar = confirm(
+                `Sua renda base hoje é R$ ${rendaBaseAtual.toFixed(2).replace('.', ',')}. ` +
+                `Quer usar R$ ${valor.toFixed(2).replace('.', ',')} como nova base?`
+            );
+            if (atualizar) {
+                state.orcamento.base.rendaBase = valor;
+                if (state.orcamento.semanaAtual) {
+                    const fortaleza = state.orcamento.base?.fortalezaTotal || 1800;
+                    const vida = state.orcamento.vida?.total || 700;
+                    const futuro = Math.max(valor - fortaleza - vida, 0);
+                    state.orcamento.semanaAtual.futuro.limite = futuro / DIVISOR_SEMANAL;
+                }
             }
         }
+
+        state.orcamento.rendaDetalhe.fontes.push({
+            id: 'fonte_' + Date.now(),
+            nome: nome,
+            valor: valor,
+            origem: origem,
+            frequencia: frequenciaRendaSelecionada,
+            diaRecebimento: diaRecebimento,
+            custodiaPadraoId: custodiaRendaSelecionada || null
+        });
     }
 
-    state.orcamento.rendaDetalhe.fontes.push({
-        id: 'fonte_' + Date.now(),
-        nome: nome,
-        valor: valor,
-        origem: origem,
-        frequencia: frequenciaRendaSelecionada,
-        diaRecebimento: diaRecebimento,
-        custodiaPadraoId: custodiaRendaSelecionada || null
-    });
-if (typeof _tickOnboardingNivel2AposFonte === "function") _tickOnboardingNivel2AposFonte();
+    if (typeof _tickOnboardingNivel2AposFonte === "function") _tickOnboardingNivel2AposFonte();
     frequenciaRendaSelecionada = null;
     diaRecebimentoTemp = null;
     origemRendaTemp = null;
@@ -6610,6 +6642,7 @@ function removerFonteRenda(id) {
     renderizarDetalheRenda();
 }
 function abrirFormularioFonteRenda() {
+    fonteRendaEditandoId = null;
     const container = document.getElementById('renda-detalhe-conteudo');
     container.innerHTML = `
         <div class="fala-avatar">
@@ -6623,6 +6656,94 @@ function abrirFormularioFonteRenda() {
             Cancelar
         </button>
     `;
+}
+
+function editarFonteRenda(id) {
+    const fonte = (state.orcamento.rendaDetalhe.fontes || []).find(f => f.id === id);
+    if (!fonte) return;
+
+    fonteRendaEditandoId = id;
+    origemRendaTemp = fonte.origem;
+    temGenericaTemp = false;
+    frequenciaRendaSelecionada = fonte.frequencia;
+    custodiaRendaSelecionada = fonte.custodiaPadraoId || null;
+
+    const container = document.getElementById('renda-detalhe-conteudo');
+    const custodias = (state.orcamento.nivel >= 3) ? (state.orcamento.custodias || []) : [];
+
+    let htmlCustodia = '';
+    if (custodias.length > 0) {
+        let chipsCust = '';
+        custodias.forEach(c => {
+            const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
+            const sel = (fonte.custodiaPadraoId === c.id) ? ' selecionado' : '';
+            chipsCust += `<div class="chip${sel}" data-custodia-id="${c.id}" onclick="selecionarCustodiaRenda(this)">${tipo.icone} ${c.nome}</div>`;
+        });
+        htmlCustodia = `
+            <div class="fala-avatar">
+                <span class="icone">🌿</span>
+                <span class="texto">Onde esse dinheiro costuma cair? (opcional)</span>
+            </div>
+            <div class="chip-container" id="chips-custodia-renda">
+                ${chipsCust}
+            </div>
+        `;
+    }
+
+    let chipsFreq = '';
+    const freqs = [
+        { id: 'mensal', label: 'Todo mês, mesmo dia' },
+        { id: 'quinzenal', label: 'Duas vezes por mês' },
+        { id: 'semanal', label: 'Toda semana' },
+        { id: 'imprevisivel', label: 'Varia muito' }
+    ];
+    freqs.forEach(fr => {
+        const sel = fonte.frequencia === fr.id ? ' selecionado' : '';
+        chipsFreq += `<div class="chip${sel}" onclick="responderFrequenciaRenda(this, '${fr.id}')">${fr.label}</div>`;
+    });
+
+    const nomeEsc = String(fonte.nome || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+    container.innerHTML = `
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">Vamos editar a fonte <strong>${nomeEsc}</strong>.</span>
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">Qual é o nome dessa fonte?</span>
+        </div>
+        <input type="text" id="fonte-nome" class="input-padrao" placeholder="Ex: Salário" value="${nomeEsc}">
+
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">Quanto por mês?</span>
+        </div>
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="number" id="fonte-valor" class="input-padrao" placeholder="0.00" value="${fonte.valor != null ? fonte.valor : ''}">
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">E cai sempre no mesmo dia ou vem espalhado pelo mês?</span>
+        </div>
+        <div class="chip-container" id="chips-frequencia">
+            ${chipsFreq}
+        </div>
+        ${htmlCustodia}
+
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 16px;" onclick="fonteRendaEditandoId=null; renderizarDetalheRenda()">
+            Cancelar
+        </button>
+    `;
+
+    if (fonte.frequencia === 'mensal' || fonte.frequencia === 'quinzenal') {
+        mostrarPassoDiaRecebimento(fonte.frequencia, fonte.diaRecebimento);
+    } else {
+        mostrarBotaoSalvarFonte();
+    }
 }
 
 function refazerDetalheRenda() {
