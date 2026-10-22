@@ -2740,8 +2740,27 @@ function _categoriaParcelasQuitada(cat) {
 
 function calcularLimiteCategoriaSemana(cat, semana) {
     if (!cat || !semana) return 0;
-    // Quitada: não entra no teto semanal de planejamento
-    if (_categoriaParcelasQuitada(cat)) return 0;
+    
+    // Verifica se a categoria está quitada
+    let estaQuitada = _categoriaParcelasQuitada(cat);
+    
+    // Se está quitada, mas o pagamento foi feito NESTA semana, 
+    // ela ainda deve contar no limite desta semana.
+    if (estaQuitada) {
+        const pagouNestaSemana = (state.orcamento.historicoRegistros || []).some(r => 
+            (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva' || r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') &&
+            r.categoriaId === cat.id &&
+            r.data >= semana.inicio + 'T00:00:00' &&
+            r.data <= semana.fim + 'T23:59:59'
+        );
+        
+        if (pagouNestaSemana) {
+            estaQuitada = false; // Ignora o status "Quitada" para o cálculo desta semana
+        }
+    }
+
+    if (estaQuitada) return 0; // A partir da próxima semana, o limite será 0.
+
     const valor = Number(cat.valor) || 0;
     if (valor <= 0) return 0;
 
