@@ -10814,8 +10814,7 @@ function renderizarFluxoCaixa() {
         (!fluxoCustodiaFiltro || c.custodiaPadraoId === fluxoCustodiaFiltro)
     );
     const totalMensalSemVenc = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
-    const quotaDiaBase = totalMensalSemVenc / 30;
-
+    
     // Totais coerentes com o filtro
     let totEntradas = fluxo.totais.entradas;
     let totSaidas = fluxo.totais.saidas;
@@ -10828,9 +10827,9 @@ function renderizarFluxoCaixa() {
             .reduce((s, e) => s + (e.valor || 0), 0);
     }
 
-    // Valor teórico que gostaríamos de distribuir
+    // Valor teórico que gostaríamos de distribuir no mês todo
     const distribuicaoTeorica = (totalMensalSemVenc / 30) * fluxo.dias;
-    let totalDistribuidoReal = distribuicaoTeorica; // fallback para N1/N2
+    let totalDistribuidoReal = 0;
 
     // ============================================================
     // N3 — Projeção dia a dia com saldo corrido + melhores momentos
@@ -10841,7 +10840,7 @@ function renderizarFluxoCaixa() {
     let saldoFinalProj = null;
 
     if ((orc.nivel || 1) >= 3 && (orc.custodias || []).length > 0) {
-        // Saldo de partida: custódia filtrada ou soma das contas sem fatura
+        // Saldo de partida
         if (fluxoCustodiaFiltro) {
             const c = orc.custodias.find(x => x.id === fluxoCustodiaFiltro);
             if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) {
@@ -10858,9 +10857,8 @@ function renderizarFluxoCaixa() {
         const diasCompletos = [];
         let saldoCorrido = saldoInicialProj;
 
-        // Controle de alocação dinâmica
+        // Controle de alocação dinâmica (Look-ahead de 20 dias)
         let distribuidoRestante = totalMensalSemVenc;
-        let totalDistribuidoLoop = 0;
 
         for (let i = 0; i < fluxo.dias; i++) {
             const d = new Date(inicioDt);
@@ -10880,47 +10878,75 @@ function renderizarFluxoCaixa() {
                 .reduce((s, e) => s + (e.valor || 0), 0);
             const netEventos = entradas - saidas;
 
-            let saldoAntes = saldoCorrido + netEventos;
-            let diasRestantes = fluxo.dias - i;
+            const saldoAntes = saldoCorrido + netEventos;
+            
+            // LOOK-AHEAD: Calcula o pior saldo nos próximos 20 dias (ou até o fim do período)
+            let minFuturo = 0;
+            let acumuladoFuturo = 0;
+            const diasParaOlhar = Math.min(20, fluxo.dias - i - 1);
+            
+            for (let j = 1; j <= diasParaOlhar; j++) {
+                const dataFutura = new Date(inicioDt);
+                dataFutura.setDate(inicioDt.getDate() + i + j);
+                const dataKeyFutura = dataFutura.toISOString().split('T')[0];
+                const diaFuturo = fluxo.porDia[dataKeyFutura] || { entradas: 0, saidas: 0, eventos: [] };
+                
+                let evsFut = diaFuturo.eventos || [];
+                if (fluxoCustodiaFiltro) evsFut = evsFut.filter(e => e.custodiaId === fluxoCustodiaFiltro);
+                
+                const entFut = evsFut.filter(e => e.tipo === 'recebimento').reduce((s, e) => s + (e.valor || 0), 0);
+                const saiFut = evsFut.filter(e => e.tipo === 'vencimento').reduce((s, e) => s + (e.valor || 0), 0);
+                
+                acumuladoFuturo += (entFut - saiFut);
+                if (acumuladoFuturo < minFuturo) {
+                    minFuturo = acumuladoFuturo;
+                }
+            }
 
-            // Lógica Dinâmica: Ajusta o gasto diluído conforme o saldo
+            // Define o limite máximo de gasto hoje para que não falte dinheiro no futuro
+            // Margem de segurança de R$ 10,00
+            let limiteHoje = saldoAntes + minFuturo - 10;
+            if (limiteHoje < 0) limiteHoje = 0;
+
             let quotaDia = 0;
+            let isReduzido = false;
+
             if (saldoAntes > 0 && distribuidoRestante > 0) {
                 let qBase = totalMensalSemVenc / fluxo.dias;
-                let qRestanteMedia = distribuidoRestante / diasRestantes;
+                let qRestanteMedia = distribuidoRestante / (fluxo.dias - i);
                 
-                // O alvo do dia é a maior média entre a base diária e o restante médio
+                // Tenta gastar a média ou um pouco mais se o saldo for muito alto
                 let alvoDia = Math.max(qBase, qRestanteMedia);
-
-                // Compensar em dias com muito saldo (se o saldo atual é maior que a dívida restante, gasta mais rápido)
                 if (saldoAntes > distribuidoRestante * 2) {
                     alvoDia *= 1.5; 
                 } else if (saldoAntes > distribuidoRestante) {
                     alvoDia *= 1.2;
                 }
 
-                // Deixa uma margem de segurança de R$ 10 para não zerar a conta
-                let disponivelParaGasto = Math.max(0, saldoAntes - 10);
+                // A cota real é o menor valor entre o alvo e o limite seguro do caixa
+                quotaDia = Math.min(alvoDia, limiteHoje, distribuidoRestante);
                 
-                quotaDia = Math.min(disponivelParaGasto, alvoDia);
-                quotaDia = Math.min(quotaDia, distribuidoRestante);
+                // Verifica se foi reduzido em relação ao alvo para avisar na tela
+                if (quotaDia < alvoDia - 0.01) {
+                    isReduzido = true;
+                }
             }
 
             saldoCorrido = saldoAntes - quotaDia;
             distribuidoRestante -= quotaDia;
-            totalDistribuidoLoop += quotaDia;
+            totalDistribuidoReal += quotaDia;
 
             diasCompletos.push({
                 data: d, dataKey,
                 entradas, saidas,
                 eventos: eventosDia,
-                quotaDistribuida: quotaDia, // Valor real calculado para o dia
+                quotaDistribuida: quotaDia,
+                isReduzido: isReduzido,
                 netEventos, saldoAntes, saldoCorrido,
                 temEvento: eventosDia.length > 0
             });
         }
 
-        totalDistribuidoReal = totalDistribuidoLoop;
         saldoFinalProj = saldoCorrido;
 
         // -------- Timeline com saldo depois de cada dia --------
@@ -10943,18 +10969,21 @@ function renderizarFluxoCaixa() {
                             <strong style="color: ${corEv};">${sinal} ${fmt(e.valor)}</strong>
                         </div>`;
                 });
+                
                 if (d.quotaDistribuida > 0) {
+                    let labelQuota = d.isReduzido ? '🛒 Gastos diluídos (reduzido por segurança)' : '🛒 Gastos diluídos do dia';
                     linhas += `
                         <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.78rem; border-top: 1px solid var(--border); color: var(--warning);">
-                            <span>🛒 Gastos diluídos do dia</span>
+                            <span>${labelQuota}</span>
                             <strong>− ${fmt(d.quotaDistribuida)}</strong>
                         </div>`;
                 } else if (totalMensalSemVenc > 0) {
                     linhas += `
                         <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.75rem; border-top: 1px solid var(--border); color: var(--secondary);">
-                            <span>🛒 Gastos diluídos pausados (saldo baixo)</span>
+                            <span>🛒 Gastos diluídos pausados (proteção de saldo futuro)</span>
                         </div>`;
                 }
+                
                 htmlDiaADia += `
                     <div class="card" style="padding: 10px 12px; margin-bottom: 6px; border-left: 3px solid ${corSaldo};">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
@@ -10965,7 +10994,7 @@ function renderizarFluxoCaixa() {
                     </div>`;
             } else {
                 const quotaTxt = d.quotaDistribuida > 0
-                    ? `<span style="color: var(--warning); font-size: 0.72rem;">🛒 − ${fmt(d.quotaDistribuida)}</span>`
+                    ? `<span style="color: var(--warning); font-size: 0.72rem;">🛒 − ${fmt(d.quotaDistribuida)}${d.isReduzido ? ' (reduzido)' : ''}</span>`
                     : (totalMensalSemVenc > 0 ? `<span style="color: var(--secondary); font-size: 0.72rem;">🛒 pausado</span>` : '');
                 
                 htmlDiaADia += `
@@ -10997,7 +11026,7 @@ function renderizarFluxoCaixa() {
                     <div class="secao-titulo">🎯 Melhores momentos para gastos diluídos</div>
                     <div class="card" style="padding: 14px 16px; margin-bottom: 16px; border-left: 4px solid var(--success); background: var(--success-soft);">
                         <p style="font-size: 0.82rem; color: var(--secondary); margin-bottom: 10px; line-height: 1.4;">
-                            Como os gastos sem data fixa podem ser alocados em qualquer dia, estes são os dias em que seu saldo estará mais alto. O app já ajusta automaticamente o consumo para priorizar esses dias.
+                            O app já ajusta automaticamente o consumo priorizando dias com mais saldo. Estes são os melhores dias para concentrar essas compras:
                         </p>
                         ${topPeaks.map((d, i) => {
                             const rotulo = `${diasSemana[d.data.getDay()]}, ${String(d.data.getDate()).padStart(2, '0')}/${String(d.data.getMonth() + 1).padStart(2, '0')}`;
@@ -11019,7 +11048,7 @@ function renderizarFluxoCaixa() {
     const falaZe = `
         <div class="fala-avatar">
             <span class="icone">🔭</span>
-            <span class="texto"><strong>Zé:</strong> Aqui entra o que você declarou. Os gastos sem data fixa entram diluídos no período para você ver a sobra real, priorizando dias com mais saldo para evitar que o saldo fique negativo.</span>
+            <span class="texto"><strong>Zé:</strong> Aqui entra o que você declarou. Os gastos sem data fixa entram diluídos no período, mas são protegidos: se houver risco de saldo negativo nos próximos 20 dias, eu reduzo ou pauso o gasto hoje.</span>
         </div>
     `;
 
@@ -11040,7 +11069,7 @@ function renderizarFluxoCaixa() {
             </div>
             ${totalDistribuidoReal > 0 ? `
             <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px;">
-                <span style="color: var(--secondary);">Gastos diluídos (sem data)</span>
+                <span style="color: var(--secondary);">Gastos diluídos alocados</span>
                 <strong style="color: var(--warning);">− ${fmt(totalDistribuidoReal)}</strong>
             </div>
             ` : ''}
@@ -11049,8 +11078,8 @@ function renderizarFluxoCaixa() {
                 <strong style="color: ${corSaldo};">${fmt(Math.abs(sobraAjustada))}</strong>
             </div>
             ${totalDistribuidoReal < distribuicaoTeorica ? `
-                <div style="font-size: 0.7rem; color: var(--danger); margin-top: 4px; text-align: right;">
-                    * Nem todos os gastos diluídos puderam ser alocados (saldo insuficiente)
+                <div style="font-size: 0.7rem; color: var(--warning); margin-top: 4px; text-align: right;">
+                    * Gastos diluídos protegidos para não furar o caixa futuro
                 </div>
             ` : ''}
             ${saldoInicialProj !== null ? `
@@ -11089,7 +11118,6 @@ function renderizarFluxoCaixa() {
                     ? 'var(--warning)'
                     : (proj.saldoFinal < 0 ? 'var(--danger)' : 'var(--success)');
                 
-                // Se houver custódia filtrada, calculamos os gastos diluídos só para ela
                 const gastosDistFiltro = (categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0) / 30) * fluxo.dias;
                 const saldoProjAjustado = proj.temFatura ? proj.faturaFinal : (proj.saldoFinal - gastosDistFiltro);
 
