@@ -10807,19 +10807,172 @@ function renderizarFluxoCaixa() {
     const gargalos = detectarGargalos(fluxo, { custodias: projMapFluxo });
     const sugestoes = sugerirEquilibrio(gargalos, orc);
 
-    // NOVO: Cálculo dos gastos distribuídos (sem data fixa)
-    // Considera a categoria se não tiver vencimento (ou for tipo 'consumo') e respeita o filtro de custódia
-    const categoriasSemVenc = (orc.categorias || []).filter(c => 
-        !c.vencimento && 
-        !_categoriaParcelasQuitada(c) &&
-        (!fluxoCustodiaFiltro || c.custodiaPadraoId === fluxoCustodiaFiltro)
-    );
-    const totalMensalSemVenc = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
-    // Proporcional aos 30 dias da janela
-    const gastosDistribuidos = (totalMensalSemVenc / 30) * fluxo.dias;
-    
-    // Calcula a sobra real (considerando o que já tem data + o que é consumo diluído)
-    const sobraAjustada = fluxo.totais.saldo - gastosDistribuidos;
+   // NOVO: Cálculo dos gastos distribuídos (sem data fixa)
+const categoriasSemVenc = (orc.categorias || []).filter(c => 
+    !c.vencimento && 
+    !_categoriaParcelasQuitada(c) &&
+    (!fluxoCustodiaFiltro || c.custodiaPadraoId === fluxoCustodiaFiltro)
+);
+const totalMensalSemVenc = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+const gastosDistribuidos = (totalMensalSemVenc / 30) * fluxo.dias;
+const quotaDiaBase = totalMensalSemVenc / 30;
+
+// Totais coerentes com o filtro (evita misturar evento filtrado com total global)
+let totEntradas = fluxo.totais.entradas;
+let totSaidas = fluxo.totais.saidas;
+if (fluxoCustodiaFiltro) {
+    totEntradas = (fluxo.eventos || [])
+        .filter(e => e.tipo === 'recebimento' && e.custodiaId === fluxoCustodiaFiltro)
+        .reduce((s, e) => s + (e.valor || 0), 0);
+    totSaidas = (fluxo.eventos || [])
+        .filter(e => e.tipo === 'vencimento' && e.custodiaId === fluxoCustodiaFiltro)
+        .reduce((s, e) => s + (e.valor || 0), 0);
+}
+const sobraAjustada = (totEntradas - totSaidas) - gastosDistribuidos;
+
+// ============================================================
+// N3 — Projeção dia a dia com saldo corrido + melhores momentos
+// ============================================================
+let htmlDiaADia = '';
+let htmlMelhoresMomentos = '';
+let saldoInicialProj = null;
+let saldoFinalProj = null;
+
+if ((orc.nivel || 1) >= 3 && (orc.custodias || []).length > 0) {
+    // Saldo de partida: custódia filtrada ou soma das contas sem fatura
+    if (fluxoCustodiaFiltro) {
+        const c = orc.custodias.find(x => x.id === fluxoCustodiaFiltro);
+        if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) {
+            saldoInicialProj = Number(c.saldoAtual) || 0;
+        }
+    } else {
+        saldoInicialProj = orc.custodias
+            .filter(c => !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura)
+            .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
+    }
+
+    const inicioDt = new Date(fluxo.inicio + 'T00:00:00');
+    const diasSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+    const diasCompletos = [];
+    let saldoCorrido = saldoInicialProj;
+
+    for (let i = 0; i < fluxo.dias; i++) {
+        const d = new Date(inicioDt);
+        d.setDate(inicioDt.getDate() + i);
+        const dataKey = d.toISOString().split('T')[0];
+        const diaData = fluxo.porDia[dataKey] || { entradas: 0, saidas: 0, eventos: [] };
+
+        let eventosDia = diaData.eventos || [];
+        if (fluxoCustodiaFiltro) {
+            eventosDia = eventosDia.filter(e => e.custodiaId === fluxoCustodiaFiltro);
+        }
+        const entradas = eventosDia
+            .filter(e => e.tipo === 'recebimento')
+            .reduce((s, e) => s + (e.valor || 0), 0);
+        const saidas = eventosDia
+            .filter(e => e.tipo === 'vencimento')
+            .reduce((s, e) => s + (e.valor || 0), 0);
+        const netEventos = entradas - saidas;
+
+        const saldoAntes = saldoCorrido;
+        saldoCorrido += netEventos - quotaDiaBase;
+
+        diasCompletos.push({
+            data: d, dataKey,
+            entradas, saidas,
+            eventos: eventosDia,
+            quotaDistribuida: quotaDiaBase,
+            netEventos, saldoAntes, saldoCorrido,
+            temEvento: eventosDia.length > 0
+        });
+    }
+
+    saldoFinalProj = saldoCorrido;
+
+    // -------- Timeline com saldo depois de cada dia --------
+    htmlDiaADia = `<div class="secao-titulo">Saldo depois de cada dia</div>`;
+
+    diasCompletos.forEach(d => {
+        const rotulo = `${diasSemana[d.data.getDay()]}, ${String(d.data.getDate()).padStart(2, '0')}/${String(d.data.getMonth() + 1).padStart(2, '0')}`;
+        const corSaldo = d.saldoCorrido >= 0 ? 'var(--success)' : 'var(--danger)';
+
+        if (d.temEvento) {
+            let linhas = '';
+            d.eventos.forEach(e => {
+                const sinal = e.tipo === 'recebimento' ? '+' : '−';
+                const corEv = e.tipo === 'recebimento' ? 'var(--success)' : 'var(--danger)';
+                const icone = e.tipo === 'recebimento' ? '💰'
+                    : (e.caixa === 'base' ? '🛡️' : e.caixa === 'vida' ? '🌿' : '🔭');
+                linhas += `
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.85rem; border-top: 1px solid var(--border);">
+                        <span style="color: var(--primary);">${icone} ${e.nome}</span>
+                        <strong style="color: ${corEv};">${sinal} ${fmt(e.valor)}</strong>
+                    </div>`;
+            });
+            if (d.quotaDistribuida > 0) {
+                linhas += `
+                    <div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.78rem; border-top: 1px solid var(--border); color: var(--warning);">
+                        <span>🛒 Gastos diluídos do dia</span>
+                        <strong>− ${fmt(d.quotaDistribuida)}</strong>
+                    </div>`;
+            }
+            htmlDiaADia += `
+                <div class="card" style="padding: 10px 12px; margin-bottom: 6px; border-left: 3px solid ${corSaldo};">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <strong style="font-size: 0.88rem;">${rotulo}</strong>
+                        <span style="font-size: 0.85rem; color: ${corSaldo}; font-weight: 700;">→ ${fmt(d.saldoCorrido)}</span>
+                    </div>
+                    ${linhas}
+                </div>`;
+        } else {
+            const quotaTxt = d.quotaDistribuida > 0
+                ? `<span style="color: var(--warning); font-size: 0.72rem;">🛒 − ${fmt(d.quotaDistribuida)}</span>`
+                : '';
+            htmlDiaADia += `
+                <div style="padding: 6px 10px; margin-bottom: 3px; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; background: var(--bg-color); border-radius: 8px;">
+                    <span style="color: var(--secondary);">${rotulo}</span>
+                    ${quotaTxt}
+                    <strong style="color: ${corSaldo}; font-size: 0.82rem;">${fmt(d.saldoCorrido)}</strong>
+                </div>`;
+        }
+    });
+
+    // -------- Melhores momentos para gastos diluídos --------
+    if (quotaDiaBase > 0) {
+        const peaks = [];
+        for (let i = 0; i < diasCompletos.length; i++) {
+            const d = diasCompletos[i];
+            if (d.saldoCorrido <= 0) continue;
+            const ant = i > 0 ? diasCompletos[i - 1].saldoCorrido : -Infinity;
+            const prox = i < diasCompletos.length - 1 ? diasCompletos[i + 1].saldoCorrido : -Infinity;
+            if (d.saldoCorrido >= ant && d.saldoCorrido >= prox) peaks.push(d);
+        }
+        const topPeaks = peaks
+            .sort((a, b) => b.saldoCorrido - a.saldoCorrido)
+            .slice(0, 5)
+            .sort((a, b) => a.data - b.data);
+
+        if (topPeaks.length > 0) {
+            htmlMelhoresMomentos = `
+                <div class="secao-titulo">🎯 Melhores momentos para gastos diluídos</div>
+                <div class="card" style="padding: 14px 16px; margin-bottom: 16px; border-left: 4px solid var(--success); background: var(--success-soft);">
+                    <p style="font-size: 0.82rem; color: var(--secondary); margin-bottom: 10px; line-height: 1.4;">
+                        Como os gastos sem data fixa (mercado, transporte, etc.) podem ser alocados em qualquer dia, estes são os dias em que seu saldo estará mais alto — a melhor hora de concentrar essas compras:
+                    </p>
+                    ${topPeaks.map((d, i) => {
+                        const rotulo = `${diasSemana[d.data.getDay()]}, ${String(d.data.getDate()).padStart(2, '0')}/${String(d.data.getMonth() + 1).padStart(2, '0')}`;
+                        const eventoInfo = d.temEvento
+                            ? ` (${d.eventos.length} evento${d.eventos.length > 1 ? 's' : ''})`
+                            : '';
+                        return `<div style="display: flex; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--border); font-size: 0.85rem;">
+                            <span>${i + 1}. ${rotulo}${eventoInfo}</span>
+                            <strong style="color: var(--success);">${fmt(d.saldoCorrido)}</strong>
+                        </div>`;
+                    }).join('')}
+                </div>`;
+        }
+    }
+}
 
     const falaZe = `
         <div class="fala-avatar">
@@ -10836,29 +10989,35 @@ function renderizarFluxoCaixa() {
                 Próximos ${fluxo.dias} dias
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px;">
-                <span style="color: var(--secondary);">Entradas com data</span>
-                <strong style="color: var(--success);">+ ${fmt(fluxo.totais.entradas)}</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px;">
-                <span style="color: var(--secondary);">Saídas com data</span>
-                <strong style="color: var(--danger);">− ${fmt(fluxo.totais.saidas)}</strong>
-            </div>
-            ${gastosDistribuidos > 0 ? `
-            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px;">
-                <span style="color: var(--secondary);">Gastos diluídos (sem data)</span>
-                <strong style="color: var(--warning);">− ${fmt(gastosDistribuidos)}</strong>
-            </div>
-            ` : ''}
-            <div style="display: flex; justify-content: space-between; font-size: 1rem; padding-top: 10px; margin-top: 6px; border-top: 1px solid var(--border);">
-                <span style="font-weight: bold; color: var(--primary);">${sobraAjustada >= 0 ? 'Sobra ajustada' : 'Falta ajustada'}</span>
-                <strong style="color: ${corSaldo};">${fmt(Math.abs(sobraAjustada))}</strong>
-            </div>
-            <div style="font-size: 0.7rem; color: var(--secondary); margin-top: 6px; text-align: right;">
-                *Sobra ajustada inclui os gastos diluídos no período.
-            </div>
-        </div>
+    <span style="color: var(--secondary);">Entradas com data</span>
+    <strong style="color: var(--success);">+ ${fmt(totEntradas)}</strong>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px;">
+    <span style="color: var(--secondary);">Saídas com data</span>
+    <strong style="color: var(--danger);">− ${fmt(totSaidas)}</strong>
+</div>
+${gastosDistribuidos > 0 ? `
+<div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 6px;">
+    <span style="color: var(--secondary);">Gastos diluídos (sem data)</span>
+    <strong style="color: var(--warning);">− ${fmt(gastosDistribuidos)}</strong>
+</div>
+` : ''}
+<div style="display: flex; justify-content: space-between; font-size: 1rem; padding-top: 10px; margin-top: 6px; border-top: 1px solid var(--border);">
+    <span style="font-weight: bold; color: var(--primary);">${sobraAjustada >= 0 ? 'Sobra ajustada' : 'Falta ajustada'}</span>
+    <strong style="color: ${corSaldo};">${fmt(Math.abs(sobraAjustada))}</strong>
+</div>
+${saldoInicialProj !== null ? `
+    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; padding-top: 8px; margin-top: 8px; border-top: 1px dashed var(--border);">
+        <span style="color: var(--secondary);">Saldo inicial${fluxoCustodiaFiltro ? ' (conta)' : ' (contas)'}</span>
+        <strong>${fmt(saldoInicialProj)}</strong>
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 0.95rem; padding-top: 4px;">
+        <span style="font-weight: bold; color: var(--primary);">Saldo final projetado</span>
+        <strong style="color: ${saldoFinalProj >= 0 ? 'var(--success)' : 'var(--danger)'};">${fmt(saldoFinalProj)}</strong>
+    </div>
+` : ''}
+</div>
     `;
-
     // Bloco 8 — seletor de custódia (N3)
     let htmlSeletorCustodia = '';
     let htmlProjCustodia = '';
@@ -11038,9 +11197,10 @@ function renderizarFluxoCaixa() {
         ${htmlResumo}
         ${htmlSeletorCustodia}
         ${htmlProjCustodia}
-        ${htmlLacunas}
-        ${htmlGargalos}
-        ${htmlTimeline}
+        ${htmlMelhoresMomentos}
+${htmlLacunas}
+${htmlGargalos}
+${htmlDiaADia || htmlTimeline}
         <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 12px;" onclick="voltarParaOrcamento()">
             Voltar
         </button>
