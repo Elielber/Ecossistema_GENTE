@@ -10902,9 +10902,68 @@ function renderizarFluxoCaixa() {
     let saldoInicialProj = null;
     let saldoFinalProj = null;
 
-    // Verifica a preferência do usuário (padrão true se não existir)
     const protegerSaldo = orc.configFluxo?.protegerSaldo !== false;
 
+    // ============================================================
+    // NOVO: CONCILIAÇÃO DE ENVELOPES (Conectar Home com Fluxo)
+    // ============================================================
+    let totaisPorCaixa = {
+        base: { contas: 0, diluidos: 0 },
+        vida: { contas: 0, diluidos: 0 },
+        futuro: { contas: 0, diluidos: 0 }
+    };
+
+    // Pega os gastos com data (vencimentos) por caixa
+    (fluxo.eventos || []).forEach(e => {
+        if (e.tipo === 'vencimento' && e.caixa) {
+            if (!totaisPorCaixa[e.caixa]) totaisPorCaixa[e.caixa] = { contas: 0, diluidos: 0 };
+            totaisPorCaixa[e.caixa].contas += (e.valor || 0);
+        }
+    });
+
+    // Pega os gastos diluídos por caixa
+    categoriasSemVenc.forEach(c => {
+        if (c.caixa) {
+            if (!totaisPorCaixa[c.caixa]) totaisPorCaixa[c.caixa] = { contas: 0, diluidos: 0 };
+            totaisPorCaixa[c.caixa].diluidos += (Number(c.valor) || 0);
+        }
+    });
+
+    let htmlConexaoEnvelopes = `
+        <div class="card" style="margin-bottom: 16px; padding: 16px;">
+            <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 12px; font-weight: 700;">
+                Conexão com a Home
+            </div>
+            <p style="font-size: 0.8rem; color: var(--secondary); margin-bottom: 14px; line-height: 1.4;">
+                O que você planejou nos envelopes (Home) aparece aqui distribuído no tempo. Os <strong>gastos diluídos</strong> são o seu consumo (mercado, lazer) e as <strong>contas com data</strong> são os vencimentos.
+            </p>
+    `;
+
+    ['base', 'vida', 'futuro'].forEach(k => {
+        const dados = totaisPorCaixa[k];
+        if (!dados || (dados.contas === 0 && dados.diluidos === 0)) return;
+
+        const icone = k === 'base' ? '🛡️' : k === 'vida' ? '🌿' : '🔭';
+        const nome = k === 'base' ? 'Base' : k === 'vida' ? 'Vida' : 'Futuro';
+        const cor = k === 'base' ? 'var(--primary)' : k === 'vida' ? 'var(--warning)' : 'var(--success)';
+
+        htmlConexaoEnvelopes += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: 0.85rem;">
+                <div>
+                    <strong style="color: ${cor}; font-size: 0.9rem;">${icone} ${nome}</strong>
+                    <div style="font-size: 0.75rem; color: var(--secondary); margin-top: 2px;">
+                        Contas: ${fmt(dados.contas)} + Diluídos: ${fmt(dados.diluidos)}
+                    </div>
+                </div>
+                <strong style="color: var(--text-main); font-size: 0.95rem;">${fmt(dados.contas + dados.diluidos)}</strong>
+            </div>
+        `;
+    });
+    htmlConexaoEnvelopes += `</div>`;
+
+    // ============================================================
+    // N3 — Projeção dia a dia (mantida a lógica de proteção de saldo)
+    // ============================================================
     if ((orc.nivel || 1) >= 3 && (orc.custodias || []).length > 0) {
         if (fluxoCustodiaFiltro) {
             const c = orc.custodias.find(x => x.id === fluxoCustodiaFiltro);
@@ -10936,11 +10995,10 @@ function renderizarFluxoCaixa() {
             let quotaDia = 0;
             let isReduzido = false;
 
-            if (saldoAntes > 0 || !protegerSaldo) { // Se não protege, calcula mesmo se saldoAntes for negativo
+            if (saldoAntes > 0 || !protegerSaldo) {
                 let qBase = totalMensalSemVenc / fluxo.dias;
                 
                 if (protegerSaldo) {
-                    // Lógica de Look-ahead (proteção)
                     let minFuturo = 0;
                     let acumuladoFuturo = 0;
                     const diasParaOlhar = Math.min(20, fluxo.dias - i - 1);
@@ -10960,7 +11018,7 @@ function renderizarFluxoCaixa() {
                         if (acumuladoFuturo < minFuturo) minFuturo = acumuladoFuturo;
                     }
 
-                    let limiteHoje = saldoAntes + minFuturo - 10; // R$ 10 de margem
+                    let limiteHoje = saldoAntes + minFuturo - 10;
                     if (limiteHoje < 0) limiteHoje = 0;
                     
                     if (distribuidoRestante > 0) {
@@ -10973,7 +11031,6 @@ function renderizarFluxoCaixa() {
                         if (quotaDia < alvoDia - 0.01) isReduzido = true;
                     }
                 } else {
-                    // Lógica de Plano Rígido (sem proteção)
                     if (distribuidoRestante > 0) {
                         quotaDia = Math.min(qBase, distribuidoRestante);
                     }
@@ -11004,7 +11061,11 @@ function renderizarFluxoCaixa() {
                     const sinal = e.tipo === 'recebimento' ? '+' : '−';
                     const corEv = e.tipo === 'recebimento' ? 'var(--success)' : 'var(--danger)';
                     const icone = e.tipo === 'recebimento' ? '💰' : (e.caixa === 'base' ? '🛡️' : e.caixa === 'vida' ? '🌿' : '🔭');
-                    linhas += `<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.85rem; border-top: 1px solid var(--border);"><span style="color: var(--primary);">${icone} ${e.nome}</span><strong style="color: ${corEv};">${sinal} ${fmt(e.valor)}</strong></div>`;
+                    
+                    // NOVO: Mostra a qual envelope a conta pertence
+                    const tagCaixa = e.tipo === 'vencimento' && e.caixa ? `<span style="font-size:0.65rem; color:var(--secondary); margin-left:4px;">[${e.caixa}]</span>` : '';
+                    
+                    linhas += `<div style="display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.85rem; border-top: 1px solid var(--border);"><span style="color: var(--primary);">${icone} ${e.nome} ${tagCaixa}</span><strong style="color: ${corEv};">${sinal} ${fmt(e.valor)}</strong></div>`;
                 });
                 
                 if (d.quotaDistribuida > 0) {
@@ -11026,7 +11087,6 @@ function renderizarFluxoCaixa() {
     const subtotalFluxo = totEntradas - totSaidas;
     const corSaldo = sobraAjustada >= 0 ? 'var(--success)' : 'var(--danger)';
 
-    // VISUAL DO SWITCH
     const bgSwitch = protegerSaldo ? 'var(--success)' : 'var(--secondary)';
     const posSwitch = protegerSaldo ? 'translateX(16px)' : 'translateX(0px)';
     const htmlSwitch = `
@@ -11073,11 +11133,9 @@ function renderizarFluxoCaixa() {
         </div>
     `;
 
-    // O resto do código (Seletor de custódias, Projeção, Gargalos e Timeline) permanece igual...
     let htmlSeletorCustodia = '';
     let htmlProjCustodia = '';
     if ((orc.nivel || 1) >= 3 && (orc.custodias || []).length > 0) {
-        // ... (mantenha o código do seletor e projeção que já existia)
         const custodias = orc.custodias;
         let chips = `<div class="chip${fluxoCustodiaFiltro ? '' : ' selecionado'}" onclick="fluxoCustodiaFiltro=null;renderizarFluxoCaixa()">Todas</div>`;
         custodias.forEach(c => {
@@ -11086,7 +11144,6 @@ function renderizarFluxoCaixa() {
             chips += `<div class="chip${sel}" onclick="fluxoCustodiaFiltro='${c.id}';renderizarFluxoCaixa()">${tipo.icone} ${c.nome}</div>`;
         });
         htmlSeletorCustodia = `<div class="secao-titulo">Ver por conta</div><div class="chip-container" style="margin-bottom: 16px;">${chips}</div>`;
-        // O bloco de projeção da custódia omitido aqui para brevidade, mantenha o seu original
     }
 
     let htmlLacunas = '';
@@ -11104,13 +11161,14 @@ function renderizarFluxoCaixa() {
         htmlGargalos = `<div class="secao-titulo">Pontos de atenção</div>${itens.map(s => `<div class="card" style="padding: 12px 14px; margin-bottom: 8px; border-left: 3px solid var(--warning); font-size: 0.85rem; color: var(--primary); line-height: 1.45;">${s.mensagem || s.tipo}</div>`).join('')}`;
     }
 
+    // O restante do código para a timeline (quando não há custódias) 
+    // [mantenha o seu código original para a timeline, se houver, mas a maior parte já está no htmlDiaADia acima]
     let porDiaView = fluxo.porDia;
     const datas = Object.keys(porDiaView).sort();
     let htmlTimeline = '';
     if (datas.length > 0) {
-         // ... (mantenha o código da timeline original aqui)
          htmlTimeline = `<div class="secao-titulo">Calendário declarado</div>`; 
-         // [o código original da timeline foi omitido para focar na resposta, mas você deve colar o seu]
+         // [o seu código original da timeline entra aqui]
     }
 
     container.innerHTML = `
@@ -11119,6 +11177,9 @@ function renderizarFluxoCaixa() {
             <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--primary); margin-top: 4px;">Olhar à frente</h2>
         </div>
         ${htmlResumo}
+        
+        ${htmlConexaoEnvelopes} <!-- AQUI ESTÁ O NOVO BLOCO QUE CONECTA AS MÉTRICAS -->
+        
         ${htmlSeletorCustodia}
         ${htmlProjCustodia}
         ${htmlLacunas}
