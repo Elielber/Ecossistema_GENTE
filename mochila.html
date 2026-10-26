@@ -6960,10 +6960,7 @@ function renderizarDetalheGastos() {
                             <div class="nome-cat">${cat.nome}</div>
                             <div class="meta-cat">${metaExtra}</div>
                         </div>
-                        <div style="display: flex; align-items: center;" onclick="event.stopPropagation()">
-                            <span class="valor-cat">R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')}</span>
-                            <button class="btn-remover" onclick="removerCategoria('${cat.id}')">&times;</button>
-                        </div>
+                        <div style="display: flex; align-items: center;" onclick="event.stopPropagation()"> <span class="valor-cat">R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')}</span> <button class="btn-remover" style="color: var(--primary); font-size: 1rem;" onclick="abrirFormularioCategoriaFuturo('${cat.id}')" title="Editar">✏️</button> <button class="btn-remover" onclick="removerCategoria('${cat.id}')">&times;</button> </div>
                     </div>
                     ${barraHtml}
                 </div>
@@ -7941,10 +7938,15 @@ function confirmarPagamentoParcela() {
     renderizarDetalheFuturo();
 }
 
-function abrirFormularioCategoriaFuturo() {
+function abrirFormularioCategoriaFuturo(idExistente) {
     const container = document.getElementById('divida-detalhe-conteudo');
     const subtipo = caixaFuturoAtiva;
     const avatar = subtipo === 'divida' ? '🔭' : '🐖';
+
+    const catExistente = idExistente
+        ? (state.orcamento.categorias || []).find(c => c.id === idExistente)
+        : null;
+    categoriaEditandoId = catExistente ? catExistente.id : null;
 
     const chipsD = [
         '💳 Cartão', '🏦 Empréstimo', '👤 Devendo pra alguém',
@@ -7961,10 +7963,13 @@ function abrirFormularioCategoriaFuturo() {
         htmlChips += `<div class="chip" onclick="preencherNomeCategoria(this)">${c}</div>`;
     });
 
+    const tituloFala = catExistente ? `Vamos ajustar <strong>${catExistente.nome}</strong>.` : 'Qual é o nome?';
+    const btnSalvar = catExistente ? 'Salvar alterações' : 'Salvar';
+
     container.innerHTML = `
         <div class="fala-avatar">
             <span class="icone">${avatar}</span>
-            <span class="texto">Qual é o nome?</span>
+            <span class="texto">${tituloFala}</span>
         </div>
 
         <input type="text" id="nova-cat-nome" class="input-padrao" placeholder="Ex: Cartão X, Reserva de emergência">
@@ -7988,7 +7993,7 @@ function abrirFormularioCategoriaFuturo() {
             <span class="texto">Esse valor é sempre igual ou muda?</span>
         </div>
 
-                <div class="chip-container" id="chips-tipo-cat">
+        <div class="chip-container" id="chips-tipo-cat">
             <div class="chip" data-tipo="conta" onclick="selecionarTipoCategoria(this, 'conta')">É uma conta</div>
             <div class="chip" data-tipo="consumo" onclick="selecionarTipoCategoria(this, 'consumo')">É aporte (distribuído)</div>
         </div>
@@ -8002,31 +8007,55 @@ function abrirFormularioCategoriaFuturo() {
         </div>
 		
 		<div class="fala-avatar">
-    <span class="icone">${avatar}</span>
-    <span class="texto">Essa ${subtipo === 'divida' ? 'dívida' : 'reserva'} tem parcelas definidas?</span>
-</div>
-<div class="chip-container" id="chips-parcelamento">
-    <div class="chip" onclick="selecionarParcelamento(this, 'nao')">Não, é contínuo</div>
-    <div class="chip" onclick="selecionarParcelamento(this, 'sim')">Sim, tem um número de parcelas</div>
-</div>
+            <span class="icone">${avatar}</span>
+            <span class="texto">Essa ${subtipo === 'divida' ? 'dívida' : 'reserva'} tem parcelas definidas?</span>
+        </div>
+        <div class="chip-container" id="chips-parcelamento">
+            <div class="chip" onclick="selecionarParcelamento(this, 'nao')">Não, é contínuo</div>
+            <div class="chip" onclick="selecionarParcelamento(this, 'sim')">Sim, tem um número de parcelas</div>
+        </div>
 
-<div id="bloco-parcelas" style="display: none;">
-    <div class="fala-avatar">
-        <span class="icone">${avatar}</span>
-        <span class="texto">Quantas parcelas no total?</span>
-    </div>
-    <input type="number" id="nova-cat-parcelas" class="input-padrao" placeholder="Ex: 12" min="1">
-</div>
+        <div id="bloco-parcelas" style="display: none;">
+            <div class="fala-avatar">
+                <span class="icone">${avatar}</span>
+                <span class="texto">Quantas parcelas no total?</span>
+            </div>
+            <input type="number" id="nova-cat-parcelas" class="input-padrao" placeholder="Ex: 12" min="1">
+        </div>
 
-        <button class="btn-primary" onclick="salvarCategoriaFuturo()">Salvar</button>
-        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="renderizarDetalheFuturo()">
+        <button class="btn-primary" onclick="salvarCategoriaFuturo()">${btnSalvar}</button>
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="categoriaEditandoId=null; renderizarDetalheFuturo()">
             Cancelar
         </button>
     `;
-	tipoCategoriaSelecionado = null;
-    parcelamentoSelecionado = null;
-}
 
+    tipoCategoriaSelecionado = null;
+    parcelamentoSelecionado = null;
+
+    // Prefill em edição
+    if (catExistente) {
+        document.getElementById('nova-cat-nome').value = catExistente.nome || '';
+        document.getElementById('nova-cat-valor').value = catExistente.valor != null ? catExistente.valor : '';
+
+        // Tipo
+        tipoCategoriaSelecionado = catExistente.tipo || 'conta';
+        const chipTipo = document.querySelector(`#chips-tipo-cat .chip[data-tipo="${tipoCategoriaSelecionado}"]`);
+        if (chipTipo) selecionarTipoCategoria(chipTipo, tipoCategoriaSelecionado);
+
+        if (tipoCategoriaSelecionado === 'conta' && catExistente.vencimento) {
+            document.getElementById('nova-cat-vencimento').value = catExistente.vencimento;
+        }
+
+        // Parcelamento
+        parcelamentoSelecionado = catExistente.parcelasTotais ? 'sim' : 'nao';
+        const chipParc = document.querySelector(`#chips-parcelamento .chip[onclick*="${parcelamentoSelecionado}"]`);
+        if (chipParc) selecionarParcelamento(chipParc, parcelamentoSelecionado);
+
+        if (parcelamentoSelecionado === 'sim') {
+            document.getElementById('nova-cat-parcelas').value = catExistente.parcelasTotais;
+        }
+    }
+}
     
 	let parcelamentoSelecionado = null;
 
@@ -8050,7 +8079,7 @@ function salvarCategoriaFuturo() {
         ? (parseInt(parcelasInput && parcelasInput.value) || 0)
         : null;
 
-        if (nome === '') { alert('Diga o nome.'); return; }
+    if (nome === '') { alert('Diga o nome.'); return; }
     if (valor <= 0) { alert('Insira um valor maior que zero.'); return; }
     if (!tipoCategoriaSelecionado) { alert('Escolha se é conta ou aporte.'); return; }
     if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
@@ -8066,12 +8095,12 @@ function salvarCategoriaFuturo() {
         return;
     }
 
-    // Confirmação de "já paguei" para conta com vencimento já passado
+    // Confirmação de "já paguei" (apenas na criação, edição não pergunta de novo para não confundir)
     const diaHoje = new Date().getDate();
     const mesAtual = _mesAtualYYYYMM();
     let pagamentoConfirmadoMes = null;
 
-    if (tipoCategoriaSelecionado === 'conta' && vencimento && vencimento < diaHoje) {
+    if (!categoriaEditandoId && tipoCategoriaSelecionado === 'conta' && vencimento && vencimento < diaHoje) {
         const confirmou = confirm(
             `O dia ${vencimento} já passou este mês.\n\n` +
             `Essa conta já foi paga?\n\n` +
@@ -8082,17 +8111,47 @@ function salvarCategoriaFuturo() {
         if (confirmou) pagamentoConfirmadoMes = mesAtual;
     }
 
+    // ---------- EDIÇÃO ----------
+    if (categoriaEditandoId) {
+        const cat = (state.orcamento.categorias || []).find(c => c.id === categoriaEditandoId);
+        if (!cat) {
+            categoriaEditandoId = null;
+            alert('Categoria não encontrada.');
+            renderizarDetalheFuturo();
+            return;
+        }
+
+        // Atualiza apenas os campos de configuração futura
+        cat.nome = nome;
+        cat.valor = valor; // Valor das próximas parcelas
+        cat.tipo = tipoCategoriaSelecionado;
+        cat.vencimento = vencimento;
+        cat.parcelasTotais = parcelasTotais; 
+        cat.valorTotal = parcelasTotais ? (valor * parcelasTotais) : null;
+        // NÃO alteramos cat.parcelasPagas (preservando o passado)
+
+        categoriaEditandoId = null;
+        tipoCategoriaSelecionado = null;
+        parcelamentoSelecionado = null;
+        
+        recalcularTotalFuturo();
+        salvarEstado();
+        renderizarDetalheFuturo();
+        return;
+    }
+
+    // ---------- CRIAÇÃO ----------
     if (!state.orcamento.categorias) state.orcamento.categorias = [];
     state.orcamento.categorias.push({
         id: 'cat_' + Date.now(),
         nome: nome,
-        valor: valor,                    // valor da PARCELA (mensal)
+        valor: valor,
         tipo: tipoCategoriaSelecionado,
         vencimento: vencimento,
         caixa: 'futuro',
         subtipo: subtipo,
         parcelasPagas: 0,
-        parcelasTotais: parcelasTotais,  // null = contínuo
+        parcelasTotais: parcelasTotais,
         valorTotal: parcelasTotais ? (valor * parcelasTotais) : null,
         pagamentoConfirmadoMes: pagamentoConfirmadoMes
     });
