@@ -1547,11 +1547,7 @@ function migrarEstado() {
     if (state.theme !== 'light' && state.theme !== 'dark') {
         state.theme = 'light';
     }
-    try {
-        document.documentElement.setAttribute('data-theme', state.theme || 'light');
-    } catch (_) {}
-
-    if (!state.orcamento) return;
+    if (state.fontSize !== 'normal' && state.fontSize !== 'grande' && state.fontSize !== 'maior') { state.fontSize = 'normal'; } try { document.documentElement.setAttribute('data-theme', state.theme || 'light'); const _sizes = { normal: '16px', grande: '18px', maior: '20px' }; document.documentElement.style.fontSize = _sizes[state.fontSize] || '16px'; } catch (_) {} if (!state.orcamento) return;
     
     if (!state.orcamento.configFluxo) {
     state.orcamento.configFluxo = { protegerSaldo: true };
@@ -3734,6 +3730,23 @@ function alternarTemaHome() {
     }
 }
 
+function aplicarTamanhoFonte() {
+    const t = (state && state.fontSize) || 'normal';
+    const sizes = { normal: '16px', grande: '18px', maior: '20px' };
+    try {
+        document.documentElement.style.fontSize = sizes[t] || '16px';
+    } catch (_) {}
+}
+
+function alterarTamanhoFonte(tamanho) {
+    if (tamanho !== 'normal' && tamanho !== 'grande' && tamanho !== 'maior') return;
+    if (!state) state = { orcamento: null };
+    state.fontSize = tamanho;
+    aplicarTamanhoFonte();
+    try { salvarEstado(); } catch (_) {}
+    renderizarTelaAjustes();
+}
+
 function aplicarTemaSalvo() {
     const t = (state && state.theme) === 'dark' ? 'dark' : 'light';
     try {
@@ -4199,15 +4212,30 @@ function renderizarTelaAjustes() {
     if (!el) return;
     const temaAtual = (state && state.theme) === 'dark' ? 'dark' : 'light';
     const labelTema = temaAtual === 'dark' ? '☀️ Tema claro' : '🌙 Tema escuro';
-    // Fase 4 — só preferências leves (edição e tutoriais migraram)
+    
+    const fs = (state && state.fontSize) || 'normal';
+    const chipFonte = `
+        <button type="button" class="chip ${fs === 'normal' ? 'selecionado' : ''}" onclick="alterarTamanhoFonte('normal')" style="flex:1; justify-content:center; padding: 12px 0;">A</button>
+        <button type="button" class="chip ${fs === 'grande' ? 'selecionado' : ''}" onclick="alterarTamanhoFonte('grande')" style="flex:1; justify-content:center; padding: 12px 0; font-size: 1.1rem;">A+</button>
+        <button type="button" class="chip ${fs === 'maior' ? 'selecionado' : ''}" onclick="alterarTamanhoFonte('maior')" style="flex:1; justify-content:center; padding: 12px 0; font-size: 1.25rem;">A++</button>
+    `;
+
     const chips = `
         <button type="button" class="chip" id="chip-tema" onclick="alternarTemaHome()">${labelTema}</button>
         <button type="button" class="chip" onclick="abrirConfigCicloSemana()">🗓️ Ciclo da semana</button>
         <button type="button" class="chip" onclick="abrirModalQRCode()">📤 Compartilhar</button>
     `;
+
     el.innerHTML = `
         ${cabecalhoTelaSecundaria('Ajustes', 'Preferências')}
-        <div class="ajustes-grid">${chips}</div>
+        
+        <div class="secao-titulo">Aparência</div>
+        <div class="ajustes-grid" style="margin-bottom: 24px;">${chips}</div>
+
+        <div class="secao-titulo">Tamanho da letra</div>
+        <div class="ajustes-grid" style="gap: 8px; margin-bottom: 24px;">
+            ${chipFonte}
+        </div>
     `;
 }
 
@@ -8481,6 +8509,7 @@ const saldo = (typeof r.saldo === 'number') ? r.saldo : (rendaReal - totalGasto)
 window.addEventListener('DOMContentLoaded', async () => {
     await carregarEstado();
     if (typeof aplicarTemaSalvo === 'function') aplicarTemaSalvo();
+    if (typeof aplicarTamanhoFonte === 'function') aplicarTamanhoFonte();
     atualizarBotaoFeedback('screen-welcome');
     atualizarBotaoRetomada();
     renderizarPreviaSemana();
