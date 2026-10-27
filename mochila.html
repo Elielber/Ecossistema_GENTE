@@ -6707,6 +6707,12 @@ function selecionarCustodiaRenda(el) {
     custodiaRendaSelecionada = el.getAttribute('data-custodia-id');
 }
 
+function selecionarNaturezaRenda(el, nat) {
+    document.querySelectorAll('#chips-natureza .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    naturezaRendaSelecionada = nat;
+}
+
 function responderFrequenciaRenda(el, freq) {
     document.querySelectorAll('#chips-frequencia .chip').forEach(c => c.classList.remove('selecionado'));
     el.classList.add('selecionado');
@@ -6721,11 +6727,7 @@ function responderFrequenciaRenda(el, freq) {
         return;
     }
 
-function selecionarNaturezaRenda(el, nat) {
-    document.querySelectorAll('#chips-natureza .chip').forEach(c => c.classList.remove('selecionado'));
-    el.classList.add('selecionado');
-    naturezaRendaSelecionada = nat;
-}
+
 
     // Se estiver editando a mesma frequência, mantém os dias
     let diasExistentes = null;
@@ -6817,13 +6819,7 @@ function mostrarBotaoSalvarFonte() {
 let origemRendaTemp = null;
 let temGenericaTemp = false;
 
-function salvarFonteRenda(origem, temGenerica) {
-    const nome = document.getElementById('fonte-nome').value.trim();
-    const valor = parseFloat(document.getElementById('fonte-valor').value) || 0;
-
-    if (nome === '') { alert("Diga o nome da fonte."); return; }
-    if (valor <= 0) { alert("Insira um valor maior que zero."); return; }
-    if (!frequenciaRendaSelecionada) { alert("Escolha como a renda cai."); return; }
+function salvarFonteRenda(origem, temGenerica) { const nome = document.getElementById('fonte-nome').value.trim(); const valor = parseFloat(document.getElementById('fonte-valor').value) || 0; if (nome === '') { alert("Diga o nome da fonte."); return; } if (valor <= 0) { alert("Insira um valor maior que zero."); return; } if (!frequenciaRendaSelecionada) { alert("Escolha como a renda cai."); return; }
 
     // Coleta o dia, se aplicável
     let diaRecebimento = null;
@@ -6866,6 +6862,8 @@ function salvarFonteRenda(origem, temGenerica) {
 
     if (!state.orcamento.rendaDetalhe) state.orcamento.rendaDetalhe = { fontes: [] };
     if (!state.orcamento.rendaDetalhe.fontes) state.orcamento.rendaDetalhe.fontes = [];
+    
+    const eraEdicao = !!fonteRendaEditandoId; const fontePreEdicao = eraEdicao ? state.orcamento.rendaDetalhe.fontes.find(f => f.id === fonteRendaEditandoId) : null; const naturezaAnterior = fontePreEdicao ? (fontePreEdicao.natureza || null) : null;
 
     if (fonteRendaEditandoId) {
         // MODO EDIÇÃO
@@ -6912,18 +6910,30 @@ function salvarFonteRenda(origem, temGenerica) {
     }
 
     if (typeof _tickOnboardingNivel2AposFonte === "function") _tickOnboardingNivel2AposFonte();
-    frequenciaRendaSelecionada = null;
+    
     const naturezaSalva = naturezaRendaSelecionada;
+    
+    frequenciaRendaSelecionada = null;
+    
     naturezaRendaSelecionada = null;
     diaRecebimentoTemp = null;
     origemRendaTemp = null;
     temGenericaTemp = false;
     custodiaRendaSelecionada = null;
+    
+    const frágilSalva = (naturezaSalva === 'contratual' || naturezaSalva === 'variavel');
+    const frágilAnterior = (naturezaAnterior === 'contratual' || naturezaAnterior === 'variavel');
+    const novaFonteFrágil = !eraEdicao && frágilSalva;
+    const mudouParaFrágil = frágilSalva && !frágilAnterior;
+    if (novaFonteFrágil || mudouParaFrágil) {
+        state.orcamento._sugestaoReservaPendente = true;
+    }
 
     salvarEstado();
     console.log('[NÍVEL 2] Fonte de renda salva:', nome, '| dia:', diaRecebimento);
     renderizarDetalheRenda();
 }
+
 function removerFonteRenda(id) {
     const confirmar = confirm("Remover esta fonte de renda?");
     if (!confirmar) return;
@@ -6931,12 +6941,9 @@ function removerFonteRenda(id) {
     state.orcamento.rendaDetalhe.fontes = (state.orcamento.rendaDetalhe.fontes || []).filter(f => f.id !== id);
     if (typeof _tickOnboardingNivel2AposFonte === "function") _tickOnboardingNivel2AposFonte();
     salvarEstado();
-    if (naturezaSalva === 'contratual' || naturezaSalva === 'variavel') {
-        state.orcamento._sugestaoReservaPendente = true;
-        salvarEstado();
-    }
     renderizarDetalheRenda();
 }
+
 function abrirFormularioFonteRenda() {
     fonteRendaEditandoId = null;
     const container = document.getElementById('renda-detalhe-conteudo');
