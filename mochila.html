@@ -936,7 +936,11 @@
         <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
         <div id="divida-detalhe-conteudo"></div>
     </div>
-    
+    <!-- TELA 8b: Caderno de desejos e dívidas latentes (N4 — inventário) -->
+<div id="screen-inventario" class="screen">
+    <button class="btn-voltar" onclick="voltarInventarioParaFuturo()">← Voltar</button>
+    <div id="inventario-conteudo"></div>
+</div>
         <!-- TELA 9: Custódias (Nível 3) -->
     <div id="screen-custodias" class="screen">
         <button class="btn-voltar" onclick="voltarParaOrcamento()">← Voltar</button>
@@ -7973,6 +7977,7 @@ container.innerHTML = `
             <span class="icone">${avatar.icone}</span>
             <span class="texto">${avatar.fala}</span>
         </div>
+        ${renderizarPreviewInventarioN3()}
 
         ${htmlCategorias}
         ${totalizador}
@@ -8728,7 +8733,303 @@ const saldo = (typeof r.saldo === 'number') ? r.saldo : (rendaReal - totalGasto)
         `;
     }).join('');
 }
+// ============================================================
+// FATIA E — CADERNO (inventário N4: desejos + dívidas latentes)
+// Guardado em state.n4.inventarios — fora do orçamento.
+// ============================================================
 
+function _lerInventarioN4() {
+    state.n4 = _garantirStubN4(state.n4);
+    return state.n4.inventarios;
+}
+
+function _totalEstimadoInventario() {
+    return _lerInventarioN4()
+        .reduce((s, i) => s + (Number(i.valorEstimado) || 0), 0);
+}
+
+function _escInventario(str) {
+    return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
+ * Preview discreto no Futuro (N3). Sempre visível.
+ * - Vazio: convida a anotar.
+ * - Com itens: mostra contagem + total estimado.
+ * Nada aqui entra no plano. O botão "tornar compromisso" só nasce no N4.
+ */
+function renderizarPreviewInventarioN3() {
+    const itens = _lerInventarioN4();
+    const n = itens.length;
+    const total = _totalEstimadoInventario();
+    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    if (n === 0) {
+        return `
+            <button type="button" onclick="abrirTelaInventario()"
+                style="width:100%;text-align:left;background:var(--bg-color);border:1px dashed var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:12px;font-family:inherit;">
+                <span style="font-size:1.4rem;flex-shrink:0;">📔</span>
+                <span style="flex:1;font-size:0.85rem;color:var(--secondary);line-height:1.4;text-align:left;">
+                    <strong style="color:var(--primary);">Caderno</strong><br>
+                    Desejos e dívidas que ainda não são compromisso.
+                </span>
+                <span style="color:var(--primary);font-weight:700;font-size:1.2rem;">+</span>
+            </button>
+        `;
+    }
+
+    const valorTxt = total > 0 ? ` · ${fmt(total)}` : '';
+    return `
+        <button type="button" onclick="abrirTelaInventario()"
+            style="width:100%;text-align:left;background:var(--bg-color);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:12px;font-family:inherit;">
+            <span style="font-size:1.4rem;flex-shrink:0;">📔</span>
+            <span style="flex:1;font-size:0.85rem;color:var(--secondary);line-height:1.4;text-align:left;">
+                <strong style="color:var(--primary);">Caderno (${n})</strong>${valorTxt}<br>
+                Fora do plano — o Nível 4 usa para cenários.
+            </span>
+            <span style="color:var(--primary);font-weight:700;">→</span>
+        </button>
+    `;
+}
+// ============================================================
+// FATIA E — Tela do Caderno (inventário N4)
+// Lista, formulário, salvar, remover. Não toca state.orcamento.
+// ============================================================
+
+function abrirTelaInventario() {
+    renderizarInventario();
+    goToScreen('screen-inventario');
+}
+
+function voltarInventarioParaFuturo() {
+    renderizarDetalheFuturo();
+    goToScreen('screen-divida-detalhe');
+}
+
+function renderizarInventario() {
+    const container = document.getElementById('inventario-conteudo');
+    if (!container) return;
+    const itens = _lerInventarioN4();
+    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    let listaHtml = '';
+    if (itens.length === 0) {
+        listaHtml = `
+            <div class="placeholder-info" style="padding: 28px 16px;">
+                Você ainda não anotou nenhum desejo ou dívida.<br>
+                <span style="font-size:0.85rem;color:var(--secondary);display:block;margin-top:8px;line-height:1.45;">
+                    Aqui é um caderno. <strong>Nada aqui entra no plano</strong>, no limite da semana ou no fluxo.
+                    É só para o Nível 4 usar quando você quiser olhar adiante.
+                </span>
+            </div>
+        `;
+    } else {
+        const ordenados = itens.slice().sort((a, b) =>
+            String(b.criadoEm || '').localeCompare(String(a.criadoEm || ''))
+        );
+        listaHtml = ordenados.map(item => {
+            const isDesejo = item.tipo === 'desejo';
+            const icone = isDesejo ? '🌱' : '📎';
+            const label = isDesejo ? 'Desejo' : 'Dívida latente';
+            const valorTxt = (Number(item.valorEstimado) || 0) > 0
+                ? fmt(item.valorEstimado)
+                : '—';
+            let meta = label;
+            if (item.horizonte) meta += ' · ' + _escInventario(item.horizonte);
+
+            const nomeEsc = _escInventario(item.nome);
+            const notaEsc = item.nota ? _escInventario(item.nota) : '';
+
+            return `
+                <div class="categoria-item" style="display:block;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+                        <div style="flex:1;min-width:0;">
+                            <div class="nome-cat">${icone} ${nomeEsc}</div>
+                            <div class="meta-cat">${meta}</div>
+                            ${notaEsc ? `<div style="font-size:0.8rem;color:var(--secondary);margin-top:6px;line-height:1.4;">${notaEsc}</div>` : ''}
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+                            <span class="valor-cat">${valorTxt}</span>
+                            <div style="display:flex;gap:6px;">
+                                <button type="button"
+                                    onclick="abrirFormularioInventario('${item.id}')"
+                                    style="background:none;border:1px solid var(--primary);color:var(--primary);border-radius:8px;padding:6px 10px;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:inherit;">
+                                    Editar
+                                </button>
+                                <button type="button"
+                                    onclick="removerInventarioItem('${item.id}')"
+                                    style="background:none;border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:6px 10px;font-size:0.75rem;font-weight:600;cursor:pointer;font-family:inherit;">
+                                    ×
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    container.innerHTML = `
+        ${cabecalhoTelaSecundaria('Caderno', 'Desejos e dívidas que ainda não são compromisso')}
+
+        <div class="fala-avatar">
+            <span class="icone">📔</span>
+            <span class="texto">
+                Aqui é só anotação. <strong>Nada entra no plano</strong>, no limite da semana, no fluxo, nas caixinhas.
+                O <strong>Nível 4</strong> usa isso para montar cenários e mostrar quanto tempo de reserva cada coisa pediria.
+            </span>
+        </div>
+
+        ${listaHtml}
+
+        <button class="btn-primary" style="margin-top:20px;background:var(--accent);" onclick="abrirFormularioInventario()">
+            + Anotar desejo ou dívida
+        </button>
+    `;
+}
+
+function abrirFormularioInventario(id) {
+    const container = document.getElementById('inventario-conteudo');
+    if (!container) return;
+    const itens = _lerInventarioN4();
+    const item = id ? itens.find(i => i.id === id) : null;
+    const editando = !!item;
+
+    const nome = item ? (item.nome || '') : '';
+    const tipo = item ? (item.tipo || 'desejo') : 'desejo';
+    const valorEstimado = item && item.valorEstimado != null ? item.valorEstimado : '';
+    const horizonte = item ? (item.horizonte || '') : '';
+    const nota = item ? (item.nota || '') : '';
+
+    const nomeEsc = _escInventario(nome);
+    const horizonteEsc = _escInventario(horizonte);
+    const notaEsc = _escInventario(nota);
+
+    container.innerHTML = `
+        ${cabecalhoTelaSecundaria(editando ? 'Editar anotação' : 'Nova anotação', 'Caderno — fora do plano')}
+
+        <div class="fala-avatar">
+            <span class="icone">📔</span>
+            <span class="texto">${editando ? 'Ajuste o que quiser. Isso continua fora do plano.' : 'Só anotação. Nada aqui entra no orçamento.'}</span>
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">📔</span>
+            <span class="texto">O que é isso?</span>
+        </div>
+        <div class="chip-container" id="chips-tipo-inventario">
+            <div class="chip${tipo === 'desejo' ? ' selecionado' : ''}" data-tipo="desejo" onclick="selecionarTipoInventario(this)">🌱 Desejo</div>
+            <div class="chip${tipo === 'divida_latente' ? ' selecionado' : ''}" data-tipo="divida_latente" onclick="selecionarTipoInventario(this)">📎 Dívida latente</div>
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">📔</span>
+            <span class="texto">Como você chama isso?</span>
+        </div>
+        <input type="text" id="inv-nome" class="input-padrao" placeholder="Ex: Trocar o celular, devendo pro Zé" value="${nomeEsc}">
+
+        <div class="fala-avatar">
+            <span class="icone">📔</span>
+            <span class="texto">Quanto, mais ou menos? (opcional)</span>
+        </div>
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="number" id="inv-valor" class="input-padrao" placeholder="0.00" step="0.01" value="${valorEstimado !== '' ? valorEstimado : ''}">
+        </div>
+
+        <div class="fala-avatar">
+            <span class="icone">📔</span>
+            <span class="texto">Quando? (opcional)</span>
+        </div>
+        <input type="text" id="inv-horizonte" class="input-padrao" placeholder="Ex: 2027, junho, sem prazo" value="${horizonteEsc}">
+
+        <div class="fala-avatar">
+            <span class="icone">📔</span>
+            <span class="texto">Alguma nota? (opcional)</span>
+        </div>
+        <input type="text" id="inv-nota" class="input-padrao" placeholder="Ex: o atual tá travando" value="${notaEsc}">
+
+        <button class="btn-primary" onclick="salvarInventarioItem('${id || ''}')">
+            ${editando ? 'Salvar alterações' : 'Anotar'}
+        </button>
+        <button class="btn-option" style="justify-content:center;border-color:var(--secondary);margin-top:10px;" onclick="renderizarInventario()">
+            Cancelar
+        </button>
+    `;
+}
+
+function selecionarTipoInventario(el) {
+    document.querySelectorAll('#chips-tipo-inventario .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+}
+
+function salvarInventarioItem(id) {
+    const container = document.getElementById('inventario-conteudo');
+    if (!container) return;
+
+    const nome = document.getElementById('inv-nome').value.trim();
+    const tipoEl = document.querySelector('#chips-tipo-inventario .chip.selecionado');
+    const tipo = tipoEl ? tipoEl.getAttribute('data-tipo') : null;
+
+    const valorRaw = document.getElementById('inv-valor').value;
+    let valorEstimado = null;
+    if (String(valorRaw || '').trim() !== '') {
+        valorEstimado = parseFloat(String(valorRaw).replace(',', '.'));
+        if (isNaN(valorEstimado) || valorEstimado < 0) {
+            alert('Valor inválido.');
+            return;
+        }
+    }
+
+    const horizonte = document.getElementById('inv-horizonte').value.trim() || null;
+    const nota = document.getElementById('inv-nota').value.trim() || null;
+
+    if (nome === '') { alert('Diga o nome.'); return; }
+    if (!tipo) { alert('Escolha se é desejo ou dívida latente.'); return; }
+
+    state.n4 = _garantirStubN4(state.n4);
+    const itens = state.n4.inventarios;
+
+    if (id) {
+        const item = itens.find(i => i.id === id);
+        if (!item) {
+            alert('Anotação não encontrada.');
+            renderizarInventario();
+            return;
+        }
+        item.nome = nome;
+        item.tipo = tipo;
+        item.valorEstimado = valorEstimado;
+        item.horizonte = horizonte;
+        item.nota = nota;
+    } else {
+        itens.push({
+            id: 'inv_' + Date.now(),
+            tipo: tipo,
+            nome: nome,
+            valorEstimado: valorEstimado,
+            horizonte: horizonte,
+            nota: nota,
+            criadoEm: new Date().toISOString()
+        });
+    }
+
+    salvarEstado();
+    renderizarInventario();
+}
+
+function removerInventarioItem(id) {
+    if (!confirm('Remover esta anotação?')) return;
+    state.n4 = _garantirStubN4(state.n4);
+    state.n4.inventarios = state.n4.inventarios.filter(i => i.id !== id);
+    salvarEstado();
+    renderizarInventario();
+}
 // ============================================================
 // BOOT
 // ============================================================
