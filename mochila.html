@@ -8933,6 +8933,62 @@ function irParaAjusteContasDoModal() {
     abrirTelaCustodias();
 }
 
+function calcularSaldoSemanaAtual() {
+    const semana = state.orcamento && state.orcamento.semanaAtual;
+    if (!semana) {
+        return { saldo: 0, rendaReal: 0, totalGasto: 0, temMovimento: false };
+    }
+    const rendaReal = semana.rendaReal || 0;
+    const totalGasto = (semana.base?.gasto || 0)
+        + (semana.vida?.gasto || 0)
+        + (semana.futuro?.gasto || 0);
+    const saldo = rendaReal - totalGasto;
+    const temMovimento = rendaReal > 0 || totalGasto > 0;
+    return { saldo, rendaReal, totalGasto, temMovimento };
+}
+
+function sugerirSaldoInicialCustodia() {
+    const comSaldo = (state.orcamento.custodias || []).filter(c => {
+        const t = TIPOS_CUSTODIA[c.tipo] || {};
+        return t.temSaldo;
+    });
+    const { saldo, rendaReal, totalGasto, temMovimento } = calcularSaldoSemanaAtual();
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    if (comSaldo.length > 0) {
+        return {
+            valor: 0,
+            html: `<div id="cust-saldo-dica" style="font-size: 0.8rem; color: var(--secondary); margin-top: 8px; line-height: 1.45;">
+                Já existe outra conta com saldo. Informe só o que tem <strong>nesta</strong> conta — os próximos apontamentos no <strong>+</strong> atualizam cada uma.
+            </div>`
+        };
+    }
+
+    if (temMovimento) {
+        const sugerido = Math.max(0, saldo);
+        let extra = '';
+        if (saldo < 0) {
+            extra = ` A semana está negativa (${fmt(saldo)}); sugerimos começar em zero e ajustar se a conta tiver outro valor.`;
+        } else {
+            extra = ` Recebimentos ${fmt(rendaReal)} − gastos ${fmt(totalGasto)}.`;
+        }
+        return {
+            valor: sugerido,
+            html: `<div id="cust-saldo-dica" style="font-size: 0.8rem; color: var(--primary); margin-top: 8px; line-height: 1.45; background: var(--purple-light); padding: 10px 12px; border-radius: 8px;">
+                💡 Pelo que você já registrou esta semana, o saldo seria cerca de <strong>${fmt(sugerido)}</strong>.${extra}
+                Ajuste se o valor real na conta for outro. A partir daqui, cada gasto ou recebimento no <strong>+</strong> com esta conta atualiza o saldo.
+            </div>`
+        };
+    }
+
+    return {
+        valor: 0,
+        html: `<div id="cust-saldo-dica" style="font-size: 0.8rem; color: var(--secondary); margin-top: 8px; line-height: 1.45;">
+            Informe o valor real que tem hoje. Nos próximos apontamentos pelo <strong>+</strong>, escolha esta conta para manter o saldo alinhado ao da semana.
+        </div>`
+    };
+}
+
 function abrirTelaCustodias() {
     goToScreen('screen-custodias');
     renderizarCustodias();
