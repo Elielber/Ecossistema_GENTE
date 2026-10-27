@@ -1236,6 +1236,29 @@ const CHAVE_STORAGE = 'd_mais_1_orcamento';
 const REGISTROS_PARA_NIVEL2 = 10;
 const SEMANAS_PARA_NIVEL2 = 2;
 
+// === N3 — naturezas de renda e custódia de reserva ===
+const NATUREZAS_RENDA = {
+    estavel:    { label: 'Estável',    icone: '💼', desc: 'CLT, aposentadoria, pensão' },
+    contratual: { label: 'Contratual', icone: '📄', desc: 'Aluguel, contrato com prazo' },
+    variavel:   { label: 'Variável',   icone: '🎨', desc: 'Autônomo, bicos, comissão' }
+};
+
+const RESERVA_FAIXA_MESES = { min: 3, max: 6 };
+
+function _custodiaEhReserva(c) {
+    return !!(c && c.finalidade === 'reserva');
+}
+function _custodiasOperacionais(orc) {
+    return ((orc && orc.custodias) || []).filter(c => !_custodiaEhReserva(c));
+}
+function _custodiasReserva(orc) {
+    return ((orc && orc.custodias) || []).filter(_custodiaEhReserva);
+}
+function traduzirNatureza(nat) {
+    const n = NATUREZAS_RENDA[nat];
+    return n ? n.label : '—';
+}
+
 // ============================================================
 // ESTADO GLOBAL
 // ============================================================
@@ -1636,6 +1659,9 @@ if (Array.isArray(state.orcamento.resumos)) {
         if (!Array.isArray(c.historicoReconciliacoes)) c.historicoReconciliacoes = [];
         if (c.faturaAcumulada === undefined) c.faturaAcumulada = 0;
         if (c.criadaEm === undefined) c.criadaEm = new Date().toISOString();
+        if (c.finalidade !== 'reserva' && c.finalidade !== 'operacional') {
+            c.finalidade = 'operacional';
+        }
     });
         // === NÍVEL 3 — MIGRAÇÃO DE REGISTROS ===
     if (!Array.isArray(state.orcamento.historicoRegistros)) {
@@ -1679,6 +1705,7 @@ state.orcamento.categorias.forEach(c => {
     if (state.orcamento.rendaDetalhe && Array.isArray(state.orcamento.rendaDetalhe.fontes)) {
         state.orcamento.rendaDetalhe.fontes.forEach(f => {
             if (f.diaRecebimento === undefined) f.diaRecebimento = null;
+            if (f.natureza === undefined) f.natureza = null;
         });
     }
 
@@ -4430,7 +4457,7 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
 function renderizarCardsCustodiaHome(orc, semana) {
     if (!orc || (orc.nivel || 1) < 3) return '';
 
-    const custodias = orc.custodias || [];
+    const custodias = (orc.custodias || []).filter(c => !_custodiaEhReserva(c));
     const rendaMensal = (orc.base && orc.base.rendaBase) ? orc.base.rendaBase : 0;
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -6387,6 +6414,61 @@ function abrirDetalheRenda() {
     renderizarDetalheRenda();
 }
 
+
+function avaliarSugestaoReservaN3(orc) {
+    if (!orc) return null;
+    const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
+    if (fontes.length === 0) return null;
+
+    const total = fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0);
+    if (total <= 0) return null;
+
+    let fragilTotal = 0;
+    fontes.forEach(f => {
+        if (f.natureza === 'contratual' || f.natureza === 'variavel') {
+            fragilTotal += Number(f.valor) || 0;
+        }
+    });
+    if (fragilTotal <= 0) return null;
+
+    const pctFragil = (fragilTotal / total) * 100;
+    const catReserva = (orc.categorias || []).find(c => c.caixa === 'futuro' && c.subtipo === 'reserva');
+    const reservaMensal = catReserva ? (Number(catReserva.valor) || 0) : 0;
+    const reservaMin = fragilTotal * RESERVA_FAIXA_MESES.min;
+    const reservaMax = fragilTotal * RESERVA_FAIXA_MESES.max;
+
+    let acumulado = 0;
+    if (catReserva && catReserva.custodiaPadraoId) {
+        const cust = (orc.custodias || []).find(c => c.id === catReserva.custodiaPadraoId);
+        if (cust && _custodiaEhReserva(cust)) acumulado = Number(cust.saldoAtual) || 0;
+    }
+
+    let mesesMin = null, mesesMax = null;
+    if (reservaMensal > 0) {
+        mesesMin = Math.ceil(Math.max(0, reservaMin - acumulado) / reservaMensal);
+        mesesMax = Math.ceil(Math.max(0, reservaMax - acumulado) / reservaMensal);
+    }
+
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    let mensagem;
+    if (reservaMensal <= 0) {
+        mensagem = `${pctFragil.toFixed(0)}% da sua renda é frágil (contratual ou variável): ${fmt(fragilTotal)}. ` +
+            `Uma referência comum é guardar de ${RESERVA_FAIXA_MESES.min} a ${RESERVA_FAIXA_MESES.max} meses disso em reserva ` +
+            `(${fmt(reservaMin)} a ${fmt(reservaMax)}). Você ainda não tem reserva em construção — quer começar?`;
+    } else {
+        mensagem = `${pctFragil.toFixed(0)}% da sua renda é frágil: ${fmt(fragilTotal)}. ` +
+            `A faixa de referência é ${RESERVA_FAIXA_MESES.min}–${RESERVA_FAIXA_MESES.max} meses ` +
+            `(${fmt(reservaMin)} a ${fmt(reservaMax)}). ` +
+            `Com ${fmt(reservaMensal)}/mês, você chega em ${mesesMin}–${mesesMax} meses.`;
+    }
+
+    return {
+        pctFragil, fragilTotal, reservaMin, reservaMax,
+        reservaMensal, mesesMin, mesesMax, mensagem, catReserva, acumulado
+    };
+}
+
 function renderizarDetalheRenda() {
     const container = document.getElementById('renda-detalhe-conteudo');
     const renda = state.orcamento.rendaDetalhe;
@@ -6411,12 +6493,32 @@ function renderizarDetalheRenda() {
 
     // Se já detalhou: mostra lista de fontes + adicionar
     const fontes = renda.fontes || [];
+    let blocoSugestaoReserva = '';
+    if (state.orcamento._sugestaoReservaPendente) {
+        delete state.orcamento._sugestaoReservaPendente;
+        try { salvarEstado(); } catch (_) {}
+        const sug = avaliarSugestaoReservaN3(state.orcamento);
+        if (sug) {
+            blocoSugestaoReserva = `
+                <div class="fala-avatar" style="border-left-color: var(--warning);">
+                    <span class="icone">🔭</span>
+                    <span class="texto"><strong>Zé:</strong> ${sug.mensagem}</span>
+                </div>
+            `;
+        }
+    }
+
     const totalFontes = fontes.reduce((s, f) => s + (f.valor || 0), 0);
     const diferenca = valorBase - totalFontes;
 
     let htmlFontes = '';
 fontes.forEach(f => {
     let metaFonte = `${traduzirOrigem(f.origem)} · ${traduzirFrequencia(f.frequencia)}`;
+    const pctFonte = totalFontes > 0 ? ((Number(f.valor) || 0) / totalFontes) * 100 : 0;
+    if (f.natureza && NATUREZAS_RENDA[f.natureza]) {
+        metaFonte += ` · ${NATUREZAS_RENDA[f.natureza].icone} ${NATUREZAS_RENDA[f.natureza].label}`;
+    }
+    metaFonte += ` · ${pctFonte.toFixed(0)}% da renda`;
     const descDia = descreverDiaRecebimento(f.diaRecebimento);
     if (descDia) metaFonte += ` · ${descDia}`;
     if (f.custodiaPadraoId) {
@@ -6481,6 +6583,7 @@ const linkContas = nivel >= 3
     </div>
 
     ${avisoDiferenca}
+    ${blocoSugestaoReserva}
     ${htmlFontes}
 
     <div class="totalizador">
@@ -6527,6 +6630,7 @@ function responderOrigemRenda(origem) {
     origemRendaTemp = origem;
     temGenericaTemp = temGenerica;
     frequenciaRendaSelecionada = null;
+    naturezaRendaSelecionada = null;
     diaRecebimentoTemp = null;
     custodiaRendaSelecionada = null;
     fonteRendaEditandoId = null;
@@ -6578,10 +6682,21 @@ function responderOrigemRenda(origem) {
             <div class="chip" onclick="responderFrequenciaRenda(this, 'imprevisivel')">Varia muito</div>
         </div>
         ${htmlCustodia}
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">Como é a natureza dessa renda?</span>
+        </div>
+        <div class="chip-container" id="chips-natureza">
+            <div class="chip" onclick="selecionarNaturezaRenda(this, 'estavel')">💼 Estável (CLT, aposentadoria)</div>
+            <div class="chip" onclick="selecionarNaturezaRenda(this, 'contratual')">📄 Contratual (aluguel)</div>
+            <div class="chip" onclick="selecionarNaturezaRenda(this, 'variavel')">🎨 Variável (autônomo)</div>
+        </div>
+
         <!-- O botão Salvar é injetado dinamicamente por mostrarBotaoSalvarFonte() -->
     `;
 }
 let frequenciaRendaSelecionada = null;
+let naturezaRendaSelecionada = null;
 let diaRecebimentoTemp = null; // número | [d1,d2] | null
 let custodiaRendaSelecionada = null;
 let fonteRendaEditandoId = null;
@@ -6605,6 +6720,12 @@ function responderFrequenciaRenda(el, freq) {
         mostrarBotaoSalvarFonte();
         return;
     }
+
+function selecionarNaturezaRenda(el, nat) {
+    document.querySelectorAll('#chips-natureza .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    naturezaRendaSelecionada = nat;
+}
 
     // Se estiver editando a mesma frequência, mantém os dias
     let diasExistentes = null;
@@ -6756,6 +6877,7 @@ function salvarFonteRenda(origem, temGenerica) {
             fonte.frequencia = frequenciaRendaSelecionada;
             fonte.diaRecebimento = diaRecebimento;
             fonte.custodiaPadraoId = custodiaRendaSelecionada || null;
+            fonte.natureza = naturezaRendaSelecionada || fonte.natureza || null;
         }
         fonteRendaEditandoId = null;
     } else {
@@ -6783,6 +6905,7 @@ function salvarFonteRenda(origem, temGenerica) {
             valor: valor,
             origem: origem,
             frequencia: frequenciaRendaSelecionada,
+            natureza: naturezaRendaSelecionada || null,
             diaRecebimento: diaRecebimento,
             custodiaPadraoId: custodiaRendaSelecionada || null
         });
@@ -6790,6 +6913,8 @@ function salvarFonteRenda(origem, temGenerica) {
 
     if (typeof _tickOnboardingNivel2AposFonte === "function") _tickOnboardingNivel2AposFonte();
     frequenciaRendaSelecionada = null;
+    const naturezaSalva = naturezaRendaSelecionada;
+    naturezaRendaSelecionada = null;
     diaRecebimentoTemp = null;
     origemRendaTemp = null;
     temGenericaTemp = false;
@@ -6806,6 +6931,10 @@ function removerFonteRenda(id) {
     state.orcamento.rendaDetalhe.fontes = (state.orcamento.rendaDetalhe.fontes || []).filter(f => f.id !== id);
     if (typeof _tickOnboardingNivel2AposFonte === "function") _tickOnboardingNivel2AposFonte();
     salvarEstado();
+    if (naturezaSalva === 'contratual' || naturezaSalva === 'variavel') {
+        state.orcamento._sugestaoReservaPendente = true;
+        salvarEstado();
+    }
     renderizarDetalheRenda();
 }
 function abrirFormularioFonteRenda() {
@@ -6833,6 +6962,7 @@ function editarFonteRenda(id) {
     origemRendaTemp = fonte.origem;
     temGenericaTemp = false;
     frequenciaRendaSelecionada = fonte.frequencia;
+    naturezaRendaSelecionada = fonte.natureza || null;
     custodiaRendaSelecionada = fonte.custodiaPadraoId || null;
 
     const container = document.getElementById('renda-detalhe-conteudo');
@@ -6900,6 +7030,15 @@ function editarFonteRenda(id) {
             ${chipsFreq}
         </div>
         ${htmlCustodia}
+        <div class="fala-avatar">
+            <span class="icone">🌿</span>
+            <span class="texto">Como é a natureza dessa renda?</span>
+        </div>
+        <div class="chip-container" id="chips-natureza">
+            <div class="chip${fonte.natureza === 'estavel' ? ' selecionado' : ''}" onclick="selecionarNaturezaRenda(this, 'estavel')">💼 Estável</div>
+            <div class="chip${fonte.natureza === 'contratual' ? ' selecionado' : ''}" onclick="selecionarNaturezaRenda(this, 'contratual')">📄 Contratual</div>
+            <div class="chip${fonte.natureza === 'variavel' ? ' selecionado' : ''}" onclick="selecionarNaturezaRenda(this, 'variavel')">🎨 Variável</div>
+        </div>
 
         <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 16px;" onclick="fonteRendaEditandoId=null; renderizarDetalheRenda()">
             Cancelar
@@ -7797,8 +7936,31 @@ function renderizarDetalheFuturo() {
         </div>
     `;
 
-    container.innerHTML = `
+    
+    let blocoSugestaoReservaFuturo = '';
+    if (subtipo === 'reserva') {
+        const sug = avaliarSugestaoReservaN3(state.orcamento);
+        if (sug) {
+            const faltaConta = sug.catReserva && !sug.catReserva.custodiaPadraoId;
+            blocoSugestaoReservaFuturo = `
+                <div class="card" style="border-left: 4px solid var(--warning); background: var(--warning-soft); margin-bottom: 16px;">
+                    <div style="display: flex; gap: 10px; align-items: flex-start;">
+                        <span style="font-size: 1.3rem;">🔭</span>
+                        <div style="flex: 1;">
+                            <div style="font-size: 0.75rem; font-weight: 700; color: var(--warning); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Zé · reserva sugerida</div>
+                            <p style="font-size: 0.88rem; color: var(--text-main); line-height: 1.5; margin: 0 0 10px;">
+                                ${sug.mensagem}
+                            </p>
+                            ${faltaConta ? `<p style="font-size: 0.8rem; color: var(--warning); line-height: 1.4; margin: 0;">💡 Ligue uma conta de reserva para o dinheiro aparecer.</p>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+container.innerHTML = `
         ${header}
+        ${blocoSugestaoReservaFuturo}
         ${_bannerPendenteFuturoHtml(subtipo)}
         <div class="fala-avatar" style="border-left-color: ${avatar.cor};">
             <span class="icone">${avatar.icone}</span>
@@ -7910,6 +8072,18 @@ function confirmarPagamentoParcela() {
         }
     }
 
+    // Aporte de reserva com destino: credita a custódia de reserva ligada à categoria
+    let custodiaDestinoNome = null;
+    let custodiaDestinoId = null;
+    if (cat.subtipo === 'reserva' && cat.custodiaPadraoId) {
+        const destino = state.orcamento.custodias.find(c => c.id === cat.custodiaPadraoId);
+        if (destino && _custodiaEhReserva(destino)) {
+            destino.saldoAtual = (destino.saldoAtual || 0) + valorPago;
+            custodiaDestinoNome = destino.nome;
+            custodiaDestinoId = destino.id;
+        }
+    }
+
     // 4. Histórico
     if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
     state.orcamento.historicoRegistros.push({
@@ -7921,6 +8095,7 @@ function confirmarPagamentoParcela() {
         categoria: cat.nome,
         valor: valorPago,
         custodiaId: registroTemporario.custodiaId || null,
+        custodiaDestinoId: custodiaDestinoId,
         cartaoId: null,
         saldoAtualizado: !!registroTemporario.custodiaId
     });
@@ -7950,6 +8125,10 @@ function confirmarPagamentoParcela() {
             falaFinal = `Parcela registrada: ${pagas} de ${total}. ${linhaCustodia}`;
         } else {
             falaFinal = `Aporte registrado. ${linhaCustodia}`;
+        }
+        if (custodiaDestinoNome) falaFinal += ` Guardado em <strong>${custodiaDestinoNome}</strong>.`;
+        if (cat.subtipo === 'reserva' && !custodiaDestinoId && state.orcamento.nivel >= 3) {
+            falaFinal += ' Nenhuma conta de reserva ligada — o dinheiro saiu da conta mas ainda não apareceu em uma reserva. Ligue em Futuro → Reservas.';
         }
 
         const falaEl = document.getElementById('modal-registro-fala');
@@ -7994,7 +8173,34 @@ function abrirFormularioCategoriaFuturo(idExistente) {
     const tituloFala = catExistente ? `Vamos ajustar <strong>${catExistente.nome}</strong>.` : 'Qual é o nome?';
     const btnSalvar = catExistente ? 'Salvar alterações' : 'Salvar';
 
-    container.innerHTML = `
+    
+    let htmlCustodiaReserva = '';
+    if (subtipo === 'reserva') {
+        const custodiasReserva = _custodiasReserva(state.orcamento);
+        if (custodiasReserva.length > 0) {
+            let chips = '';
+            custodiasReserva.forEach(c => {
+                const sel = (catExistente && catExistente.custodiaPadraoId === c.id) ? ' selecionado' : '';
+                chips += `<div class="chip${sel}" data-custodia-id="${c.id}" onclick="selecionarCustodiaReservaFuturo(this)">🐖 ${c.nome}</div>`;
+            });
+            htmlCustodiaReserva = `
+                <div class="fala-avatar">
+                    <span class="icone">🔭</span>
+                    <span class="texto">Onde essa reserva vai ficar guardada? (opcional)</span>
+                </div>
+                <div class="chip-container" id="chips-custodia-reserva-futuro">${chips}</div>
+            `;
+        } else {
+            htmlCustodiaReserva = `
+                <div style="font-size: 0.8rem; color: var(--secondary); margin: 12px 0; line-height: 1.45;">
+                    💡 Cadastre uma conta de reserva em <strong>Contas → Nova conta de reserva</strong> para ver o dinheiro aparecer aqui.
+                </div>
+            `;
+        }
+    }
+    custodiaReservaFuturoSelecionada = catExistente ? (catExistente.custodiaPadraoId || null) : null;
+
+container.innerHTML = `
         <div class="fala-avatar">
             <span class="icone">${avatar}</span>
             <span class="texto">${tituloFala}</span>
@@ -8051,6 +8257,7 @@ function abrirFormularioCategoriaFuturo(idExistente) {
             <input type="number" id="nova-cat-parcelas" class="input-padrao" placeholder="Ex: 12" min="1">
         </div>
 
+        ${htmlCustodiaReserva}
         <button class="btn-primary" onclick="salvarCategoriaFuturo()">${btnSalvar}</button>
         <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="categoriaEditandoId=null; renderizarDetalheFuturo()">
             Cancelar
@@ -8086,6 +8293,7 @@ function abrirFormularioCategoriaFuturo(idExistente) {
 }
     
 	let parcelamentoSelecionado = null;
+let custodiaReservaFuturoSelecionada = null;
 
 function selecionarParcelamento(el, escolha) {
     document.querySelectorAll('#chips-parcelamento .chip').forEach(c => c.classList.remove('selecionado'));
@@ -8094,6 +8302,12 @@ function selecionarParcelamento(el, escolha) {
 
     const blocoParcelas = document.getElementById('bloco-parcelas');
     blocoParcelas.style.display = escolha === 'sim' ? 'block' : 'none';
+}
+
+function selecionarCustodiaReservaFuturo(el) {
+    document.querySelectorAll('#chips-custodia-reserva-futuro .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    custodiaReservaFuturoSelecionada = el.getAttribute('data-custodia-id');
 }
 
 
@@ -8159,8 +8373,12 @@ function salvarCategoriaFuturo() {
         // NÃO alteramos cat.parcelasPagas (preservando o passado)
 
         categoriaEditandoId = null;
+        if (subtipo === 'reserva') {
+            cat.custodiaPadraoId = custodiaReservaFuturoSelecionada || null;
+        }
         tipoCategoriaSelecionado = null;
         parcelamentoSelecionado = null;
+        custodiaReservaFuturoSelecionada = null;
         
         recalcularTotalFuturo();
         salvarEstado();
@@ -8182,7 +8400,9 @@ function salvarCategoriaFuturo() {
         parcelasTotais: parcelasTotais,
         valorTotal: parcelasTotais ? (valor * parcelasTotais) : null,
         pagamentoConfirmadoMes: pagamentoConfirmadoMes
-    });
+    ,
+            custodiaPadraoId: (subtipo === 'reserva') ? (custodiaReservaFuturoSelecionada || null) : null
+        });
 
     recalcularTotalFuturo();
 
@@ -8713,68 +8933,67 @@ function abrirTelaCustodias() {
 
 function renderizarCustodias() {
     const container = document.getElementById('custodias-conteudo');
-    const custodias = state.orcamento.custodias || [];
+    const todas = state.orcamento.custodias || [];
+    const operacionais = todas.filter(c => !_custodiaEhReserva(c));
+    const reservas = todas.filter(_custodiaEhReserva);
 
-    let htmlLista = '';
-    if (custodias.length === 0) {
-        htmlLista = `
-            <div class="placeholder-info">
-                Você ainda não cadastrou onde guarda seu dinheiro.<br>
-                Vamos começar?
-            </div>
-        `;
-    } else {
-        custodias.forEach(c => {
-            const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
-            let linhaValor = '';
-
-            if (tipo.temFatura) {
-                linhaValor = `<span class="valor-cat">Fatura: R$ ${(c.faturaAcumulada || 0).toFixed(2).replace('.', ',')}</span>`;
-            } else {
-                linhaValor = `<span class="valor-cat">R$ ${(c.saldoAtual || 0).toFixed(2).replace('.', ',')}</span>`;
-            }
-
-            const metaExtra = tipo.temFatura
-                ? `fatura (não é saldo de conta)` + (c.diaFechamento ? ` · fecha dia ${c.diaFechamento}` : '') + (c.diaVencimento ? ` · vence dia ${c.diaVencimento}` : '')
-                : tipo.nome;
-
-            const ultimaRec = c.ultimaReconciliacao
-                ? `<div class="meta-cat" style="color: var(--primary);">Reconciliado ${(c.ultimaReconciliacao || '').split('T')[0]}</div>`
-                : `<div class="meta-cat" style="color: var(--secondary);">Ainda não reconciliado</div>`;
-
-            htmlLista += `
-                <div class="categoria-item" style="cursor: default; flex-wrap: wrap;">
-                    <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; cursor: pointer;" onclick="abrirFormularioCustodia('${c.id}')">
-                        <span style="font-size: 1.5rem;">${tipo.icone}</span>
-                        <div style="min-width: 0;">
-                            <div class="nome-cat">${c.nome}</div>
-                            <div class="meta-cat">${metaExtra}</div>
-                            ${ultimaRec}
-                        </div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-                        ${linhaValor}
-                        <button type="button" class="btn-reg editar" onclick="event.stopPropagation(); abrirReconciliacaoCustodia('${c.id}')" title="Atualizar saldo real">🎯</button>
-                        <button class="btn-remover" onclick="event.stopPropagation(); removerCustodia('${c.id}')">&times;</button>
+    function renderItem(c) {
+        const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
+        const linhaValor = tipo.temFatura
+            ? `<span class="valor-cat">Fatura: R$ ${(c.faturaAcumulada || 0).toFixed(2).replace('.', ',')}</span>`
+            : `<span class="valor-cat">R$ ${(c.saldoAtual || 0).toFixed(2).replace('.', ',')}</span>`;
+        const metaExtra = tipo.temFatura
+            ? `fatura (não é saldo de conta)` + (c.diaFechamento ? ` · fecha dia ${c.diaFechamento}` : '') + (c.diaVencimento ? ` · vence dia ${c.diaVencimento}` : '')
+            : tipo.nome;
+        const ultimaRec = c.ultimaReconciliacao
+            ? `<div class="meta-cat" style="color: var(--primary);">Reconciliado ${(c.ultimaReconciliacao || '').split('T')[0]}</div>`
+            : `<div class="meta-cat" style="color: var(--secondary);">Ainda não reconciliado</div>`;
+        return `
+            <div class="categoria-item" style="cursor: default; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; cursor: pointer;" onclick="abrirFormularioCustodia('${c.id}')">
+                    <span style="font-size: 1.5rem;">${tipo.icone}</span>
+                    <div style="min-width: 0;">
+                        <div class="nome-cat">${c.nome}</div>
+                        <div class="meta-cat">${metaExtra}</div>
+                        ${ultimaRec}
                     </div>
                 </div>
-            `;
-        });
+                <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                    ${linhaValor}
+                    <button type="button" class="btn-reg editar" onclick="event.stopPropagation(); abrirReconciliacaoCustodia('${c.id}')" title="Atualizar saldo real">🎯</button>
+                    <button class="btn-remover" onclick="event.stopPropagation(); removerCustodia('${c.id}')">&times;</button>
+                </div>
+            </div>
+        `;
+    }
+
+    const htmlListaOp = operacionais.length > 0
+        ? operacionais.map(renderItem).join('')
+        : `<div class="placeholder-info">Você ainda não cadastrou onde guarda seu dinheiro.<br>Vamos começar?</div>`;
+
+    let htmlReservas = '';
+    if (reservas.length > 0) {
+        htmlReservas = `
+            <div class="secao-titulo" style="margin-top: 24px;">🐖 Reservas</div>
+            <p style="font-size: 0.8rem; color: var(--secondary); margin-bottom: 12px; line-height: 1.45;">
+                Estas contas ficam separadas do dia a dia. O dinheiro aqui não entra no "o que você tem agora" — ele é o colchão.
+            </p>
+            ${reservas.map(renderItem).join('')}
+        `;
     }
 
     const nCats = (state.orcamento.categorias || []).length;
-    const orientacao = custodias.length === 0
+    const orientacao = operacionais.length === 0
         ? `Onde o dinheiro mora? Cadastre conta, carteira ou cartão. Depois, no <strong>+</strong>, cada gasto ou recebimento pergunta <strong>de onde saiu</strong> ou <strong>onde entrou</strong>.`
         : `Toque numa conta para editar. No <strong>+</strong> a gente pede de onde saiu. Nas categorias de Base/Vida você pode ligar a origem padrão.`;
 
     container.innerHTML = `
-        ${cabecalhoTelaSecundaria('Contas', 'Onde o dinheiro mora')}
+        ${typeof cabecalhoTelaSecundaria === 'function' ? cabecalhoTelaSecundaria('Contas', 'Onde o dinheiro mora') : '<h2 class="title">Contas</h2>'}
         <div class="fala-avatar">
             <span class="icone">🛡️</span>
             <span class="texto"><strong>Torres:</strong> ${orientacao}</span>
         </div>
-
-        ${custodias.length === 0 ? `
+        ${operacionais.length === 0 ? `
             <div class="card" style="border-left: 4px solid var(--primary); background: var(--purple-light); margin-bottom: 16px;">
                 <strong style="color: var(--primary); display: block; margin-bottom: 8px;">Depois de cadastrar</strong>
                 <p style="font-size: 0.85rem; color: var(--secondary); line-height: 1.5; margin: 0;">
@@ -8782,90 +9001,39 @@ function renderizarCustodias() {
                 </p>
             </div>
         ` : ''}
-
-        ${htmlLista}
-
+        ${htmlListaOp}
         <button class="btn-primary" style="margin-top: 20px; background: var(--accent);" onclick="abrirFormularioCustodia(null)">
             + Adicionar conta
         </button>
-        ${custodias.length >= 2 ? `
+        <button class="btn-option" style="justify-content: center; margin-top: 10px; border-color: var(--warning);" onclick="abrirFormularioCustodia(null, { finalidade: 'reserva' })">
+            🐖 Nova conta de reserva
+        </button>
+        ${operacionais.length >= 2 ? `
         <button class="btn-primary" style="margin-top: 10px; background: var(--secondary);" onclick="abrirTransferenciaCustodias()">
             ↔️ Transferir entre contas
         </button>
         ` : ''}
+        ${htmlReservas}
     `;
 }
 
-/**
- * Saldo da semana atual (renda real − gastos nas caixinhas).
- * Usado para sugerir saldo inicial da 1ª custódia e reduzir inconsistência visual.
- */
-function calcularSaldoSemanaAtual() {
-    const semana = state.orcamento && state.orcamento.semanaAtual;
-    if (!semana) {
-        return { saldo: 0, rendaReal: 0, totalGasto: 0, temMovimento: false };
-    }
-    const rendaReal = semana.rendaReal || 0;
-    const totalGasto = (semana.base?.gasto || 0)
-        + (semana.vida?.gasto || 0)
-        + (semana.futuro?.gasto || 0);
-    const saldo = rendaReal - totalGasto;
-    const temMovimento = rendaReal > 0 || totalGasto > 0;
-    return { saldo, rendaReal, totalGasto, temMovimento };
-}
+let finalidadeCustodiaForm = 'operacional'; // módulo
 
-/**
- * Sugestão de saldo inicial ao criar custódia com saldo.
- * - 1ª custódia com saldo + semana com movimento → usa saldo da semana (mín. 0)
- * - Já existem outras com saldo → 0 (não duplica o que já está em outra conta)
- * - Sem movimento na semana → 0 (usuário informa o real)
- */
-function sugerirSaldoInicialCustodia() {
-    const comSaldo = (state.orcamento.custodias || []).filter(c => {
-        const t = TIPOS_CUSTODIA[c.tipo] || {};
-        return t.temSaldo;
-    });
-    const { saldo, rendaReal, totalGasto, temMovimento } = calcularSaldoSemanaAtual();
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-    if (comSaldo.length > 0) {
-        return {
-            valor: 0,
-            html: `<div id="cust-saldo-dica" style="font-size: 0.8rem; color: var(--secondary); margin-top: 8px; line-height: 1.45;">
-                Já existe outra conta com saldo. Informe só o que tem <strong>nesta</strong> conta — os próximos apontamentos no <strong>+</strong> atualizam cada uma.
-            </div>`
-        };
-    }
-
-    if (temMovimento) {
-        const sugerido = Math.max(0, saldo);
-        let extra = '';
-        if (saldo < 0) {
-            extra = ` A semana está negativa (${fmt(saldo)}); sugerimos começar em zero e ajustar se a conta tiver outro valor.`;
-        } else {
-            extra = ` Recebimentos ${fmt(rendaReal)} − gastos ${fmt(totalGasto)}.`;
-        }
-        return {
-            valor: sugerido,
-            html: `<div id="cust-saldo-dica" style="font-size: 0.8rem; color: var(--primary); margin-top: 8px; line-height: 1.45; background: var(--purple-light); padding: 10px 12px; border-radius: 8px;">
-                💡 Pelo que você já registrou esta semana, o saldo seria cerca de <strong>${fmt(sugerido)}</strong>.${extra}
-                Ajuste se o valor real na conta for outro. A partir daqui, cada gasto ou recebimento no <strong>+</strong> com esta conta atualiza o saldo.
-            </div>`
-        };
-    }
-
-    return {
-        valor: 0,
-        html: `<div id="cust-saldo-dica" style="font-size: 0.8rem; color: var(--secondary); margin-top: 8px; line-height: 1.45;">
-            Informe o valor real que tem hoje. Nos próximos apontamentos pelo <strong>+</strong>, escolha esta conta para manter o saldo alinhado ao da semana.
-        </div>`
-    };
-}
-
-function abrirFormularioCustodia(id) {
+function abrirFormularioCustodia(id, opcoes) {
+    opcoes = opcoes || {};
+    const finalidadeForcada = opcoes.finalidade || null;
     const container = document.getElementById('custodias-conteudo');
     const custodia = id ? (state.orcamento.custodias || []).find(c => c.id === id) : null;
     const editando = !!custodia;
+
+    const finalidadeAtual = custodia
+        ? (custodia.finalidade || 'operacional')
+        : (finalidadeForcada || 'operacional');
+    finalidadeCustodiaForm = finalidadeAtual;
+
+    const tituloForm = editando
+        ? (finalidadeAtual === 'reserva' ? 'Editar reserva' : 'Editar conta')
+        : (finalidadeAtual === 'reserva' ? 'Nova reserva' : 'Nova conta');
 
     const nomeAtual = custodia ? custodia.nome : '';
     const tipoAtual = custodia ? custodia.tipo : null;
@@ -8891,7 +9059,7 @@ function abrirFormularioCustodia(id) {
     container.innerHTML = `
         <div class="fala-avatar">
             <span class="icone">🏦</span>
-            <span class="texto">${editando ? 'Editar conta' : 'Nova conta'}</span>
+            <span class="texto">${tituloForm}</span>
         </div>
 
         <div class="fala-avatar">
@@ -9029,6 +9197,7 @@ function salvarCustodia(id) {
         if (!custodia) return;
         custodia.nome = nome;
         custodia.tipo = tipo;
+        custodia.finalidade = finalidadeCustodiaForm;
         custodia.saldoInicial = saldoInicial;
         custodia.saldoAtual = saldoInicial; // re-baseline
         if (info.temFatura) {
@@ -9041,6 +9210,7 @@ function salvarCustodia(id) {
             id: 'cust_' + Date.now(),
             nome: nome,
             tipo: tipo,
+            finalidade: finalidadeCustodiaForm,
             saldoInicial: saldoInicial,
             saldoAtual: saldoInicial,
             criadaEm: new Date().toISOString(),
@@ -9050,16 +9220,16 @@ function salvarCustodia(id) {
             nova.diaFechamento = diaFechamento;
             nova.diaVencimento = diaVencimento;
         }
-        const eraPrimeira = (state.orcamento.custodias || []).length === 0;
+        const eraPrimeiraOperacional = _custodiasOperacionais(state.orcamento).length === 0;
         state.orcamento.custodias.push(nova);
 
-        // Padrão se for a primeira
-        if (eraPrimeira) {
+        // Só vira padrão se for operacional e a primeira operacional
+        if (eraPrimeiraOperacional && !_custodiaEhReserva(nova)) {
             state.orcamento.custodiaPadrao = nova.id;
         }
 
-        // Lote: ligar categorias órfãs (só custódia sem fatura)
-        if (!info.temFatura) {
+        // Lote: ligar categorias órfãs só para custódia operacional sem fatura
+        if (!info.temFatura && !_custodiaEhReserva(nova)) {
             const orfas = (state.orcamento.categorias || []).filter(c => !c.custodiaPadraoId);
             if (orfas.length > 0) {
                 const ligar = confirm(
@@ -9074,6 +9244,7 @@ function salvarCustodia(id) {
     }
 
     tipoCustodiaSelecionado = null;
+    finalidadeCustodiaForm = 'operacional';
     salvarEstado();
     if (typeof _tickOnboardingAposCustodia === 'function') _tickOnboardingAposCustodia();
     renderizarCustodias();
@@ -9098,7 +9269,7 @@ function abrirTransferenciaCustodias() {
 function renderizarTransferencia() {
     const container = document.getElementById('transferencia-conteudo');
     const custodias = (state.orcamento.custodias || []).filter(
-        c => !TIPOS_CUSTODIA[c.tipo].temFatura   // cartão de crédito não entra como origem/destino
+        c => !TIPOS_CUSTODIA[c.tipo].temFatura && !_custodiaEhReserva(c)
     );
 
     if (custodias.length < 2) {
@@ -9264,6 +9435,7 @@ function renderizarPagamentoFatura(cartaoId) {
     // Origem = só custódias com saldo (não outro cartão de crédito)
     const custodiaOrigem = (state.orcamento.custodias || []).filter(c => {
         if (c.id === cartaoId) return false;
+        if (_custodiaEhReserva(c)) return false;
         const t = TIPOS_CUSTODIA[c.tipo] || {};
         return !t.temFatura;
     });
@@ -9704,6 +9876,10 @@ function custodiasDisponiveisParaGasto() {
     const orc = state.orcamento;
     if (!orc.custodias || orc.custodias.length === 0) return [];
 
+    // Reserva não é usada para gasto do dia a dia
+    const operacionais = orc.custodias.filter(c => !_custodiaEhReserva(c));
+    if (operacionais.length === 0) return [];
+
     let prioridade = null;
     if (registroTemporario && registroTemporario.custodiaId) {
         prioridade = registroTemporario.custodiaId;
@@ -9712,8 +9888,9 @@ function custodiasDisponiveisParaGasto() {
         if (cat && cat.custodiaPadraoId) prioridade = cat.custodiaPadraoId;
     }
     if (!prioridade) prioridade = orc.custodiaPadrao;
+    if (prioridade && !operacionais.some(c => c.id === prioridade)) prioridade = null;
 
-    const ordenadas = [...orc.custodias];
+    const ordenadas = [...operacionais];
     if (prioridade) {
         const idx = ordenadas.findIndex(c => c.id === prioridade);
         if (idx > 0) {
@@ -11888,6 +12065,7 @@ function _estoqueOperacionalAtual(orc) {
     let somaSaldo = 0;
     let somaFatura = 0;
     custodias.forEach(c => {
+        if (_custodiaEhReserva(c)) return; // reserva fica fora do operacional
         const tipo = (typeof TIPOS_CUSTODIA !== 'undefined' && TIPOS_CUSTODIA[c.tipo]) ? TIPOS_CUSTODIA[c.tipo] : {};
         if (tipo.temFatura) somaFatura += (c.faturaAcumulada || 0);
         else somaSaldo += (c.saldoAtual || 0);
@@ -12031,6 +12209,7 @@ function projetarCustodia(orc, custodiaId, opcoes) {
     const custodias = orc.custodias || [];
     const custodia = custodias.find(c => c.id === custodiaId);
     if (!custodia) return null;
+    if (_custodiaEhReserva(custodia)) return null; // reserva não entra em fluxo operacional
     const tipoInfo = TIPOS_CUSTODIA[custodia.tipo] || TIPOS_CUSTODIA.outro;
     const fluxo = projetarFluxo(orc, opcoes);
     // Recebimentos e vencimentos ligados a esta conta
@@ -12648,6 +12827,12 @@ function _desfazerEfeitosRegistro(r) {
                 cat.parcelasPagas -= 1;
             }
         }
+        if (r.custodiaDestinoId) {
+            const destino = (state.orcamento.custodias || []).find(x => x.id === r.custodiaDestinoId);
+            if (destino && _custodiaEhReserva(destino)) {
+                destino.saldoAtual = (destino.saldoAtual || 0) - (r.valor || 0);
+            }
+        }
     }
 }
 
@@ -12724,6 +12909,12 @@ function _aplicarEfeitosRegistro(r) {
             const cat = (state.orcamento.categorias || []).find(c => c.id === r.categoriaId);
             if (cat) {
                 cat.parcelasPagas = (cat.parcelasPagas || 0) + 1;
+            }
+        }
+        if (r.custodiaDestinoId) {
+            const destino = (state.orcamento.custodias || []).find(x => x.id === r.custodiaDestinoId);
+            if (destino && _custodiaEhReserva(destino)) {
+                destino.saldoAtual = (destino.saldoAtual || 0) + (r.valor || 0);
             }
         }
     }
