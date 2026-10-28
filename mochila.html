@@ -862,11 +862,78 @@
         }
         .dialogo-composer .btn-primary { margin-top: 8px; }
         .dialogo-composer .input-com-prefixo { margin-bottom: 8px; }
-    </style>
+    /* Barra de navegação fixa global */
+.app-navbar {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px; /* Mesma largura do app-container */
+    height: 60px;
+    background: var(--bg-color);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    z-index: 800; /* Acima do conteúdo, abaixo dos modais (1000) */
+    box-sizing: border-box;
+}
+
+/* Ajuste no padding das telas para o conteúdo não sumir atrás do topo */
+.screen {
+    padding-top: 75px !important; /* 60px da barra + 15px de respiro */
+}
+
+/* A tela de welcome não tem barra, então ela pode manter o padding original */
+#screen-welcome {
+    padding-top: 30px !important;
+}
+
+.nav-left, .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nav-btn-voltar {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--primary);
+    cursor: pointer;
+    display: none; /* Oculto por padrão, JS mostra se precisar */
+    padding: 0;
+    line-height: 1;
+}
+
+/* Esconde o botão 'btn-voltar' antigo que ficava solto no texto */
+.btn-voltar {
+    display: none !important; 
+}
+	
+	</style>
 </head>
 <body>
 
 <div class="app-container">
+	
+    <!-- NOVA BARRA DE NAVEGAÇÃO GLOBAL -->
+    <header class="app-navbar" id="app-navbar">
+        <div class="nav-left">
+            <button class="nav-btn-voltar" id="nav-btn-voltar" onclick="window.history.back()" aria-label="Voltar">←</button>
+            <div class="home-brand" id="nav-brand" style="display: none;">🎒 Mochila</div>
+        </div>
+        
+        <div class="nav-right">
+            <button type="button" class="home-icon-btn" title="Avisos" onclick="abrirTelaNotificacoes()" aria-label="Avisos" id="nav-btn-avisos" style="display: none;">
+                <span class="badge-dot" id="nav-badge-dot" style="display: none;"></span>🔔
+            </button>
+            <button type="button" class="home-icon-btn" title="Menu" onclick="abrirDrawer()" aria-label="Menu" id="nav-btn-menu" style="display: none;">☰</button>
+        </div>
+    </header>
+
 
     <!-- TELA 1: Acolhimento (Fatia E — identidade visual) -->
     <div id="screen-welcome" class="screen active">
@@ -1825,7 +1892,44 @@ function goToScreen(id) {
         renderizarPreviaSemana();
     }
 
-    atualizarBotaoFeedback(id); // Ciclo 4.0
+    atualizarBotaoFeedback(id); 
+    
+    // ==========================================
+    // NOVA LÓGICA DA BARRA DE NAVEGAÇÃO GLOBAL
+    // ==========================================
+    const navbar = document.getElementById('app-navbar');
+    const navVoltar = document.getElementById('nav-btn-voltar');
+    const navBrand = document.getElementById('nav-brand');
+    const navAvisos = document.getElementById('nav-btn-avisos');
+    const navMenu = document.getElementById('nav-btn-menu');
+    const navBadge = document.getElementById('nav-badge-dot');
+
+    if (id === 'screen-welcome') {
+        // Na tela de boas vindas, esconde a barra inteira
+        navbar.style.display = 'none';
+    } else if (id === 'screen-orcamento-inicio') {
+        // Na Home, mostra a barra no formato "Home"
+        navbar.style.display = 'flex';
+        navVoltar.style.display = 'none'; // Sem voltar na home
+        navBrand.style.display = 'block';
+        navAvisos.style.display = 'flex';
+        navMenu.style.display = 'flex';
+        
+        // Atualiza o badge de avisos se necessário
+        if (typeof _temAvisoUnificado === 'function' && _temAvisoUnificado(state.orcamento)) {
+            navBadge.style.display = 'block';
+        } else {
+            navBadge.style.display = 'none';
+        }
+    } else {
+        // Telas internas
+        navbar.style.display = 'flex';
+        navVoltar.style.display = 'block'; // Mostra botão voltar
+        navBrand.style.display = 'none';    // Tira o logo para dar espaço
+        navAvisos.style.display = 'flex';
+        navMenu.style.display = 'flex';
+        navBadge.style.display = 'none';    // Foco na tarefa atual
+    }
 }
 
 function voltarParaOrcamento() {
