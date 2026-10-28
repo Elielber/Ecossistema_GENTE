@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Analisador de Consistência v2 — dinâmico</title>
+<script src="https://cdn.jsdelivr.net/npm/acorn@8.11.3/dist/acorn.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/acorn-walk@8.3.2/dist/walk.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+<style>
+  *{box-sizing:border-box} html,body{margin:0;height:100%;font-family:system-ui,sans-serif;font-size:13px}
+  body{display:flex;flex-direction:column}
+  #topbar{padding:10px 14px;background:#f4f4f6;border-bottom:1px solid #ddd;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  #topbar h1{margin:0;font-size:15px;color:#333;font-weight:600}
+  #stats{font-size:12px;color:#555;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  #controls{padding:8px 14px;background:#fafafa;border-bottom:1px solid #eee;display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:12px}
+  #controls label{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+  #controls input[type=search]{padding:4px 8px;border:1px solid #ccc;border-radius:4px;width:220px;font-size:12px}
+  #main{display:flex;flex:1;min-height:0}
+  #cy{flex:1;min-height:400px;background:#fafafa;border-right:1px solid #ddd}
+  #issues{width:440px;overflow-y:auto;background:#fff}
+  .issue-group{border-bottom:1px solid #eee}
+  .issue-group-header{padding:8px 14px;background:#f4f4f6;font-weight:600;font-size:12px;color:#333;display:flex;justify-content:space-between;cursor:pointer;position:sticky;top:0;z-index:1}
+  .issue-group-header:hover{background:#eaeaea}
+  .issue-item{padding:8px 14px;border-top:1px solid #f0f0f0;font-size:12px;line-height:1.45}
+  .issue-item.error{border-left:3px solid #c00;background:#fff5f5}
+  .issue-item.warn{border-left:3px solid #d90;background:#fffbf0}
+  .issue-item.info{border-left:3px solid #09c;background:#f4fbff}
+  .issue-item code{background:#eef;padding:1px 4px;border-radius:3px;font-size:11px;font-family:ui-monospace,monospace}
+  .empty{padding:40px 20px;color:#888;text-align:center;font-size:13px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+  .badge.error{background:#fee;color:#c00}
+  .badge.warn{background:#ffe;color:#b70}
+  .badge.ok{background:#efe;color:#070}
+  .badge.info{background:#e8f4ff;color:#069}
+  #legend{position:absolute;bottom:12px;left:12px;background:rgba(255,255,255,.95);border:1px solid #ddd;border-radius:8px;padding:8px 12px;font-size:11px;line-height:1.6;box-shadow:0 2px 8px rgba(0,0,0,.1);z-index:10}
+  #legend div{display:flex;align-items:center;gap:6px}
+  #legend span.dot{display:inline-block;width:10px;height:10px;border-radius:50%}
+  #mainwrap{position:relative;flex:1;display:flex;min-height:0}
+  #copybtn{padding:4px 10px;border:1px solid #ccc;background:#fff;border-radius:4px;cursor:pointer;font-size:11px}
+  #copybtn:hover{background:#f0f0f0}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <h1>🔎 Analisador de Consistência v2 (c/ IDs dinâmicos)</h1>
+  <input type="file" id="fileinput" accept=".html,.htm">
+  <span id="stats">Aguardando arquivo…</span>
+  <button id="copybtn" onclick="copiarRelatorio()" style="display:none">📋 Copiar relatório</button>
+</div>
+<div id="controls">
+  <label><input type="checkbox" id="showExternals" checked> Externos</label>
+  <label><input type="checkbox" id="showScripts" checked> Scripts inline</label>
+  <label><input type="checkbox" id="showFunctions"> Funções</label>
+  <label><input type="checkbox" id="showElements"> IDs estáticos</label>
+  <label><input type="checkbox" id="showDynamic"> IDs dinâmicos</label>
+  <input type="search" id="search" placeholder="Filtrar nós do grafo…">
+  <span id="searchmatches" style="color:#888"></span>
+</div>
+<div id="mainwrap">
+  <div id="main">
+    <div id="cy"></div>
+    <div id="issues"><div class="empty">Selecione o arquivo <code>mochila.html</code>.</div></div>
+  </div>
+  <div id="legend">
+    <div><span class="dot" style="background:#7C3AED"></span> Arquivo</div>
+    <div><span class="dot" style="background:#f59e0b"></span> Recurso externo (CDN)</div>
+    <div><span class="dot" style="background:#10b981"></span> Script inline</div>
+    <div><span class="dot" style="background:#6366f1"></span> Função</div>
+    <div><span class="dot" style="background:#ec4899"></span> ID estático (HTML)</div>
+    <div><span class="dot" style="background:#8b5cf6"></span> ID dinâmico (JS)</div>
+  </div>
+</div>
+
+<script>
+const KNOWN_GLOBALS = new Set([
+  'Object','Array','String','Number','Boolean','Function','Symbol','BigInt','Math','Date','RegExp','Error','TypeError','RangeError','SyntaxError','ReferenceError',
+  'JSON','Promise','Reflect','Proxy','Map','Set','WeakMap','WeakSet','WeakRef','isNaN','isFinite','parseInt','parseFloat','NaN','Infinity','undefined',
+  'encodeURI','encodeURIComponent','decodeURI','decodeURIComponent','escape','unescape','eval','globalThis','arguments',
+  'alert','confirm','prompt','console','fetch','setTimeout','clearTimeout','setInterval','clearInterval','requestAnimationFrame','cancelAnimationFrame',
+  'requestIdleCallback','cancelIdleCallback','queueMicrotask','structuredClone','atob','btoa','postMessage','matchMedia','getComputedStyle',
+  'event','this','true','false','null','void',
+]);
+
+const STATE = {
+  file: null, html: '',
+  nodes: [], edges: [], issues: [],
+  stats: {}, cy: null,
+  filter: { externals: true, scripts: true, functions: false, elements: false, dynamic: true },
+  search: '',
+};
+
+const $ = (s) => document.querySelector(s);
+
+$('#fileinput').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  STATE.file = f;
+  STATE.html = await f.text();
+  runAnalysis();
+});
+
+document.querySelectorAll('#controls input[type=checkbox]').forEach(cb => {
+  cb.addEventListener('change', () => {
+    STATE.filter = {
+      externals: $('#showExternals').checked,
+      scripts: $('#showScripts').checked,
+      functions: $('#showFunctions').checked,
+      elements: $('#showElements').checked,
+      dynamic: $('#showDynamic').checked,
+    };
+    buildGraph();
+  });
+});
+
+$('#search').addEventListener('input', (e) => {
+  STATE.search = e.target.value.trim().toLowerCase();
+  buildGraph();
+});
+
+/* ---------- helpers ---------- */
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+function shortenUrl(url) {
+  if (!url) return '?';
+  if (url.startsWith('data:')) return 'data:…';
+  try { const u = new URL(url); const parts = u.pathname.split('/').filter(Boolean);
+    return u.hostname + ' / ' + (parts[parts.length - 1] || '');
+  } catch (_) { return url.length > 45 ? url.slice(0,42)+'…' : url; }
+}
+function walker() {
+  if (typeof acorn !== 'undefined' && acorn.walk) return acorn.walk;
+  if (typeof walk !== 'undefined') return walk;
+  return null;
+}
+
+/** Regex tolerante: captura id="X", id='X' e id=X (sem aspas, raro) */
+function extractIdsFromString(str) {
+  const out = [];
+  if (!str || typeof str !== 'string') return out;
+  const re = /\bid\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s"'<>]+))/g;
+  let m;
+  while ((m = re.exec(str)) !== null) {
+    const id = m[1] || m[2] || m[3];
+    if (id && !/[\$\{\}]/.test(id)) out.push(id);
+  }
+  return out;
+}
+
+/* ---------- análise ---------- */
+
+function runAnalysis() {
+  const html = STATE.html;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  STATE.nodes = []; STATE.edges = []; STATE.issues = [];
+
+  const rootId = 'file:root';
+  STATE.nodes.push({ id: rootId, label: STATE.file.name, kind: 'file', size: 44 });
+
+  // 1. Recursos externos
+  const externals = [];
+  doc.querySelectorAll('script[src]').forEach(s => externals.push({ kind: 'script', src: s.getAttribute('src') }));
+  doc.querySelectorAll('link[rel="stylesheet"][href]').forEach(l => externals.push({ kind: 'style', src: l.getAttribute('href') }));
+  externals.forEach((ext, i) => {
+    const id = 'ext:' + i;
+    STATE.nodes.push({ id, label: shortenUrl(ext.src), full: ext.src, kind: 'external', extKind: ext.kind, size: 28 });
+    STATE.edges.push({ id: 'e-root-' + i, source: rootId, target: id, kind: 'loads' });
+  });
+
+  // 2. Scripts inline
+  const inlineScripts = [];
+  doc.querySelectorAll('script:not([src])').forEach((s, i) => {
+    const code = s.textContent || '';
+    if (code.trim().length < 20) return;
+    inlineScripts.push({ idx: i, code, lineCount: code.split('\n').length, functions: [], ast: null });
+  });
+
+  const allFunctions = new Map();
+  const allGlobals = new Set();
+  const getByIdRefs = new Set();
+  const qSelRefs = new Set();
+  // *** NOVO: IDs criados dinamicamente ***
+  const dynamicIds = new Map(); // id → { scriptIdx, origem: 'innerHTML'|'assign'|'setAttribute' }
+  const W = walker();
+
+  inlineScripts.forEach(script => {
+    try {
+      script.ast = acorn.parse(script.code, {
+        ecmaVersion: 'latest', sourceType: 'script', locations: true,
+        allowReturnOutsideFunction: true, allowAwaitOutsideFunction: true,
+      });
+    } catch (e1) {
+      try {
+        script.ast = acorn.parse(script.code, {
+          ecmaVersion: 'latest', sourceType: 'module', locations: true,
+          allowReturnOutsideFunction: true, allowAwaitOutsideFunction: true,
+        });
+      } catch (e2) {
+        STATE.issues.push({
+          group: 'parse', level: 'error',
+          msg: `Erro de sintaxe no script inline #${script.idx + 1}: <code>${escapeHtml(e1.message)}</code>`
+        });
+        return;
+      }
+    }
+    if (!W) return;
+
+    W.full(script.ast, (node) => {
+      // --- Funções declaradas ---
+      if (node.type === 'FunctionDeclaration' && node.id) {
+        script.functions.push(node.id.name);
+        allFunctions.set(node.id.name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?' });
+      }
+      if (node.type === 'VariableDeclaration') {
+        node.declarations.forEach(d => {
+          if (d.id && d.id.type === 'Identifier') {
+            allGlobals.add(d.id.name);
+            if (d.init && (d.init.type === 'FunctionExpression' || d.init.type === 'ArrowFunctionExpression')) {
+              allFunctions.set(d.id.name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?' });
+            }
+          }
+        });
+      }
+      if (node.type === 'ClassDeclaration' && node.id) allGlobals.add(node.id.name);
+      if (node.type === 'AssignmentExpression'
+          && node.left.type === 'MemberExpression'
+          && node.left.object.type === 'Identifier'
+          && (node.left.object.name === 'window' || node.left.object.name === 'globalThis')
+          && node.left.property.type === 'Identifier') {
+        allGlobals.add(node.left.property.name);
+        if (node.right.type === 'FunctionExpression' || node.right.type === 'ArrowFunctionExpression') {
+          allFunctions.set(node.left.property.name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?' });
+        }
+      }
+
+      // --- getElementById('x') ---
+      if (node.type === 'CallExpression'
+          && node.callee.type === 'MemberExpression'
+          && node.callee.object.type === 'Identifier'
+          && node.callee.object.name === 'document'
+          && node.callee.property.type === 'Identifier'
+          && node.callee.property.name === 'getElementById'
+          && node.arguments[0] && node.arguments[0].type === 'Literal'
+          && typeof node.arguments[0].value === 'string') {
+        getByIdRefs.add(node.arguments[0].value);
+      }
+
+      // --- querySelector('#x') ---
+      if (node.type === 'CallExpression'
+          && node.callee.type === 'MemberExpression'
+          && node.callee.property.type === 'Identifier'
+          && node.callee.property.name === 'querySelector'
+          && node.arguments[0] && node.arguments[0].type === 'Literal'
+          && typeof node.arguments[0].value === 'string') {
+        const m = node.arguments[0].value.match(/(?:^|[\s>~+])#([\w-]+)/);
+        if (m) qSelRefs.add(m[1]);
+      }
+
+      // ============================================================
+      // *** NOVO: coleta de IDs dinâmicos ***
+      // ============================================================
+
+      // (a) Literal string contendo id="X"  →  innerHTML = '...id="foo"...'
+      if (node.type === 'Literal' && typeof node.value === 'string') {
+        for (const id of extractIdsFromString(node.value)) {
+          if (!dynamicIds.has(id)) dynamicIds.set(id, { scriptIdx: script.idx, origem: 'innerHTML', line: node.loc ? node.loc.start.line : '?' });
+        }
+      }
+
+      // (b) TemplateLiteral: analisa cada quasi (parte estática)
+      if (node.type === 'TemplateLiteral') {
+        for (const q of node.quasis) {
+          const str = (q.value && (q.value.cooked != null ? q.value.cooked : q.value.raw)) || '';
+          for (const id of extractIdsFromString(str)) {
+            if (!dynamicIds.has(id)) dynamicIds.set(id, { scriptIdx: script.idx, origem: 'template', line: node.loc ? node.loc.start.line : '?' });
+          }
+        }
+      }
+
+      // (c) el.id = 'X'
+      if (node.type === 'AssignmentExpression'
+          && node.left.type === 'MemberExpression'
+          && node.left.property.type === 'Identifier'
+          && node.left.property.name === 'id'
+          && node.right.type === 'Literal'
+          && typeof node.right.value === 'string') {
+        const id = node.right.value;
+        if (id && !dynamicIds.has(id)) {
+          dynamicIds.set(id, { scriptIdx: script.idx, origem: 'assign', line: node.loc ? node.loc.start.line : '?' });
+        }
+      }
+
+      // (d) setAttribute('id', 'X')
+      if (node.type === 'CallExpression'
+          && node.callee.type === 'MemberExpression'
+          && node.callee.property.type === 'Identifier'
+          && node.callee.property.name === 'setAttribute'
+          && node.arguments[0] && node.arguments[0].type === 'Literal'
+          && node.arguments[0].value === 'id'
+          && node.arguments[1] && node.arguments[1].type === 'Literal'
+          && typeof node.arguments[1].value === 'string') {
+        const id = node.arguments[1].value;
+        if (!dynamicIds.has(id)) {
+          dynamicIds.set(id, { scriptIdx: script.idx, origem: 'setAttribute', line: node.loc ? node.loc.start.line : '?' });
+        }
+      }
+    });
+  });
+
+  // 3. Nós dos scripts inline + funções
+  inlineScripts.forEach((script, i) => {
+    const id = 'inline:' + i;
+    STATE.nodes.push({ id, kind: 'inline-script', size: 34,
+      label: `Script #${i + 1} · ${script.lineCount} linhas · ${script.functions.length} fn` });
+    STATE.edges.push({ id: 'e-root-inline-' + i, source: rootId, target: id, kind: 'contains' });
+    const seen = new Set();
+    script.functions.forEach(fn => {
+      if (seen.has(fn)) return; seen.add(fn);
+      const fid = 'fn:' + fn;
+      if (!STATE.nodes.find(n => n.id === fid)) {
+        STATE.nodes.push({ id: fid, kind: 'function', size: 14, label: fn });
+      }
+      STATE.edges.push({ id: `e-${i}-${fid}`, source: id, target: fid, kind: 'defines' });
+    });
+  });
+
+  // 4. IDs estáticos do HTML
+  const domIds = new Map();
+  doc.querySelectorAll('[id]').forEach(el => {
+    const id = el.getAttribute('id');
+    if (!id) return;
+    if (domIds.has(id)) {
+      STATE.issues.push({ group: 'ids', level: 'warn',
+        msg: `id duplicado: <code>${escapeHtml(id)}</code> (&lt;${el.tagName.toLowerCase()}&gt;)` });
+    } else {
+      domIds.set(id, el.tagName.toLowerCase());
+      STATE.nodes.push({ id: 'dom:' + id, kind: 'dom-id', size: 11, label: '#' + id, domTag: el.tagName.toLowerCase() });
+    }
+  });
+
+  // 5. Nós dos IDs dinâmicos (aparecem no grafo se o filtro estiver ligado)
+  dynamicIds.forEach((meta, id) => {
+    if (domIds.has(id)) return; // já existe estático, não duplica
+    STATE.nodes.push({
+      id: 'dyn:' + id, kind: 'dynamic-id', size: 11, label: '#' + id + ' (js)',
+      metaOrigem: meta.origem, metaLine: meta.line,
+    });
+  });
+
+  // 6. Cruzamentos — agora com distinção estático / dinâmico / ausente
+  getByIdRefs.forEach(id => {
+    if (domIds.has(id)) return;
+    if (dynamicIds.has(id)) {
+      const m = dynamicIds.get(id);
+      STATE.issues.push({
+        group: 'getByIdDyn', level: 'info',
+        msg: `getElementById(<code>"${escapeHtml(id)}"</code>) — criado dinamicamente (${m.origem}, linha ~${m.line})`
+      });
+      return;
+    }
+    STATE.issues.push({
+      group: 'getById', level: 'error',
+      msg: `getElementById(<code>"${escapeHtml(id)}"</code>) — <strong>não existe</strong> no HTML nem é criado no JS`
+    });
+  });
+
+  qSelRefs.forEach(id => {
+    if (domIds.has(id)) return;
+    if (dynamicIds.has(id)) {
+      const m = dynamicIds.get(id);
+      STATE.issues.push({
+        group: 'querySelDyn', level: 'info',
+        msg: `querySelector(<code>"#${escapeHtml(id)}"</code>) — criado dinamicamente (${m.origem})`
+      });
+      return;
+    }
+    STATE.issues.push({
+      group: 'querySel', level: 'warn',
+      msg: `querySelector(<code>"#${escapeHtml(id)}"</code>) — <strong>não existe</strong> no HTML nem é criado no JS`
+    });
+  });
+
+  // 7. Handlers inline
+  let handlerCount = 0;
+  doc.querySelectorAll('*').forEach(el => {
+    for (const attr of Array.from(el.attributes || [])) {
+      if (!attr.name.startsWith('on')) continue;
+      const code = (attr.value || '').trim();
+      if (!code) continue;
+      handlerCount++;
+      let ast;
+      try { ast = acorn.parse(code, { ecmaVersion: 'latest', allowReturnOutsideFunction: true, allowAwaitOutsideFunction: true }); }
+      catch (_) {
+        STATE.issues.push({ group: 'handlers', level: 'info',
+          msg: `Handler <code>${attr.name}</code> em &lt;${el.tagName.toLowerCase()}&gt; não parseia: <code>${escapeHtml(code.slice(0,50))}…</code>` });
+        continue;
+      }
+      if (!W) continue;
+      const called = new Set();
+      W.full(ast, (node) => {
+        if (node.type === 'CallExpression' && node.callee.type === 'Identifier') called.add(node.callee.name);
+      });
+      called.forEach(fn => {
+        if (KNOWN_GLOBALS.has(fn)) return;
+        if (allFunctions.has(fn)) return;
+        if (allGlobals.has(fn)) return;
+        const idPart = el.getAttribute('id') ? ` id=<code>"${escapeHtml(el.getAttribute('id'))}"</code>` : '';
+        STATE.issues.push({ group: 'handlers', level: 'error',
+          msg: `Handler <code>${attr.name}</code> em &lt;${el.tagName.toLowerCase()}${idPart}&gt; chama <code>${fn}()</code> — <strong>função não definida</strong>` });
+      });
+    }
+  });
+
+  // 8. label[for] e âncoras
+  doc.querySelectorAll('label[for]').forEach(l => {
+    const t = l.getAttribute('for');
+    if (t && !domIds.has(t) && !dynamicIds.has(t)) {
+      STATE.issues.push({ group: 'labelFor', level: 'warn',
+        msg: `<code>&lt;label for="${escapeHtml(t)}"&gt;</code> — elemento alvo não existe` });
+    }
+  });
+  doc.querySelectorAll('a[href^="#"]').forEach(a => {
+    const h = a.getAttribute('href');
+    if (h.length < 2) return;
+    const t = h.slice(1);
+    if (!domIds.has(t) && !dynamicIds.has(t)) {
+      STATE.issues.push({ group: 'anchor', level: 'info',
+        msg: `<code>&lt;a href="#${escapeHtml(t)}"&gt;</code> — âncora sem alvo` });
+    }
+  });
+
+  // 9. Estatísticas
+  STATE.stats = {
+    lines: html.split('\n').length,
+    externals: externals.length,
+    inlineScripts: inlineScripts.length,
+    functions: allFunctions.size,
+    globals: allGlobals.size,
+    domIds: domIds.size,
+    dynamicIds: dynamicIds.size,
+    getByIdRefs: getByIdRefs.size,
+    handlers: handlerCount,
+    errors: STATE.issues.filter(i => i.level === 'error').length,
+    warns:  STATE.issues.filter(i => i.level === 'warn').length,
+    infos:  STATE.issues.filter(i => i.level === 'info').length,
+  };
+
+  renderStats(); renderIssues(); buildGraph();
+  $('#copybtn').style.display = 'inline-block';
+}
+
+/* ---------- render: stats ---------- */
+function renderStats() {
+  const s = STATE.stats;
+  $('#stats').innerHTML =
+    `${s.lines.toLocaleString('pt-BR')} linhas · ` +
+    `${s.externals} externo(s) · ` +
+    `${s.inlineScripts} script(s) inline · ` +
+    `${s.functions} funç. · ` +
+    `<span title="IDs estáticos no HTML">${s.domIds} ids HTML</span> · ` +
+    `<span title="IDs criados via innerHTML/.id/setAttribute" style="color:#8b5cf6">${s.dynamicIds} ids dinâmicos</span> · ` +
+    `${s.handlers} handler(s) · ` +
+    `<span class="badge error">${s.errors} erro(s)</span> ` +
+    `<span class="badge warn">${s.warns} aviso(s)</span> ` +
+    `<span class="badge info">${s.infos} info(s)</span>`;
+}
+
+/* ---------- render: issues ---------- */
+const GROUPS = {
+  parse:        { title: '🔴 Erros de sintaxe',              order: 1 },
+  handlers:     { title: '🔴 Handlers → funções',            order: 2 },
+  getById:      { title: '🔴 getElementById (realmente ausente)', order: 3 },
+  querySel:     { title: '🟡 querySelector (realmente ausente)',  order: 4 },
+  ids:          { title: '🟡 IDs duplicados',                order: 5 },
+  labelFor:     { title: '🟡 label[for]',                    order: 6 },
+  getByIdDyn:   { title: '🔵 getElementById → dinâmico (ok)', order: 7 },
+  querySelDyn:  { title: '🔵 querySelector → dinâmico (ok)', order: 8 },
+  anchor:       { title: '🔵 Âncoras',                       order: 9 },
+};
+
+function renderIssues() {
+  const el = $('#issues');
+  if (STATE.issues.length === 0) {
+    el.innerHTML = `<div class="empty"><div style="font-size:44px;margin-bottom:10px">✓</div>
+      <div style="color:#070;font-weight:600;font-size:14px">Nenhum problema detectado</div></div>`;
+    return;
+  }
+  const grouped = {};
+  STATE.issues.forEach(i => { const g = i.group || 'outros'; (grouped[g] || (grouped[g] = [])).push(i); });
+  const orderedKeys = Object.keys(grouped).sort((a,b) =>
+    ((GROUPS[a] && GROUPS[a].order) || 99) - ((GROUPS[b] && GROUPS[b].order) || 99));
+
+  let html = '';
+  orderedKeys.forEach(g => {
+    const list = grouped[g];
+    const info = GROUPS[g] || { title: '🔹 ' + g };
+    const e = list.filter(i => i.level === 'error').length;
+    const w = list.filter(i => i.level === 'warn').length;
+    const badges = [];
+    if (e) badges.push(`<span class="badge error">${e}</span>`);
+    if (w) badges.push(`<span class="badge warn">${w}</span>`);
+    if (!e && !w) badges.push(`<span class="badge info">${list.length}</span>`);
+    html += `<div class="issue-group">
+      <div class="issue-group-header"><span>${info.title}</span><span>${badges.join(' ')}</span></div>`;
+    list.forEach(i => { html += `<div class="issue-item ${i.level}">${i.msg}</div>`; });
+    html += `</div>`;
+  });
+  el.innerHTML = html;
+}
+
+/* ---------- render: grafo ---------- */
+function buildGraph() {
+  let nodes = STATE.nodes.filter(n => {
+    if (n.kind === 'external'      && !STATE.filter.externals) return false;
+    if (n.kind === 'inline-script' && !STATE.filter.scripts)   return false;
+    if (n.kind === 'function'      && !STATE.filter.functions) return false;
+    if (n.kind === 'dom-id'        && !STATE.filter.elements)  return false;
+    if (n.kind === 'dynamic-id'    && !STATE.filter.dynamic)   return false;
+    if (STATE.search && !(n.label || '').toLowerCase().includes(STATE.search)) return false;
+    return true;
+  });
+  const ids = new Set(nodes.map(n => n.id));
+  const edges = STATE.edges.filter(e => ids.has(e.source) && ids.has(e.target));
+  $('#searchmatches').textContent = STATE.search ? `· ${nodes.length} match(es)` : '';
+
+  const elements = [];
+  nodes.forEach(n => {
+    const style = {
+      file:           { color: '#7C3AED', shape: 'round-rectangle', fz: 14 },
+      external:       { color: '#f59e0b', shape: 'diamond',         fz: 10 },
+      'inline-script':{ color: '#10b981', shape: 'round-rectangle', fz: 10 },
+      function:       { color: '#6366f1', shape: 'ellipse',         fz: 9  },
+      'dom-id':       { color: '#ec4899', shape: 'tag',             fz: 9  },
+      'dynamic-id':   { color: '#8b5cf6', shape: 'tag',             fz: 9  },
+    }[n.kind] || { color: '#aaa', shape: 'ellipse', fz: 9 };
+    elements.push({ data: { id: n.id, label: n.label || n.id, kind: n.kind,
+      color: style.color, shape: style.shape, fz: style.fz, size: n.size || 20 } });
+  });
+  edges.forEach(e => {
+    const color = e.kind === 'loads' ? '#f59e0b' : e.kind === 'contains' ? '#10b981' : e.kind === 'defines' ? '#6366f1' : '#aaa';
+    elements.push({ data: { id: e.id, source: e.source, target: e.target, color } });
+  });
+
+  if (STATE.cy) { STATE.cy.destroy(); STATE.cy = null; }
+  const n = nodes.length;
+  const layout =
+    n <= 30  ? { name: 'cose', animate: false, nodeRepulsion: 4000, idealEdgeLength: 80 } :
+    n <= 200 ? { name: 'cose', animate: false, nodeRepulsion: 8000, idealEdgeLength: 50, numIter: 500 } :
+               { name: 'concentric', animate: false,
+                 concentric: x => ({ file: 10, external: 8, 'inline-script': 6 }[x.data('kind')] || 3),
+                 levelWidth: () => 2 };
+
+  STATE.cy = cytoscape({
+    container: $('#cy'), elements, layout, wheelSensitivity: 0.2,
+    style: [
+      { selector: 'node', style: { 'background-color': 'data(color)', 'shape': 'data(shape)',
+          'width': 'data(size)', 'height': 'data(size)', 'label': 'data(label)',
+          'font-size': 'data(fz)', 'text-valign': 'bottom', 'text-margin-y': 4,
+          'text-wrap': 'ellipsis', 'text-max-width': 140, 'color': '#222',
+          'border-width': 1, 'border-color': '#fff' } },
+      { selector: 'node[kind="file"], node[kind="inline-script"]', style: {
+          'color': '#fff', 'text-valign': 'center', 'text-halign': 'center', 'font-weight': 'bold' } },
+      { selector: 'edge', style: { 'width': 1.2, 'line-color': 'data(color)',
+          'target-arrow-color': 'data(color)', 'target-arrow-shape': 'triangle',
+          'curve-style': 'bezier', 'arrow-scale': 0.7, 'opacity': 0.65 } },
+    ],
+  });
+}
+
+/* ---------- copiar relatório ---------- */
+function copiarRelatorio() {
+  if (!STATE.stats.lines) return;
+  const lines = [];
+  lines.push('RELATÓRIO — ' + STATE.file.name);
+  lines.push('='.repeat(50));
+  const s = STATE.stats;
+  lines.push(`Linhas: ${s.lines} | Externos: ${s.externals} | Scripts inline: ${s.inlineScripts}`);
+  lines.push(`Funções: ${s.functions} | IDs HTML: ${s.domIds} | IDs dinâmicos: ${s.dynamicIds} | Handlers: ${s.handlers}`);
+  lines.push(`Erros: ${s.errors} | Avisos: ${s.warns} | Info: ${s.infos}`);
+  lines.push('');
+  const grouped = {};
+  STATE.issues.forEach(i => (grouped[i.group] || (grouped[i.group] = [])).push(i));
+  Object.keys(grouped).forEach(g => {
+    lines.push(`## ${(GROUPS[g] && GROUPS[g].title) || g} (${grouped[g].length})`);
+    grouped[g].forEach(i => {
+      const msg = i.msg.replace(/<[^>]+>/g, '').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&');
+      lines.push('  - ' + msg);
+    });
+    lines.push('');
+  });
+  navigator.clipboard.writeText(lines.join('\n')).then(
+    () => alert('Relatório copiado!'),
+    () => alert('Não foi possível copiar.')
+  );
+}
+</script>
+</body>
+</html>
