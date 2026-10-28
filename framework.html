@@ -22,11 +22,96 @@
         body { background-color: var(--bg); color: var(--text); display: flex; justify-content: center; padding: 20px; }
         .container { width: 100%; max-width: 900px; background: var(--card-bg); border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); overflow: hidden; }
         
-        header { background: var(--primary); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+        header { 
+    background: var(--primary); 
+    color: white; 
+    padding: 15px 20px; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    flex-wrap: wrap; 
+    gap: 10px; 
+}
         .header-title h1 { font-size: 1.4rem; margin-bottom: 2px; }
         .header-title p { font-size: 0.85rem; opacity: 0.8; }
         
-        .header-actions { display: flex; gap: 10px; flex-wrap: wrap;justify-content: flex-end;align-items: center;}
+        /* Novos estilos para o Menu Suspenso */
+.header-actions { 
+    display: flex; 
+    gap: 10px; 
+    align-items: center; 
+    justify-content: flex-end;
+    flex-shrink: 0; 
+    flex-wrap: wrap; 
+}
+
+#versionSelect {
+    flex-shrink: 0;
+    width: auto;
+    min-width: 150px;
+}
+
+
+.menu-container {
+    flex-shrink: 0;
+}
+.menu-container {
+    position: relative;
+    display: inline-block;
+}
+
+.btn-menu-toggle {
+    background: transparent; 
+    border: none; 
+    color: white; 
+    padding: 8px 15px; 
+    border-radius: 4px; 
+    cursor: pointer; 
+    font-size: 1.2rem; 
+    line-height: 1;
+    transition: 0.2s;
+    display: flex;
+    align-items: left;
+}
+.btn-menu-toggle:hover { background: rgba(255,255,255,0.1); }
+
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 5px);
+    background: white;
+    min-width: 220px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-radius: 6px;
+    z-index: 1000;
+    overflow: hidden;
+    flex-direction: column;
+    border: 1px solid #ddd;
+}
+
+.dropdown-menu.show { display: flex; }
+
+.dropdown-menu button {
+    background: none;
+    border: none;
+    padding: 12px 15px;
+    text-align: left;
+    color: #333;
+    font-weight: 500;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    display: flex;
+    align-items: left;
+    gap: 10px;
+    border-radius: 0;
+    transition: 0.1s;
+}
+
+.dropdown-menu button:hover { background: #f0f7fd; color: var(--secondary); }
+.dropdown-menu button:last-child { border-bottom: none; }
+.dropdown-menu button.btn-share { color: var(--success); font-weight: bold; }
+.dropdown-menu button.btn-share:hover { background: #e8f5e9; }
         .btn-header { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
         .btn-header:hover { background: rgba(255,255,255,0.2); }
 
@@ -63,6 +148,7 @@
             .form-content { padding: 15px; }
             .navigation { padding: 15px; gap: 10px; }
             header { flex-direction: column; gap: 15px; text-align: center; }
+            .header-actions { width: 100%; }
         }
     </style>
 </head>
@@ -75,13 +161,20 @@
             <p>Gestão Estruturada de Projetos</p>
         </div>
         <div class="header-actions">
-    <!-- NOVO SELETOR DE VERSÃO (Começa oculto) -->
-    <select id="versionSelect" style="display: none; padding: 8px; border-radius: 4px; border: 1px solid var(--border); font-weight: bold;" onchange="changeViewVersion(this.value)"></select>
-            <button class="btn-header" onclick="saveDraft()">💾</button>
-            <button class="btn-header" onclick="loadDraft()">📂</button>
-            <button class="btn-header" onclick="shareToSheets()">⬆️</button>
-            <button class="btn-header" onclick="loadSharedPlan()">⬇️</button>
+    <!-- Seletor de Versão -->
+    <select id="versionSelect" style="display: none; padding: 8px; border-radius: 4px; border: 1px solid #ddd; font-weight: bold; font-size: 0.85rem; color: #333; max-width: 200px;" onchange="changeViewVersion(this.value)"></select>
+    
+    <!-- Menu Suspenso -->
+    <div class="menu-container">
+        <button class="btn-menu-toggle" onclick="toggleMenu(event)">☰</button>
+        <div class="dropdown-menu" id="headerMenu">
+            <button onclick="saveDraft(); closeMenu()">💾 Salvar Rascunho</button>
+            <button onclick="loadDraft(); closeMenu()">📂 Abrir Rascunho</button>
+            <button onclick="loadSharedPlan(); closeMenu()">⬇️ Abrir Compartilhado</button>
+            <button class="btn-share" onclick="shareToSheets(); closeMenu()">⬆️ Compartilhar</button>
         </div>
+    </div>
+</div>
     </header>
     
     <div class="progress-bar-container">
@@ -615,6 +708,29 @@ function changeViewVersion(index) {
         document.getElementById('ident_versao').value = projectHistory[index].version;
     }
 }
+
+// Lógica para abrir e fechar o menu
+function toggleMenu(event) {
+    event.stopPropagation(); // Impede que o clique feche o menu imediatamente
+    const menu = document.getElementById('headerMenu');
+    menu.classList.toggle('show');
+}
+
+function closeMenu() {
+    const menu = document.getElementById('headerMenu');
+    if (menu.classList.contains('show')) {
+        menu.classList.remove('show');
+    }
+}
+
+// Fecha o menu se clicar em qualquer lugar da tela fora dele
+window.addEventListener('click', function(event) {
+    const menu = document.getElementById('headerMenu');
+    const btn = document.querySelector('.btn-menu-toggle');
+    if (menu.classList.contains('show') && !btn.contains(event.target)) {
+        menu.classList.remove('show');
+    }
+});
     function exportDataJSON() {
         const data = getAllFormData();
         const jsonString = JSON.stringify(data, null, 2);
