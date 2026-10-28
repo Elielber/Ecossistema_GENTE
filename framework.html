@@ -73,6 +73,8 @@
             <p>Gestão Estruturada de Projetos</p>
         </div>
         <div class="header-actions">
+    <!-- NOVO SELETOR DE VERSÃO (Começa oculto) -->
+    <select id="versionSelect" style="display: none; padding: 8px; border-radius: 4px; border: 1px solid var(--border); font-weight: bold;" onchange="changeViewVersion(this.value)"></select>
             <button class="btn-header" onclick="saveDraft()">💾</button>
             <button class="btn-header" onclick="loadDraft()">📂</button>
             <button class="btn-header" onclick="shareToSheets()">⬆️</button>
@@ -518,6 +520,12 @@
     // --- COMPARTILHAMENTO GOOGLE SHEETS ---
     async function shareToSheets() {
     const data = getAllFormData();
+
+        const currentSelectedVersion = document.getElementById('ident_versao').value;
+    if (projectHistory.length > 0 && projectHistory[0].version !== currentSelectedVersion) {
+        const confirmar = confirm(`Atenção: Você está visualizando a versão ${currentSelectedVersion}, mas a mais recente é a ${projectHistory[0].version}.\n\nDeseja sobrescrever a versão ${currentSelectedVersion} ou criar uma nova versão?\n\nClique OK para SOBRESCREVER ou CANCELAR para abortar e mudar a versão.`);
+        if (!confirmar) return;
+    }
     
     // Gera um ID único se não existir (usa timestamp + número aleatório)
     if (!data.ident_projectId) {
@@ -548,20 +556,44 @@
         alert('Erro ao conectar com o Google Sheets.');
     }
 }
+// Variável global para armazenar o histórico baixado
+let projectHistory = [];
+
 async function loadSharedPlan() {
     const projectId = prompt("Digite o ID do Projeto compartilhado (ex: PRJ-123456789):");
     if (!projectId) return;
 
     try {
-        // Requisição GET para o Google Apps Script
         const response = await fetch(`${GOOGLE_SCRIPT_URL}?id=${projectId}`);
         const result = await response.json();
 
         if (result.status === 'success') {
-            // Preenche o formulário com os dados resgatados
-            populateFormData(result.data);
-            alert('Plano carregado com sucesso! Você já pode visualizar e editar.');
-            currentStep = 0; // Volta para a tela inicial
+            // Ordena as versões da mais nova para a mais antiga (baseado no timestamp)
+            projectHistory = result.versions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            const select = document.getElementById('versionSelect');
+            select.innerHTML = ''; // Limpa opções anteriores
+            
+            // Cria as opções no Dropdown
+            projectHistory.forEach((v, index) => {
+                const date = new Date(v.timestamp).toLocaleString('pt-BR');
+                const option = document.createElement('option');
+                option.value = index;
+                option.text = `Versão ${v.version} (${date})`;
+                select.appendChild(option);
+            });
+
+            // Define o ID no campo oculto
+            document.getElementById('ident_projectId').value = projectId;
+
+            // Carrega a versão mais recente (índice 0)
+            changeViewVersion(0);
+            
+            // Mostra o dropdown no cabeçalho
+            select.style.display = 'block';
+            
+            alert('Histórico carregado com sucesso!');
+            currentStep = 0;
             updateUI();
         } else {
             alert(`Erro: ${result.message}`);
@@ -569,6 +601,16 @@ async function loadSharedPlan() {
     } catch (error) {
         console.error(error);
         alert('Erro ao buscar os dados. Verifique sua conexão.');
+    }
+}
+
+// Função para trocar os dados na tela quando o usuário muda a versão no Dropdown
+function changeViewVersion(index) {
+    if (projectHistory[index]) {
+        populateFormData(projectHistory[index].data);
+        
+        // Atualiza visualmente o campo de versão para a versão que está sendo vista
+        document.getElementById('ident_versao').value = projectHistory[index].version;
     }
 }
     function exportDataJSON() {
