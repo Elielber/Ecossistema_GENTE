@@ -75,7 +75,8 @@
         <div class="header-actions">
             <button class="btn-header" onclick="saveDraft()">💾</button>
             <button class="btn-header" onclick="loadDraft()">📂</button>
-            <button class="btn-header" style="background: var(--success); border-color: var(--success);" onclick="shareToSheets()">🤝</button>
+            <button class="btn-header" onclick="shareToSheets()">⬆️</button>
+            <button class="btn-header" onclick="loadSharedPlan()">⬇️</button>
         </div>
     </header>
     
@@ -88,10 +89,13 @@
         <div class="step active" id="step-0">
             <h2>Identificação da Equipe e Versão</h2>
             <p class="step-desc">Dados base do projeto.</p>
-            <div class="grid-2">
+                        <div class="grid-2">
                 <div class="form-group">
                     <label>Nome do Projeto / Desafio</label>
+                    <input type="hidden" id="ident_projectId">
+                 
                     <input type="text" id="ident_projeto" placeholder="Ex: Otimização de Atendimento">
+                    
                 </div>
                 <div class="form-group">
                     <label>Versão do Plano</label>
@@ -513,10 +517,18 @@
 
     // --- COMPARTILHAMENTO GOOGLE SHEETS ---
     async function shareToSheets() {
-    async function shareToSheets() {
     const data = getAllFormData();
+    
+    // Gera um ID único se não existir (usa timestamp + número aleatório)
+    if (!data.ident_projectId) {
+        const newId = 'PRJ-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+        document.getElementById('ident_projectId').value = newId;
+        data.ident_projectId = newId;
+    }
+
     const payload = {
         action: "save",
+        projectId: data.ident_projectId,
         version: data.ident_versao || "v1.0",
         projectName: data.ident_projeto || "Projeto Sem Nome",
         timestamp: new Date().toISOString(),
@@ -527,16 +539,38 @@
         await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Correção crucial aqui
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(payload)
         });
-        alert('Dados enviados para o Google Sheets! Verifique sua planilha.');
+        alert(`Plano compartilhado/atualizado com sucesso!\nID do Projeto: ${data.ident_projectId}\n\nOutros usuários podem usar este ID para acessar o plano.`);
     } catch (error) {
         console.error(error);
-        alert('Erro ao conectar com o Google Sheets. Verifique sua internet.');
+        alert('Erro ao conectar com o Google Sheets.');
     }
 }
+async function loadSharedPlan() {
+    const projectId = prompt("Digite o ID do Projeto compartilhado (ex: PRJ-123456789):");
+    if (!projectId) return;
 
+    try {
+        // Requisição GET para o Google Apps Script
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?id=${projectId}`);
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            // Preenche o formulário com os dados resgatados
+            populateFormData(result.data);
+            alert('Plano carregado com sucesso! Você já pode visualizar e editar.');
+            currentStep = 0; // Volta para a tela inicial
+            updateUI();
+        } else {
+            alert(`Erro: ${result.message}`);
+        }
+    } catch (error) {
+        console.error(error);
+        alert('Erro ao buscar os dados. Verifique sua conexão.');
+    }
+}
     function exportDataJSON() {
         const data = getAllFormData();
         const jsonString = JSON.stringify(data, null, 2);
