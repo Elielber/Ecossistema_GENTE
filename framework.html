@@ -47,7 +47,7 @@
         #versionSelect {
             flex-shrink: 0;
             width: auto;
-            min-width: 290px;
+            min-width: 150px;
         }
 
         .menu-container {
@@ -77,7 +77,7 @@
             right: 0;
             top: calc(100% + 5px);
             background: white;
-            min-width: 220px;
+            min-width: 240px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             border-radius: 6px;
             z-index: 1000;
@@ -98,7 +98,7 @@
             border-bottom: 1px solid #eee;
             cursor: pointer;
             display: flex;
-            align-items: left;
+            align-items: center;
             gap: 10px;
             border-radius: 0;
             transition: 0.1s;
@@ -108,6 +108,9 @@
         .dropdown-menu button:last-child { border-bottom: none; }
         .dropdown-menu button.btn-share { color: var(--success); font-weight: bold; }
         .dropdown-menu button.btn-share:hover { background: #e8f5e9; }
+        .dropdown-menu button.btn-view-plan { color: var(--secondary); font-weight: bold; }
+        .dropdown-menu button.btn-view-plan:hover { background: #eaf4fc; }
+
         .btn-header { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
         .btn-header:hover { background: rgba(255,255,255,0.2); }
 
@@ -128,7 +131,7 @@
         textarea { resize: vertical; min-height: 80px; }
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
 
-        .navigation { display: flex; justify-content: space-between; padding: 20px 30px; background: #f9f9f9; border-top: 1px solid var(--border); align-items: center; gap: 10px;flex-wrap: wrap;}
+        .navigation { display: flex; justify-content: space-between; padding: 20px 30px; background: #f9f9f9; border-top: 1px solid var(--border); align-items: center; gap: 10px; flex-wrap: wrap;}
         button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
         button.btn-prev { background: #ccc; color: #333; }
         button.btn-next { background: var(--secondary); color: white; }
@@ -139,7 +142,6 @@
         .dynamic-table th, .dynamic-table td { border: 1px solid var(--border); padding: 8px; text-align: left; font-size: 0.85rem; }
         .dynamic-table th { background: #eee; }
 
-        /* [NOVO] Botão "⤵ puxar de" (Estratégia 2) */
         .btn-pull {
             margin-left: 8px;
             padding: 2px 8px;
@@ -174,10 +176,8 @@
             <p>Gestão Estruturada de Projetos</p>
         </div>
         <div class="header-actions">
-    <!-- Seletor de Versão -->
     <select id="versionSelect" style="display: none; padding: 8px; border-radius: 4px; border: 1px solid #ddd; font-weight: bold; font-size: 0.85rem; color: #333; max-width: 200px;" onchange="changeViewVersion(this.value)"></select>
     
-    <!-- Menu Suspenso -->
     <div class="menu-container">
         <button class="btn-menu-toggle" onclick="toggleMenu(event)">☰</button>
         <div class="dropdown-menu" id="headerMenu">
@@ -185,6 +185,7 @@
             <button onclick="loadDraft(); closeMenu()">📂 Abrir Rascunho</button>
             <button onclick="loadSharedPlan(); closeMenu()">⬇️ Abrir Compartilhado</button>
             <button class="btn-share" onclick="shareToSheets(); closeMenu()">⬆️ Compartilhar</button>
+            <button class="btn-view-plan" onclick="viewFullPlan(); closeMenu()">📄 Ver Plano Completo</button>
         </div>
     </div>
 </div>
@@ -199,13 +200,11 @@
         <div class="step active" id="step-0">
             <h2>Identificação da Equipe e Versão</h2>
             <p class="step-desc">Dados base do projeto.</p>
-                        <div class="grid-2">
+            <div class="grid-2">
                 <div class="form-group">
                     <label>Nome do Projeto / Desafio</label>
                     <input type="hidden" id="ident_projectId">
-                 
                     <input type="text" id="ident_projeto" placeholder="Ex: Otimização de Atendimento">
-                    
                 </div>
                 <div class="form-group">
                     <label>Versão do Plano</label>
@@ -232,7 +231,6 @@
             </div>
         </div>
 
-        <!-- ETAPA 1: ACORDO DA EQUIPE -->
         <div class="step" id="step-1">
             <h2>1. Acordo da Equipe</h2>
             <p class="step-desc">Alinhamento de convivência e registros.</p>
@@ -254,7 +252,6 @@
             </div>
         </div>
 
-        <!-- ETAPA 2: MAPA DO PROBLEMA -->
         <div class="step" id="step-2">
             <h2>2. Mapa Técnico do Problema</h2>
             <p class="step-desc">Compreensão do caso raiz (sem escolher tecnologia).</p>
@@ -286,7 +283,6 @@
             </div>
         </div>
 
-        <!-- ETAPA 3: HIPÓTESE TÉCNICA -->
         <div class="step" id="step-3">
             <h2>3. Hipótese Técnica</h2>
             <p class="step-desc">Abordagem + Condição + Resultado + Critério de Teste.</p>
@@ -312,23 +308,21 @@
             </div>
         </div>
 
-        <!-- ETAPA 4: MATRIZ DE ALTERNATIVAS -->
         <div class="step" id="step-4">
             <h2>4. Matriz de Alternativas</h2>
             <p class="step-desc">Comparação de opções técnicas.</p>
             <table class="dynamic-table">
-    <thead>
-        <tr><th>Critério</th><th>Alternativa 1</th><th>Alternativa 2</th></tr>
-    </thead>
-    <tbody>
-        <tr><td>Aderência</td><td><input type="text" id="alt_ader_1"></td><td><input type="text" id="alt_ader_2"></td></tr>
-        <tr><td>Viabilidade</td><td><input type="text" id="alt_via_1"></td><td><input type="text" id="alt_via_2"></td></tr>
-        <tr><td>Prazo / Custo</td><td><input type="text" id="alt_prazo_1"></td><td><input type="text" id="alt_prazo_2"></td></tr>
-    </tbody>
-</table>
+                <thead>
+                    <tr><th>Critério</th><th>Alternativa 1</th><th>Alternativa 2</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Aderência</td><td><input type="text" id="alt_ader_1"></td><td><input type="text" id="alt_ader_2"></td></tr>
+                    <tr><td>Viabilidade</td><td><input type="text" id="alt_via_1"></td><td><input type="text" id="alt_via_2"></td></tr>
+                    <tr><td>Prazo / Custo</td><td><input type="text" id="alt_prazo_1"></td><td><input type="text" id="alt_prazo_2"></td></tr>
+                </tbody>
+            </table>
         </div>
 
-        <!-- ETAPA 5: DECISÃO JUSTIFICADA -->
         <div class="step" id="step-5">
             <h2>5. Decisão Justificada</h2>
             <p class="step-desc">Fechamento da escolha.</p>
@@ -350,7 +344,6 @@
             </div>
         </div>
 
-        <!-- ETAPA 6: ARQUITETURA CONCEITUAL -->
         <div class="step" id="step-6">
             <h2>6. Quadro de Arquitetura</h2>
             <p class="step-desc">Fluxo de dados e componentes.</p>
@@ -362,7 +355,6 @@
             <div class="form-group"><label>Riscos no Fluxo</label><textarea id="arq_riscos"></textarea></div>
         </div>
 
-        <!-- ETAPA 7: MATRIZ DE TESTE -->
         <div class="step" id="step-7">
             <h2>7. Matriz de Teste</h2>
             <p class="step-desc">Definição do critério de sucesso antes do resultado.</p>
@@ -379,23 +371,21 @@
             <div class="form-group"><label>Resultado e Limitações</label><textarea id="teste_resultado"></textarea></div>
         </div>
 
-        <!-- ETAPA 8: MATRIZ DE VALIDAÇÃO -->
         <div class="step" id="step-8">
             <h2>8. Matriz de Validação</h2>
             <p class="step-desc">Métricas e riscos residuais.</p>
             <table class="dynamic-table">
-    <thead><tr><th>Critério</th><th>Métrica</th><th>Resultado</th><th>Risco</th></tr></thead>
-    <tbody>
-        <tr><td>Aderência Técnica</td><td><input type="text" id="val_ader_met"></td><td><input type="text" id="val_ader_res"></td><td><input type="text" id="val_ader_ris"></td></tr>
-        <tr><td>Qualidade de Dados</td><td><input type="text" id="val_qual_met"></td><td><input type="text" id="val_qual_res"></td><td><input type="text" id="val_qual_ris"></td></tr>
-        <tr><td>Explicabilidade</td><td><input type="text" id="val_expl_met"></td><td><input type="text" id="val_expl_res"></td><td><input type="text" id="val_expl_ris"></td></tr>
-        <tr><td>Privacidade</td><td><input type="text" id="val_priv_met"></td><td><input type="text" id="val_priv_res"></td><td><input type="text" id="val_priv_ris"></td></tr>
-    </tbody>
-</table>
+                <thead><tr><th>Critério</th><th>Métrica</th><th>Resultado</th><th>Risco</th></tr></thead>
+                <tbody>
+                    <tr><td>Aderência Técnica</td><td><input type="text" id="val_ader_met"></td><td><input type="text" id="val_ader_res"></td><td><input type="text" id="val_ader_ris"></td></tr>
+                    <tr><td>Qualidade de Dados</td><td><input type="text" id="val_qual_met"></td><td><input type="text" id="val_qual_res"></td><td><input type="text" id="val_qual_ris"></td></tr>
+                    <tr><td>Explicabilidade</td><td><input type="text" id="val_expl_met"></td><td><input type="text" id="val_expl_res"></td><td><input type="text" id="val_expl_ris"></td></tr>
+                    <tr><td>Privacidade</td><td><input type="text" id="val_priv_met"></td><td><input type="text" id="val_priv_res"></td><td><input type="text" id="val_priv_ris"></td></tr>
+                </tbody>
+            </table>
             <div class="form-group" style="margin-top:15px;"><label>Riscos Residuais (Quem aceita e sob qual condição?)</label><textarea id="validacao_riscos"></textarea></div>
         </div>
 
-        <!-- ETAPA 9: PROPOSTA FINAL -->
         <div class="step" id="step-9">
             <h2>9. Proposta Técnica Final</h2>
             <p class="step-desc">Consolidação final.</p>
@@ -422,68 +412,65 @@
             <div class="form-group"><label>Próximos Passos</label><textarea id="final_proximos_passos"></textarea></div>
         </div>
 
-        <!-- ETAPA 10: PRINCÍPIOS -->
         <div class="step" id="step-10">
             <h2>10. Princípios Transferíveis</h2>
             <p class="step-desc">Regras de decisão para o futuro.</p>
-            <div class="form-group"><label>Princípio 1</label><input type="text" placeholder="Ex: Não escolher abordagem antes do problema."></div>
-            <div class="form-group"><label>Artefato / Momento</label><input type="text" placeholder="Ex: Fase 1 / Mapa"></div>
-            <div class="form-group"><label>Princípio 2</label><input type="text" placeholder="Ex: Critério antes do teste."></div>
-            <div class="form-group"><label>Artefato / Momento</label><input type="text" placeholder="Ex: Fase 3 / Matriz Teste"></div>
+            <div class="form-group"><label>Princípio 1</label><input type="text" id="principio_1" placeholder="Ex: Não escolher abordagem antes do problema."></div>
+            <div class="form-group"><label>Artefato / Momento</label><input type="text" id="principio_1_momento" placeholder="Ex: Fase 1 / Mapa"></div>
+            <div class="form-group"><label>Princípio 2</label><input type="text" id="principio_2" placeholder="Ex: Critério antes do teste."></div>
+            <div class="form-group"><label>Artefato / Momento</label><input type="text" id="principio_2_momento" placeholder="Ex: Fase 3 / Matriz Teste"></div>
         </div>
 
-        <!-- ETAPA 11: ROTEIRO DE APRESENTAÇÃO -->
         <div class="step" id="step-11">
             <h2>11. Roteiro de Apresentação</h2>
             <p class="step-desc">Estrutura do pitch.</p>
             <table class="dynamic-table">
-    <thead><tr><th>Momento</th><th>Conteúdo</th><th>Quem Fala</th></tr></thead>
-    <tbody>
-        <tr>
-            <td>Problema (30s)</td>
-            <td>
-                <textarea style="min-height:50px;" id="pitch_prob_txt"></textarea>
-                <button type="button" class="btn-pull" style="margin-top:4px;" onclick="pullFrom('final_problema','pitch_prob_txt')">⤵ Et. 9</button>
-            </td>
-            <td><input type="text" id="pitch_prob_quem"></td>
-        </tr>
-        <tr>
-            <td>Abordagem (60s)</td>
-            <td>
-                <textarea style="min-height:50px;" id="pitch_abord_txt"></textarea>
-                <button type="button" class="btn-pull" style="margin-top:4px;" onclick="pullFrom('final_abordagem','pitch_abord_txt')">⤵ Et. 9</button>
-            </td>
-            <td><input type="text" id="pitch_abord_quem"></td>
-        </tr>
-        <tr>
-            <td>Justificativa (60s)</td>
-            <td>
-                <textarea style="min-height:50px;" id="pitch_just_txt"></textarea>
-                <button type="button" class="btn-pull" style="margin-top:4px;" onclick="pullFrom('final_justificativa','pitch_just_txt')">⤵ Et. 9</button>
-            </td>
-            <td><input type="text" id="pitch_just_quem"></td>
-        </tr>
-        <tr>
-            <td>Validação (30s)</td>
-            <td>
-                <textarea style="min-height:50px;" id="pitch_valid_txt"></textarea>
-                <button type="button" class="btn-pull" style="margin-top:4px;" onclick="pullFrom('final_validacao','pitch_valid_txt')">⤵ Et. 9</button>
-            </td>
-            <td><input type="text" id="pitch_valid_quem"></td>
-        </tr>
-        <tr>
-            <td>Próximos Passos (30s)</td>
-            <td>
-                <textarea style="min-height:50px;" id="pitch_prox_txt"></textarea>
-                <button type="button" class="btn-pull" style="margin-top:4px;" onclick="pullFrom('final_proximos_passos','pitch_prox_txt')">⤵ Et. 9</button>
-            </td>
-            <td><input type="text" id="pitch_prox_quem"></td>
-        </tr>
-    </tbody>
-</table>
+                <thead><tr><th>Momento</th><th>Conteúdo</th><th>Quem Fala</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td>Problema (30s)</td>
+                        <td>
+                            <textarea style="min-height:50px;" id="pitch_prob_txt"></textarea>
+                            <button type="button" class="btn-pull" style="margin-top:4px;" onclick="pullFrom('final_problema','pitch_prob_txt')">⤵ Et. 9</button>
+                        </td>
+                        <td><input type="text" id="pitch_prob_quem"></td>
+                    </tr>
+                    <tr>
+                        <td>Abordagem (60s)</td>
+                        <td>
+                            <textarea style="min-height:50px;" id="pitch_abord_txt"></textarea>
+                            <button type="button" class="btn-pull" style="margin-top:4px;" onclick="pullFrom('final_abordagem','pitch_abord_txt')">⤵ Et. 9</button>
+                        </td>
+                        <td><input type="text" id="pitch_abord_quem"></td>
+                    </tr>
+                    <tr>
+                        <td>Justificativa (60s)</td>
+                        <td>
+                            <textarea style="min-height:50px;" id="pitch_just_txt"></textarea>
+                            <button type="button" class="btn-pull" style="margin-top:4px;" onclick="pullFrom('final_justificativa','pitch_just_txt')">⤵ Et. 9</button>
+                        </td>
+                        <td><input type="text" id="pitch_just_quem"></td>
+                    </tr>
+                    <tr>
+                        <td>Validação (30s)</td>
+                        <td>
+                            <textarea style="min-height:50px;" id="pitch_valid_txt"></textarea>
+                            <button type="button" class="btn-pull" style="margin-top:4px;" onclick="pullFrom('final_validacao','pitch_valid_txt')">⤵ Et. 9</button>
+                        </td>
+                        <td><input type="text" id="pitch_valid_quem"></td>
+                    </tr>
+                    <tr>
+                        <td>Próximos Passos (30s)</td>
+                        <td>
+                            <textarea style="min-height:50px;" id="pitch_prox_txt"></textarea>
+                            <button type="button" class="btn-pull" style="margin-top:4px;" onclick="pullFrom('final_proximos_passos','pitch_prox_txt')">⤵ Et. 9</button>
+                        </td>
+                        <td><input type="text" id="pitch_prox_quem"></td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
 
-        <!-- ETAPA 12: CONCLUSÃO -->
         <div class="step" id="step-12">
             <h2>Projeto Estruturado!</h2>
             <p class="step-desc">Framework preenchido.</p>
@@ -503,13 +490,11 @@
 </div>
 
 <script>
-    // CONFIGURAÇÃO GOOGLE SHEETS
     const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBgdRoYxsL_m0oAog4-aoJq_dshalUmwQlcJFvzSXKTUGKnRjYWSvs9GVHGfRtb_gGYQ/exec'; 
 
     let currentStep = 0;
     const totalSteps = document.querySelectorAll('.step').length;
     
-    // Mapeamento de Fases para Relatórios
     const phaseEnds = {
         2: { name: "Fase 1: Alinhamento e Problema", start: 1, end: 2 },
         6: { name: "Fase 2: Ideação e Decisão", start: 3, end: 6 },
@@ -517,9 +502,7 @@
         11: { name: "Fase 4: Defesa e Legado", start: 9, end: 11 }
     };
 
-    // --- [NOVO] ESTRATÉGIA 1: Auto-preenchimento ao avançar ---
-    // Cada chave é a etapa de ORIGEM (currentStep); o valor é a lista de pares [destino, origem].
-    // Só preenche se o destino estiver vazio (não sobrescreve edições do usuário).
+    // ===== AUTO-FILL (Estratégia 1) =====
     const autoFillRules = {
         2: [['final_problema', 'mapa_problema']],
         3: [
@@ -547,11 +530,10 @@
             const s = document.getElementById(sourceId);
             if (t && s && !t.value.trim() && s.value.trim()) {
                 t.value = s.value;
-                t.style.background = '#fffbe6'; // amarelo claro = auto-preenchido
+                t.style.background = '#fffbe6';
             }
         });
 
-        // Composto: teste_hipotese (ao sair da Etapa 3)
         if (currentStep === 3) {
             const th = document.getElementById('teste_hipotese');
             if (th && !th.value.trim()) {
@@ -560,13 +542,9 @@
             }
         }
 
-        // [NOVO] Estratégia 4: Ao sair da Etapa 10 → preencher "Quem fala" na Etapa 11
-        if (currentStep === 10) {
-            autoFillPitchSpeakers();
-        }
+        if (currentStep === 10) autoFillPitchSpeakers();
     }
 
-    // --- [NOVO] ESTRATÉGIA 4: Auto-preenchimento dos apresentadores ---
     function autoFillPitchSpeakers() {
         const papeis = document.getElementById('ident_papeis').value;
         const integrantes = (document.getElementById('ident_integrantes').value || '').split(',')[0]?.trim();
@@ -583,23 +561,15 @@
             });
     }
 
-    // --- [NOVO] ESTRATÉGIA 2: Botão "⤵ puxar de" (manual, sobrescreve) ---
     function pullFrom(sourceId, targetId) {
         const s = document.getElementById(sourceId);
         const t = document.getElementById(targetId);
-        if (s && t) {
-            t.value = s.value;
-            t.style.background = '#e6f4e6'; // verde claro = ação manual do usuário
-        }
+        if (s && t) { t.value = s.value; t.style.background = '#e6f4e6'; }
     }
 
-    // --- [NOVO] Funções de síntese (compostos) ---
     function synthInto(targetId, synthFn) {
         const t = document.getElementById(targetId);
-        if (t) {
-            t.value = synthFn();
-            t.style.background = '#e6f4e6';
-        }
+        if (t) { t.value = synthFn(); t.style.background = '#e6f4e6'; }
     }
 
     function synthHipotese() {
@@ -637,7 +607,7 @@
         return out.join('\n');
     }
 
-    // --- INDEXEDDB SETUP ---
+    // ===== INDEXEDDB =====
     const DB_NAME = 'FrameworkDB';
     const DB_VERSION = 1;
     const STORE_NAME = 'draft';
@@ -660,11 +630,7 @@
         try {
             const db = await initDB();
             const tx = db.transaction(STORE_NAME, 'readwrite');
-            const store = tx.objectStore(STORE_NAME);
-            
-            const data = getAllFormData();
-            store.put(data, 'current_draft');
-            
+            tx.objectStore(STORE_NAME).put(getAllFormData(), 'current_draft');
             tx.oncomplete = () => alert('Rascunho salvo localmente com sucesso!');
         } catch (error) {
             console.error(error);
@@ -676,16 +642,10 @@
         try {
             const db = await initDB();
             const tx = db.transaction(STORE_NAME, 'readonly');
-            const store = tx.objectStore(STORE_NAME);
-            const request = store.get('current_draft');
-
-            request.onsuccess = () => {
-                if (request.result) {
-                    populateFormData(request.result);
-                    alert('Rascunho carregado com sucesso!');
-                } else {
-                    alert('Nenhum rascunho encontrado.');
-                }
+            const req = tx.objectStore(STORE_NAME).get('current_draft');
+            req.onsuccess = () => {
+                if (req.result) { populateFormData(req.result); alert('Rascunho carregado com sucesso!'); }
+                else alert('Nenhum rascunho encontrado.');
             };
         } catch (error) {
             console.error(error);
@@ -693,7 +653,6 @@
         }
     }
 
-    // --- UTILITÁRIOS DE DADOS ---
     function getAllFormData() {
         const data = {};
         document.querySelectorAll('input, textarea').forEach(el => {
@@ -709,7 +668,7 @@
         }
     }
 
-    // --- NAVEGAÇÃO E RELATÓRIOS ---
+    // ===== NAVEGAÇÃO =====
     function updateUI() {
         document.querySelectorAll('.step').forEach((step, index) => {
             step.classList.toggle('active', index === currentStep);
@@ -727,10 +686,9 @@
             btnNext.innerText = currentStep === totalSteps - 2 ? 'Concluir' : '⏭';
         }
 
-        // Mostra botão de relatório no final de cada fase
         if (phaseEnds[currentStep]) {
             btnReport.style.display = 'block';
-            btnReport.innerText = `📄${phaseEnds[currentStep].name}`;
+            btnReport.innerText = `📄 ${phaseEnds[currentStep].name}`;
         } else {
             btnReport.style.display = 'none';
         }
@@ -740,191 +698,277 @@
     }
 
     function changeStep(direction) {
-        // [NOVO] Auto-preenchimento antes de sair da etapa atual
         if (direction === 1) autoFillOnNext();
-
         currentStep += direction;
         if (currentStep < 0) currentStep = 0;
         if (currentStep >= totalSteps) currentStep = totalSteps - 1;
         updateUI();
     }
 
-    function generatePhaseReport() {
-        const phase = phaseEnds[currentStep];
-        if (!phase) return;
+    // ===== GERAÇÃO DE RELATÓRIO (visualização + impressão na própria janela) =====
+    function escapeHtml(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
 
+    function generateReport(start, end, title) {
         const ident = getAllFormData();
-        let htmlContent = `
-            <html>
-            <head>
-                <title>Relatório - ${phase.name}</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
-                    h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
-                    h2 { color: #3498db; margin-top: 30px; }
-                    .header-info { background: #f4f7f6; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-                    .field { margin-bottom: 15px; }
-                    .label { font-weight: bold; color: #555; font-size: 0.9em; text-transform: uppercase; }
-                    .value { background: #f9f9f9; padding: 10px; border-left: 3px solid #3498db; margin-top: 5px; }
-                </style>
-            </head>
-            <body>
-                <h1>${phase.name}</h1>
-                <div class="header-info">
-                    <strong>Projeto:</strong> ${ident.ident_projeto || 'N/A'} <br>
-                    <strong>Versão:</strong> ${ident.ident_versao || 'N/A'} <br>
-                    <strong>Data do Relatório:</strong> ${new Date().toLocaleDateString('pt-BR')}
-                </div>
-        `;
+        const now = new Date().toLocaleString('pt-BR');
+        const safeTitle = escapeHtml(title);
 
-        for (let i = phase.start; i <= phase.end; i++) {
+        let htmlContent = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>${safeTitle}</title>
+<style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; color: #333; background: #eef2f5; }
+    .toolbar {
+        position: sticky; top: 0; z-index: 100;
+        background: #2c3e50; color: white; padding: 12px 20px;
+        display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .toolbar h3 { margin: 0; font-size: 1rem; flex: 1; min-width: 200px; }
+    .toolbar button { padding: 9px 18px; border: none; border-radius: 4px; cursor: pointer; font-weight: 700; font-size: 0.9rem; transition: 0.15s; }
+    .btn-print { background: #27ae60; color: white; }
+    .btn-print:hover { background: #219653; }
+    .btn-close { background: #7f8c8d; color: white; }
+    .btn-close:hover { background: #95a5a6; }
+    .hint { font-size: 0.75rem; opacity: 0.95; width: 100%; background: rgba(255,255,255,0.1); padding: 6px 10px; border-radius: 4px; }
+    .content { max-width: 820px; margin: 20px auto; background: white; padding: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 12px; margin-top: 0; }
+    h2 { color: #3498db; margin-top: 32px; border-bottom: 1px solid #ecf0f1; padding-bottom: 6px; page-break-after: avoid; }
+    .header-info { background: #f4f7f6; padding: 15px; border-radius: 5px; margin-bottom: 20px; line-height: 1.7; }
+    .field { margin-bottom: 15px; page-break-inside: avoid; }
+    .label { font-weight: 700; color: #555; font-size: 0.82em; text-transform: uppercase; letter-spacing: 0.5px; }
+    .value { background: #f9f9f9; padding: 10px 12px; border-left: 3px solid #3498db; margin-top: 5px; white-space: pre-wrap; word-wrap: break-word; }
+    table.report-table { width: 100%; border-collapse: collapse; margin: 10px 0 20px; font-size: 0.88em; page-break-inside: avoid; }
+    table.report-table th, table.report-table td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; vertical-align: top; }
+    table.report-table th { background: #ecf0f1; font-weight: 700; }
+    .footer { margin-top: 40px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 0.78em; color: #999; text-align: center; }
+    @page { size: A4; margin: 15mm; }
+    @media print {
+        body { background: white; }
+        .toolbar, .no-print { display: none !important; }
+        .content { max-width: none; margin: 0; padding: 0; box-shadow: none; }
+        .value { background: white; }
+        .header-info { background: #f4f7f6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        h1 { page-break-after: avoid; }
+        .field { page-break-inside: avoid; }
+        table.report-table { page-break-inside: avoid; }
+    }
+</style>
+</head>
+<body>
+<div class="toolbar no-print">
+    <h3>📄 ${safeTitle}</h3>
+    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
+    <div class="hint">💡 Na janela de impressão, selecione <strong>"Salvar como PDF"</strong> no campo de destino. Atalho: <strong>Ctrl+P</strong> (Windows) / <strong>⌘+P</strong> (Mac).</div>
+</div>
+<div class="content">
+    <h1>${safeTitle}</h1>
+    <div class="header-info">
+        <strong>Projeto:</strong> ${escapeHtml(ident.ident_projeto || 'N/A')}<br>
+        <strong>Versão:</strong> ${escapeHtml(ident.ident_versao || 'N/A')}<br>
+        <strong>Instituição:</strong> ${escapeHtml(ident.ident_instituicao || 'N/A')}<br>
+        <strong>Equipe:</strong> ${escapeHtml(ident.ident_integrantes || 'N/A')}<br>
+        <strong>Data do Relatório:</strong> ${now}
+    </div>
+`;
+
+        for (let i = start; i <= end; i++) {
             const stepEl = document.getElementById(`step-${i}`);
-            const title = stepEl.querySelector('h2').innerText;
-            htmlContent += `<h2>${title}</h2>`;
-            
+            if (!stepEl) continue;
+
+            const titleEl = stepEl.querySelector('h2');
+            if (!titleEl) continue;
+
+            let hasContent = false;
+            stepEl.querySelectorAll('input, textarea').forEach(el => {
+                if (el.value && el.value.trim()) hasContent = true;
+            });
+            if (!hasContent) continue;
+
+            htmlContent += `<h2>${escapeHtml(titleEl.innerText.trim())}</h2>`;
+
+            // Form-groups
             stepEl.querySelectorAll('.form-group').forEach(group => {
                 const label = group.querySelector('label');
                 const input = group.querySelector('input, textarea');
-                if (label && input && input.value.trim() !== '') {
-                    htmlContent += `
-                        <div class="field">
-                            <div class="label">${label.innerText}</div>
-                            <div class="value">${input.value.replace(/\n/g, '<br>')}</div>
-                        </div>
-                    `;
-                }
+                if (!label || !input || !input.value.trim()) return;
+
+                const labelText = Array.from(label.childNodes)
+                    .filter(n => n.nodeType === Node.TEXT_NODE)
+                    .map(n => n.textContent)
+                    .join(' ')
+                    .trim();
+
+                htmlContent += `
+                <div class="field">
+                    <div class="label">${escapeHtml(labelText)}</div>
+                    <div class="value">${escapeHtml(input.value).replace(/\n/g, '<br>')}</div>
+                </div>`;
+            });
+
+            // Tabelas dinâmicas (Etapas 4, 8 e 11)
+            stepEl.querySelectorAll('.dynamic-table').forEach(table => {
+                htmlContent += `<table class="report-table">`;
+
+                table.querySelectorAll('thead tr').forEach(tr => {
+                    htmlContent += '<tr>' + Array.from(tr.children).map(c =>
+                        `<th>${escapeHtml(c.innerText.trim())}</th>`
+                    ).join('') + '</tr>';
+                });
+
+                table.querySelectorAll('tbody tr').forEach(tr => {
+                    htmlContent += '<tr>' + Array.from(tr.children).map(td => {
+                        const input = td.querySelector('input, textarea');
+                        const val = input ? input.value : td.innerText;
+                        const display = (val && val.trim())
+                            ? escapeHtml(val).replace(/\n/g, '<br>')
+                            : '<em style="color:#bbb">—</em>';
+                        return `<td>${display}</td>`;
+                    }).join('') + '</tr>';
+                });
+
+                htmlContent += `</table>`;
             });
         }
 
-        htmlContent += `</body></html>`;
+        htmlContent += `
+    <div class="footer">Gerado por Framework de Inovação em ${now}</div>
+</div>
+</body>
+</html>`;
 
-        // Abre em nova aba para impressão ou salvamento em PDF
         const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert('⚠️ Pop-up bloqueado! Permita pop-ups neste site para visualizar ou imprimir o relatório.');
+            return;
+        }
+        printWindow.document.open();
         printWindow.document.write(htmlContent);
         printWindow.document.close();
     }
 
-    // --- COMPARTILHAMENTO GOOGLE SHEETS ---
+    // --- Relatório da fase atual (abre janela com botão de imprimir) ---
+    function generatePhaseReport() {
+        const phase = phaseEnds[currentStep];
+        if (!phase) return;
+        generateReport(phase.start, phase.end, phase.name);
+    }
+
+    // --- Relatório do plano completo ---
+    function viewFullPlan() {
+        generateReport(1, totalSteps - 2, 'Plano Completo do Projeto');
+    }
+
+    // ===== COMPARTILHAMENTO GOOGLE SHEETS =====
     async function shareToSheets() {
-    const data = getAllFormData();
-
+        const data = getAllFormData();
         const currentSelectedVersion = document.getElementById('ident_versao').value;
-    if (projectHistory.length > 0 && projectHistory[0].version !== currentSelectedVersion) {
-        const confirmar = confirm(`Atenção: Você está visualizando a versão ${currentSelectedVersion}, mas a mais recente é a ${projectHistory[0].version}.\n\nDeseja sobrescrever a versão ${currentSelectedVersion} ou criar uma nova versão?\n\nClique OK para SOBRESCREVER ou CANCELAR para abortar e mudar a versão.`);
-        if (!confirmar) return;
-    }
-    
-    // Gera um ID único se não existir (usa timestamp + número aleatório)
-    if (!data.ident_projectId) {
-        const newId = 'PRJ-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
-        document.getElementById('ident_projectId').value = newId;
-        data.ident_projectId = newId;
-    }
-
-    const payload = {
-        action: "save",
-        projectId: data.ident_projectId,
-        version: data.ident_versao || "v1.0",
-        projectName: data.ident_projeto || "Projeto Sem Nome",
-        timestamp: new Date().toISOString(),
-        data: data
-    };
-
-    try {
-        await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(payload)
-        });
-        alert(`Plano compartilhado/atualizado com sucesso!\nID do Projeto: ${data.ident_projectId}\n\nOutros usuários podem usar este ID para acessar o plano.`);
-    } catch (error) {
-        console.error(error);
-        alert('Erro ao conectar com o Google Sheets.');
-    }
-}
-// Variável global para armazenar o histórico baixado
-let projectHistory = [];
-
-async function loadSharedPlan() {
-    const projectId = prompt("Digite o ID do Projeto compartilhado (ex: PRJ-123456789):");
-    if (!projectId) return;
-
-    try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?id=${projectId}`);
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            // Ordena as versões da mais nova para a mais antiga (baseado no timestamp)
-            projectHistory = result.versions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            
-            const select = document.getElementById('versionSelect');
-            select.innerHTML = ''; // Limpa opções anteriores
-            
-            // Cria as opções no Dropdown
-            projectHistory.forEach((v, index) => {
-                const date = new Date(v.timestamp).toLocaleString('pt-BR');
-                const option = document.createElement('option');
-                option.value = index;
-                option.text = `Versão ${v.version} (${date})`;
-                select.appendChild(option);
-            });
-
-            // Define o ID no campo oculto
-            document.getElementById('ident_projectId').value = projectId;
-
-            // Carrega a versão mais recente (índice 0)
-            changeViewVersion(0);
-            
-            // Mostra o dropdown no cabeçalho
-            select.style.display = 'block';
-            
-            alert('Histórico carregado com sucesso!');
-            currentStep = 0;
-            updateUI();
-        } else {
-            alert(`Erro: ${result.message}`);
+        if (projectHistory.length > 0 && projectHistory[0].version !== currentSelectedVersion) {
+            const confirmar = confirm(`Atenção: Você está visualizando a versão ${currentSelectedVersion}, mas a mais recente é a ${projectHistory[0].version}.\n\nDeseja sobrescrever a versão ${currentSelectedVersion} ou criar uma nova versão?\n\nClique OK para SOBRESCREVER ou CANCELAR para abortar e mudar a versão.`);
+            if (!confirmar) return;
         }
-    } catch (error) {
-        console.error(error);
-        alert('Erro ao buscar os dados. Verifique sua conexão.');
+
+        if (!data.ident_projectId) {
+            const newId = 'PRJ-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+            document.getElementById('ident_projectId').value = newId;
+            data.ident_projectId = newId;
+        }
+
+        const payload = {
+            action: "save",
+            projectId: data.ident_projectId,
+            version: data.ident_versao || "v1.0",
+            projectName: data.ident_projeto || "Projeto Sem Nome",
+            timestamp: new Date().toISOString(),
+            data: data
+        };
+
+        try {
+            await fetch(GOOGLE_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            alert(`Plano compartilhado/atualizado com sucesso!\nID do Projeto: ${data.ident_projectId}\n\nOutros usuários podem usar este ID para acessar o plano.`);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao conectar com o Google Sheets.');
+        }
     }
-}
 
-// Função para trocar os dados na tela quando o usuário muda a versão no Dropdown
-function changeViewVersion(index) {
-    if (projectHistory[index]) {
-        populateFormData(projectHistory[index].data);
-        
-        // Atualiza visualmente o campo de versão para a versão que está sendo vista
-        document.getElementById('ident_versao').value = projectHistory[index].version;
+    let projectHistory = [];
+
+    async function loadSharedPlan() {
+        const projectId = prompt("Digite o ID do Projeto compartilhado (ex: PRJ-123456789):");
+        if (!projectId) return;
+
+        try {
+            const response = await fetch(`${GOOGLE_SCRIPT_URL}?id=${projectId}`);
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                projectHistory = result.versions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                const select = document.getElementById('versionSelect');
+                select.innerHTML = '';
+
+                projectHistory.forEach((v, index) => {
+                    const date = new Date(v.timestamp).toLocaleString('pt-BR');
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.text = `Versão ${v.version} (${date})`;
+                    select.appendChild(option);
+                });
+
+                document.getElementById('ident_projectId').value = projectId;
+                changeViewVersion(0);
+                select.style.display = 'block';
+
+                alert('Histórico carregado com sucesso!');
+                currentStep = 0;
+                updateUI();
+            } else {
+                alert(`Erro: ${result.message}`);
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao buscar os dados. Verifique sua conexão.');
+        }
     }
-}
 
-// Lógica para abrir e fechar o menu
-function toggleMenu(event) {
-    event.stopPropagation(); // Impede que o clique feche o menu imediatamente
-    const menu = document.getElementById('headerMenu');
-    menu.classList.toggle('show');
-}
-
-function closeMenu() {
-    const menu = document.getElementById('headerMenu');
-    if (menu.classList.contains('show')) {
-        menu.classList.remove('show');
+    function changeViewVersion(index) {
+        if (projectHistory[index]) {
+            populateFormData(projectHistory[index].data);
+            document.getElementById('ident_versao').value = projectHistory[index].version;
+        }
     }
-}
 
-// Fecha o menu se clicar em qualquer lugar da tela fora dele
-window.addEventListener('click', function(event) {
-    const menu = document.getElementById('headerMenu');
-    const btn = document.querySelector('.btn-menu-toggle');
-    if (menu.classList.contains('show') && !btn.contains(event.target)) {
-        menu.classList.remove('show');
+    function toggleMenu(event) {
+        event.stopPropagation();
+        document.getElementById('headerMenu').classList.toggle('show');
     }
-});
 
-    // --- [NOVO] Limpa o destaque visual quando o usuário edita o campo manualmente ---
+    function closeMenu() {
+        const menu = document.getElementById('headerMenu');
+        if (menu.classList.contains('show')) menu.classList.remove('show');
+    }
+
+    window.addEventListener('click', function(event) {
+        const menu = document.getElementById('headerMenu');
+        const btn = document.querySelector('.btn-menu-toggle');
+        if (menu.classList.contains('show') && !btn.contains(event.target)) {
+            menu.classList.remove('show');
+        }
+    });
+
     document.addEventListener('input', function(e) {
         if (e.target.matches('input, textarea')) {
             e.target.style.background = '';
