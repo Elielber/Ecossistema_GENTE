@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Analisador de Consistência v2 — dinâmico</title>
+<title>Analisador v3 — Consistência + Call Graph</title>
 <script src="https://cdn.jsdelivr.net/npm/acorn@8.11.3/dist/acorn.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/acorn-walk@8.3.2/dist/walk.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
@@ -38,14 +38,292 @@
   #mainwrap{position:relative;flex:1;display:flex;min-height:0}
   #copybtn{padding:4px 10px;border:1px solid #ccc;background:#fff;border-radius:4px;cursor:pointer;font-size:11px}
   #copybtn:hover{background:#f0f0f0}
+
+  /* Call analysis panel */
+  .call-panel{background:#f9f8ff;border-bottom:2px solid #8b5cf6}
+  .call-panel-header{padding:10px 14px;background:#8b5cf6;color:#fff;font-weight:600;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+  .call-summary{padding:8px 14px;font-size:11px;color:#555;background:#f0edff;border-bottom:1px solid #e0d8ff}
+  .call-section{border-top:1px solid #e5e0ff}
+  .call-section summary{padding:8px 14px;cursor:pointer;font-size:12px;font-weight:600;color:#4c1d95;background:#f5f2ff;list-style:none}
+  .call-section summary::marker{display:none}
+  .call-section summary:hover{background:#ede8ff}
+  .call-section[open] summary{background:#e5deff}
+  .call-row{display:flex;justify-content:space-between;gap:8px;padding:6px 14px;font-size:11px;border-top:1px solid #f0edff;line-height:1.4}
+  .call-row .name{font-family:ui-monospace,monospace;color:#4c1d95;font-weight:600;word-break:break-all}
+  .call-row .metrics{color:#666;font-size:10px;white-space:nowrap;flex-shrink:0}
+  .call-row .rank{color:#aaa;font-size:10px;width:18px;flex-shrink:0}
+  .call-hint{padding:10px 14px;font-size:11px;color:#888;font-style:italic;line-height:1.4}
+
+  /* Tooltip */
+  #tooltip{position:fixed;pointer-events:none;background:#1e1b2e;color:#fff;padding:8px 12px;border-radius:6px;font-size:11px;line-height:1.5;box-shadow:0 4px 12px rgba(0,0,0,.25);z-index:9999;display:none;max-width:320px}
+  #tooltip code{background:rgba(255,255,255,.15);padding:1px 4px;border-radius:3px;font-family:ui-monospace,monospace}
+  #tooltip .t-row{display:flex;gap:8px;margin-top:2px}
+  #tooltip .t-row span:first-child{opacity:.7;min-width:60px}
+
+  /* Focus banner */
+  #focus-banner{position:absolute;top:8px;left:8px;background:#8b5cf6;color:#fff;padding:6px 12px;border-radius:6px;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,.2);display:none;z-index:100;align-items:center;gap:8px}
+  #focus-banner button{background:rgba(255,255,255,.2);border:none;color:#fff;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:11px}
+  #focus-banner button:hover{background:rgba(255,255,255,.35)}
+  
+  .severity-panel { border-bottom: 2px solid #dc2626; background: #fef7f7; }
+.severity-panel-header { padding: 10px 14px; background: #dc2626; color: #fff; font-weight: 600; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+.severity-summary { font-size: 11px; opacity: 0.85; font-weight: 500; }
+.severity-group { border-top: 1px solid #f0e0e0; }
+.severity-group summary { padding: 8px 14px; cursor: pointer; font-size: 12px; font-weight: 600; background: #fff; list-style: none; }
+.severity-group.critical summary { color: #991b1b; background: #fef2f2; }
+.severity-group.high summary { color: #c2410c; background: #fff7ed; }
+.severity-group.medium summary { color: #a16207; background: #fefce8; }
+.severity-group.low summary { color: #0369a1; background: #f0f9ff; }
+.severity-item { padding: 10px 14px; border-top: 1px solid #f5eaea; cursor: pointer; }
+.severity-item:hover { background: #fdf3f3; }
+.severity-item-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+.severity-name { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; color: #7f1d1d; }
+.severity-score { background: #dc2626; color: #fff; padding: 1px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+.severity-metrics { font-size: 10px; color: #555; margin-bottom: 4px; }
+.severity-why { font-size: 11px; color: #444; line-height: 1.45; }
+.severity-detail { margin-top: 6px; }
+.severity-detail summary { font-size: 10px; color: #666; cursor: pointer; padding: 2px 0; }
+.severity-detail ul { margin: 4px 0 0 16px; font-size: 11px; color: #444; line-height: 1.5; }
+.severity-trace { font-size: 10px; color: #666; margin-top: 6px; }
+.severity-trace code { background: #f0e0e0; padding: 1px 5px; border-radius: 3px; margin-right: 3px; font-family: ui-monospace, monospace; }
+/* ============================================================
+   RELATÓRIO PDF — tela oculta, print visível
+   ============================================================ */
+
+#report-view { display: none; }
+
+@media print {
+  /* Esconde tudo, mostra só o relatório */
+  body > *:not(#report-view) { display: none !important; }
+  #report-view { display: block !important; }
+  
+  body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  @page { size: A4; margin: 14mm 12mm; }
+  
+  .report-section { page-break-inside: avoid; }
+  .report-graph-section { page-break-before: always; }
+  .report-section h2 { page-break-after: avoid; }
+  .report-h3 { page-break-after: avoid; }
+  .report-table { page-break-inside: avoid; }
+}
+
+/* ─── Estilos do relatório (usados em print) ─── */
+#report-view {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #222;
+  line-height: 1.5;
+  font-size: 11px;
+}
+
+#report-view .report-container {
+  max-width: 100%;
+  background: #fff;
+  padding: 0 4px;
+}
+
+#report-view .report-cover {
+  text-align: center;
+  padding: 24px 20px;
+  border-bottom: 3px solid #7C3AED;
+  margin-bottom: 20px;
+}
+
+#report-view .report-title {
+  font-size: 22px;
+  color: #7C3AED;
+  margin: 0 0 12px;
+}
+
+#report-view .report-file {
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  color: #333;
+  background: #f4f4f6;
+  padding: 6px 12px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 8px;
+}
+
+#report-view .report-date {
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 16px;
+}
+
+#report-view .report-stats {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin: 16px 0;
+}
+
+#report-view .report-stat {
+  background: #f8f7fc;
+  padding: 10px 6px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+#report-view .report-stat .num {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: #7C3AED;
+}
+
+#report-view .report-stat .lbl {
+  display: block;
+  font-size: 8.5px;
+  color: #666;
+  text-transform: uppercase;
+  margin-top: 2px;
+  letter-spacing: 0.04em;
+}
+
+#report-view .report-issue-summary {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+#report-view .report-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+#report-view .report-badge.error { background: #fee; color: #c00; }
+#report-view .report-badge.warn  { background: #ffe; color: #b70; }
+#report-view .report-badge.info  { background: #e8f4ff; color: #069; }
+
+#report-view .report-section {
+  margin: 20px 0;
+}
+
+#report-view .report-section h2 {
+  font-size: 15px;
+  color: #7C3AED;
+  border-bottom: 2px solid #7C3AED;
+  padding-bottom: 4px;
+  margin: 0 0 10px;
+}
+
+#report-view .report-h3 {
+  font-size: 12px;
+  color: #333;
+  margin: 12px 0 6px;
+  padding-left: 6px;
+  border-left: 3px solid #8b5cf6;
+}
+
+#report-view .report-h3.critical { border-left-color: #dc2626; }
+#report-view .report-h3.high     { border-left-color: #ea580c; }
+#report-view .report-h3.medium   { border-left-color: #ca8a04; }
+#report-view .report-h3.low      { border-left-color: #0369a1; }
+
+#report-view .report-note {
+  font-size: 10px;
+  color: #666;
+  font-style: italic;
+  margin-bottom: 10px;
+}
+
+#report-view .report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  margin-bottom: 12px;
+}
+
+#report-view .report-table th,
+#report-view .report-table td {
+  border: 1px solid #ddd;
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+#report-view .report-table th {
+  background: #f4f4f6;
+  font-weight: 600;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  color: #555;
+}
+
+#report-view .report-table td code {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: #7C3AED;
+  background: #f8f7fc;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+#report-view .report-priority {
+  display: inline-block;
+  background: #dc2626;
+  color: #fff;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+#report-view .report-list {
+  margin: 0 0 12px 20px;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+#report-view .report-list li { margin-bottom: 3px; }
+
+#report-view .report-list code {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  background: #f8f7fc;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: #7C3AED;
+}
+
+#report-view .report-graph-section { text-align: center; }
+
+#report-view .report-graph-img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-top: 10px;
+}
+
+#report-view .report-footer {
+  text-align: center;
+  font-size: 9px;
+  color: #999;
+  margin-top: 30px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+}
+
 </style>
 </head>
 <body>
 <div id="topbar">
-  <h1>🔎 Analisador de Consistência v2 (c/ IDs dinâmicos)</h1>
+  <h1>🔎 Analisador v3 — Consistência + Call Graph</h1>
   <input type="file" id="fileinput" accept=".html,.htm">
   <span id="stats">Aguardando arquivo…</span>
   <button id="copybtn" onclick="copiarRelatorio()" style="display:none">📋 Copiar relatório</button>
+  <button id="pdfbtn" onclick="gerarRelatorioPDF()" style="display:none">📄 Gerar PDF</button>
 </div>
 <div id="controls">
   <label><input type="checkbox" id="showExternals" checked> Externos</label>
@@ -53,6 +331,9 @@
   <label><input type="checkbox" id="showFunctions"> Funções</label>
   <label><input type="checkbox" id="showElements"> IDs estáticos</label>
   <label><input type="checkbox" id="showDynamic"> IDs dinâmicos</label>
+  <label style="border-left:2px solid #8b5cf6;padding-left:14px;font-weight:600;color:#4c1d95">
+    <input type="checkbox" id="showCallEdges"> Call edges (funções → funções)
+  </label>
   <input type="search" id="search" placeholder="Filtrar nós do grafo…">
   <span id="searchmatches" style="color:#888"></span>
 </div>
@@ -63,13 +344,22 @@
   </div>
   <div id="legend">
     <div><span class="dot" style="background:#7C3AED"></span> Arquivo</div>
-    <div><span class="dot" style="background:#f59e0b"></span> Recurso externo (CDN)</div>
+    <div><span class="dot" style="background:#f59e0b"></span> Recurso externo</div>
     <div><span class="dot" style="background:#10b981"></span> Script inline</div>
     <div><span class="dot" style="background:#6366f1"></span> Função</div>
-    <div><span class="dot" style="background:#ec4899"></span> ID estático (HTML)</div>
-    <div><span class="dot" style="background:#8b5cf6"></span> ID dinâmico (JS)</div>
+    <div><span class="dot" style="background:#ec4899"></span> ID estático</div>
+    <div><span class="dot" style="background:#8b5cf6"></span> ID dinâmico</div>
+    <div id="legend-call" style="display:none;flex-direction:column;align-items:flex-start;gap:2px;margin-top:6px;padding-top:6px;border-top:1px solid #ccc">
+      <div><span class="dot" style="background:#10b981"></span> <span class="dot" style="background:#84cc16"></span> <span class="dot" style="background:#f59e0b"></span> <span class="dot" style="background:#ef4444"></span> Complexidade</div>
+      <div style="font-size:10px;color:#888">borda vermelha = ciclo · borda azul = entry point</div>
+    </div>
+  </div>
+  <div id="focus-banner">
+    Focado em <code id="focus-name"></code>
+    <button onclick="clearFocus()">✕ Ver tudo</button>
   </div>
 </div>
+<div id="tooltip"></div>
 
 <script>
 const KNOWN_GLOBALS = new Set([
@@ -85,8 +375,11 @@ const STATE = {
   file: null, html: '',
   nodes: [], edges: [], issues: [],
   stats: {}, cy: null,
-  filter: { externals: true, scripts: true, functions: false, elements: false, dynamic: true },
+  severity: null,
+  filter: { externals: true, scripts: true, functions: false, elements: false, dynamic: true, callEdges: false },
   search: '',
+  focusFn: null, // nome da função em foco (call graph)
+  callGraph: null, // { functions: Map, edges: [], cycles: [] }
 };
 
 const $ = (s) => document.querySelector(s);
@@ -96,6 +389,7 @@ $('#fileinput').addEventListener('change', async (e) => {
   if (!f) return;
   STATE.file = f;
   STATE.html = await f.text();
+  STATE.focusFn = null;
   runAnalysis();
 });
 
@@ -107,7 +401,11 @@ document.querySelectorAll('#controls input[type=checkbox]').forEach(cb => {
       functions: $('#showFunctions').checked,
       elements: $('#showElements').checked,
       dynamic: $('#showDynamic').checked,
+      callEdges: $('#showCallEdges').checked,
     };
+    if (!STATE.filter.callEdges) STATE.focusFn = null;
+    syncFocusBanner();
+    $('#legend-call').style.display = STATE.filter.callEdges ? 'flex' : 'none';
     buildGraph();
   });
 });
@@ -134,8 +432,6 @@ function walker() {
   if (typeof walk !== 'undefined') return walk;
   return null;
 }
-
-/** Regex tolerante: captura id="X", id='X' e id=X (sem aspas, raro) */
 function extractIdsFromString(str) {
   const out = [];
   if (!str || typeof str !== 'string') return out;
@@ -148,12 +444,171 @@ function extractIdsFromString(str) {
   return out;
 }
 
-/* ---------- análise ---------- */
+/* ============================================================
+   CALL GRAPH — análise estática
+   ============================================================ */
+
+/** Analisa uma função (nó AST): extrai chamadas, complexidade e LOC. */
+function analyzeFunction(fnNode) {
+  const calls = [];
+  let loopDepth = 0;
+  let complexity = 1; // McCabe: base = 1
+  const startLine = fnNode.loc ? fnNode.loc.start.line : 0;
+  const endLine = fnNode.loc ? fnNode.loc.end.line : 0;
+  const loc = Math.max(0, endLine - startLine + 1);
+
+  function visit(node) {
+    if (!node || typeof node !== 'object' || !node.type) return;
+    const type = node.type;
+
+    // Não descer em funções aninhadas (elas têm análise própria)
+    if (type === 'FunctionDeclaration' || type === 'FunctionExpression' || type === 'ArrowFunctionExpression') {
+      return;
+    }
+
+    // Loops: marcam contexto de "chamado em loop" + incrementam complexidade
+    if (type === 'ForStatement' || type === 'ForInStatement' || type === 'ForOfStatement'
+        || type === 'WhileStatement' || type === 'DoWhileStatement') {
+      complexity++;
+      loopDepth++;
+      visitChildren(node);
+      loopDepth--;
+      return;
+    }
+
+    // Demais pontos de decisão
+    if (type === 'IfStatement' || type === 'ConditionalExpression'
+        || type === 'SwitchCase' || type === 'CatchClause' || type === 'LogicalExpression') {
+      complexity++;
+    }
+
+    // Chamadas: só consideramos `foo()` com Identifier (foo.bar() é externo)
+    if (type === 'CallExpression' && node.callee.type === 'Identifier') {
+      calls.push({ name: node.callee.name, inLoop: loopDepth > 0 });
+    }
+
+    visitChildren(node);
+  }
+
+  function visitChildren(node) {
+    for (const key in node) {
+      if (key === 'loc' || key === 'start' || key === 'end' || key === 'type' || key === 'range') continue;
+      const child = node[key];
+      if (Array.isArray(child)) {
+        for (const c of child) if (c && c.type) visit(c);
+      } else if (child && child.type) {
+        visit(child);
+      }
+    }
+  }
+
+  if (fnNode.body) visit(fnNode.body);
+  return { calls, complexity, loc };
+}
+
+/** Tarjan SCC — detecta ciclos (auto-recursão e mútuos/indiretos). */
+function findCycles(graph) {
+  let index = 0;
+  const indices = new Map();
+  const lowlinks = new Map();
+  const onStack = new Set();
+  const stack = [];
+  const cycles = [];
+
+  function strongconnect(v) {
+    indices.set(v, index);
+    lowlinks.set(v, index);
+    index++;
+    stack.push(v);
+    onStack.add(v);
+
+    const neighbors = graph.get(v) || new Set();
+    neighbors.forEach(w => {
+      if (!indices.has(w)) {
+        strongconnect(w);
+        lowlinks.set(v, Math.min(lowlinks.get(v), lowlinks.get(w)));
+      } else if (onStack.has(w)) {
+        lowlinks.set(v, Math.min(lowlinks.get(v), indices.get(w)));
+      }
+    });
+
+    if (lowlinks.get(v) === indices.get(v)) {
+      const scc = [];
+      let w;
+      do {
+        w = stack.pop();
+        onStack.delete(w);
+        scc.push(w);
+      } while (w !== v);
+      if (scc.length > 1) {
+        cycles.push({ nodes: scc, isRecursion: false });
+      } else if (scc.length === 1 && (graph.get(scc[0]) || new Set()).has(scc[0])) {
+        cycles.push({ nodes: scc, isRecursion: true });
+      }
+    }
+  }
+
+  for (const v of graph.keys()) if (!indices.has(v)) strongconnect(v);
+  return cycles;
+}
+
+function buildCallGraph(fnAstMap, allFunctions, entryPointNames) {
+  const functions = new Map();
+  const edges = [];
+  const callersOf = new Map(); // callee → Set<caller>
+
+  fnAstMap.forEach((fnNode, name) => {
+    const { calls, complexity, loc } = analyzeFunction(fnNode);
+    const fdata = {
+      name, loc, complexity,
+      fanIn: 0, fanOut: 0, loopCalls: 0,
+      isEntry: entryPointNames.has(name),
+      inCycle: false, cycleIds: [],
+    };
+
+    const callees = new Set();
+    for (const c of calls) {
+      if (!allFunctions.has(c.name)) continue; // só chamadas a funções do próprio arquivo
+      callees.add(c.name);
+      if (c.inLoop) fdata.loopCalls++;
+      if (!callersOf.has(c.name)) callersOf.set(c.name, new Set());
+      callersOf.get(c.name).add(name);
+      edges.push({ source: name, target: c.name, inLoop: c.inLoop });
+    }
+    fdata.fanOut = callees.size;
+    functions.set(name, fdata);
+  });
+
+  // fanIn via callersOf
+  callersOf.forEach((callers, callee) => {
+    if (functions.has(callee)) functions.get(callee).fanIn = callers.size;
+  });
+
+  // Grafo de adjacência (para Tarjan)
+  const adjacency = new Map();
+  functions.forEach((_, n) => adjacency.set(n, new Set()));
+  edges.forEach(e => {
+    if (adjacency.has(e.source)) adjacency.get(e.source).add(e.target);
+  });
+
+  const cycles = findCycles(adjacency);
+  cycles.forEach((c, idx) => {
+    c.id = idx;
+    c.nodes.forEach(n => {
+      const f = functions.get(n);
+      if (f) { f.inCycle = true; f.cycleIds.push(idx); }
+    });
+  });
+
+  return { functions, edges, cycles };
+}
+
+/* ---------- análise principal ---------- */
 
 function runAnalysis() {
   const html = STATE.html;
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  STATE.nodes = []; STATE.edges = []; STATE.issues = [];
+  STATE.nodes = []; STATE.edges = []; STATE.issues = []; STATE.callGraph = null;
 
   const rootId = 'file:root';
   STATE.nodes.push({ id: rootId, label: STATE.file.name, kind: 'file', size: 44 });
@@ -180,8 +635,8 @@ function runAnalysis() {
   const allGlobals = new Set();
   const getByIdRefs = new Set();
   const qSelRefs = new Set();
-  // *** NOVO: IDs criados dinamicamente ***
-  const dynamicIds = new Map(); // id → { scriptIdx, origem: 'innerHTML'|'assign'|'setAttribute' }
+  const dynamicIds = new Map();
+  const fnAstMap = new Map(); // nome → nó AST (para call graph)
   const W = walker();
 
   inlineScripts.forEach(script => {
@@ -197,10 +652,8 @@ function runAnalysis() {
           allowReturnOutsideFunction: true, allowAwaitOutsideFunction: true,
         });
       } catch (e2) {
-        STATE.issues.push({
-          group: 'parse', level: 'error',
-          msg: `Erro de sintaxe no script inline #${script.idx + 1}: <code>${escapeHtml(e1.message)}</code>`
-        });
+        STATE.issues.push({ group: 'parse', level: 'error',
+          msg: `Erro de sintaxe no script inline #${script.idx + 1}: <code>${escapeHtml(e1.message)}</code>` });
         return;
       }
     }
@@ -211,6 +664,7 @@ function runAnalysis() {
       if (node.type === 'FunctionDeclaration' && node.id) {
         script.functions.push(node.id.name);
         allFunctions.set(node.id.name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?' });
+        fnAstMap.set(node.id.name, node);
       }
       if (node.type === 'VariableDeclaration') {
         node.declarations.forEach(d => {
@@ -218,9 +672,15 @@ function runAnalysis() {
             allGlobals.add(d.id.name);
             if (d.init && (d.init.type === 'FunctionExpression' || d.init.type === 'ArrowFunctionExpression')) {
               allFunctions.set(d.id.name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?' });
+              fnAstMap.set(d.id.name, d.init);
             }
           }
         });
+      }
+      if (node.type === 'MethodDefinition' && node.key && node.key.type === 'Identifier' && node.value) {
+        const name = node.key.name;
+        allFunctions.set(name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?' });
+        fnAstMap.set(name, node.value);
       }
       if (node.type === 'ClassDeclaration' && node.id) allGlobals.add(node.id.name);
       if (node.type === 'AssignmentExpression'
@@ -231,10 +691,11 @@ function runAnalysis() {
         allGlobals.add(node.left.property.name);
         if (node.right.type === 'FunctionExpression' || node.right.type === 'ArrowFunctionExpression') {
           allFunctions.set(node.left.property.name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?' });
+          fnAstMap.set(node.left.property.name, node.right);
         }
       }
 
-      // --- getElementById('x') ---
+      // getElementById / querySelector
       if (node.type === 'CallExpression'
           && node.callee.type === 'MemberExpression'
           && node.callee.object.type === 'Identifier'
@@ -245,8 +706,6 @@ function runAnalysis() {
           && typeof node.arguments[0].value === 'string') {
         getByIdRefs.add(node.arguments[0].value);
       }
-
-      // --- querySelector('#x') ---
       if (node.type === 'CallExpression'
           && node.callee.type === 'MemberExpression'
           && node.callee.property.type === 'Identifier'
@@ -257,18 +716,12 @@ function runAnalysis() {
         if (m) qSelRefs.add(m[1]);
       }
 
-      // ============================================================
-      // *** NOVO: coleta de IDs dinâmicos ***
-      // ============================================================
-
-      // (a) Literal string contendo id="X"  →  innerHTML = '...id="foo"...'
+      // IDs dinâmicos
       if (node.type === 'Literal' && typeof node.value === 'string') {
         for (const id of extractIdsFromString(node.value)) {
           if (!dynamicIds.has(id)) dynamicIds.set(id, { scriptIdx: script.idx, origem: 'innerHTML', line: node.loc ? node.loc.start.line : '?' });
         }
       }
-
-      // (b) TemplateLiteral: analisa cada quasi (parte estática)
       if (node.type === 'TemplateLiteral') {
         for (const q of node.quasis) {
           const str = (q.value && (q.value.cooked != null ? q.value.cooked : q.value.raw)) || '';
@@ -277,8 +730,6 @@ function runAnalysis() {
           }
         }
       }
-
-      // (c) el.id = 'X'
       if (node.type === 'AssignmentExpression'
           && node.left.type === 'MemberExpression'
           && node.left.property.type === 'Identifier'
@@ -290,8 +741,6 @@ function runAnalysis() {
           dynamicIds.set(id, { scriptIdx: script.idx, origem: 'assign', line: node.loc ? node.loc.start.line : '?' });
         }
       }
-
-      // (d) setAttribute('id', 'X')
       if (node.type === 'CallExpression'
           && node.callee.type === 'MemberExpression'
           && node.callee.property.type === 'Identifier'
@@ -319,7 +768,7 @@ function runAnalysis() {
       if (seen.has(fn)) return; seen.add(fn);
       const fid = 'fn:' + fn;
       if (!STATE.nodes.find(n => n.id === fid)) {
-        STATE.nodes.push({ id: fid, kind: 'function', size: 14, label: fn });
+        STATE.nodes.push({ id: fid, kind: 'function', size: 14, label: fn, fnName: fn });
       }
       STATE.edges.push({ id: `e-${i}-${fid}`, source: id, target: fid, kind: 'defines' });
     });
@@ -339,50 +788,42 @@ function runAnalysis() {
     }
   });
 
-  // 5. Nós dos IDs dinâmicos (aparecem no grafo se o filtro estiver ligado)
+  // 5. IDs dinâmicos
   dynamicIds.forEach((meta, id) => {
-    if (domIds.has(id)) return; // já existe estático, não duplica
+    if (domIds.has(id)) return;
     STATE.nodes.push({
       id: 'dyn:' + id, kind: 'dynamic-id', size: 11, label: '#' + id + ' (js)',
       metaOrigem: meta.origem, metaLine: meta.line,
     });
   });
 
-  // 6. Cruzamentos — agora com distinção estático / dinâmico / ausente
+  // 6. Cruzamento getElementById / querySelector
   getByIdRefs.forEach(id => {
     if (domIds.has(id)) return;
     if (dynamicIds.has(id)) {
       const m = dynamicIds.get(id);
-      STATE.issues.push({
-        group: 'getByIdDyn', level: 'info',
-        msg: `getElementById(<code>"${escapeHtml(id)}"</code>) — criado dinamicamente (${m.origem}, linha ~${m.line})`
-      });
+      STATE.issues.push({ group: 'getByIdDyn', level: 'info',
+        msg: `getElementById(<code>"${escapeHtml(id)}"</code>) — criado dinamicamente (${m.origem}, linha ~${m.line})` });
       return;
     }
-    STATE.issues.push({
-      group: 'getById', level: 'error',
-      msg: `getElementById(<code>"${escapeHtml(id)}"</code>) — <strong>não existe</strong> no HTML nem é criado no JS`
-    });
+    STATE.issues.push({ group: 'getById', level: 'error',
+      msg: `getElementById(<code>"${escapeHtml(id)}"</code>) — <strong>não existe</strong> no HTML nem é criado no JS` });
   });
-
   qSelRefs.forEach(id => {
     if (domIds.has(id)) return;
     if (dynamicIds.has(id)) {
       const m = dynamicIds.get(id);
-      STATE.issues.push({
-        group: 'querySelDyn', level: 'info',
-        msg: `querySelector(<code>"#${escapeHtml(id)}"</code>) — criado dinamicamente (${m.origem})`
-      });
+      STATE.issues.push({ group: 'querySelDyn', level: 'info',
+        msg: `querySelector(<code>"#${escapeHtml(id)}"</code>) — criado dinamicamente (${m.origem})` });
       return;
     }
-    STATE.issues.push({
-      group: 'querySel', level: 'warn',
-      msg: `querySelector(<code>"#${escapeHtml(id)}"</code>) — <strong>não existe</strong> no HTML nem é criado no JS`
-    });
+    STATE.issues.push({ group: 'querySel', level: 'warn',
+      msg: `querySelector(<code>"#${escapeHtml(id)}"</code>) — <strong>não existe</strong> no HTML nem é criado no JS` });
   });
 
-  // 7. Handlers inline
+  // 7. Handlers inline + coleta de entry points
   let handlerCount = 0;
+  const entryPointNames = new Set();
   doc.querySelectorAll('*').forEach(el => {
     for (const attr of Array.from(el.attributes || [])) {
       if (!attr.name.startsWith('on')) continue;
@@ -402,6 +843,7 @@ function runAnalysis() {
         if (node.type === 'CallExpression' && node.callee.type === 'Identifier') called.add(node.callee.name);
       });
       called.forEach(fn => {
+        entryPointNames.add(fn);
         if (KNOWN_GLOBALS.has(fn)) return;
         if (allFunctions.has(fn)) return;
         if (allGlobals.has(fn)) return;
@@ -430,7 +872,36 @@ function runAnalysis() {
     }
   });
 
-  // 9. Estatísticas
+  // 9. Call Graph
+  STATE.callGraph = buildCallGraph(fnAstMap, allFunctions, entryPointNames);
+  
+  // ─── Sistema especialista ───
+const { blast, depth, callersOf } = _calcularBlastRadius(STATE.callGraph);
+const inversePairs = _detectarParesInversos(STATE.callGraph);
+STATE.severity = _classificarTudo(STATE.callGraph, blast, depth, callersOf, inversePairs);
+
+  // Enriquecer nós de função com métricas
+  STATE.nodes.forEach(n => {
+    if (n.kind === 'function') {
+      const fd = STATE.callGraph.functions.get(n.fnName);
+      if (fd) Object.assign(n, {
+        loc: fd.loc, complexity: fd.complexity,
+        fanIn: fd.fanIn, fanOut: fd.fanOut, loopCalls: fd.loopCalls,
+        isEntry: fd.isEntry, inCycle: fd.inCycle,
+      });
+    }
+  });
+
+  // Adicionar arestas de chamada ao STATE.edges (com prefixo call:)
+  STATE.callGraph.edges.forEach((e, i) => {
+    STATE.edges.push({
+      id: 'call:' + i, source: 'fn:' + e.source, target: 'fn:' + e.target,
+      kind: 'calls', inLoop: e.inLoop,
+    });
+  });
+
+  // 10. Estatísticas
+  const cg = STATE.callGraph;
   STATE.stats = {
     lines: html.split('\n').length,
     externals: externals.length,
@@ -441,6 +912,8 @@ function runAnalysis() {
     dynamicIds: dynamicIds.size,
     getByIdRefs: getByIdRefs.size,
     handlers: handlerCount,
+    callEdges: cg.edges.length,
+    cycles: cg.cycles.length,
     errors: STATE.issues.filter(i => i.level === 'error').length,
     warns:  STATE.issues.filter(i => i.level === 'warn').length,
     infos:  STATE.issues.filter(i => i.level === 'info').length,
@@ -448,25 +921,27 @@ function runAnalysis() {
 
   renderStats(); renderIssues(); buildGraph();
   $('#copybtn').style.display = 'inline-block';
+  $('#pdfbtn').style.display = 'inline-block';
 }
 
-/* ---------- render: stats ---------- */
+/* ---------- stats ---------- */
 function renderStats() {
   const s = STATE.stats;
   $('#stats').innerHTML =
     `${s.lines.toLocaleString('pt-BR')} linhas · ` +
-    `${s.externals} externo(s) · ` +
-    `${s.inlineScripts} script(s) inline · ` +
-    `${s.functions} funç. · ` +
-    `<span title="IDs estáticos no HTML">${s.domIds} ids HTML</span> · ` +
-    `<span title="IDs criados via innerHTML/.id/setAttribute" style="color:#8b5cf6">${s.dynamicIds} ids dinâmicos</span> · ` +
-    `${s.handlers} handler(s) · ` +
+    `${s.externals} ext · ` +
+    `${s.inlineScripts} script(s) · ` +
+    `${s.functions} fn · ` +
+    `<span title="IDs estáticos">${s.domIds} ids HTML</span> · ` +
+    `<span title="IDs criados em runtime" style="color:#8b5cf6">${s.dynamicIds} ids din.</span> · ` +
+    `<span title="Arestas de chamada entre funções" style="color:#8b5cf6">${s.callEdges} call edges</span> · ` +
+    `<span title="Ciclos detectados" style="color:#dc2626">${s.cycles} ciclo(s)</span> · ` +
     `<span class="badge error">${s.errors} erro(s)</span> ` +
     `<span class="badge warn">${s.warns} aviso(s)</span> ` +
     `<span class="badge info">${s.infos} info(s)</span>`;
 }
 
-/* ---------- render: issues ---------- */
+/* ---------- Issues panel ---------- */
 const GROUPS = {
   parse:        { title: '🔴 Erros de sintaxe',              order: 1 },
   handlers:     { title: '🔴 Handlers → funções',            order: 2 },
@@ -479,19 +954,117 @@ const GROUPS = {
   anchor:       { title: '🔵 Âncoras',                       order: 9 },
 };
 
+function renderizarPainelSeveridade(porFuncao) {
+    if (!porFuncao || Object.keys(porFuncao).length === 0) return '';
+
+    // Agrupar por severidade máxima
+    const grupos = { CRITICAL: [], HIGH: [], MEDIUM: [], LOW: [], INFO: [] };
+    for (const [nome, entry] of Object.entries(porFuncao)) {
+        const maior = entry.findings.reduce((acc, f) =>
+            SEVERITY_ORDER[f.severidade] < SEVERITY_ORDER[acc.severidade] ? f : acc
+        );
+        grupos[maior.severidade].push({ nome, ...entry });
+    }
+
+    // Ordenar por prioridade dentro de cada grupo
+    for (const g of Object.values(grupos)) g.sort((a, b) => b.prioridade - a.prioridade);
+
+    let html = `<div class="severity-panel">
+        <div class="severity-panel-header">
+            <span>🎯 Análise de severidade e prioridade</span>
+            <span class="severity-summary">
+                ${grupos.CRITICAL.length} crítico(s) · ${grupos.HIGH.length} alto(s) · ${grupos.MEDIUM.length} médio(s)
+            </span>
+        </div>`;
+
+    for (const sev of ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']) {
+        const lista = grupos[sev];
+        if (lista.length === 0) continue;
+
+        html += `<details class="severity-group ${sev.toLowerCase()}" ${sev === 'CRITICAL' || sev === 'HIGH' ? 'open' : ''}>
+            <summary>${SEVERITY_ICON[sev]} ${sev} (${lista.length})</summary>`;
+
+        for (const item of lista.slice(0, 20)) {
+            const fatos = item.fatos;
+            const principais = item.findings.slice(0, 3).map(f => `[${f.severidade}] ${f.porque}`).join(' ');
+            html += `
+                <div class="severity-item" onclick="focusFunction('${item.nome.replace(/'/g, "\\'")}')">
+                    <div class="severity-item-head">
+                        <span class="severity-name">${escapeHtml(item.nome)}</span>
+                        <span class="severity-score" title="Prioridade calculada">${item.prioridade}</span>
+                    </div>
+                    <div class="severity-metrics">
+                        cx ${fatos.cx} · LOC ${fatos.loc} · ${fatos.fanIn} chamadores · blast ${fatos.blastRadius}
+                        ${fatos.inCycle ? ' · ⚠️ ciclo' : ''}
+                        ${fatos.temInverso ? ` · 🔁 par com ${escapeHtml(fatos.temInverso)}` : ''}
+                    </div>
+                    <div class="severity-why">${principais}</div>
+                    <details class="severity-detail" onclick="event.stopPropagation()">
+                        <summary>Ações sugeridas e raciocínio completo</summary>
+                        <ul>${item.findings.flatMap(f => f.acoes.map(a => `<li>${a}</li>`)).filter((v,i,s) => s.indexOf(v)===i).join('')}</ul>
+                        <div class="severity-trace">
+                            <strong>Regras disparadas:</strong>
+                            ${item.findings.map(f => `<code>${f.id}</code>`).join(' ')}
+                        </div>
+                    </details>
+                </div>`;
+        }
+        html += `</details>`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
+function toggleCallPanel() {
+  const body = document.getElementById('call-panel-body');
+  if (body) body.style.display = body.style.display === 'none' ? 'block' : 'none';
+}
+
+function focusFunction(fnName) {
+  if (!STATE.filter.callEdges) {
+    $('#showCallEdges').checked = true;
+    STATE.filter.callEdges = true;
+    $('#legend-call').style.display = 'flex';
+  }
+  STATE.focusFn = fnName;
+  syncFocusBanner();
+  buildGraph();
+}
+
+function clearFocus() {
+  STATE.focusFn = null;
+  syncFocusBanner();
+  buildGraph();
+}
+
+function syncFocusBanner() {
+  const b = document.getElementById('focus-banner');
+  if (STATE.focusFn && STATE.filter.callEdges) {
+    document.getElementById('focus-name').textContent = STATE.focusFn;
+    b.style.display = 'flex';
+  } else {
+    b.style.display = 'none';
+  }
+}
+
 function renderIssues() {
   const el = $('#issues');
+  const severityHTML = renderizarPainelSeveridade(STATE.severity);
+  const callHTML = renderCallAnalysis();
+
   if (STATE.issues.length === 0) {
-    el.innerHTML = `<div class="empty"><div style="font-size:44px;margin-bottom:10px">✓</div>
-      <div style="color:#070;font-weight:600;font-size:14px">Nenhum problema detectado</div></div>`;
+    el.innerHTML = severityHTML + callHTML + `<div class="empty"><div style="font-size:44px;margin-bottom:10px">✓</div>
+      <div style="color:#070;font-weight:600;font-size:14px">Nenhuma inconsistência detectada</div></div>`;
     return;
   }
+
   const grouped = {};
   STATE.issues.forEach(i => { const g = i.group || 'outros'; (grouped[g] || (grouped[g] = [])).push(i); });
   const orderedKeys = Object.keys(grouped).sort((a,b) =>
     ((GROUPS[a] && GROUPS[a].order) || 99) - ((GROUPS[b] && GROUPS[b].order) || 99));
 
-  let html = '';
+  let html = severityHTML + callHTML;
   orderedKeys.forEach(g => {
     const list = grouped[g];
     const info = GROUPS[g] || { title: '🔹 ' + g };
@@ -508,91 +1081,912 @@ function renderIssues() {
   });
   el.innerHTML = html;
 }
+function renderCallAnalysis() {
+  const cg = STATE.callGraph;
+  if (!cg || cg.functions.size === 0) return '';
+  const fns = Array.from(cg.functions.values());
 
-/* ---------- render: grafo ---------- */
+  const byFanIn = [...fns].sort((a, b) => b.fanIn - a.fanIn).filter(f => f.fanIn > 0);
+  const byComplex = [...fns].sort((a, b) => b.complexity - a.complexity).filter(f => f.complexity > 1);
+  const byLoopCalls = [...fns].sort((a, b) => b.loopCalls - a.loopCalls).filter(f => f.loopCalls > 0);
+  const orphans = fns.filter(f => f.fanIn === 0 && !f.isEntry);
+
+  const cycCount = cg.cycles.length;
+  const summary = `${fns.length} funções · ${cg.edges.length} chamadas · ${cycCount} ciclo(s) · ${orphans.length} órfã(s)`;
+
+  let html = `<div class="call-panel">
+    <div class="call-panel-header">
+      <span>📊 Análise de Chamadas (Call Graph)</span>
+      <button onclick="toggleCallPanel()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:11px">▾</button>
+    </div>
+    <div id="call-panel-body">
+    <div class="call-summary">${summary}</div>`;
+
+  if (byFanIn.length > 0) {
+    html += `<details class="call-section" ${byFanIn.length > 0 ? 'open' : ''}>
+      <summary>🏆 Funções centrais (mais chamadas)</summary>`;
+    byFanIn.slice(0, 10).forEach((f, i) => {
+      html += `<div class="call-row">
+        <span class="rank">${i + 1}</span>
+        <span class="name" onclick="focusFunction('${f.name.replace(/'/g, "\\'")}')">${escapeHtml(f.name)}</span>
+        <span class="metrics">${f.fanIn} chamador${f.fanIn > 1 ? 'es' : ''} · cx ${f.complexity} · ${f.loc} LOC</span>
+      </div>`;
+    });
+    html += `</details>`;
+  }
+
+  if (byComplex.length > 0) {
+    html += `<details class="call-section">
+      <summary>🔥 Complexidade ciclomática</summary>`;
+    byComplex.slice(0, 10).forEach((f, i) => {
+      html += `<div class="call-row">
+        <span class="rank">${i + 1}</span>
+        <span class="name" onclick="focusFunction('${f.name.replace(/'/g, "\\'")}')">${escapeHtml(f.name)}</span>
+        <span class="metrics">cx ${f.complexity} · ${f.loc} LOC · ${f.fanIn} in / ${f.fanOut} out</span>
+      </div>`;
+    });
+    html += `</details>`;
+  }
+
+  if (cycCount > 0) {
+    html += `<details class="call-section" open>
+      <summary>🔄 Ciclos de chamada</summary>`;
+    cg.cycles.forEach(c => {
+      if (c.isRecursion) {
+        html += `<div class="call-row"><span class="rank">↻</span><span class="name">${escapeHtml(c.nodes[0])}</span><span class="metrics">auto-recursão</span></div>`;
+      } else {
+        const path = c.nodes.concat(c.nodes[0]).join(' → ');
+        html += `<div class="call-row"><span class="rank">↻</span><span class="name" style="white-space:normal;word-break:break-word">${escapeHtml(path)}</span></div>`;
+      }
+    });
+    html += `</details>`;
+  }
+
+  if (byLoopCalls.length > 0) {
+    html += `<details class="call-section">
+      <summary>⚡ Chamadas em loop (possível hotspot)</summary>
+      <div class="call-hint">Chamadas feitas dentro de for/while — candidatas a hot path. Não substitui profiler real (medir tempo de execução).</div>`;
+    byLoopCalls.slice(0, 10).forEach((f, i) => {
+      html += `<div class="call-row">
+        <span class="rank">${i + 1}</span>
+        <span class="name">${escapeHtml(f.name)}</span>
+        <span class="metrics">${f.loopCalls} chamada(s) em loop</span>
+      </div>`;
+    });
+    html += `</details>`;
+  }
+
+  if (orphans.length > 0) {
+    html += `<details class="call-section">
+      <summary>💀 Funções órfãs (nunca chamadas)</summary>
+      <div class="call-hint">Não são chamadas por nenhuma função do arquivo nem por handler HTML. Podem ser código morto ou chamadas indiretas (callbacks, addEventListener).</div>`;
+    orphans.slice(0, 30).forEach(f => {
+      html += `<div class="call-row"><span class="rank">·</span><span class="name">${escapeHtml(f.name)}</span><span class="metrics">${f.loc} LOC · cx ${f.complexity}</span></div>`;
+    });
+    if (orphans.length > 30) html += `<div class="call-hint">… e mais ${orphans.length - 30}</div>`;
+    html += `</details>`;
+  }
+
+  html += `</div></div>`;
+  return html;
+}
+
+/* ---------- grafo ---------- */
+function complexityColor(c) {
+  if (c <= 5) return '#10b981';
+  if (c <= 10) return '#84cc16';
+  if (c <= 15) return '#f59e0b';
+  if (c <= 25) return '#ef4444';
+  return '#7c2d12';
+}
+function computeNodeSize(n) {
+  if (n.kind !== 'function' || !STATE.filter.callEdges) return n.size || 14;
+  const fan = (n.fanIn || 0) + (n.fanOut || 0);
+  const cplx = n.complexity || 1;
+  // tamanho entre ~14 e ~55
+  return Math.min(55, 14 + Math.log2(1 + fan) * 6 + Math.log2(1 + cplx) * 4);
+}
+
 function buildGraph() {
   let nodes = STATE.nodes.filter(n => {
+    const showFns = STATE.filter.functions || STATE.filter.callEdges;
     if (n.kind === 'external'      && !STATE.filter.externals) return false;
     if (n.kind === 'inline-script' && !STATE.filter.scripts)   return false;
-    if (n.kind === 'function'      && !STATE.filter.functions) return false;
+    if (n.kind === 'function'      && !showFns)                return false;
     if (n.kind === 'dom-id'        && !STATE.filter.elements)  return false;
     if (n.kind === 'dynamic-id'    && !STATE.filter.dynamic)   return false;
     if (STATE.search && !(n.label || '').toLowerCase().includes(STATE.search)) return false;
     return true;
   });
+
+  // Foco em função: isola vizinhança no call graph
+  if (STATE.focusFn && STATE.filter.callEdges) {
+    const related = new Set([STATE.focusFn]);
+    STATE.callGraph.edges.forEach(e => {
+      if (e.source === STATE.focusFn) related.add(e.target);
+      if (e.target === STATE.focusFn) related.add(e.source);
+    });
+    nodes = nodes.filter(n => n.kind === 'function' && related.has(n.fnName));
+  }
+
   const ids = new Set(nodes.map(n => n.id));
-  const edges = STATE.edges.filter(e => ids.has(e.source) && ids.has(e.target));
+  let edges = STATE.edges.filter(e => {
+    if (!ids.has(e.source) || !ids.has(e.target)) return false;
+    if (e.kind === 'calls' && !STATE.filter.callEdges) return false;
+    // No modo foco, só arestas de chamada entre os nós visíveis
+    if (STATE.focusFn && STATE.filter.callEdges && e.kind !== 'calls') return false;
+    return true;
+  });
+
   $('#searchmatches').textContent = STATE.search ? `· ${nodes.length} match(es)` : '';
 
   const elements = [];
   nodes.forEach(n => {
-    const style = {
-      file:           { color: '#7C3AED', shape: 'round-rectangle', fz: 14 },
-      external:       { color: '#f59e0b', shape: 'diamond',         fz: 10 },
-      'inline-script':{ color: '#10b981', shape: 'round-rectangle', fz: 10 },
-      function:       { color: '#6366f1', shape: 'ellipse',         fz: 9  },
-      'dom-id':       { color: '#ec4899', shape: 'tag',             fz: 9  },
-      'dynamic-id':   { color: '#8b5cf6', shape: 'tag',             fz: 9  },
-    }[n.kind] || { color: '#aaa', shape: 'ellipse', fz: 9 };
-    elements.push({ data: { id: n.id, label: n.label || n.id, kind: n.kind,
-      color: style.color, shape: style.shape, fz: style.fz, size: n.size || 20 } });
+    let color, shape, fz, size, extra = {};
+    if (n.kind === 'function' && STATE.filter.callEdges) {
+      color = complexityColor(n.complexity || 1);
+      shape = 'ellipse';
+      fz = 9;
+      size = computeNodeSize(n);
+      extra = {
+        complexity: n.complexity || 1,
+        fanIn: n.fanIn || 0,
+        fanOut: n.fanOut || 0,
+        loc: n.loc || 0,
+        loopCalls: n.loopCalls || 0,
+        isEntry: !!n.isEntry,
+        inCycle: !!n.inCycle,
+      };
+    } else {
+      const base = {
+        file:           { color: '#7C3AED', shape: 'round-rectangle', fz: 14 },
+        external:       { color: '#f59e0b', shape: 'diamond',         fz: 10 },
+        'inline-script':{ color: '#10b981', shape: 'round-rectangle', fz: 10 },
+        function:       { color: '#6366f1', shape: 'ellipse',         fz: 9  },
+        'dom-id':       { color: '#ec4899', shape: 'tag',             fz: 9  },
+        'dynamic-id':   { color: '#8b5cf6', shape: 'tag',             fz: 9  },
+      }[n.kind] || { color: '#aaa', shape: 'ellipse', fz: 9 };
+      color = base.color; shape = base.shape; fz = base.fz; size = n.size || 20;
+    }
+    elements.push({
+      data: {
+        id: n.id, label: n.label || n.id, kind: n.kind,
+        color, shape, fz, size,
+        ...extra,
+      }
+    });
   });
   edges.forEach(e => {
-    const color = e.kind === 'loads' ? '#f59e0b' : e.kind === 'contains' ? '#10b981' : e.kind === 'defines' ? '#6366f1' : '#aaa';
-    elements.push({ data: { id: e.id, source: e.source, target: e.target, color } });
+    let color = '#aaa', width = 1.2;
+    if (e.kind === 'loads')    color = '#f59e0b';
+    if (e.kind === 'contains') color = '#10b981';
+    if (e.kind === 'defines')  color = '#6366f1';
+    if (e.kind === 'calls')    { color = e.inLoop ? '#dc2626' : '#64748b'; width = e.inLoop ? 2 : 1.2; }
+    elements.push({ data: { id: e.id, source: e.source, target: e.target, color, width } });
   });
 
   if (STATE.cy) { STATE.cy.destroy(); STATE.cy = null; }
   const n = nodes.length;
-  const layout =
-    n <= 30  ? { name: 'cose', animate: false, nodeRepulsion: 4000, idealEdgeLength: 80 } :
-    n <= 200 ? { name: 'cose', animate: false, nodeRepulsion: 8000, idealEdgeLength: 50, numIter: 500 } :
-               { name: 'concentric', animate: false,
-                 concentric: x => ({ file: 10, external: 8, 'inline-script': 6 }[x.data('kind')] || 3),
-                 levelWidth: () => 2 };
+  let layout;
+  if (STATE.filter.callEdges && STATE.focusFn) {
+    layout = { name: 'concentric', animate: false, concentric: x => x.data('fanIn') || 0, levelWidth: () => 2 };
+  } else if (STATE.filter.callEdges) {
+    layout = {
+      name: 'concentric', animate: false,
+      concentric: x => (x.data('fanIn') || 0) * 2 + (x.data('complexity') || 1),
+      levelWidth: () => 3, minNodeSpacing: 30,
+    };
+  } else {
+    layout =
+      n <= 30  ? { name: 'cose', animate: false, nodeRepulsion: 4000, idealEdgeLength: 80 } :
+      n <= 200 ? { name: 'cose', animate: false, nodeRepulsion: 8000, idealEdgeLength: 50, numIter: 500 } :
+                 { name: 'concentric', animate: false,
+                   concentric: x => ({ file: 10, external: 8, 'inline-script': 6 }[x.data('kind')] || 3),
+                   levelWidth: () => 2 };
+  }
 
   STATE.cy = cytoscape({
     container: $('#cy'), elements, layout, wheelSensitivity: 0.2,
     style: [
-      { selector: 'node', style: { 'background-color': 'data(color)', 'shape': 'data(shape)',
-          'width': 'data(size)', 'height': 'data(size)', 'label': 'data(label)',
-          'font-size': 'data(fz)', 'text-valign': 'bottom', 'text-margin-y': 4,
-          'text-wrap': 'ellipsis', 'text-max-width': 140, 'color': '#222',
-          'border-width': 1, 'border-color': '#fff' } },
+      { selector: 'node', style: {
+          'background-color': 'data(color)', 'shape': 'data(shape)',
+          'width': 'data(size)', 'height': 'data(size)',
+          'label': 'data(label)', 'font-size': 'data(fz)',
+          'text-valign': 'bottom', 'text-margin-y': 4,
+          'text-wrap': 'ellipsis', 'text-max-width': 140,
+          'color': '#222', 'border-width': 1, 'border-color': '#fff' } },
       { selector: 'node[kind="file"], node[kind="inline-script"]', style: {
           'color': '#fff', 'text-valign': 'center', 'text-halign': 'center', 'font-weight': 'bold' } },
-      { selector: 'edge', style: { 'width': 1.2, 'line-color': 'data(color)',
+      { selector: 'node[inCycle]', style: {
+          'border-width': 3, 'border-color': '#dc2626', 'border-style': 'dashed' } },
+      { selector: 'node[isEntry]', style: {
+          'border-width': 3, 'border-color': '#2563eb' } },
+      { selector: 'edge', style: {
+          'width': 'data(width)', 'line-color': 'data(color)',
           'target-arrow-color': 'data(color)', 'target-arrow-shape': 'triangle',
           'curve-style': 'bezier', 'arrow-scale': 0.7, 'opacity': 0.65 } },
     ],
   });
+
+  // Tooltip + click-focus
+  const tooltip = document.getElementById('tooltip');
+  STATE.cy.on('mouseover', 'node', (evt) => {
+    const d = evt.target.data();
+    if (d.kind !== 'function' || !STATE.filter.callEdges) return;
+    tooltip.innerHTML = `
+      <div><strong>${escapeHtml(d.label)}</strong></div>
+      <div class="t-row"><span>Complexidade</span><span>${d.complexity || 1}</span></div>
+      <div class="t-row"><span>LOC</span><span>${d.loc || 0}</span></div>
+      <div class="t-row"><span>Fan-in</span><span>${d.fanIn || 0} chamadores</span></div>
+      <div class="t-row"><span>Fan-out</span><span>${d.fanOut || 0} chamadas</span></div>
+      ${d.loopCalls ? `<div class="t-row"><span>Em loop</span><span>${d.loopCalls}×</span></div>` : ''}
+      ${d.isEntry ? `<div class="t-row"><span>Entry point</span><span>✓ handler HTML</span></div>` : ''}
+      ${d.inCycle ? `<div class="t-row"><span>⚠️ Ciclo</span><span>sim</span></div>` : ''}
+    `;
+    tooltip.style.display = 'block';
+  });
+  STATE.cy.on('mousemove', 'node', (evt) => {
+    const oe = evt.originalEvent;
+    tooltip.style.left = (oe.clientX + 14) + 'px';
+    tooltip.style.top = (oe.clientY + 14) + 'px';
+  });
+  STATE.cy.on('mouseout', 'node', () => { tooltip.style.display = 'none'; });
+  STATE.cy.on('tap', 'node', (evt) => {
+    const d = evt.target.data();
+    if (d.kind !== 'function' || !STATE.filter.callEdges) return;
+    if (STATE.focusFn === d.label) {
+      clearFocus();
+    } else {
+      focusFunction(d.label);
+    }
+  });
+  STATE.cy.on('tap', (evt) => {
+    if (evt.target === STATE.cy && STATE.focusFn) clearFocus();
+  });
 }
 
+/* ============================================================
+   SISTEMA ESPECIALISTA — severidade e prioridade
+   ============================================================ */
+
+const SEVERITY_WEIGHT = { CRITICAL: 100, HIGH: 50, MEDIUM: 20, LOW: 5, INFO: 1 };
+const SEVERITY_ORDER  = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 };
+const SEVERITY_ICON   = { CRITICAL: '🔴', HIGH: '🟠', MEDIUM: '🟡', LOW: '🔵', INFO: '⚪' };
+
+/**
+ * Regras declarativas.
+ * Adicionar uma regra = adicionar um objeto aqui.
+ * Nenhuma regra toca no motor — o motor só lê `when`, `severidade`, etc.
+ */
+const RULES = [
+    // ─── Estruturais ──────────────────────────────────────────
+    {
+        id: 'CYCLE_HIGH_FANIN',
+        severidade: 'CRITICAL', confianca: 0.95, categoria: 'structural',
+        when: f => f.inCycle && f.fanIn >= 3,
+        porque: 'Está em ciclo de chamadas E tem 3+ chamadores diretos — alterar aqui propaga em malha de difícil rastreio.',
+        acoes: ['Quebrar o ciclo extraindo a dependência comum em módulo sem retorno.',
+                'Adicionar teste de contrato antes de qualquer mudança.'],
+    },
+    {
+        id: 'CYCLE',
+        severidade: 'HIGH', confianca: 0.90, categoria: 'structural',
+        when: f => f.inCycle,
+        porque: 'Faz parte de um ciclo de chamadas — efeito cascata difícil de prever.',
+        acoes: ['Identificar a função raiz do ciclo e quebrar por extração.'],
+    },
+    {
+        id: 'INVERSE_PAIR',
+        severidade: 'HIGH', confianca: 0.85, categoria: 'invariant',
+        when: f => !!f.temInverso,
+        porque: 'Tem par inverso (_aplicar ↔ _desfazer, abrir ↔ fechar, etc.). Se as duas divergirem, estado corrompe silenciosamente.',
+        acoes: ['Adicionar teste de inverso: aplicar(r) + desfazer(r) deve deixar o estado idêntico ao original.',
+                'Manter os dois pares no mesmo arquivo (ou módulo) para facilitar revisão.'],
+    },
+
+    // ─── Complexidade ─────────────────────────────────────────
+    {
+        id: 'CX_EXTREME',
+        severidade: 'CRITICAL', confianca: 0.95, categoria: 'complexity',
+        when: f => f.cx >= 50,
+        porque: 'Complexidade ciclomática extrema (cx ≥ 50) — caminhos de execução não podem ser exaustivamente testados.',
+        acoes: ['Decomposição obrigatória em funções com nome próprio antes de qualquer nova feature.'],
+    },
+    {
+        id: 'CX_HIGH',
+        severidade: 'HIGH', confianca: 0.90, categoria: 'complexity',
+        when: f => f.cx >= 20 && f.cx < 50,
+        porque: 'Complexidade alta (cx ≥ 20) — bem acima do limite recomendado de 10.',
+        acoes: ['Extrair cada bloco if/switch de 3+ ramos em função nomeada.'],
+    },
+    {
+        id: 'CX_MED',
+        severidade: 'MEDIUM', confianca: 0.70, categoria: 'complexity',
+        when: f => f.cx >= 10 && f.cx < 20,
+        porque: 'Complexidade moderada (cx ≥ 10) — no limite superior do tolerável.',
+        acoes: ['Considerar extração de blocos na próxima edição.'],
+    },
+
+    // ─── Tamanho ──────────────────────────────────────────────
+    {
+        id: 'LOC_MONSTER',
+        severidade: 'HIGH', confianca: 0.85, categoria: 'size',
+        when: f => f.loc >= 150,
+        porque: 'Função muito longa (≥ 150 linhas) — mistura múltiplas responsabilidades.',
+        acoes: ['Inventariar subresponsabilidades e extrair cada uma como função.'],
+    },
+    {
+        id: 'LOC_LONG',
+        severidade: 'MEDIUM', confianca: 0.60, categoria: 'size',
+        when: f => f.loc >= 80 && f.loc < 150,
+        porque: 'Função longa (≥ 80 linhas) — extração de blocos é candidata.',
+        acoes: [],
+    },
+
+    // ─── Acoplamento ─────────────────────────────────────────
+    {
+        id: 'GOD_FUNCTION',
+        severidade: 'HIGH', confianca: 0.85, categoria: 'coupling',
+        when: f => f.fanIn >= 10 && f.cx >= 10,
+        porque: 'Função central (10+ chamadores) E complexa (cx ≥ 10) — mudanças quebram muita coisa de uma vez.',
+        acoes: ['Reduzir complexidade interna antes de aceitar mais chamadores.'],
+    },
+    {
+        id: 'CONTRACT_HOTSPOT',
+        severidade: 'MEDIUM', confianca: 0.60, categoria: 'coupling',
+        when: f => f.fanIn >= 10 && f.cx < 10,
+        porque: 'Contrato crítico (10+ chamadores) — mesmo sendo simples, mudar a assinatura quebra o sistema.',
+        acoes: ['Documentar o contrato (formato de entrada/saída) com comentário acima da função.'],
+    },
+
+    // ─── Performance (proxy) ─────────────────────────────────
+    {
+        id: 'LOOP_CALLS',
+        severidade: 'LOW', confianca: 0.40, categoria: 'performance',
+        when: f => f.loopCalls >= 3,
+        porque: 'Múltiplas chamadas em loop — possível hotspot. Não substitui profiler real.',
+        acoes: ['Medir com performance.now() ou Chrome DevTools antes de otimizar.'],
+    },
+];
+
+function _calcularBlastRadius(callGraph) {
+    const callersOf = new Map();
+    for (const fn of callGraph.functions.values()) callersOf.set(fn.name, new Set());
+    for (const e of callGraph.edges) {
+        if (callersOf.has(e.target)) callersOf.get(e.target).add(e.source);
+    }
+
+    const blast = new Map();
+    const depth = new Map();
+
+    for (const nome of callGraph.functions.keys()) {
+        const vistos = new Set();
+        const fila = [[nome, 0]];
+        let maxD = 0;
+        while (fila.length) {
+            const [atual, d] = fila.shift();
+            if (d > 10) continue;
+            maxD = Math.max(maxD, d);
+            for (const c of callersOf.get(atual) || []) {
+                if (!vistos.has(c)) { vistos.add(c); fila.push([c, d + 1]); }
+            }
+        }
+        blast.set(nome, vistos.size);
+        depth.set(nome, maxD);
+    }
+
+    return { blast, depth, callersOf };
+}
+
+function _detectarParesInversos(callGraph) {
+    const PADROES = [
+        [/^_?aplicar(.+)$/i, 'desfazer'],
+        [/^abrir(.+)$/i, 'fechar'],
+        [/^salvar(.+)$/i, 'carregar'],
+        [/^iniciar(.+)$/i, 'finalizar'],
+        [/^_?computar(.+)$/i, 'reverter'],
+    ];
+    const nomes = [...callGraph.functions.keys()];
+    const pares = new Map();
+
+    for (const [re, prefixoInverso] of PADROES) {
+        for (const a of nomes) {
+            const m = a.match(re);
+            if (!m) continue;
+            const parEsperado = prefixoInverso + m[1];
+            // normaliza caixa para o match
+            const par = nomes.find(b => b.toLowerCase() === parEsperado.toLowerCase());
+            if (par && !pares.has(a)) {
+                pares.set(a, par);
+                pares.set(par, a);
+            }
+        }
+    }
+    return pares;
+}
+
+function _classificarTudo(callGraph, blast, depth, callersOf, inversePairs) {
+    // ─── Pass 1: por função, regra independente ───
+    const porFuncao = {};
+
+    for (const fd of callGraph.functions.values()) {
+        const fatos = {
+            nome: fd.name,
+            cx: fd.complexity,
+            loc: fd.loc,
+            fanIn: fd.fanIn,
+            fanOut: fd.fanOut,
+            loopCalls: fd.loopCalls,
+            isEntry: fd.isEntry,
+            inCycle: fd.inCycle,
+            temInverso: inversePairs.get(fd.name) || null,
+            blastRadius: blast.get(fd.name) || 0,
+            depth: depth.get(fd.name) || 0,
+        };
+
+        const findings = RULES.filter(r => {
+            try { return r.when(fatos); }
+            catch (e) { console.warn(`Regra ${r.id} falhou:`, e); return false; }
+        }).map(r => ({
+            id: r.id,
+            severidade: r.severidade,
+            confianca: r.confianca,
+            categoria: r.categoria,
+            porque: r.porque,
+            acoes: r.acoes || [],
+        }));
+
+        if (findings.length > 0) {
+            porFuncao[fd.name] = { fatos, findings };
+        }
+    }
+
+    // ─── Pass 2: compostos (cadeia crítica) ───
+    for (const [nome, entry] of Object.entries(porFuncao)) {
+        const maior = entry.findings.reduce((acc, f) =>
+            SEVERITY_ORDER[f.severidade] < SEVERITY_ORDER[acc.severidade] ? f : acc
+        );
+        if (maior.severidade !== 'HIGH' && maior.severidade !== 'CRITICAL') continue;
+
+        const callers = [...(callersOf.get(nome) || [])];
+        if (callers.length < 3) continue;
+
+        const chamadoresCriticos = callers.filter(c => {
+            const e = porFuncao[c];
+            if (!e) return false;
+            return e.findings.some(f => f.severidade === 'HIGH' || f.severidade === 'CRITICAL');
+        });
+
+        if (chamadoresCriticos.length / callers.length >= 0.5) {
+            entry.findings.push({
+                id: 'CHAIN_CRITICAL',
+                severidade: 'HIGH',
+                confianca: 0.70,
+                categoria: 'compound',
+                porque: `${chamadoresCriticos.length}/${callers.length} chamadores diretos também são HIGH/CRITICAL — a cadeia inteira precisa de atenção conjunta.`,
+                acoes: ['Revisar o conjunto antes de mudanças individuais.'],
+            });
+        }
+    }
+
+    // ─── Calcular prioridade ───
+    for (const entry of Object.values(porFuncao)) {
+        entry.prioridade = _calcularPrioridade(entry.findings, entry.fatos);
+    }
+
+    return porFuncao;
+}
+
+function _calcularPrioridade(findings, fatos) {
+    if (!findings.length) return 0;
+    const maior = findings.reduce((acc, f) =>
+        SEVERITY_ORDER[f.severidade] < SEVERITY_ORDER[acc.severidade] ? f : acc
+    );
+    const base = SEVERITY_WEIGHT[maior.severidade] || 1;
+    const conf = maior.confianca || 0.5;
+    const blastFactor = 1 + Math.log10(1 + (fatos.blastRadius || 0));
+
+    let risco = 1;
+    if (fatos.inCycle) risco += 1.0;
+    if (fatos.temInverso) risco += 0.5;
+    if (fatos.cx >= 20 && fatos.loc >= 100) risco += 0.5;
+    if (fatos.isEntry) risco += 0.3;
+    risco += Math.min(findings.length * 0.1, 0.5);
+
+    return Math.round(base * conf * blastFactor * risco);
+}
+
+
+
 /* ---------- copiar relatório ---------- */
+/* Copia texto para o clipboard com fallback robusto.
+   Retorna Promise<{ ok: boolean, metodo: 'modern'|'legacy'|'download'|'none' }>. */
+async function copyToClipboard(text) {
+  // 1) Clipboard API (só em secure context)
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return { ok: true, metodo: 'modern' };
+    } catch (_) { /* cai para fallback */ }
+  }
+
+  // 2) Fallback legado: textarea + execCommand (funciona em file://)
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.left = '-9999px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (ok) return { ok: true, metodo: 'legacy' };
+  } catch (_) { /* cai para download */ }
+
+  // 3) Último recurso: baixar como .txt (sempre funciona)
+  try {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'relatorio_' + (STATE.file?.name || 'analise') + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { ok: true, metodo: 'download' };
+  } catch (_) { /* falha total */ }
+
+  return { ok: false, metodo: 'none' };
+}
+
+/* ============================================================
+   GERAÇÃO DE PDF — via window.print() + print CSS
+   ============================================================ */
+
+async function gerarRelatorioPDF() {
+  if (!STATE.stats.lines) {
+    alert('Nenhuma análise carregada. Selecione um arquivo primeiro.');
+    return;
+  }
+
+  const antigo = document.getElementById('report-view');
+  if (antigo) antigo.remove();
+
+  // Captura o grafo ANTES de montar o relatório (cy ainda está vivo)
+  const grafoHTML = await _capturarGrafoParaPDF();
+
+  // Monta o HTML completo
+  const html = _montarRelatorioParaPDF(grafoHTML);
+
+  const wrapper = document.createElement('div');
+  wrapper.id = 'report-view';
+  wrapper.innerHTML = html;
+  document.body.appendChild(wrapper);
+
+  // Espera imagens carregarem (crítico para o grafo no PDF)
+  await _esperarImagens(wrapper);
+
+  // Dispara o diálogo de impressão (usuário escolhe "Salvar como PDF")
+  window.print();
+}
+
+async function _capturarGrafoParaPDF() {
+  if (!STATE.callGraph || STATE.callGraph.functions.size === 0) {
+    return `<section class="report-section report-graph-section">
+      <h2>Gráfico do Call Graph</h2>
+      <p class="report-note">Análise de chamadas não disponível neste arquivo.</p>
+    </section>`;
+  }
+
+  // Ativar call edges se não estiverem visíveis
+  const precisaAtivar = !STATE.filter.callEdges;
+  if (precisaAtivar) {
+    const btn = document.getElementById('showCallEdges');
+    if (btn) btn.checked = true;
+    STATE.filter.callEdges = true;
+    buildGraph();
+    await new Promise(r => setTimeout(r, 250));
+  }
+
+  const n = STATE.callGraph.functions.size;
+  const escala = n > 300 ? 1 : (n > 100 ? 1.5 : 2);
+
+  try {
+    STATE.cy.fit(undefined, 20);
+    await new Promise(r => setTimeout(r, 100));
+
+    let png;
+    try {
+      png = STATE.cy.png({ full: true, scale: escala, bg: '#ffffff' });
+    } catch (e) {
+      // fallback: escala 1
+      png = STATE.cy.png({ full: true, scale: 1, bg: '#ffffff' });
+    }
+
+    return `<section class="report-section report-graph-section">
+      <h2>Gráfico do Call Graph</h2>
+      <p class="report-note">${n} funções exportadas em PNG (escala ${escala}×). Para navegação interativa, use o analisador.</p>
+      <img src="${png}" alt="Call Graph" class="report-graph-img" />
+    </section>`;
+  } catch (e) {
+    console.warn('Falha ao exportar grafo:', e);
+    return `<section class="report-section report-graph-section">
+      <h2>Gráfico do Call Graph</h2>
+      <p class="report-note">⚠️ Não foi possível exportar o grafo como imagem (${escapeHtml(String(e).slice(0, 100))}).</p>
+    </section>`;
+  }
+}
+
+function _esperarImagens(root) {
+  const imgs = [...root.querySelectorAll('img')];
+  return Promise.all(imgs.map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise(r => {
+      img.onload = r;
+      img.onerror = r;
+      setTimeout(r, 2000);
+    });
+  }));
+}
+
+function _montarRelatorioParaPDF(grafoHTML) {
+  const s = STATE.stats;
+  const dataStr = new Date().toLocaleString('pt-BR');
+  const fileName = STATE.file?.name || 'arquivo';
+
+  const capa = `
+    <section class="report-section report-cover">
+      <h1 class="report-title">📊 Relatório de Análise de Código</h1>
+      <div class="report-file">${escapeHtml(fileName)}</div>
+      <div class="report-date">Gerado em ${dataStr}</div>
+      <div class="report-stats">
+        <div class="report-stat"><span class="num">${s.lines.toLocaleString('pt-BR')}</span><span class="lbl">Linhas</span></div>
+        <div class="report-stat"><span class="num">${s.functions}</span><span class="lbl">Funções</span></div>
+        <div class="report-stat"><span class="num">${s.callEdges}</span><span class="lbl">Call edges</span></div>
+        <div class="report-stat"><span class="num">${s.cycles}</span><span class="lbl">Ciclos</span></div>
+        <div class="report-stat"><span class="num">${s.handlers}</span><span class="lbl">Handlers</span></div>
+        <div class="report-stat"><span class="num">${s.dynamicIds}</span><span class="lbl">IDs dinâmicos</span></div>
+      </div>
+      <div class="report-issue-summary">
+        <div class="report-badge error">${s.errors} erro(s)</div>
+        <div class="report-badge warn">${s.warns} aviso(s)</div>
+        <div class="report-badge info">${s.infos} info(s)</div>
+      </div>
+    </section>
+  `;
+
+  return `<div class="report-container">
+    ${capa}
+    ${_montarSeveridadePDF(STATE.severity)}
+    ${_montarCallGraphPDF(STATE.callGraph)}
+    ${grafoHTML}
+    ${_montarIssuesPDF(STATE.issues)}
+    <footer class="report-footer">Gerado por Analisador v3 — ${dataStr}</footer>
+  </div>`;
+}
+
+function _montarSeveridadePDF(porFuncao) {
+  if (!porFuncao || Object.keys(porFuncao).length === 0) {
+    return `<section class="report-section">
+      <h2>🎯 Análise de Severidade</h2>
+      <p class="report-note">Sem achados de severidade neste arquivo.</p>
+    </section>`;
+  }
+
+  const grupos = { CRITICAL: [], HIGH: [], MEDIUM: [], LOW: [] };
+  for (const [nome, entry] of Object.entries(porFuncao)) {
+    const maior = entry.findings.reduce((acc, f) =>
+      SEVERITY_ORDER[f.severidade] < SEVERITY_ORDER[acc.severidade] ? f : acc
+    );
+    if (grupos[maior.severidade]) grupos[maior.severidade].push({ nome, ...entry });
+  }
+  for (const g of Object.values(grupos)) g.sort((a, b) => b.prioridade - a.prioridade);
+
+  let html = `<section class="report-section"><h2>🎯 Análise de Severidade</h2>`;
+
+  for (const sev of ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']) {
+    if (grupos[sev].length === 0) continue;
+    html += `<h3 class="report-h3 ${sev.toLowerCase()}">${SEVERITY_ICON[sev]} ${sev} (${grupos[sev].length})</h3>`;
+    html += `<table class="report-table"><thead><tr>
+      <th>Função</th><th>Prioridade</th><th>cx</th><th>LOC</th><th>Chamadores</th><th>Regras</th>
+    </tr></thead><tbody>`;
+    grupos[sev].forEach(item => {
+      html += `<tr>
+        <td><code>${escapeHtml(item.nome)}</code></td>
+        <td><span class="report-priority">${item.prioridade}</span></td>
+        <td>${item.fatos.cx}</td>
+        <td>${item.fatos.loc}</td>
+        <td>${item.fatos.fanIn}</td>
+        <td><small>${item.findings.map(f => f.id).join(', ')}</small></td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  html += `</section>`;
+  return html;
+}
+
+function _montarCallGraphPDF(cg) {
+  if (!cg || cg.functions.size === 0) {
+    return `<section class="report-section">
+      <h2>📊 Call Graph (detalhado)</h2>
+      <p class="report-note">Análise de chamadas não executada.</p>
+    </section>`;
+  }
+
+  const fns = Array.from(cg.functions.values());
+  const topIn = [...fns].sort((a, b) => b.fanIn - a.fanIn).filter(f => f.fanIn > 0).slice(0, 15);
+  const topCx = [...fns].sort((a, b) => b.complexity - a.complexity).filter(f => f.complexity > 5).slice(0, 15);
+  const orphans = fns.filter(f => f.fanIn === 0 && !f.isEntry).slice(0, 20);
+
+  let html = `<section class="report-section">
+    <h2>📊 Call Graph (detalhado)</h2>
+    <p class="report-note">${fns.length} funções · ${cg.edges.length} chamadas · ${cg.cycles.length} ciclo(s)</p>`;
+
+  if (topIn.length) {
+    html += `<h3 class="report-h3">🏆 Funções mais chamadas (fan-in)</h3>
+      <table class="report-table"><thead><tr>
+        <th>Função</th><th>Chamadores</th><th>Chamadas</th><th>Complexidade</th><th>LOC</th>
+      </tr></thead><tbody>`;
+    topIn.forEach(f => {
+      html += `<tr>
+        <td><code>${escapeHtml(f.name)}</code></td>
+        <td>${f.fanIn}</td><td>${f.fanOut}</td><td>${f.complexity}</td><td>${f.loc}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  if (topCx.length) {
+    html += `<h3 class="report-h3">🔥 Maior complexidade ciclomática</h3>
+      <table class="report-table"><thead><tr>
+        <th>Função</th><th>Complexidade</th><th>LOC</th><th>Chamadores</th>
+      </tr></thead><tbody>`;
+    topCx.forEach(f => {
+      html += `<tr>
+        <td><code>${escapeHtml(f.name)}</code></td>
+        <td>${f.complexity}</td><td>${f.loc}</td><td>${f.fanIn}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  if (cg.cycles.length) {
+    html += `<h3 class="report-h3">🔄 Ciclos de chamada</h3><ul class="report-list">`;
+    cg.cycles.forEach(c => {
+      if (c.isRecursion) {
+        html += `<li><code>${escapeHtml(c.nodes[0])}</code> (auto-recursão)</li>`;
+      } else {
+        html += `<li><code>${escapeHtml(c.nodes.concat(c.nodes[0]).join(' → '))}</code></li>`;
+      }
+    });
+    html += `</ul>`;
+  }
+
+  if (orphans.length) {
+    html += `<h3 class="report-h3">💀 Funções órfãs (nunca chamadas)</h3>
+      <table class="report-table"><thead><tr>
+        <th>Função</th><th>LOC</th><th>Complexidade</th>
+      </tr></thead><tbody>`;
+    orphans.forEach(f => {
+      html += `<tr>
+        <td><code>${escapeHtml(f.name)}</code></td><td>${f.loc}</td><td>${f.complexity}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  html += `</section>`;
+  return html;
+}
+
+function _montarIssuesPDF(issues) {
+  if (!issues || issues.length === 0) {
+    return `<section class="report-section">
+      <h2>🔍 Consistência (issues)</h2>
+      <p class="report-note">✓ Nenhuma inconsistência detectada.</p>
+    </section>`;
+  }
+
+  const grouped = {};
+  issues.forEach(i => {
+    const g = i.group || 'outros';
+    (grouped[g] || (grouped[g] = [])).push(i);
+  });
+
+  const ordem = ['parse','handlers','getById','querySel','ids','labelFor','getByIdDyn','querySelDyn','anchor'];
+  let html = `<section class="report-section"><h2>🔍 Consistência (issues)</h2>`;
+
+  ordem.forEach(g => {
+    if (!grouped[g]) return;
+    const list = grouped[g];
+    const info = GROUPS[g] || { title: g };
+    html += `<h3 class="report-h3">${info.title} (${list.length})</h3><ul class="report-list">`;
+    list.forEach(i => {
+      const msg = i.msg
+        .replace(/<[^>]+>/g, '')
+        .replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+        .replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&');
+      html += `<li>${escapeHtml(msg)}</li>`;
+    });
+    html += `</ul>`;
+  });
+
+  html += `</section>`;
+  return html;
+}
+
 function copiarRelatorio() {
   if (!STATE.stats.lines) return;
+
   const lines = [];
-  lines.push('RELATÓRIO — ' + STATE.file.name);
+  lines.push('RELATÓRIO — ' + (STATE.file?.name || 'arquivo'));
   lines.push('='.repeat(50));
   const s = STATE.stats;
   lines.push(`Linhas: ${s.lines} | Externos: ${s.externals} | Scripts inline: ${s.inlineScripts}`);
-  lines.push(`Funções: ${s.functions} | IDs HTML: ${s.domIds} | IDs dinâmicos: ${s.dynamicIds} | Handlers: ${s.handlers}`);
+  lines.push(`Funções: ${s.functions} | IDs HTML: ${s.domIds} | IDs dinâmicos: ${s.dynamicIds}`);
+  lines.push(`Call edges: ${s.callEdges} | Ciclos: ${s.cycles} | Handlers: ${s.handlers}`);
   lines.push(`Erros: ${s.errors} | Avisos: ${s.warns} | Info: ${s.infos}`);
   lines.push('');
+
+  // ── Seção Call Graph ──
+  const cg = STATE.callGraph;
+  if (cg && cg.functions.size) {
+    const fns = Array.from(cg.functions.values());
+    lines.push('## CALL GRAPH');
+    const topIn = [...fns].sort((a,b) => b.fanIn - a.fanIn).filter(f => f.fanIn > 0).slice(0, 5);
+    if (topIn.length) {
+      lines.push('Top chamadas (fan-in):');
+      topIn.forEach(f => lines.push(`  - ${f.name}: ${f.fanIn} chamadores, cx ${f.complexity}, ${f.loc} LOC`));
+    }
+    const topCx = [...fns].sort((a,b) => b.complexity - a.complexity).filter(f => f.complexity > 5).slice(0, 5);
+    if (topCx.length) {
+      lines.push('Top complexidade:');
+      topCx.forEach(f => lines.push(`  - ${f.name}: cx ${f.complexity}, ${f.loc} LOC`));
+    }
+    if (cg.cycles.length) {
+      lines.push(`Ciclos (${cg.cycles.length}):`);
+      cg.cycles.forEach(c => lines.push(`  - ${c.isRecursion ? c.nodes[0] + ' (auto-recursão)' : c.nodes.concat(c.nodes[0]).join(' → ')}`));
+    }
+    lines.push('');
+  }
+
+  // ── Issues ──
   const grouped = {};
   STATE.issues.forEach(i => (grouped[i.group] || (grouped[i.group] = [])).push(i));
   Object.keys(grouped).forEach(g => {
     lines.push(`## ${(GROUPS[g] && GROUPS[g].title) || g} (${grouped[g].length})`);
     grouped[g].forEach(i => {
-      const msg = i.msg.replace(/<[^>]+>/g, '').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&');
+      const msg = i.msg
+        .replace(/<[^>]+>/g, '')
+        .replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+        .replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&amp;/g,'&');
       lines.push('  - ' + msg);
     });
     lines.push('');
   });
-  navigator.clipboard.writeText(lines.join('\n')).then(
-    () => alert('Relatório copiado!'),
-    () => alert('Não foi possível copiar.')
-  );
+
+  // ── Executa com feedback honesto ──
+  copyToClipboard(lines.join('\n')).then(({ ok, metodo }) => {
+    if (!ok) {
+      alert('❌ Não foi possível copiar nem baixar o relatório.\n\nSe estiver no console (F12), o conteúdo está em `lines.join("\\n")`.');
+      return;
+    }
+    if (metodo === 'modern') {
+      alert('✅ Relatório copiado!');
+    } else if (metodo === 'legacy') {
+      alert('✅ Relatório copiado!\n\n(usando método legado — funciona em file://)');
+    } else if (metodo === 'download') {
+      alert('✅ Relatório baixado como .txt na pasta de Downloads.\n\nMotivo: o navegador bloqueou o clipboard neste contexto.');
+    }
+  });
 }
 </script>
 </body>
