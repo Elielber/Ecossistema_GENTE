@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analisador Dialógico de Editais</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📜</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js"></script>
+<style>
+:root{
+  --bg:#F8F7FC; --card:#FFFFFF; --text:#1E1B2E; --secondary:#6B7280;
+  --primary:#7C3AED; --primary-press:#6D28D9;
+  --success:#10B981; --warning:#F59E0B; --danger:#EF4444;
+  --border:#E5E7EB; --purple-light:#EDE9FE;
+  --success-soft:#ECFDF5; --warning-soft:#FFFBEB; --danger-soft:#FEF2F2; --info-soft:#EDE9FE;
+  --radius-card:16px; --radius-btn:999px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg); color:var(--text); min-height:100vh;
+  display:flex; justify-content:center;
+}
+.app{width:100%;max-width:520px;display:flex;flex-direction:column;min-height:100vh}
+.header{
+  padding:16px 20px;background:var(--primary);color:white;
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  position:sticky;top:0;z-index:50;
+}
+.header h1{font-size:1.1rem;font-weight:800;letter-spacing:-0.02em}
+.header small{font-size:0.7rem;opacity:.8;display:block;font-weight:500}
+.header-btn{
+  background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);
+  color:white;padding:6px 12px;border-radius:var(--radius-btn);
+  font-size:0.75rem;cursor:pointer;font-weight:600;
+}
+.screen{display:none;flex-direction:column;padding:20px;flex:1}
+.screen.active{display:flex}
+.screen-title{font-size:1.3rem;font-weight:700;color:var(--primary);margin-bottom:8px}
+.screen-sub{font-size:0.9rem;color:var(--secondary);line-height:1.5;margin-bottom:20px}
+
+.card{
+  background:var(--card);border-radius:var(--radius-card);padding:18px;
+  margin-bottom:14px;border:1px solid var(--border);
+  box-shadow:0 2px 8px rgba(0,0,0,.03);
+}
+
+/* ========== DIÁLOGO (inspirado no mochila) ========== */
+.dialogo-thread{
+  display:flex;flex-direction:column;gap:10px;
+  margin-bottom:16px;
+  max-height:none;
+}
+.bolha-personagem{
+  display:flex;align-items:flex-start;gap:10px;
+  max-width:92%;align-self:flex-start;
+}
+.bolha-personagem .avatar{
+  font-size:1.35rem;flex-shrink:0;line-height:1;margin-top:2px;
+  width:36px;height:36px;border-radius:50%;
+  background:var(--purple-light);display:flex;align-items:center;justify-content:center;
+}
+.bolha-personagem .corpo{
+  background:var(--purple-light);
+  border-radius:4px 16px 16px 16px;
+  padding:12px 14px;font-size:0.92rem;line-height:1.5;
+  color:var(--text);border:1px solid var(--border);flex:1;
+}
+.bolha-personagem .nome{
+  font-size:0.72rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:0.04em;color:var(--secondary);margin-bottom:4px;
+}
+.bolha-personagem.toulmin .corpo{background:var(--info-soft);border-color:#c7d2fe}
+.bolha-personagem.bardin .corpo{background:var(--success-soft);border-color:#a7f3d0}
+.bolha-personagem.fairclough .corpo{background:var(--warning-soft);border-color:#fde68a}
+.bolha-personagem.critico .corpo{background:var(--danger-soft);border-color:#fecaca}
+.bolha-usuario{
+  align-self:flex-end;max-width:85%;
+  background:var(--primary);color:#fff;
+  border-radius:16px 4px 16px 16px;
+  padding:11px 14px;font-size:0.92rem;font-weight:500;
+  line-height:1.4;box-shadow:0 2px 8px rgba(124,58,237,.25);
+}
+.bolha-sistema{
+  align-self:center;font-size:0.78rem;color:var(--secondary);
+  font-style:italic;padding:4px 12px;background:var(--bg);
+  border-radius:var(--radius-btn);border:1px dashed var(--border);
+}
+
+/* ========== COMPOSER / INPUT ========== */
+.composer{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:16px;padding:14px;margin-bottom:12px;
+}
+.composer-hint{
+  font-size:0.8rem;color:var(--secondary);margin-bottom:10px;font-weight:500;
+}
+.btn{
+  display:block;width:100%;padding:14px 16px;border:none;
+  border-radius:14px;font-size:0.95rem;font-weight:600;
+  cursor:pointer;transition:0.15s;font-family:inherit;
+}
+.btn-primary{
+  background:var(--primary);color:white;
+  border-radius:var(--radius-btn);font-size:1rem;
+  padding:16px;box-shadow:0 4px 15px rgba(124,58,237,.28);
+}
+.btn-primary:active{transform:scale(0.98);background:var(--primary-press)}
+.btn-primary:disabled{background:var(--secondary);cursor:not-allowed;box-shadow:none;opacity:.7}
+.btn-option{
+  background:var(--card);border:1.5px solid var(--border);
+  color:var(--text);text-align:left;margin-bottom:8px;
+  display:flex;align-items:center;gap:12px;
+}
+.btn-option:hover{border-color:var(--primary);background:var(--purple-light)}
+.btn-option .ico{font-size:1.4rem;flex-shrink:0}
+.btn-ghost{
+  background:none;border:none;color:var(--secondary);
+  font-size:0.85rem;cursor:pointer;padding:8px;font-weight:600;
+}
+.btn-ghost:hover{color:var(--primary)}
+
+textarea, input[type=text]{
+  width:100%;padding:12px 14px;border-radius:12px;
+  border:1.5px solid var(--border);background:var(--card);
+  color:var(--text);font-size:0.92rem;outline:none;
+  font-family:inherit;margin-bottom:10px;resize:vertical;
+}
+textarea:focus, input[type=text]:focus{
+  border-color:var(--primary);box-shadow:0 0 0 3px rgba(124,58,237,.15);
+}
+
+.file-input{
+  display:block;width:100%;padding:10px;border:2px dashed var(--border);
+  border-radius:12px;font-size:0.85rem;background:var(--card);
+  cursor:pointer;color:var(--secondary);margin-bottom:10px;
+}
+.file-input:hover{border-color:var(--primary);background:var(--purple-light)}
+
+/* ========== CHIPS / TAGS ========== */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chip{
+  padding:5px 11px;border-radius:var(--radius-btn);
+  background:var(--purple-light);color:var(--primary);
+  font-size:0.72rem;font-weight:600;border:1px solid transparent;
+}
+.chip.success{background:var(--success-soft);color:var(--success)}
+.chip.warning{background:var(--warning-soft);color:var(--warning)}
+.chip.danger{background:var(--danger-soft);color:var(--danger)}
+.chip.clickable{cursor:pointer}
+.chip.clickable:hover{opacity:.8}
+
+/* ========== MÉTRICAS ========== */
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.metric{
+  background:var(--bg);border:1px solid var(--border);border-radius:10px;
+  padding:10px 8px;text-align:center;
+}
+.metric .num{display:block;font-size:1.15rem;font-weight:800;color:var(--primary)}
+.metric .lbl{display:block;font-size:0.65rem;color:var(--secondary);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+
+/* ========== SEVERIDADE ========== */
+.finding{
+  padding:10px 12px;border-radius:10px;margin-bottom:8px;
+  font-size:0.88rem;border-left:4px solid;line-height:1.45;
+}
+.finding.critical{background:var(--danger-soft);border-color:var(--danger);color:#991b1b}
+.finding.high{background:var(--warning-soft);border-color:var(--warning);color:#92400e}
+.finding.medium{background:#fefce8;border-color:#ca8a04;color:#713f12}
+.finding.low{background:#f0f9ff;border-color:#0369a1;color:#0c4a6e}
+.finding-why{font-size:0.75rem;color:var(--secondary);margin-top:4px;font-style:italic}
+
+/* ========== PROGRESS ========== */
+.progress{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:16px}
+.progress > div{height:100%;background:var(--primary);width:0;transition:width .4s}
+
+/* ========== Q&A ========== */
+.qa-input-row{display:flex;gap:8px;margin-bottom:10px}
+.qa-input-row input{flex:1;margin-bottom:0}
+.qa-input-row button{
+  background:var(--primary);color:white;border:none;padding:0 18px;
+  border-radius:12px;font-weight:700;cursor:pointer;font-size:0.85rem;
+}
+.qa-item{
+  background:var(--bg);border-left:3px solid var(--primary);
+  border-radius:8px;padding:10px 12px;margin-bottom:8px;
+}
+.qa-q{font-weight:700;color:var(--primary);font-size:0.85rem;margin-bottom:6px}
+.qa-a{font-size:0.88rem;color:var(--text);line-height:1.5;white-space:pre-wrap}
+.qa-src{font-size:0.7rem;color:var(--secondary);margin-top:6px;font-style:italic}
+
+/* ========== BOTTOM NAV ========== */
+.bottom-nav{
+  position:sticky;bottom:0;background:var(--card);
+  border-top:1px solid var(--border);display:flex;
+  justify-content:space-around;padding:8px 0;margin-top:auto;
+  z-index:40;
+}
+.nav-btn{
+  background:none;border:none;color:var(--secondary);
+  display:flex;flex-direction:column;align-items:center;
+  gap:2px;padding:6px 12px;cursor:pointer;font-size:0.65rem;
+  font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+  font-family:inherit;
+}
+.nav-btn .ico{font-size:1.2rem}
+.nav-btn.active{color:var(--primary)}
+
+/* util */
+.mt-2{margin-top:8px}
+.mt-3{margin-top:12px}
+.mt-4{margin-top:16px}
+.text-sm{font-size:0.85rem}
+.text-xs{font-size:0.75rem}
+.muted{color:var(--secondary)}
+.hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header class="header">
+    <div>
+      <h1>📜 Analisador Dialógico</h1>
+      <small>Discourse Analysis de Editais e Contratos</small>
+    </div>
+    <button class="header-btn" id="btn-pdf" onclick="gerarPDF()" style="display:none">📄 PDF</button>
+  </header>
+
+  <!-- ================================================== -->
+  <!-- TELA 1: WELCOME                                    -->
+  <!-- ================================================== -->
+  <section class="screen active" id="screen-welcome">
+    <div style="font-size:3rem;margin-bottom:8px;text-align:center">📜</div>
+    <h1 class="screen-title" style="text-align:center">Vamos ler o documento juntos?</h1>
+    <p class="screen-sub" style="text-align:center">
+      Três especialistas leem o texto por ângulos diferentes. Você acompanha a análise como uma conversa — sem precisar entender de linguística.
+    </p>
+
+    <div id="welcome-dialogo" class="dialogo-thread"></div>
+
+    <div class="composer">
+      <div class="composer-hint">Cole o texto ou envie o arquivo</div>
+      <textarea id="welcome-texto" rows="6" placeholder="Cole aqui o texto do edital, contrato, ata ou decisão..."></textarea>
+      <input type="file" id="welcome-arquivo" class="file-input" accept=".pdf,.txt">
+      <button class="btn btn-primary" id="welcome-btn-analisar" onclick="iniciarAnalise()">Analisar documento</button>
+    </div>
+  </section>
+
+  <!-- ================================================== -->
+  <!-- TELA 2: ANÁLISE (conversa em tempo real)          -->
+  <!-- ================================================== -->
+  <section class="screen" id="screen-analise">
+    <div class="progress"><div id="analise-progress"></div></div>
+    <div id="analise-dialogo" class="dialogo-thread"></div>
+    <div id="analise-composer" class="composer hidden">
+      <div class="composer-hint">O que você quer explorar?</div>
+      <button class="btn btn-option" onclick="irParaAchados()">
+        <span class="ico">🎯</span>
+        <span style="flex:1">
+          <strong>Ver achados priorizados</strong><br>
+          <span class="text-xs muted">O que exige ação primeiro</span>
+        </span>
+      </button>
+      <button class="btn btn-option" onclick="irParaQABuffet()">
+        <span class="ico">💬</span>
+        <span style="flex:1">
+          <strong>Perguntar sobre o texto</strong><br>
+          <span class="text-xs muted">Prazo, valor, objeto, habilitação...</span>
+        </span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ================================================== -->
+  <!-- TELA 3: ACHADOS                                    -->
+  <!-- ================================================== -->
+  <section class="screen" id="screen-achados">
+    <button class="btn-ghost" onclick="goToScreen('screen-analise')">← Voltar à análise</button>
+    <h2 class="screen-title">Achados priorizados</h2>
+    <p class="screen-sub">Ordenados por severidade × confiança × impacto</p>
+    <div class="metrics" id="achados-metricas"></div>
+    <div id="achados-lista"></div>
+  </section>
+
+  <!-- ================================================== -->
+  <!-- TELA 4: Q&A                                        -->
+  <!-- ================================================== -->
+  <section class="screen" id="screen-qa">
+    <button class="btn-ghost" onclick="goToScreen('screen-analise')">← Voltar à análise</button>
+    <h2 class="screen-title">Pergunte ao documento</h2>
+    <p class="screen-sub">As respostas vêm do texto — não de suposição</p>
+
+    <div class="card">
+      <div class="qa-input-row">
+        <input type="text" id="qa-input" placeholder="Ex: qual o prazo? quais os valores?">
+        <button onclick="perguntar()">→</button>
+      </div>
+      <div class="chips">
+        <span class="chip clickable" onclick="setQ('qual o objeto do edital?')">objeto</span>
+        <span class="chip clickable" onclick="setQ('qual o valor estimado?')">valor</span>
+        <span class="chip clickable" onclick="setQ('qual o prazo de entrega?')">prazo</span>
+        <span class="chip clickable" onclick="setQ('quando é a abertura?')">abertura</span>
+        <span class="chip clickable" onclick="setQ('quais os requisitos de habilitação?')">habilitação</span>
+        <span class="chip clickable" onclick="setQ('quais as sanções previstas?')">sanções</span>
+        <span class="chip clickable" onclick="setQ('qual a base legal?')">base legal</span>
+      </div>
+    </div>
+
+    <div id="qa-history"></div>
+  </section>
+
+  <!-- ================================================== -->
+  <!-- BOTTOM NAV                                         -->
+  <!-- ================================================== -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-target="screen-welcome" onclick="navTo('screen-welcome')">
+      <span class="ico">🏠</span><span>Início</span>
+    </button>
+    <button class="nav-btn" data-target="screen-analise" onclick="navTo('screen-analise')">
+      <span class="ico">💬</span><span>Análise</span>
+    </button>
+    <button class="nav-btn" data-target="screen-achados" onclick="navTo('screen-achados')">
+      <span class="ico">🎯</span><span>Achados</span>
+    </button>
+    <button class="nav-btn" data-target="screen-qa" onclick="navTo('screen-qa')">
+      <span class="ico">❓</span><span>Perguntar</span>
+    </button>
+  </nav>
+</div>
+
+<script>
+/* ============================================================
+   PDF.js — inicialização defensiva
+   ============================================================ */
+(function initPDFJS() {
+  if (typeof pdfjsLib === 'undefined' || !pdfjsLib) {
+    console.warn('[PDF] pdfjsLib não carregou — upload de PDF desabilitado. .txt continua funcionando.');
+    return;
+  }
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';
+    console.log('[PDF] PDF.js pronto · worker:', pdfjsLib.GlobalWorkerOptions.workerSrc);
+  } catch (e) {
+    console.warn('[PDF] Não foi possível configurar o worker:', e);
+  }
+})();
+
+/* ============================================================
+   Upload de arquivo — com diagnóstico honesto
+   ============================================================ */
+window.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('welcome-arquivo');
+  if (!input) {
+    console.error('[UPLOAD] input#welcome-arquivo não encontrado no DOM');
+    return;
+  }
+
+  input.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const ta = document.getElementById('welcome-texto');
+    ta.value = 'Extraindo texto…';
+    ta.disabled = true;
+
+    try {
+      const nome = (file.name || '').toLowerCase();
+
+      // TXT — caminho simples, sem dependência
+      if (nome.endsWith('.txt') || file.type === 'text/plain') {
+        ta.value = await file.text();
+        return;
+      }
+
+      // PDF — caminho que depende do PDF.js
+      if (!nome.endsWith('.pdf')) {
+        alert('Formato não suportado. Use .pdf ou .txt.');
+        ta.value = '';
+        return;
+      }
+
+      if (typeof pdfjsLib === 'undefined' || !pdfjsLib) {
+        alert(
+          'PDF.js não carregou (CDN bloqueado, offline ou restrição do navegador).\n\n' +
+          'Duas saídas:\n' +
+          '1) Abra o arquivo via servidor local (ex.: python -m http.server) em vez de file://\n' +
+          '2) Converta o PDF para .txt ou cole o texto manualmente na área acima.'
+        );
+        ta.value = '';
+        return;
+      }
+
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({
+        data: buf,
+        useWorkerFetch: false,
+        isEvalSupported: false,
+      }).promise;
+
+      let texto = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        let lastY = null;
+        let pageText = '';
+        for (const item of content.items) {
+          const y = item.transform[5];
+          if (lastY !== null && Math.abs(y - lastY) > 3) pageText += '\n';
+          else if (pageText && !pageText.endsWith('\n')) pageText += ' ';
+          pageText += item.str;
+          lastY = y;
+        }
+        texto += pageText + '\n\n';
+      }
+
+      texto = texto.trim();
+      if (!texto) {
+        alert(
+          'O PDF não retornou texto. Provavelmente é um PDF escaneado (imagem).\n\n' +
+          'Converta com OCR (ex.: Adobe, OCR.space, tesseract) ou cole o texto manualmente.'
+        );
+        ta.value = '';
+        return;
+      }
+
+      ta.value = texto;
+      console.log('[PDF] Extraído:', pdf.numPages, 'página(s),', texto.length, 'caracteres');
+
+    } catch (err) {
+      console.error('[UPLOAD] Erro:', err);
+      ta.value = '';
+      const detalhe = (err && err.message) ? err.message : String(err);
+      alert(
+        'Não consegui extrair o arquivo.\n\nDetalhe técnico: ' + detalhe + '\n\n' +
+        'Abra o console (F12) para o stack completo, ou cole o texto manualmente.'
+      );
+    } finally {
+      ta.disabled = false;
+    }
+  });
+});
+
+/* ============================================================
+   PERSONAGENS (padrão mochila)
+   ============================================================ */
+const PERSONAGENS = {
+  auditor: {
+    nome: 'Auditor',
+    icone: '🛡️',
+    classe: 'toulmin',
+    intro: 'Sou o Auditor. Leio o documento procurando o que ele AFIRMA e como ele PROVA. Toda decisão precisa de alegação, garantia e evidência.'
+  },
+  analista: {
+    nome: 'Analista',
+    icone: '🌿',
+    classe: 'bardin',
+    intro: 'Sou a Analista. Não olho só o que está escrito, mas COM QUE INSISTÊNCIA está escrito. Frequência de termos conta uma história.'
+  },
+  critico: {
+    nome: 'Crítico',
+    icone: '🔭',
+    classe: 'fairclough',
+    intro: 'Sou o Crítico. Leio o que o texto CALA, como ele IMPÕE e o que ele PRESSUPÕE sem dizer. Silêncios também falam.'
+  }
+};
+
+let dialogoAtual = [];
+
+function resetDialogo() { dialogoAtual = []; }
+
+function pushPersonagem(quem, texto) {
+  const p = PERSONAGENS[quem] || PERSONAGENS.auditor;
+  dialogoAtual.push({ lado: 'personagem', quem, nome: p.nome, icone: p.icone, classe: p.classe, texto });
+}
+
+function pushUsuario(texto) {
+  dialogoAtual.push({ lado: 'usuario', texto });
+}
+
+function pushSistema(texto) {
+  dialogoAtual.push({ lado: 'sistema', texto });
+}
+
+function renderThreadHtml(containerId) {
+  const html = dialogoAtual.map(msg => {
+    if (msg.lado === 'personagem') {
+      return `
+        <div class="bolha-personagem ${msg.classe || ''}">
+          <span class="avatar">${msg.icone}</span>
+          <div class="corpo">
+            <div class="nome">${msg.nome}</div>
+            <div>${msg.texto}</div>
+          </div>
+        </div>`;
+    }
+    if (msg.lado === 'sistema') {
+      return `<div class="bolha-sistema">${msg.texto}</div>`;
+    }
+    return `<div class="bolha-usuario">${msg.texto}</div>`;
+  }).join('');
+  const el = document.getElementById(containerId);
+  if (el) el.innerHTML = html;
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ============================================================
+   ESTADO
+   ============================================================ */
+const STATE = {
+  texto: '',
+  secoes: {},
+  extraidos: {},
+  findings: [],
+  toulmin: [],
+  bardin: [],
+  fairclough: [],
+  qaHistory: []
+};
+
+/* ============================================================
+   NAVEGAÇÃO
+   ============================================================ */
+function goToScreen(id) {
+  document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.target === id);
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function navTo(id) {
+  if (id !== 'screen-welcome' && !STATE.texto) {
+    alert('Analise um documento primeiro.');
+    return;
+  }
+  goToScreen(id);
+}
+
+function irParaAchados() { goToScreen('screen-achados'); }
+function irParaQABuffet() { goToScreen('screen-qa'); }
+
+/* ============================================================
+   EXTRAÇÃO — patterns para editais brasileiros
+   ============================================================ */
+const EXTRACTORS = {
+  numeroEdital: {
+    label: 'Número do edital',
+    patterns: [/(?:edital|preg[ãa]o|concorr[êe]ncia|tomada de pre[çc]os)\s*(?:n[°º.:]?\s*)?([\d]{1,5}[\/\-.]\d{1,4})/gi],
+    multi: false
+  },
+  datas: { label: 'Datas', patterns: [/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/g], multi: true },
+  valores: { label: 'Valores (R$)', patterns: [/R\$\s*([\d.]{1,20},\d{2})/g], multi: true },
+  prazos: {
+    label: 'Prazos',
+    patterns: [/(?:prazo|vig[êe]ncia|execu[çc][ãa]o|entrega)[^\n]{0,60}?(\d+)\s*(dias?|meses?|anos?)/gi],
+    multi: true,
+    join: (a, b) => `${a} ${b}`
+  },
+  leis: {
+    label: 'Referências legais',
+    patterns: [/(?:Lei|Decreto|IN|Instru[çc][ãa]o\s+Normativa)\s*(?:n[°º.:]?\s*)?([\d.]+\s*[\/\-]\s*\d{2,4})/gi],
+    multi: true,
+    join: (num) => `Lei ${num.trim()}`
+  },
+  cnpj: { label: 'CNPJ', patterns: [/\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/g], multi: true }
+};
+
+const SECOES = [
+  { id: 'objeto', label: 'Objeto', re: /(?:^|\n)\s*(?:\d+[\.\s]+)?(?:DO\s+)?OBJETO\b[^\n]*/i },
+  { id: 'habilita', label: 'Habilitação', re: /(?:^|\n)\s*(?:\d+[\.\s]+)?(?:DA\s+)?HABILITA[ÇC][ÃA]O\b[^\n]*/i },
+  { id: 'sanciones', label: 'Sanções', re: /(?:^|\n)\s*(?:\d+[\.\s]+)?(?:DAS\s+)?SAN[ÇC][ÕO]ES\b[^\n]*/i },
+  { id: 'valor', label: 'Valor estimado', re: /(?:^|\n)\s*(?:\d+[\.\s]+)?(?:DO\s+)?VALOR\s+ESTIMADO\b[^\n]*/i },
+  { id: 'prazoEntrega', label: 'Prazo', re: /(?:^|\n)\s*(?:\d+[\.\s]+)?(?:DO\s+)?PRAZO\s+DE\s+(?:ENTREGA|EXECU[ÇC][ÃA]O)\b[^\n]*/i },
+  { id: 'garantia', label: 'Garantia', re: /(?:^|\n)\s*(?:\d+[\.\s]+)?(?:DA\s+)?GARANTIA\b[^\n]*/i },
+  { id: 'pagamento', label: 'Pagamento', re: /(?:^|\n)\s*(?:\d+[\.\s]+)?(?:DO\s+)?PAGAMENTO\b[^\n]*/i },
+  { id: 'abertura', label: 'Abertura', re: /(?:^|\n)\s*(?:\d+[\.\s]+)?(?:DA\s+)?ABERTURA\b[^\n]*/i }
+];
+
+function segmentarSecoes(texto) {
+  const secoes = {};
+  const achados = [];
+  for (const sec of SECOES) {
+    const m = texto.match(sec.re);
+    if (m) achados.push({ id: sec.id, label: sec.label, index: m.index });
+  }
+  achados.sort((a, b) => a.index - b.index);
+  for (let i = 0; i < achados.length; i++) {
+    const atual = achados[i];
+    const prox = achados[i + 1];
+    const fim = prox ? prox.index : Math.min(texto.length, atual.index + 2000);
+    secoes[atual.id] = texto.slice(atual.index, fim).trim();
+  }
+  return secoes;
+}
+
+function extrairTudo(texto) {
+  const out = {};
+  for (const [id, cfg] of Object.entries(EXTRACTORS)) {
+    const achados = new Set();
+    for (const re of cfg.patterns) {
+      re.lastIndex = 0;
+      let m;
+      while ((m = re.exec(texto)) !== null) {
+        const valor = cfg.join ? cfg.join(m[1], m[2]) : m[1];
+        if (valor) achados.add(valor.trim());
+      }
+    }
+    out[id] = [...achados];
+    if (!cfg.multi) out[id] = out[id].slice(0, 1);
+  }
+  return out;
+}
+
+/* ============================================================
+   MOTOR 1: TOULMIN — alegação, garantia, evidência
+   ============================================================ */
+function extratorToulmin(texto) {
+  const toulmin = [];
+
+  // Alegações: verbos impositivos
+  const rxVerbos = /\b(resolve|determina|decide|estabelece|institui|aprova|autoriza|fixa|define|obriga|veda|proíbe|faculta)\b/gi;
+  const sentencas = texto.replace(/\s+/g, ' ').split(/(?<=[.?!])\s+(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ])/);
+
+  const alegacoes = [];
+  for (const s of sentencas) {
+    if (s.length < 30 || s.length > 500) continue;
+    if (rxVerbos.test(s)) {
+      alegacoes.push(s.trim());
+      rxVerbos.lastIndex = 0;
+    }
+  }
+
+  // Deduplica e pega as 3 mais "densas"
+  const vistos = new Set();
+  const unicas = alegacoes.filter(a => {
+    const key = a.substring(0, 80).toLowerCase();
+    if (vistos.has(key)) return false;
+    vistos.add(key);
+    return true;
+  });
+
+  unicas.slice(0, 3).forEach((a, i) => {
+    toulmin.push({
+      tipo: 'alegacao',
+      rotulo: `Alegação ${i + 1}`,
+      texto: a.length > 280 ? a.substring(0, 280) + '...' : a
+    });
+  });
+
+  // Garantias: referências legais
+  const garantias = [];
+  const rxGarantia = /(?:Lei|Decreto|Instrução|Resolução|IN)\s+n?[°º]?\s*[\d.]+\s*[\/\-]\s*\d{2,4}/gi;
+  let mg;
+  while ((mg = rxGarantia.exec(texto)) !== null) {
+    garantias.push(mg[0].trim());
+  }
+  [...new Set(garantias)].slice(0, 3).forEach((g, i) => {
+    toulmin.push({
+      tipo: 'garantia',
+      rotulo: `Base legal ${i + 1}`,
+      texto: g
+    });
+  });
+
+  // Evidência: números, valores, datas concretas
+  const evs = [];
+  const rxValor = /R\$\s*[\d.]+,\d{2}/g;
+  const rxData = /\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\b/g;
+  let me;
+  while ((me = rxValor.exec(texto)) !== null) evs.push(me[0]);
+  while ((me = rxData.exec(texto)) !== null) evs.push(me[0]);
+  const evsUnicos = [...new Set(evs)].slice(0, 4);
+  if (evsUnicos.length) {
+    toulmin.push({
+      tipo: 'evidencia',
+      rotulo: 'Evidências concretas',
+      texto: evsUnicos.join(' · ')
+    });
+  }
+
+  if (toulmin.length === 0) {
+    toulmin.push({
+      tipo: 'aviso',
+      rotulo: 'Alegação não isolada',
+      texto: 'Não encontrei verbo impositivo claro nem base legal declarada. Pode ser texto descritivo ou fragmento.'
+    });
+  }
+
+  return toulmin;
+}
+
+/* ============================================================
+   MOTOR 2: BARDIN — taxonomia + densidade
+   ============================================================ */
+const TAXONOMIA_BARDIN = {
+  'Objeto e Escopo': ['objeto', 'contrat', 'serviç', 'fornec', 'aquis', 'prestaç', 'execuç', 'escopo', 'finalidade'],
+  'Prazos e Vigência': ['prazo', 'vigênc', 'dias', 'meses', 'execuç', 'entreg', 'venciment', 'prorrog', 'início', 'término'],
+  'Valores e Financeiro': ['valor', 'preç', 'orçament', 'custo', 'despes', 'pagament', 'parcel', 'mediç', 'fatur', 'reajust'],
+  'Habilitação e Requisitos': ['habilitaç', 'document', 'requisit', 'certid', 'regular', 'atestad', 'qualificaç', 'comprov'],
+  'Sanções e Penalidades': ['sanç', 'penalid', 'multa', 'advertên', 'suspens', 'declaraç', 'inidone', 'rescis', 'descumpr'],
+  'Formalidades e Ritual': ['edital', 'pregão', 'licitaç', 'sessão', 'proposta', 'lanc', 'abertur', 'julgament', 'recurso', 'homolog'],
+  'Base Legal e Normas': ['lei', 'decret', 'instruç', 'resoluç', 'norm', 'regulament', 'estatut', 'jurisprud'],
+  'Controle e Transparência': ['transparênc', 'public', 'divulgaç', 'controle', 'auditor', 'fiscaliz', 'prestaç', 'account']
+};
+
+function extratorBardin(texto) {
+  const lower = texto.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ');
+
+  const totalTokens = Math.max(1, lower.split(/\s+/).length);
+  const resultados = [];
+
+  for (const [categoria, radicais] of Object.entries(TAXONOMIA_BARDIN)) {
+    let freq = 0;
+    const termosEncontrados = [];
+    for (const radical of radicais) {
+      const rx = new RegExp(`\\b${radical}\\w*\\b`, 'gi');
+      const matches = lower.match(rx);
+      if (matches) {
+        freq += matches.length;
+        termosEncontrados.push(...matches.slice(0, 3));
+      }
+    }
+    if (freq > 0) {
+      const densidade = +((freq / totalTokens) * 1000).toFixed(2);
+      resultados.push({
+        categoria,
+        frequencia: freq,
+        densidade,
+        exemplos: [...new Set(termosEncontrados)].slice(0, 5),
+        peso: densidade >= 4 ? 'máximo' : densidade >= 2 ? 'alto' : 'apoio'
+      });
+    }
+  }
+
+  return resultados.sort((a, b) => b.densidade - a.densidade);
+}
+
+/* ============================================================
+   MOTOR 3: FAIRCLOUGH — modalização + legitimação + omissão
+   ============================================================ */
+function extratorFairclough(texto) {
+  const lower = texto.toLowerCase();
+  const alertas = [];
+
+  // 1. Modalização (força deôntica × propositiva)
+  const deonticos = (lower.match(/\b(deve|determina|pro[íi]be|veda|obriga|imp[õo]e|compuls[óo]ri|imprescind[íi]vel|terminantemente)\b/g) || []).length;
+  const propositivos = (lower.match(/\b(sugere|recomenda|orienta|faculta|opcional|alternativa|di[áa]logo|consenso|preferencialmente)\b/g) || []).length;
+
+  if (deonticos > propositivos * 2 && deonticos >= 3) {
+    alertas.push({
+      severidade: 'high',
+      tipo: 'Modalização Autoritária',
+      porque: `Força deôntica alta (${deonticos} marcadores impositivos × ${propositivos} propositivos). O texto IMPÕE sem negociar.`,
+      acoes: ['Verificar se a base legal autoriza esse grau de imposição', 'Checar se há canal de recurso previsto']
+    });
+  } else if (propositivos > deonticos * 2 && propositivos >= 3) {
+    alertas.push({
+     severidade: 'medium',
+      tipo: 'Modalização Branda',
+      porque: `Tom propositivo domina (${propositivos} × ${deonticos}). Em decisões estruturais, isso pode gerar vácuo de execução.`,
+      acoes: ['Checar se há sanção clara para descumprimento', 'Verificar se "recomendação" tem força executória definida']
+    });
+  }
+
+  // 2. Legitimação externa
+  const legitimacao = (lower.match(/\b(conforme\s+lei|nos\s+termos\s+da|de\s+acordo\s+com|com\s+base\s+em|em\s+conformidade|lei\s+\d|decreto\s+\d|artigo\s+\d|jurisprudência)\b/g) || []).length;
+
+  if (legitimacao >= 5) {
+    alertas.push({
+      severidade: 'low',
+      tipo: 'Legitimação Externa Forte',
+      porque: `${legitimacao} referências à autoridade externa. Transferência de responsabilidade: o texto "obedece" antes de decidir.`,
+      acoes: ['Verificar se cada referência é pertinente ao objeto', 'Checar se há referências redundantes (inflação normativa)']
+    });
+  } else if (legitimacao === 0) {
+    alertas.push({
+      severidade: 'high',
+      tipo: 'Ausência de Base Legal Declarada',
+      porque: 'Nenhuma referência a lei, decreto, instrução ou jurisprudência. Decisão sem âncora normativa explícita.',
+      acoes: ['Solicitar ao autor a fundamentação legal', 'Verificar se o poder de decisão está de fato constituído']
+    });
+  }
+
+  // 3. Omissões temáticas (eixos ausentes)
+  const eixos = {
+    'Prazo e Vigência': /\b(prazo|vig[êe]ncia|dias|meses|t[ée]rmino)\b/i,
+    'Valor e Financeiro': /\b(R\$|valor|pre[çc]o|or[çc]amento)\b/i,
+    'Sanção e Consequência': /\b(san[çc][ãa]o|penalidade|multa|advert[êe]ncia)\b/i,
+    'Recurso e Contestação': /\b(recurso|contesta[çc][ãa]o|impugna[çc][ãa]o|defesa)\b/i,
+    'Habilitação': /\b(habilita[çc][ãa]o|documenta[çc][ãa]o|requisito)\b/i
+  };
+  const ausentes = [];
+  for (const [eixo, rx] of Object.entries(eixos)) {
+    if (!rx.test(texto)) ausentes.push(eixo);
+  }
+  if (ausentes.length > 0) {
+    alertas.push({
+      severidade: ausentes.length >= 3 ? 'high' : 'medium',
+      tipo: 'Omissões Estruturais',
+      porque: `Eixos ausentes: ${ausentes.join(' · ')}. Texto pode estar incompleto ou pressupor documento anexo.`,
+      acoes: ['Verificar se há anexo ou termo de referência', 'Checar se a omissão é intencional ou erro de extração']
+    });
+  }
+
+  // 4. Personalização vs. impessoalização
+  const primeiraPessoa = (lower.match(/\b(eu|n[óo]s|nosso|nossa|meu|minha)\b/g) || []).length;
+  const impessoal = (lower.match(/\b(este\s+edital|o\s+contratante|a\s+administra[çc][ãa]o|o\s+[óo]rg[ãa]o|a\s+contratada)\b/gi) || []).length;
+
+  if (impessoal > primeiraPessoa * 3 && impessoal >= 5) {
+    alertas.push({
+      severidade: 'low',
+      tipo: 'Impessoalização Institucional',
+      porque: `Tom impessoal domina (${impessoal} menções institucionais × ${primeiraPessoa} pessoais). Estratégia de apagar o autor individual — o texto fala pela instituição.`,
+      acoes: []
+    });
+  }
+
+  // 5. Pressuposição
+  const pressuposicoes = (lower.match(/\b(j[áa]\s+|como\s+sabido|evidentemente|obviamente|naturalmente|todos\s+sabem)\b/g) || []).length;
+  if (pressuposicoes >= 2) {
+    alertas.push({
+      severidade: 'medium',
+      tipo: 'Pressuposição Ideológica',
+      porque: `${pressuposicoes} marcadores de "já sabido". O texto apresenta como consenso algo que pode ser contestável.`,
+      acoes: ['Identificar cada pressuposição e exigir que seja declarada', 'Checar se há base factual para o "evidente"']
+    });
+  }
+
+  if (alertas.length === 0) {
+    alertas.push({
+      severidade: 'low',
+      tipo: 'Discurso Equilibrado',
+      porque: 'Não foram detectados desvios significativos de modalização, legitimação ou omissão.',
+      acoes: []
+    });
+  }
+
+  return alertas;
+}
+
+/* ============================================================
+   CONSOLIDAÇÃO DE FINDINGS
+   ============================================================ */
+const CHECKLIST = [
+  { id: 'SEM_OBJETO', severidade: 'critical', when: (s) => !s.objeto, porque: 'Sem seção "Objeto" — impossível saber o que está sendo contratado.', acoes: ['Verificar preâmbulo ou anexo'] },
+  { id: 'SEM_VALOR', severidade: 'critical', when: (s, e) => !s.valor && e.valores.length === 0, porque: 'Sem valor estimado — inviável avaliar viabilidade financeira.', acoes: ['Buscar planilha orçamentária ou anexo'] },
+  { id: 'SEM_PRAZO', severidade: 'high', when: (s, e) => !s.prazoEntrega && e.prazos.length === 0, porque: 'Sem prazo de entrega/execução identificado.', acoes: ['Verificar minuta de contrato'] },
+  { id: 'SEM_HABILITACAO', severidade: 'high', when: (s) => !s.habilita, porque: 'Sem seção de habilitação — verificar base legal aplicável.', acoes: ['Confirmar se está em anexo'] },
+  { id: 'LEI_OBSOLETA', severidade: 'high', when: (s, e) => {
+    const refs = e.leis.map(r => r.toLowerCase());
+    const tem8666 = refs.some(r => /8[.,]666/.test(r));
+    const tem14133 = refs.some(r => /14[.,]133/.test(r));
+    return tem8666 && !tem14133;
+  }, porque: 'Cita Lei 8.666 (revogada em 2023) sem mencionar Lei 14.133/2021.', acoes: ['Verificar se é edital antigo'] },
+  { id: 'SEM_SANCOES', severidade: 'medium', when: (s) => !s.sanciones, porque: 'Sem cláusula de sanções identificada.', acoes: ['Checar contrato ou termo de referência'] },
+  { id: 'DOC_CURTO', severidade: 'high', when: (s, e, t) => t.length < 1500, porque: 'Documento muito curto — pode ser fragmento.', acoes: ['Verificar extração do PDF'] }
+];
+
+function executarChecklist(secoes, extraidos, texto) {
+  const findings = [];
+  for (const r of CHECKLIST) {
+    try {
+      if (r.when(secoes, extraidos, texto)) {
+        findings.push({
+          id: r.id, severidade: r.severidade, porque: r.porque,
+          acoes: r.acoes || [], origem: 'checklist'
+        });
+      }
+    } catch (_) {}
+  }
+  return findings;
+}
+
+function consolidarFindings(secoes, extraidos, texto, toulmin, bardin, fairclough) {
+  const findings = executarChecklist(secoes, extraidos, texto);
+
+  // Contribuições do Bardin: eixos com densidade alta podem indicar "inflação retórica"
+  if (bardin.length > 0) {
+    const top = bardin[0];
+    if (top.densidade >= 8) {
+      findings.push({
+        id: 'INFLACAO_RETORICA',
+        severidade: 'medium',
+        porque: `Eixo "${top.categoria}" domina o discurso (densidade ${top.densidade}/1k). O texto insiste nesse tema — pode ser blindagem retórica.`,
+        acoes: ['Verificar se há conteúdo concreto nesse eixo', 'Checar se outras dimensões estão subdimensionadas'],
+        origem: 'bardin'
+      });
+    }
+  }
+
+  // Contribuições do Fairclough
+  for (const a of fairclough) {
+    findings.push({
+      id: a.tipo.replace(/\s+/g, '_').toUpperCase(),
+      severidade: a.severidade,
+      porque: a.porque,
+      acoes: a.acoes || [],
+      origem: 'fairclough'
+    });
+  }
+
+  // Contribuições do Toulmin
+  if (toulmin.some(t => t.tipo === 'aviso')) {
+    findings.push({
+      id: 'TOULMIN_SEM_ALEGACAO',
+      severidade: 'high',
+      porque: 'O motor Toulmin não isolou alegação impositiva clara. Texto pode ser descritivo ou incompleto.',
+      acoes: ['Verificar se é edital ou apenas anexo'],
+      origem: 'toulmin'
+    });
+  }
+
+  // Ordenação por severidade
+  const ordem = { critical: 0, high: 1, medium: 2, low: 3 };
+  return findings.sort((a, b) => (ordem[a.severidade] || 9) - (ordem[b.severidade] || 9));
+}
+
+/* ============================================================
+   FLUXO DE ANÁLISE CONVERSACIONAL
+   ============================================================ */
+async function iniciarAnalise() {
+  const texto = document.getElementById('welcome-texto').value.trim();
+  if (texto.length < 100) {
+    alert('Cole um texto com pelo menos 100 caracteres (ou envie um arquivo).');
+    return;
+  }
+
+  STATE.texto = texto;
+  resetDialogo();
+
+  // Extração
+  STATE.secoes = segmentarSecoes(texto);
+  STATE.extraidos = extrairTudo(texto);
+
+  goToScreen('screen-analise');
+  document.getElementById('analise-composer').classList.add('hidden');
+  document.getElementById('analise-progress').style.width = '5%';
+
+  // 1. Auditor fala primeiro
+  pushSistema(`${texto.length.toLocaleString('pt-BR')} caracteres · ${Object.keys(STATE.secoes).length} seções detectadas`);
+  pushPersonagem('auditor', PERSONAGENS.auditor.intro);
+  renderThreadHtml('analise-dialogo');
+  await delay(500);
+  document.getElementById('analise-progress').style.width = '20%';
+
+  // 2. Análise Toulmin
+  pushPersonagem('auditor', 'Deixa eu ler o texto procurando o que ele <strong>afirma</strong> e como <strong>prova</strong>.');
+  renderThreadHtml('analise-dialogo');
+  await delay(600);
+
+  STATE.toulmin = extratorToulmin(texto);
+  for (const t of STATE.toulmin) {
+    pushPersonagem('auditor', `<strong>${t.rotulo}:</strong> ${t.texto}`);
+    renderThreadHtml('analise-dialogo');
+    await delay(300);
+  }
+  document.getElementById('analise-progress').style.width = '45%';
+
+  // 3. Analista (Bardin)
+  pushPersonagem('analista', PERSONAGENS.analista.intro);
+  renderThreadHtml('analise-dialogo');
+  await delay(500);
+
+  STATE.bardin = extratorBardin(texto);
+  if (STATE.bardin.length > 0) {
+    const top3 = STATE.bardin.slice(0, 3);
+    const lista = top3.map(b => `• <strong>${b.categoria}</strong> (densidade ${b.densidade}/1k)`).join('<br>');
+    pushPersonagem('analista', `Contei as palavras. Os temas mais insistentes:<br>${lista}`);
+  } else {
+    pushPersonagem('analista', 'Texto muito curto para análise de frequência confiável.');
+  }
+  renderThreadHtml('analise-dialogo');
+  await delay(400);
+  document.getElementById('analise-progress').style.width = '70%';
+
+  // 4. Crítico (Fairclough)
+  pushPersonagem('critico', PERSONAGENS.critico.intro);
+  renderThreadHtml('analise-dialogo');
+  await delay(500);
+
+  STATE.fairclough = extratorFairclough(texto);
+  for (const a of STATE.fairclough) {
+    const icon = a.severidade === 'high' ? '🟠' : a.severidade === 'medium' ? '🟡' : '🔵';
+    pushPersonagem('critico', `${icon} <strong>${a.tipo}:</strong> ${a.porque}`);
+    renderThreadHtml('analise-dialogo');
+    await delay(350);
+  }
+  document.getElementById('analise-progress').style.width = '95%';
+
+  // 5. Consolidação
+  pushPersonagem('auditor', 'Agora vou consolidar os achados e priorizar o que exige ação primeiro.');
+  renderThreadHtml('analise-dialogo');
+  await delay(500);
+
+  STATE.findings = consolidarFindings(
+    STATE.secoes, STATE.extraidos, texto,
+    STATE.toulmin, STATE.bardin, STATE.fairclough
+  );
+
+  const nCrit = STATE.findings.filter(f => f.severidade === 'critical').length;
+  const nHigh = STATE.findings.filter(f => f.severidade === 'high').length;
+
+  let resumo = `<strong>${STATE.findings.length} achados</strong> no total.`;
+  if (nCrit > 0) resumo += ` <strong>${nCrit} crítico(s)</strong> exigindo ação imediata.`;
+  if (nHigh > 0) resumo += ` ${nHigh} de alta prioridade.`;
+  if (nCrit === 0 && nHigh === 0) resumo += ' Nenhum bloqueador imediato.';
+
+  pushPersonagem('analista', resumo);
+  renderThreadHtml('analise-dialogo');
+
+  document.getElementById('analise-progress').style.width = '100%';
+  document.getElementById('analise-composer').classList.remove('hidden');
+
+  // Renderiza telas seguintes
+  renderAchados();
+  renderQAInit();
+  document.getElementById('btn-pdf').style.display = 'inline-block';
+}
+
+/* ============================================================
+   RENDERIZAÇÃO DA TELA DE ACHADOS
+   ============================================================ */
+function renderAchados() {
+  const m = document.getElementById('achados-metricas');
+  const c = STATE.findings.filter(f => f.severidade === 'critical').length;
+  const h = STATE.findings.filter(f => f.severidade === 'high').length;
+  const md = STATE.findings.filter(f => f.severidade === 'medium').length;
+
+  m.innerHTML = `
+    <div class="metric"><span class="num" style="color:var(--danger)">${c}</span><span class="lbl">Críticos</span></div>
+    <div class="metric"><span class="num" style="color:var(--warning)">${h}</span><span class="lbl">Altos</span></div>
+    <div class="metric"><span class="num" style="color:#ca8a04">${md}</span><span class="lbl">Médios</span></div>
+  `;
+
+  const lista = document.getElementById('achados-lista');
+  if (STATE.findings.length === 0) {
+    lista.innerHTML = `
+      <div class="card" style="text-align:center">
+        <div style="font-size:2rem;margin-bottom:8px">✓</div>
+        <p style="color:var(--secondary)">Nenhum problema detectado pelas regras atuais.</p>
+      </div>`;
+    return;
+  }
+
+  lista.innerHTML = STATE.findings.map(f => {
+    const acoes = f.acoes && f.acoes.length
+      ? `<div class="finding-why">→ ${f.acoes.join(' · ')}</div>` : '';
+    return `
+      <div class="finding ${f.severidade}">
+        <strong>${f.severidade.toUpperCase()}</strong> — ${f.porque}
+        ${acoes}
+        <div class="finding-why">motor: ${f.origem || 'checklist'}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ============================================================
+   Q&A — TEMPLATES + BUSCA
+   ============================================================ */
+const STOPWORDS = new Set(['o','a','os','as','um','uma','de','do','da','em','no','na','que','qual','quais','como','quando','onde','é','são','foi','ser','para','por','com','tem','há','ter','me','diga','mostre','quero','saber','sobre','deste','desse','esta','este']);
+
+const TEMPLATES_QA = [
+  { name: 'prazo', match: /\bprazos?\b|quantos\s+dias|quando\s+(?:entregar|executar)/i,
+    responder: () => {
+      const p = STATE.extraidos.prazos;
+      if (p.length) return 'Prazos encontrados:\n• ' + p.join('\n• ');
+      if (STATE.secoes.prazoEntrega) return STATE.secoes.prazoEntrega.slice(0, 500);
+      return null;
+    }},
+  { name: 'valor', match: /\bvalor(?:es)?\b|quanto\s+custa|or[çc]amento|pre[çc]o/i,
+    responder: () => {
+      const v = STATE.extraidos.valores;
+      if (v.length) return 'Valores em reais:\n• R$ ' + v.join('\n• R$ ');
+      if (STATE.secoes.valor) return STATE.secoes.valor.slice(0, 500);
+      return null;
+    }},
+  { name: 'abertura', match: /\babertura\b|sess[ãa]o|quando\s+abre/i,
+    responder: () => {
+      if (STATE.secoes.abertura) return STATE.secoes.abertura.slice(0, 500);
+      const m = STATE.texto.match(/abertura[^\n]{0,120}/i);
+      return m ? m[0] : null;
+    }},
+  { name: 'objeto', match: /\bobjeto\b|o\s+que\s+(?:é|vai\s+ser)\s+contratado|contrata[çc][ãa]o/i,
+    responder: () => {
+      if (STATE.secoes.objeto) return STATE.secoes.objeto.slice(0, 600);
+      const m = STATE.texto.match(/objeto[^\n]{0,300}/i);
+      return m ? m[0] : null;
+    }},
+  { name: 'habilita', match: /habilita|documenta[çc][ãa]o|requisitos/i,
+    responder: () => STATE.secoes.habilita ? STATE.secoes.habilita.slice(0, 600) : null },
+  { name: 'sancoes', match: /san[çc][ãa]o|penalidade|multa/i,
+    responder: () => STATE.secoes.sanciones ? STATE.secoes.sanciones.slice(0, 500) : null },
+  { name: 'garantia', match: /garantia|seguro|cau[çc][ãa]o/i,
+    responder: () => STATE.secoes.garantia ? STATE.secoes.garantia.slice(0, 400) : null },
+  { name: 'base_legal', match: /base\s+legal|fundament|lei|decreto/i,
+    responder: () => {
+      const l = STATE.extraidos.leis;
+      if (l.length) return 'Referências legais:\n• ' + l.join('\n• ');
+      return null;
+    }},
+  { name: 'toulmin', match: /alega[çc][ãa]o|argumento|o\s+que\s+o\s+edital\s+diz/i,
+    responder: () => {
+      if (STATE.toulmin.length === 0) return null;
+      return STATE.toulmin.map(t => `• ${t.rotulo}: ${t.texto}`).join('\n');
+    }},
+  { name: 'bardin', match: /tema|assunto|do\s+que\s+fala|insiste/i,
+    responder: () => {
+      if (STATE.bardin.length === 0) return null;
+      return STATE.bardin.slice(0, 5).map(b => `• ${b.categoria} (${b.densidade}/1k)`).join('\n');
+    }},
+  { name: 'fairclough', match: /vi[eé]s|omiss[ãa]o|discurso|tom/i,
+    responder: () => {
+      if (STATE.fairclough.length === 0) return null;
+      return STATE.fairclough.map(a => `• [${a.severidade}] ${a.tipo}: ${a.porque}`).join('\n');
+    }}
+];
+
+function buscarPorKeywords(pergunta, texto) {
+  const palavras = pergunta.toLowerCase().split(/\W+/).filter(p => p.length > 2 && !STOPWORDS.has(p));
+  if (palavras.length === 0) return null;
+
+  const sentencas = texto.split(/(?<=[.!?])\s+|\n+/).map(s => s.trim()).filter(s => s.length > 20);
+  const scored = sentencas.map(s => {
+    const lower = s.toLowerCase();
+    let hits = 0;
+    for (const p of palavras) if (lower.includes(p)) hits++;
+    return { s, score: hits };
+  }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, 3).map(x => x.s);
+}
+
+function renderQAInit() {
+  const hist = document.getElementById('qa-history');
+  hist.innerHTML = `
+    <div class="bolha-personagem auditor" style="max-width:100%">
+      <span class="avatar">🛡️</span>
+      <div class="corpo">
+        <div class="nome">Auditor</div>
+        <div>Pode perguntar. Eu respondo com trechos literais do documento — sem inventar. Se não achar, digo que não achei.</div>
+      </div>
+    </div>
+  `;
+}
+
+function setQ(q) {
+  document.getElementById('qa-input').value = q;
+  perguntar();
+}
+
+function perguntar() {
+  const pergunta = document.getElementById('qa-input').value.trim();
+  if (!pergunta) return;
+
+  let resposta = null;
+  let fonte = null;
+
+  // 1. Template
+  for (const t of TEMPLATES_QA) {
+    if (t.match.test(pergunta)) {
+      try {
+        const r = t.responder();
+        if (r) { resposta = r; fonte = `template:${t.name}`; break; }
+      } catch (_) {}
+    }
+  }
+
+  // 2. Busca por keywords
+  if (!resposta) {
+    const trechos = buscarPorKeywords(pergunta, STATE.texto);
+    if (trechos && trechos.length > 0) {
+      resposta = 'Trechos mais relevantes encontrados:\n\n' + trechos.map((s, i) => `${i + 1}. "${s}"`).join('\n\n');
+      fonte = 'busca:keywords';
+    }
+  }
+
+  if (!resposta) {
+    resposta = 'Não encontrei informação suficiente no documento para essa pergunta. Tente reformular ou uma das sugestões.';
+    fonte = 'sem-resposta';
+  }
+
+  // Histórico
+  const hist = document.getElementById('qa-history');
+  const div = document.createElement('div');
+  div.className = 'qa-item';
+  div.innerHTML = `
+    <div class="qa-q">❓ ${escapeHtml(pergunta)}</div>
+    <div class="qa-a">${escapeHtml(resposta)}</div>
+    <div class="qa-src">fonte: ${fonte}</div>
+  `;
+  hist.insertBefore(div, hist.firstChild);
+
+  document.getElementById('qa-input').value = '';
+  document.getElementById('qa-input').focus();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+/* ============================================================
+   PDF — usando window.print()
+   ============================================================ */
+function gerarPDF() {
+  if (!STATE.texto) return;
+
+  const dataStr = new Date().toLocaleString('pt-BR');
+  const toulmin = STATE.toulmin.map(t => `<li><strong>${t.rotulo}:</strong> ${escapeHtml(t.texto)}</li>`).join('');
+  const bardin = STATE.bardin.slice(0, 5).map(b =>
+    `<li><strong>${b.categoria}</strong> — densidade ${b.densidade}/1k (${b.exemplos.join(', ')})</li>`
+  ).join('');
+  const fair = STATE.fairclough.map(a =>
+    `<li><strong>[${a.severidade.toUpperCase()}] ${a.tipo}:</strong> ${escapeHtml(a.porque)}</li>`
+  ).join('');
+  const findings = STATE.findings.map(f =>
+    `<li class="finding-item ${f.severidade}"><strong>${f.severidade.toUpperCase()}</strong> — ${escapeHtml(f.porque)} <em>(${f.origem || 'checklist'})</em></li>`
+  ).join('');
+
+  const html = `
+    <!DOCTYPE html>
+    <html><head><meta charset="utf-8"><title>Relatório Forense</title>
+    <style>
+      body{font-family:system-ui,sans-serif;max-width:820px;margin:20px auto;padding:20px;color:#222;line-height:1.6}
+      h1{color:#7C3AED;border-bottom:3px solid #7C3AED;padding-bottom:10px}
+      h2{color:#7C3AED;margin-top:28px;border-bottom:1px solid #eee;padding-bottom:6px}
+      .meta{background:#f8f7fc;padding:12px;border-radius:6px;margin-bottom:16px;font-size:0.9rem}
+      ul{padding-left:20px}
+      li{margin-bottom:8px}
+      .finding-item.critical{border-left:3px solid #dc2626;padding-left:8px;list-style:none;margin-left:-10px}
+      .finding-item.high{border-left:3px solid #f59e0b;padding-left:8px;list-style:none;margin-left:-10px}
+      .finding-item.medium{border-left:3px solid #ca8a04;padding-left:8px;list-style:none;margin-left:-10px}
+      .finding-item.low{border-left:3px solid #0369a1;padding-left:8px;list-style:none;margin-left:-10px}
+      .footer{margin-top:40px;font-size:0.8rem;color:#999;text-align:center;border-top:1px solid #eee;padding-top:10px}
+      @media print{body{margin:0}.toolbar{display:none!important}}
+      @page{size:A4;margin:15mm}
+    </style></head><body>
+    <div class="toolbar" style="position:sticky;top:0;background:#7C3AED;color:white;padding:12px;margin:-20px -20px 20px;display:flex;justify-content:space-between">
+      <span>📄 Relatório Forense</span>
+      <button onclick="window.print()" style="background:white;color:#7C3AED;border:none;padding:6px 14px;border-radius:4px;font-weight:bold;cursor:pointer">Imprimir / Salvar PDF</button>
+    </div>
+
+    <h1>📜 Relatório Forense de Discurso</h1>
+    <div class="meta">
+      <div><strong>Data:</strong> ${dataStr}</div>
+      <div><strong>Tamanho:</strong> ${STATE.texto.length.toLocaleString('pt-BR')} caracteres</div>
+      <div><strong>Seções detectadas:</strong> ${Object.keys(STATE.secoes).join(', ') || 'nenhuma'}</div>
+    </div>
+
+    <h2>1. Análise Toulmin (Argumentação)</h2>
+    <ul>${toulmin}</ul>
+
+    <h2>2. Análise Bardin (Taxonomia e densidade)</h2>
+    <ul>${bardin}</ul>
+
+    <h2>3. Análise Fairclough (Crítica do Discurso)</h2>
+    <ul>${fair}</ul>
+
+    <h2>4. Achados Consolidados</h2>
+    <ul style="list-style:none;padding:0">${findings}</ul>
+
+    <div class="footer">Gerado por Analisador Dialógico de Editais — ${dataStr}</div>
+    </body></html>
+  `;
+
+  const win = window.open('', '_blank');
+  if (!win) { alert('Permita pop-ups para gerar o PDF.'); return; }
+  win.document.write(html);
+  win.document.close();
+}
+
+/* ============================================================
+   UPLOAD DE PDF
+   ============================================================ */
+document.getElementById('welcome-arquivo').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const ta = document.getElementById('welcome-texto');
+  ta.value = 'Extraindo texto do PDF...';
+  ta.disabled = true;
+
+  try {
+    if (file.name.toLowerCase().endsWith('.txt')) {
+      ta.value = await file.text();
+    } else {
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      let texto = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        let lastY = null;
+        let pageText = '';
+        for (const item of content.items) {
+          const y = item.transform[5];
+          if (lastY !== null && Math.abs(y - lastY) > 3) pageText += '\n';
+          else if (pageText && !pageText.endsWith('\n')) pageText += ' ';
+          pageText += item.str;
+          lastY = y;
+        }
+        texto += pageText + '\n\n';
+      }
+      ta.value = texto.trim();
+    }
+  } catch (err) {
+    console.error(err);
+    ta.value = '';
+    alert('Erro ao extrair. Cole o texto manualmente.');
+  } finally {
+    ta.disabled = false;
+  }
+});
+
+/* ============================================================
+   BOOT — diálogo inicial
+   ============================================================ */
+window.addEventListener('DOMContentLoaded', () => {
+  resetDialogo();
+  pushPersonagem('auditor', 'Bem-vindo. Sou o Auditor. Vou ler o documento com você.');
+  pushPersonagem('analista', 'E eu conto as palavras, para ver do que ele fala sem parar.');
+  pushPersonagem('critico', 'E eu leio o que ele cala. Pode mandar o texto.');
+  renderThreadHtml('welcome-dialogo');
+});
+</script>
+</body>
+</html>
