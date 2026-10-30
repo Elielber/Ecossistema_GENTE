@@ -5337,6 +5337,10 @@ function temCarregoSemanaAnterior(semana) {
 
 function renderizarAvisoCarregoVirada(semana) {
     if (!semana || !temCarregoSemanaAnterior(semana)) return '';
+    
+    // NOVO: Se o usuário já fechou o aviso nesta semana, não mostra mais
+    if (semana.avisoCarregoLido) return '';
+
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const partes = [];
     const b = (semana.base && semana.base.carrego) || 0;
@@ -5350,16 +5354,32 @@ function renderizarAvisoCarregoVirada(semana) {
         : ((semana.saldoAnterior || 0) < 0
             ? ' Saldo anterior: − ' + fmt(Math.abs(semana.saldoAnterior)) + '.'
             : '');
+            
     return `
         <div class="card" style="border-left: 4px solid var(--primary); background: var(--info-soft); margin-bottom: 16px; padding: 14px 16px;">
-            <div style="font-size: 0.9rem; color: var(--primary); line-height: 1.45;">
-                <strong>A semana mudou; o resultado da anterior veio junto.</strong>${detalhe}
-                A barra mostra o plano desta semana; a linha de baixo mostra a situação real.
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                <div style="font-size: 0.9rem; color: var(--primary); line-height: 1.45; flex: 1;">
+                    <strong>A semana mudou; o resultado da anterior veio junto.</strong>${detalhe}
+                    A barra mostra o plano desta semana; a linha de baixo mostra a situação real.
+                </div>
+                <!-- NOVO: Botão Entendi -->
+                <button type="button" onclick="fecharAvisoCarrego()" style="background: none; border: 1px solid var(--primary); color: var(--primary); padding: 6px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer; flex-shrink: 0; transition: 0.2s;">
+                    Entendi
+                </button>
             </div>
         </div>
     `;
 }
-
+function fecharAvisoCarrego() {
+    if (!state.orcamento || !state.orcamento.semanaAtual) return;
+    
+    // Marca como lido para a semana atual
+    state.orcamento.semanaAtual.avisoCarregoLido = true;
+    salvarEstado();
+    
+    // Re-renderiza a home para sumir com o card suavemente
+    renderizarOrcamentoInicio();
+}
 
 
 // ============================================================
@@ -5701,7 +5721,8 @@ function iniciarNovaSemana() {
         futuro: { limite: limiteFuturo, gasto: 0, estouro: 0, carrego: carregoFuturo, passivoMeta: carregoFuturo, sobraAnterior: sobraFuturo },
         carregoCategorias: carregoCategorias,
         fechada: false,
-        resumoLido: false
+        resumoLido: false,
+		avisoCarregoLido: false
     };
 
     salvarEstado();
