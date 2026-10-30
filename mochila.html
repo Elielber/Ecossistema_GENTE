@@ -4517,12 +4517,8 @@ function renderizarNotaHierarquiaCarrego(semana, orc) {
 function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
     const limiteSeguro = (limite && limite > 0) ? limite : 0;
     const gastoSeguro = Number(gasto) || 0;
-    // Barra = PLANO da semana (decisão B): só gasto desta semana / limite
-    const percentual = limiteSeguro > 0
-        ? Math.min((gastoSeguro / limiteSeguro) * 100, 100)
-        : 0;
-
-    // Carrego = déficit herdado (não inclui sobra — decisão C)
+    
+    // Carrego = déficit herdado
     let carrego = Number(opcoes.carrego) || 0;
     let sobraAnterior = Number(opcoes.sobraAnterior) || 0;
     if (id && state.orcamento && state.orcamento.semanaAtual && state.orcamento.semanaAtual[id]) {
@@ -4531,9 +4527,13 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         if (!opcoes.sobraAnterior && cx.sobraAnterior) sobraAnterior = Number(cx.sobraAnterior) || 0;
     }
 
-    // Situação real: plano − gasto desta semana − carrego (sobra não infla)
+    // NOVO: Consumido real e percentual visual considerando o passivo
     const consumidoReal = gastoSeguro + carrego;
     const disponivelReal = limiteSeguro - consumidoReal;
+
+    const percentual = limiteSeguro > 0
+        ? Math.min((consumidoReal / limiteSeguro) * 100, 100)
+        : (consumidoReal > 0 ? 100 : 0);
 
     let cor = 'barra-verde';
     let aviso = '';
