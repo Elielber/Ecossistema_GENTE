@@ -10801,13 +10801,33 @@ function renderizarBlocoProvisao(orc) {
     // --- Aqui entra a decisão (A), (B) ou (C) ---
     // Por enquanto, deixo o esqueleto com a opção (C) — as duas linhas.
 
-    const contasSemana = contasNaJanela(orc, 7);
+        const semana = state.orcamento.semanaAtual;
+    let contasSemana = [];
+    
+    if (semana) {
+        const ini = new Date(semana.inicio + 'T00:00:00');
+        const fim = new Date(semana.fim + 'T23:59:59');
+        const ano = ini.getFullYear();
+        const mes = ini.getMonth();
+
+        contasSemana = (orc.categorias || []).filter(c => {
+            if (!c.vencimento || _categoriaParcelasQuitada(c)) return false;
+
+            let venc = new Date(ano, mes, c.vencimento);
+            if (venc < ini) {
+                venc = new Date(ano, mes + 1, c.vencimento);
+            }
+
+            // Retorna true apenas se o vencimento estiver DENTRO da semana atual
+            return venc >= ini && venc <= fim;
+        });
+    }
+
     const totalSemana = contasSemana.reduce((s, c) => s + (c.valor || 0), 0);
 
     const nomesSemana = contasSemana
         .map(c => `${c.nome} (dia ${c.vencimento})`)
         .join(', ');
-
     // Se não há contas na janela, só mostra a provisão média
     if (contasSemana.length === 0) {
         return `
