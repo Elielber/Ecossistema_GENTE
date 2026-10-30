@@ -12502,28 +12502,49 @@ function _eventosRecebimentoDeclarados(orc, inicio, fim) {
         if (dias.length === 0) return;
         const valorMes = f.valor || 0;
         if (valorMes <= 0) return;
-        const valorPorOcorrencia = valorMes / dias.length;
+        
         let cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
         const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
         while (cursor <= fimMes) {
             const ano = cursor.getFullYear();
             const mes = cursor.getMonth();
-            dias.forEach(dia => {
-                const data = _dataNoMes(ano, mes, dia);
-                if (data >= inicio && data <= fim) {
-                    eventos.push({
-                        tipo: 'recebimento',
-                        data: data.toISOString().split('T')[0],
-                        dia: data.getDate(),
-                        nome: f.nome || 'Recebimento',
-                        fonteId: f.id || null,
-                        valor: valorPorOcorrencia,
-                        caixa: null,
-                        categoriaId: null,
-                        custodiaId: f.custodiaPadraoId || null
-                    });
-                }
-            });
+            
+            // NOVO: Verifica se já foi recebido (com janela de 7 dias antes do mês para pegar adiantamentos)
+            const janelaInicio = new Date(ano, mes, 1);
+            janelaInicio.setDate(janelaInicio.getDate() - 7);
+            const janelaFim = new Date(ano, mes + 1, 0);
+            
+            const realizadoNoMes = (orc.historicoRegistros || [])
+                .filter(r => 
+                    r.tipo === 'recebimento' && 
+                    !r.anulado && 
+                    r.categoria === f.nome &&
+                    new Date(r.data) >= janelaInicio &&
+                    new Date(r.data) <= janelaFim
+                )
+                .reduce((s, r) => s + (r.valor || 0), 0);
+                
+            const valorRestante = Math.max(0, valorMes - realizadoNoMes);
+            
+            if (valorRestante > 0) {
+                const valorPorOcorrencia = valorRestante / dias.length;
+                dias.forEach(dia => {
+                    const data = _dataNoMes(ano, mes, dia);
+                    if (data >= inicio && data <= fim) {
+                        eventos.push({
+                            tipo: 'recebimento',
+                            data: data.toISOString().split('T')[0],
+                            dia: data.getDate(),
+                            nome: f.nome || 'Recebimento',
+                            fonteId: f.id || null,
+                            valor: valorPorOcorrencia,
+                            caixa: null,
+                            categoriaId: null,
+                            custodiaId: f.custodiaPadraoId || null
+                        });
+                    }
+                });
+            }
             cursor = new Date(ano, mes + 1, 1);
         }
     });
@@ -12544,18 +12565,33 @@ function _eventosVencimentoDeclarados(orc, inicio, fim) {
         categorias.forEach(c => {
             const data = _dataNoMes(ano, mes, c.vencimento);
             if (data >= inicio && data <= fim) {
-                eventos.push({
-                    tipo: 'vencimento',
-                    data: data.toISOString().split('T')[0],
-                    dia: data.getDate(),
-                    nome: c.nome || 'Conta',
-                    fonteId: null,
-                    valor: c.valor || 0,
-                    caixa: c.caixa || null,
-                    categoriaId: c.id || null,
-                    custodiaId: c.custodiaPadraoId || null,
-                    subtipo: c.subtipo || null
-                });
+                // NOVO: Verifica se já foi pago (janela de 7 dias antes do mês)
+                const janelaInicio = new Date(ano, mes, 1);
+                janelaInicio.setDate(janelaInicio.getDate() - 7);
+                const janelaFim = new Date(ano, mes + 1, 0);
+
+                const jaPago = (orc.historicoRegistros || []).some(r =>
+                    !r.anulado &&
+                    (r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao' || r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') &&
+                    (r.categoriaId === c.id || r.categoria === c.nome) &&
+                    new Date(r.data) >= janelaInicio &&
+                    new Date(r.data) <= janelaFim
+                );
+
+                if (!jaPago) {
+                    eventos.push({
+                        tipo: 'vencimento',
+                        data: data.toISOString().split('T')[0],
+                        dia: data.getDate(),
+                        nome: c.nome || 'Conta',
+                        fonteId: null,
+                        valor: c.valor || 0,
+                        caixa: c.caixa || null,
+                        categoriaId: c.id || null,
+                        custodiaId: c.custodiaPadraoId || null,
+                        subtipo: c.subtipo || null
+                    });
+                }
             }
         });
         cursor = new Date(ano, mes + 1, 1);
