@@ -13715,20 +13715,24 @@ function gastoCategoriaTotal(categoriaId, categoriaNome) {
 function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
     const limiteSeguro = (limite && limite > 0) ? limite : 0;
     const gastoSeguro = Number(gasto) || 0;
-	const carrego = categoriaId ? obterCarregoCategoria(categoriaId) : 0;
+    
+    // Pega o carrego (dívida de semanas anteriores)
+    const carrego = categoriaId ? obterCarregoCategoria(categoriaId) : 0;
     const consumidoReal = gastoSeguro + carrego;
+
+    // A barra agora reflete a realidade consumida (gasto + passivo)
     const percentual = limiteSeguro > 0 
         ? Math.min((consumidoReal / limiteSeguro) * 100, 100) 
         : (consumidoReal > 0 ? 100 : 0);
     
     let cor = 'barra-verde';
-    if (limiteSeguro === 0 && gastoSeguro > 0) cor = 'barra-vermelha';
+    if (limiteSeguro === 0 && consumidoReal > 0) cor = 'barra-vermelha';
     else if (percentual >= 100) cor = 'barra-vermelha';
     else if (percentual >= 80) cor = 'barra-amarela';
 
-    const carrego = categoriaId ? obterCarregoCategoria(categoriaId) : 0;
     const sobraAnt = categoriaId ? obterSobraAnteriorCategoria(categoriaId) : 0;
-    const disponivelReal = limiteSeguro - gastoSeguro - carrego;
+    // O disponível real usa o consumidoReal que já inclui o carrego
+    const disponivelReal = limiteSeguro - consumidoReal;
     
     let linhaReal = '';
     if (carrego > 0 || sobraAnt > 0) {
@@ -13743,8 +13747,7 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
         </div>`;
     }
 
-    // NOVO: Avisa se o limite foi reduzido pela Proteção de Saldo
-        // NOVO: Avisa se o limite foi reduzido pela Proteção Ponderada
+    // Aviso se o limite foi reduzido pela Proteção de Saldo
     let avisoProtecao = '';
     if (categoriaId && state.orcamento && state.orcamento.configFluxo && state.orcamento.configFluxo.protegerSaldo) {
         const cat = (state.orcamento.categorias || []).find(c => c.id === categoriaId);
