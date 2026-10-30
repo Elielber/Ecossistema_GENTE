@@ -6688,9 +6688,35 @@ fontes.forEach(f => {
     const recebidoSem = (state.orcamento.historicoRegistros || [])
         .filter(r => r.tipo === 'recebimento' && _pertenceSemanaAtual(r.data) && (r.categoria === f.nome))
         .reduce((s, r) => s + (r.valor || 0), 0);
-    const metaSem = (f.valor || 0) / DIVISOR_SEMANAL;
-    const barraHtml = renderizarBarraCategoria(recebidoSem, metaSem);
+    // Substitua a linha acima por este bloco:
+let metaSem = (f.valor || 0) / DIVISOR_SEMANAL; // Padrão: diluído (para imprevisível/semanal)
+const diasRec = _diasRecebimento(f.diaRecebimento);
 
+if (diasRec.length > 0) {
+    metaSem = 0;
+    const semanaAtual = state.orcamento.semanaAtual;
+    if (semanaAtual) {
+        // Usa a mesma lógica de datas da calcularLimiteCategoriaSemana
+        const ini = new Date(semanaAtual.inicio + 'T00:00:00');
+        const fim = new Date(semanaAtual.fim + 'T23:59:59');
+        const ano = ini.getFullYear();
+        const mes = ini.getMonth();
+        
+        diasRec.forEach(dia => {
+            let d = new Date(ano, mes, dia);
+            // Se a data já passou no mês atual, considera o mês seguinte (virada de mês)
+            if (d < ini) d = new Date(ano, mes + 1, dia);
+            
+            // Se o dia de recebimento cai nesta semana, adiciona a fração do valor
+            // (divide por diasRec.length caso seja quinzenal, ex: dias 5 e 20)
+            if (d >= ini && d <= fim) {
+                metaSem += (f.valor || 0) / diasRec.length;
+            }
+        });
+    }
+}
+    const metaVisual = metaSem > 0 ? metaSem : recebidoSem;
+const barraHtml = renderizarBarraCategoria(recebidoSem, metaVisual);
     htmlFontes += `
         <div class="categoria-item" style="display: block; cursor: pointer;" onclick="abrirListaRegistrosCategoria(null, '${(f.nome || '').replace(/'/g, "\\'")}')">
             <div style="display: flex; justify-content: space-between; align-items: center;">
