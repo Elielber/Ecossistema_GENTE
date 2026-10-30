@@ -4535,7 +4535,7 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         ? Math.min((consumidoReal / limiteSeguro) * 100, 100)
         : (consumidoReal > 0 ? 100 : 0);
 
-    let cor = 'barra-verde';
+        let cor = 'barra-verde';
     let aviso = '';
 
     if (limiteSeguro === 0) {
@@ -4544,8 +4544,14 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
             aviso = '<div style="font-size: 0.9rem; color: var(--danger); margin-top: 6px;">Sem orçamento definido. Todo gasto aqui é acima do planejado.</div>';
         }
     } else {
-        if (percentual >= 100) cor = 'barra-vermelha';
-        else if (percentual >= 80) cor = 'barra-amarela';
+        // NOVO: Usa uma margem de tolerância de 5 centavos para evitar problemas de arredondamento do JavaScript
+        if (consumidoReal > limiteSeguro + 0.05) {
+            cor = 'barra-vermelha'; // Estourou de verdade
+        } else if (consumidoReal >= limiteSeguro - 0.05) {
+            cor = 'barra-verde'; // Bateu a meta exata (ficará com a cor principal do app)
+        } else if (percentual >= 80) {
+            cor = 'barra-amarela'; // Zona de atenção (faltando pouco)
+        }
     }
 
     const fmt = (v) => v.toFixed(2).replace('.', ',');
@@ -4553,20 +4559,26 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
     if (carrego > 0 || sobraAnterior > 0) {
         const bits = [];
         if (carrego > 0) {
-            bits.push(`passivo de meta R$ ${fmt(carrego)}`);
+            bits.push(`adiantamento na semana passada R$ ${fmt(carrego)}`);
         }
         if (sobraAnterior > 0) {
             bits.push(`sobra da semana passada R$ ${fmt(sobraAnterior)} (não aumenta o combinado)`);
         }
-        const realTxt = disponivelReal >= 0
-            ? `ainda cabe no combinado R$ ${fmt(disponivelReal)}`
-            : `passou do combinado em R$ ${fmt(Math.abs(disponivelReal))}`;
-        // Fatia 8: caixinha = total agregado; não somar com passivo de categoria
-        linhaReal = `<div style="font-size: 0.9rem; color: ${disponivelReal < 0 ? 'var(--danger)' : 'var(--secondary)'}; margin-top: 6px; line-height: 1.35;">
+        
+        // NOVO: Ajusta o texto para não falar "passou R$ 0,01" por erro de arredondamento
+        let realTxt = '';
+        if (disponivelReal > 0.05) {
+            realTxt = `ainda cabe no combinado R$ ${fmt(disponivelReal)}`;
+        } else if (disponivelReal < -0.05) {
+            realTxt = `passou do combinado em R$ ${fmt(Math.abs(disponivelReal))}`;
+        } else {
+            realTxt = `combinado atingido exatamente`;
+        }
+
+        linhaReal = `<div style="font-size: 0.9rem; color: ${disponivelReal < -0.05 ? 'var(--danger)' : 'var(--secondary)'}; margin-top: 6px; line-height: 1.35;">
             <strong>Total:</strong> ${realTxt}${bits.length ? ' · ' + bits.join(' · ') : ''}
         </div>`;
     }
-
     const onclickAttr = id ? `onclick="abrirListaRegistros('${id}')"` : '';
     const descMap = {
         base: 'Sua reserva de segurança',
