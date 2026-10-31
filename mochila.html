@@ -2950,6 +2950,7 @@ function calcularTaxaViabilidadeConsumo(orc) {
     const categoriasBase = categoriasSemVenc.filter(c => c.caixa === 'base');
     const categoriasVida = categoriasSemVenc.filter(c => c.caixa === 'vida');
     
+    // Calcula o orçamento restante por caixa, subtraindo o que já foi gasto no mês
     let totalBaseRestante = 0;
     let totalVidaRestante = 0;
     
@@ -12151,6 +12152,44 @@ function renderizarFluxoCaixa() {
         htmlGargalos = `<div class="secao-titulo">Pontos de atenção</div>${itens.map(s => `<div class="card" style="padding: 12px 14px; margin-bottom: 8px; border-left: 3px solid var(--warning); font-size: 0.9rem; color: var(--primary); line-height: 1.45;">${s.mensagem || s.tipo}</div>`).join('')}`;
     }
 
+    // Timeline Restaurada para o Nível 2 (quando não há custódias)
+    let porDiaView = fluxo.porDia;
+    const datas = Object.keys(porDiaView).sort();
+    let htmlTimeline = '';
+    if (datas.length > 0) {
+         htmlTimeline = `<div class="secao-titulo">Calendário declarado</div>`;
+         
+         datas.forEach(data => {
+             const dia = porDiaView[data];
+             const dataObj = new Date(data + 'T12:00:00');
+             const diaSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][dataObj.getDay()];
+             const dataFmt = `${diaSemana}, ${String(dataObj.getDate()).padStart(2, '0')}/${String(dataObj.getMonth() + 1).padStart(2, '0')}`;
+
+             let eventosHtml = '';
+             dia.eventos.forEach(e => {
+                 const sinal = e.tipo === 'recebimento' ? '+' : '−';
+                 const cor = e.tipo === 'recebimento' ? 'var(--success)' : 'var(--danger)';
+                 const icone = e.tipo === 'recebimento' ? '💰' : '📅';
+                 eventosHtml += `
+                     <div style="display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--border); font-size: 0.9rem;">
+                         <span style="color: var(--primary);">${icone} ${e.nome}</span>
+                         <strong style="color: ${cor};">${sinal} ${fmt(e.valor)}</strong>
+                     </div>
+                 `;
+             });
+
+             htmlTimeline += `
+                 <div class="card" style="padding: 12px 14px; margin-bottom: 8px;">
+                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                         <strong style="font-size: 0.9rem;">${dataFmt}</strong>
+                         <span style="font-size: 0.9rem; color: var(--secondary);">Saldo do dia: ${fmt(dia.entradas - dia.saidas)}</span>
+                     </div>
+                     ${eventosHtml}
+                 </div>
+             `;
+         });
+    }
+
     container.innerHTML = `
         <div style="margin-bottom: 16px;">
             <span style="font-size: 0.9rem; font-weight: bold; color: var(--secondary); text-transform: uppercase;">Fluxo de caixa</span>
@@ -12163,7 +12202,7 @@ function renderizarFluxoCaixa() {
         ${htmlSeletorCustodia}
         ${htmlLacunas}
         ${htmlGargalos}
-        ${htmlDiaADia}
+        ${htmlDiaADia || htmlTimeline}
         <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 12px;" onclick="voltarParaOrcamento()">
             Voltar
         </button>
