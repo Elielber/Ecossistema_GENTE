@@ -2946,7 +2946,18 @@ function calcularTaxaViabilidadeConsumo(orc) {
 
     const fluxo = projetarFluxo(orc, { dias: 30 });
     const categoriasSemVenc = (orc.categorias || []).filter(c => !c.vencimento && !_categoriaParcelasQuitada(c));
-    const totalMensalSemVenc = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+    const totalMensalPlanejado = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+    
+    // NOVO: Desconta o que já foi gasto nas categorias de consumo no mês atual
+    let gastoRealizadoMes = 0;
+    (orc.historicoRegistros || []).forEach(r => {
+        if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data)) {
+            if (categoriasSemVenc.some(c => c.id === r.categoriaId)) {
+                gastoRealizadoMes += (Number(r.valor) || 0);
+            }
+        }
+    });
+    const totalMensalSemVenc = Math.max(0, totalMensalPlanejado - gastoRealizadoMes);
     
     if (totalMensalSemVenc === 0) return { taxaBase: 1, taxaVida: 1, totalAlocado: null };
 
@@ -11796,13 +11807,27 @@ function renderizarFluxoCaixa() {
     const gargalos = detectarGargalos(fluxo, { custodias: projMapFluxo });
     const sugestoes = sugerirEquilibrio(gargalos, orc);
 
-    const categoriasSemVenc = (orc.categorias || []).filter(c => 
+        const categoriasSemVenc = (orc.categorias || []).filter(c => 
         !c.vencimento && 
         !_categoriaParcelasQuitada(c) &&
         (!fluxoCustodiaFiltro || c.custodiaPadraoId === fluxoCustodiaFiltro)
     );
-    const totalMensalSemVenc = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
     
+    const totalMensalPlanejado = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+    
+    // NOVO: Calcula o gasto já realizado nas categorias de consumo neste mês
+    let gastoRealizadoMes = 0;
+    (orc.historicoRegistros || []).forEach(r => {
+        if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data)) {
+            if (categoriasSemVenc.some(c => c.id === r.categoriaId)) {
+                gastoRealizadoMes += (Number(r.valor) || 0);
+            }
+        }
+    });
+    
+    // O valor a ser diluído é o que sobrou do orçamento
+    const totalMensalSemVenc = Math.max(0, totalMensalPlanejado - gastoRealizadoMes);
+	
     let totEntradas = fluxo.totais.entradas;
     let totSaidas = fluxo.totais.saidas;
     if (fluxoCustodiaFiltro) {
