@@ -7360,6 +7360,8 @@ function renderizarDetalheGastos() {
                 }
             }
             const gastoSem = gastoCategoriaNaSemana(cat.id, cat.nome);
+					const gastoMes = gastoCategoriaNoMes(cat.id, cat.nome);
+const pctMes = cat.valor > 0 ? (gastoMes / cat.valor) * 100 : 0;
             
             // Agora usa a nova função que calcula se é conta ou consumo
             const metaSem = calcularLimiteCategoriaSemana(cat, state.orcamento.semanaAtual); 
@@ -7371,8 +7373,21 @@ function renderizarDetalheGastos() {
                             <div class="nome-cat">${cat.nome}</div>
                             <div class="meta-cat">${metaExtra}</div>
                         </div>
-                        <div style="display: flex; align-items: center;" onclick="event.stopPropagation()"> <span class="valor-cat">R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')}</span> <button class="btn-remover" style="color: var(--primary); font-size: 0.9rem;" onclick="abrirFormularioCategoriaFuturo('${cat.id}')" title="Editar">✏️</button> <button class="btn-remover" onclick="removerCategoria('${cat.id}')">&times;</button> </div>
-                    </div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div style="flex: 1; min-width: 0;">
+        <div class="nome-cat">${cat.nome}</div>
+        <div class="meta-cat">${metaExtra}</div>
+    </div>
+    <div style="display: flex; align-items: center; flex-shrink: 0; padding-top: 2px;" onclick="event.stopPropagation()"> 
+        <span class="valor-cat" style="font-size: 0.9rem; font-weight: normal;">
+            ${cat.valor > 0 ? `<strong style="color: var(--text-main);">${pctMes.toFixed(0)}%</strong> <span style="color: var(--secondary); font-size: 0.8rem; margin: 0 2px;">de</span> ` : ''}
+            <strong>R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')}</strong>
+        </span> 
+        <button class="btn-remover" style="color: var(--primary); font-size: 0.9rem; margin-left: 6px;" onclick="abrirFormularioCategoriaFuturo('${cat.id}')" title="Editar">✏️</button> 
+        <button class="btn-remover" onclick="removerCategoria('${cat.id}')">&times;</button> 
+    </div>
+</div>
+</div>
                     ${barraHtml}
                 </div>
             `;
@@ -13888,7 +13903,23 @@ function gastoCategoriaNaSemana(categoriaId, categoriaNome) {
         })
         .reduce((s, r) => s + (r.valor || 0), 0);
 }
-
+function gastoCategoriaNoMes(categoriaId, categoriaNome) {
+    const orc = state.orcamento;
+    if (!orc || !orc.historicoRegistros) return 0;
+    
+    return orc.historicoRegistros
+        .filter(r => {
+            if (r.tipo !== 'gasto_direto' && r.tipo !== 'gasto_cartao') return false;
+            if (r.anulado) return false;
+            // _pertenceMesAtual já lida com meses de 28, 29, 30, 31 e virada de ano
+            if (!_pertenceMesAtual(r.data)) return false;
+            
+            if (categoriaId && r.categoriaId === categoriaId) return true;
+            if (categoriaNome && r.categoria === categoriaNome) return true;
+            return false;
+        })
+        .reduce((s, r) => s + (Number(r.valor) || 0), 0);
+}
 function gastoCategoriaTotal(categoriaId, categoriaNome) {
     const todos = state.orcamento.historicoRegistros || [];
     return todos
