@@ -1180,8 +1180,14 @@
                 <input type="text" id="editar-registro-valor" class="input-padrao" placeholder="0,00" inputmode="decimal" autocomplete="off">
             </div>
 
-            <label style="font-size: 0.9rem; color: var(--secondary); display: block; margin-bottom: 6px;">Quando foi?</label>
-            <input type="date" id="editar-registro-data" class="input-padrao" style="margin-bottom: 18px;">
+                        <label style="font-size: 0.9rem; color: var(--secondary); display: block; margin-bottom: 6px;">Quando foi? (Data do Caixa)</label>
+            <input type="date" id="editar-registro-data" class="input-padrao" style="margin-bottom: 16px;" onchange="atualizarChipsCompetencia(this.value)">
+
+            <!-- NOVO: Seletor de Competência -->
+            <label style="font-size: 0.9rem; color: var(--secondary); display: block; margin-bottom: 6px;">A qual mês esse lançamento pertence?</label>
+            <div class="chip-container" id="chips-mes-referencia" style="margin-bottom: 18px;">
+                <!-- Preenchido via JS -->
+            </div>
 
             <div id="editar-registro-erro" style="display: none; background: var(--danger-soft); border-left: 3px solid var(--danger); padding: 10px 12px; border-radius: 10px; margin-bottom: 14px; font-size: 0.9rem; color: var(--danger);"></div>
 
@@ -13822,12 +13828,60 @@ function _atualizarTelasAposRegistro() {
 
 let registroEditandoId = null;
 
+let mesReferenciaEditandoTemp = null;
+
+function atualizarChipsCompetencia(dataStr) {
+    const container = document.getElementById('chips-mes-referencia');
+    if (!container) return;
+
+    // Usa a data do input, ou hoje se estiver vazio
+    let dataBase = new Date();
+    if (dataStr) {
+        const partes = dataStr.split('-'); // YYYY-MM-DD
+        if (partes.length === 3) {
+            dataBase = new Date(partes[0], parseInt(partes[1]) - 1, parseInt(partes[2]));
+        }
+    }
+
+    const anoAtual = dataBase.getFullYear();
+    const mesAtual = dataBase.getMonth(); // 0 a 11
+
+    const mesAtualStr = anoAtual + '-' + String(mesAtual + 1).padStart(2, '0');
+
+    const proxMesData = new Date(anoAtual, mesAtual + 1, 1);
+    const proxMesStr = proxMesData.getFullYear() + '-' + String(proxMesData.getMonth() + 1).padStart(2, '0');
+
+    const rotuloAtual = _rotuloMesAno(mesAtualStr);
+    const rotuloProx = _rotuloMesAno(proxMesStr);
+
+    // Verifica se a variável temp já estava no próximo mês
+    const isProx = mesReferenciaEditandoTemp === proxMesStr;
+    const isAtual = !isProx;
+
+    container.innerHTML = `
+        <div class="chip ${isAtual ? 'selecionado' : ''}" onclick="selecionarCompetenciaEdit(this, '${mesAtualStr}')">
+            ${rotuloAtual} (mês do lançamento)
+        </div>
+        <div class="chip ${isProx ? 'selecionado' : ''}" onclick="selecionarCompetenciaEdit(this, '${proxMesStr}')">
+            ${rotuloProx} (próximo mês)
+        </div>
+    `;
+}
+
+function selecionarCompetenciaEdit(el, mesStr) {
+    document.querySelectorAll('#chips-mes-referencia .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    mesReferenciaEditandoTemp = mesStr;
+}
+
 function editarRegistro(id) {
     const lista = state.orcamento.historicoRegistros || [];
     const r = lista.find(x => x.id === id);
     if (!r) return;
 
     registroEditandoId = id;
+    
+    mesReferenciaEditandoTemp = r.mesReferencia || null;
 
     const isReceb = r.tipo === 'recebimento';
     const nome = r.categoria || (isReceb ? 'Recebimento' : 'Gasto');
@@ -13856,6 +13910,7 @@ function editarRegistro(id) {
         minD.setFullYear(minD.getFullYear() - 2);
         inputData.max = max;
         inputData.min = minD.toISOString().split('T')[0];
+        atualizarChipsCompetencia(inputData.value)
     }
 
     // Se o modal de lista ainda não está aberto (ex.: veio do formulário de categoria), abre
@@ -13990,13 +14045,25 @@ function salvarEdicaoRegistro() {
         return;
     }
 
-    _desfazerEfeitosRegistro(r);
+        _desfazerEfeitosRegistro(r);
     r.valor = novoValor;
     r.data = novaData;
     if (r.tipo === 'gasto_cartao') r.dataCompra = novaData;
+    
+    // NOVO: Grava a TAG de competência.
+    // Se for igual ao mês da data, gravamos null para simplificar o código de projeção.
+    // Se for diferente, gravamos a string 'YYYY-MM'.
+    const dataAnoMes = novaData.split('T')[0].substring(0, 7); // Pega YYYY-MM
+    if (mesReferenciaEditandoTemp && mesReferenciaEditandoTemp !== dataAnoMes) {
+        r.mesReferencia = mesReferenciaEditandoTemp;
+    } else {
+        r.mesReferencia = null;
+    }
+
     _aplicarEfeitosRegistro(r);
     salvarEstado();
-
+    
+    mesReferenciaEditandoTemp = null;
     registroEditandoId = null;
     document.getElementById('lista-registros-passo-editar').style.display = 'none';
     document.getElementById('lista-registros-passo-lista').style.display = 'block';
