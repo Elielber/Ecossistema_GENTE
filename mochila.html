@@ -14008,15 +14008,49 @@ function salvarEdicaoRegistro() {
 
     // Fatia 3: período fechado → não reescreve o passado; ajuste no corrente
     if (_registroEmPeriodoFechado(r)) {
-        // Mudança só de data para outra semana fechada: não permitido sem ajuste de valor
-        const dataSoMudou = Math.abs((Number(r.valor) || 0) - novoValor) < 0.005;
-        if (dataSoMudou) {
+        const dataOriginalStr = (r.data || '').split('T')[0];
+        const dataNovaStr = novaData.split('T')[0];
+        
+        const valorMudou = Math.abs((Number(r.valor) || 0) - novoValor) >= 0.005;
+        const dataMudou = dataOriginalStr !== dataNovaStr;
+
+        // CASO 1: O usuário só mexeu na TAG de Competência (Data e Valor estão iguais)
+        if (!valorMudou && !dataMudou) {
+            const dataAnoMes = novaData.split('T')[0].substring(0, 7);
+            
+            // Atualiza a TAG (ou limpa se for o mês padrão)
+            if (mesReferenciaEditandoTemp && mesReferenciaEditandoTemp !== dataAnoMes) {
+                r.mesReferencia = mesReferenciaEditandoTemp;
+            } else {
+                r.mesReferencia = null;
+            }
+            
+            salvarEstado();
+
+            mesReferenciaEditandoTemp = null;
+            registroEditandoId = null;
+            document.getElementById('lista-registros-passo-editar').style.display = 'none';
+            document.getElementById('lista-registros-passo-lista').style.display = 'block';
+            
+            if (listaRegistrosContexto) {
+                renderizarModalListaRegistros();
+            } else {
+                fecharModalListaRegistros();
+            }
+            _atualizarTelasAposRegistro();
+            return; // Interrompe aqui, não precisa de ajuste financeiro!
+        }
+
+        // CASO 2: O usuário tentou mudar a DATA em uma semana fechada (bloquear)
+        if (!valorMudou && dataMudou) {
             if (blocoErro) {
-                blocoErro.textContent = 'Este lançamento é de semana fechada. Altere o valor para gerar um ajuste na semana atual (a data original permanece no histórico).';
+                blocoErro.textContent = 'Este lançamento é de semana fechada. A data não pode ser alterada, apenas a competência.';
                 blocoErro.style.display = 'block';
             }
             return;
         }
+
+        // CASO 3: O usuário mudou o VALOR (gera ajuste na semana atual)
         if (!confirm(
             'Este lançamento é de uma semana já fechada.\n\n' +
             'O valor original permanece no histórico. A diferença vira ajuste na semana atual.\n\n' +
@@ -14031,6 +14065,7 @@ function salvarEdicaoRegistro() {
             }
             return;
         }
+        
         r.corrigidoPorAjusteId = ajuste.id;
         // congela valor histórico; não altera r.valor nem r.data
         salvarEstado();
@@ -14045,15 +14080,16 @@ function salvarEdicaoRegistro() {
         return;
     }
 
-        _desfazerEfeitosRegistro(r);
+    // =========================================================
+    // FLUXO NORMAL: Semana Aberta
+    // =========================================================
+    _desfazerEfeitosRegistro(r);
     r.valor = novoValor;
     r.data = novaData;
     if (r.tipo === 'gasto_cartao') r.dataCompra = novaData;
     
-    // NOVO: Grava a TAG de competência.
-    // Se for igual ao mês da data, gravamos null para simplificar o código de projeção.
-    // Se for diferente, gravamos a string 'YYYY-MM'.
-    const dataAnoMes = novaData.split('T')[0].substring(0, 7); // Pega YYYY-MM
+    // Grava a TAG de competência.
+    const dataAnoMes = novaData.split('T')[0].substring(0, 7);
     if (mesReferenciaEditandoTemp && mesReferenciaEditandoTemp !== dataAnoMes) {
         r.mesReferencia = mesReferenciaEditandoTemp;
     } else {
