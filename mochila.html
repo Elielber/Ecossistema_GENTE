@@ -6106,24 +6106,28 @@ function seguirAposCategoria() {
 }
 
 function confirmarRegistro(nomeCategoria) {
- const valor = registroTemporario.valor; 
- const caixa = registroTemporario.caixa; 
- const dataISO = registroTemporario.data || new Date().toISOString();
- // Defesa: Futuro não grava gasto órfão pelo +
- if (caixa === 'futuro') {
-    mostrarHandoffFuturo(valor);
-    return;
- }
- const semana = state.orcamento.semanaAtual; 
- if (!semana || semana.fechada) { 
- alert("A semana fechou. Vamos ver o resumo primeiro."); fecharModalRegistro(); 
- abrirResumoSemanal(); 
- return; 
- }
- // Bloco 10: só soma na semana atual se a data cair nela
- if (dataNaSemanaAtual(dataISO)) {
-    semana[caixa].gasto += valor;
- }
+    const valor = registroTemporario.valor; 
+    const caixa = registroTemporario.caixa; 
+    const dataISO = registroTemporario.data || new Date().toISOString();
+    
+    // Defesa: Futuro não grava gasto órfão pelo +
+    if (caixa === 'futuro') {
+        mostrarHandoffFuturo(valor);
+        return;
+    }
+    
+    const semana = state.orcamento.semanaAtual; 
+    if (!semana || semana.fechada) { 
+        alert("A semana fechou. Vamos ver o resumo primeiro."); 
+        fecharModalRegistro(); 
+        abrirResumoSemanal(); 
+        return; 
+    }
+    
+    // Bloco 10: só soma na semana atual se a data cair nela
+    if (dataNaSemanaAtual(dataISO)) {
+        semana[caixa].gasto += valor;
+    }
 
     // NÍVEL 3: se há custódia de origem, subtrai do saldo
     if (state.orcamento.nivel >= 3 && registroTemporario.custodiaId) {
@@ -6136,6 +6140,7 @@ function confirmarRegistro(nomeCategoria) {
     const percentual = (semana[caixa].gasto / semana[caixa].limite) * 100;
     let fala = '';
     let icone = '';
+    let mesReferencia = null; // Nova variável para a TAG
 
     if (caixa === 'base') {
         icone = '🛡️';
@@ -6152,6 +6157,37 @@ function confirmarRegistro(nomeCategoria) {
         fala = "Mais um tijolo. Olha a parede crescendo.";
     }
 
+    // ============================================================
+    // NOVO: INTELIGÊNCIA DE ADIANTAMENTO (COMPETÊNCIA vs CAIXA)
+    // ============================================================
+    if (registroTemporario.categoriaId) {
+        const cat = (state.orcamento.categorias || []).find(c => c.id === registroTemporario.categoriaId);
+        
+        // Só faz sentido perguntar para contas com vencimento definido
+        if (cat && cat.tipo === 'conta') {
+            const jaPagoNoMes = _temRegistroPagoNoMes(cat, state.orcamento);
+            
+            if (jaPagoNoMes) {
+                // Pega o mês e ano da data do registro (para não bugar se a pessoa registrar no dia 31 às 23h)
+                const dataRef = new Date(dataISO);
+                const proximoMes = new Date(dataRef.getFullYear(), dataRef.getMonth() + 1, 1);
+                const proxMesStr = proximoMes.getFullYear() + '-' + String(proximoMes.getMonth() + 1).padStart(2, '0');
+                const rotuloProxMes = _rotuloMesAno(proxMesStr);
+
+                const ehAdiantamento = confirm(
+                    `Você já registrou um pagamento para "${cat.nome}" neste mês.\n\n` +
+                    `Este novo valor é um ADIANTAMENTO para o mês de ${rotuloProxMes}?`
+                );
+
+                if (ehAdiantamento) {
+                    mesReferencia = proxMesStr;
+                    fala += ` Anotado como adiantamento de <strong>${rotuloProxMes}</strong>. No fluxo do próximo mês, essa conta já vai constar como paga.`;
+                }
+            }
+        }
+    }
+    // ============================================================
+
     // Custódia de origem (gasto sai)
     if (state.orcamento.nivel >= 3 && registroTemporario.custodiaId) {
         const c = (state.orcamento.custodias || []).find(x => x.id === registroTemporario.custodiaId);
@@ -6165,7 +6201,9 @@ function confirmarRegistro(nomeCategoria) {
         }
     }
 
-       if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+    
+    // NOVO: Adicionado o mesReferencia no objeto
     state.orcamento.historicoRegistros.push({
         id: 'reg_' + Date.now(),
         data: dataISO,
@@ -6176,7 +6214,8 @@ function confirmarRegistro(nomeCategoria) {
         valor: valor,
         custodiaId: registroTemporario.custodiaId || null,
         cartaoId: null,
-        saldoAtualizado: !!registroTemporario.custodiaId
+        saldoAtualizado: !!registroTemporario.custodiaId,
+        mesReferencia: mesReferencia // <-- TAG SALVA AQUI
     });
 
     // Verifica se o gatilho do Nível 2 foi atingido
@@ -6385,7 +6424,6 @@ function registroEscolherCustodiaRecebimento(custodiaId) {
 }
 
 function confirmarRecebimento(categoriaNome, custodiaId) {
-    // Fallback: se não veio por argumento, tenta do temporário
     if (categoriaNome === undefined || categoriaNome === null) {
         categoriaNome = registroTemporario.categoriaNome || null;
     }
@@ -6400,16 +6438,39 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
         return;
     }
 
-    // 1. Soma na renda real só se a data cair na semana atual (Bloco 10)
+    let mesReferencia = null;
+    // NOVO: INTELIGÊNCIA DE ADIANTAMENTO
+    if (registroTemporario.categoriaId || registroTemporario.categoriaNome) {
+        const fonte = (state.orcamento.rendaDetalhe?.fontes || []).find(f => 
+            f.id === registroTemporario.categoriaId || f.nome === registroTemporario.categoriaNome
+        );
+        if (fonte) {
+            const jaRecebido = (state.orcamento.historicoRegistros || []).some(r => 
+                r.tipo === 'recebimento' && !r.anulado && _pertenceMesAtual(r.data) && 
+                (r.categoriaId === fonte.id || r.categoria === fonte.nome)
+            );
+            if (jaRecebido) {
+                const dataRef = new Date(dataISO);
+                const proxMes = new Date(dataRef.getFullYear(), dataRef.getMonth() + 1, 1);
+                const proxMesStr = proxMes.getFullYear() + '-' + String(proxMes.getMonth() + 1).padStart(2, '0');
+                const rotuloProxMes = _rotuloMesAno(proxMesStr);
+
+                const ehAdiantamento = confirm(
+                    `Você já registrou um recebimento de "${fonte.nome}" neste mês.\n\n` +
+                    `Este novo valor é um ADIANTAMENTO do mês de ${rotuloProxMes}?`
+                );
+                if (ehAdiantamento) mesReferencia = proxMesStr;
+            }
+        }
+    }
+
     if (dataNaSemanaAtual(dataISO)) {
         semana.rendaReal = (semana.rendaReal || 0) + valor;
-        // Regra 8: se ultrapassou o estimado, atualiza o estimado
         if (semana.rendaReal > (semana.rendaEstimada || 0)) {
             semana.rendaEstimada = semana.rendaReal;
         }
     }
 
-    // 2. Nível 3: custódia de destino (saldo real, independente da semana)
     let custodiaNome = null;
     if (state.orcamento.nivel >= 3 && custodiaId) {
         const custodia = state.orcamento.custodias.find(c => c.id === custodiaId);
@@ -6419,7 +6480,6 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
         }
     }
 
-    // 3. Histórico
     if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
     state.orcamento.historicoRegistros.push({
         id: 'reg_' + Date.now(),
@@ -6427,26 +6487,31 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
         tipo: 'recebimento',
         caixa: null,
         categoria: categoriaNome,
+        categoriaId: registroTemporario.categoriaId || null,
         valor: valor,
         custodiaId: custodiaId || null,
         cartaoId: null,
-        saldoAtualizado: !!custodiaId
+        saldoAtualizado: !!custodiaId,
+        mesReferencia: mesReferencia // <-- TAG AQUI
     });
 
     verificarGatilhoNivel2();
     if (typeof _tickOnboardingAposRegistro === "function") _tickOnboardingAposRegistro();
     salvarEstado();
 
-    // 5. Confirmação em bolha (Fatia C)
     const totalRecebido = semana.rendaReal;
     const estimado = semana.rendaEstimada;
     const acima = totalRecebido > estimado;
+    
     let fala = `Recebido. Você já registrou R$ ${totalRecebido.toFixed(2).replace('.', ',')} esta semana. `;
-    fala += acima
-        ? `Já passou do estimado (R$ ${estimado.toFixed(2).replace('.', ',')}). Atualizei a previsão.`
-        : `Estimado: R$ ${estimado.toFixed(2).replace('.', ',')}.`;
+    fala += acima ? `Já passou do estimado (R$ ${estimado.toFixed(2).replace('.', ',')}). Atualizei a previsão.` : `Estimado: R$ ${estimado.toFixed(2).replace('.', ',')}.`;
     if (custodiaNome) fala += ` Entrou em ${custodiaNome}.`;
     else if ((state.orcamento.nivel || 1) >= 3) fala += ' Sem conta ligada — a entrada não foi somada a nenhum saldo.';
+    
+    // NOVO: Feedback visual de adiantamento
+    if (mesReferencia) {
+        fala += ` Anotado como adiantamento para <strong>${_rotuloMesAno(mesReferencia)}</strong>.`;
+    }
 
     dialogoPushPersonagem('torres', fala);
     _pintarModalRegistroDialogo(
@@ -8310,18 +8375,32 @@ function confirmarPagamentoParcela() {
         return;
     }
 
-    // 1. Incrementa a parcela
+    let mesReferencia = null;
+    // NOVO: INTELIGÊNCIA DE ADIANTAMENTO
+    if (cat.tipo === 'conta') {
+        const jaPagoNoMes = _temRegistroPagoNoMes(cat, state.orcamento);
+        if (jaPagoNoMes) {
+            const agora = new Date();
+            const proxMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 1);
+            const proxMesStr = proxMes.getFullYear() + '-' + String(proxMes.getMonth() + 1).padStart(2, '0');
+            const rotuloProxMes = _rotuloMesAno(proxMesStr);
+
+            const ehAdiantamento = confirm(
+                `Você já registrou um pagamento para "${cat.nome}" neste mês.\n\n` +
+                `Este novo pagamento é um ADIANTAMENTO para o mês de ${rotuloProxMes}?`
+            );
+            if (ehAdiantamento) mesReferencia = proxMesStr;
+        }
+    }
+
     cat.parcelasPagas = (cat.parcelasPagas || 0) + 1;
 
-    // Atualiza Futuro total (quitada some do planejamento do mês seguinte)
     if (typeof recalcularTotalFuturo === 'function') {
         try { recalcularTotalFuturo({ somenteTotal: true }); } catch (_) {}
     }
 
-    // 2. Soma no gasto da caixa Futuro
     semana.futuro.gasto += valorPago;
 
-    // 3. NÍVEL 3: subtrai da custódia, se houver
     let custodiaNome = null;
     if (state.orcamento.nivel >= 3 && registroTemporario.custodiaId) {
         const custodia = state.orcamento.custodias.find(c => c.id === registroTemporario.custodiaId);
@@ -8331,7 +8410,6 @@ function confirmarPagamentoParcela() {
         }
     }
 
-    // Aporte de reserva com destino: credita a custódia de reserva ligada à categoria
     let custodiaDestinoNome = null;
     let custodiaDestinoId = null;
     if (cat.subtipo === 'reserva' && cat.custodiaPadraoId) {
@@ -8343,7 +8421,6 @@ function confirmarPagamentoParcela() {
         }
     }
 
-    // 4. Histórico
     if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
     state.orcamento.historicoRegistros.push({
         id: 'reg_' + Date.now(),
@@ -8356,14 +8433,14 @@ function confirmarPagamentoParcela() {
         custodiaId: registroTemporario.custodiaId || null,
         custodiaDestinoId: custodiaDestinoId,
         cartaoId: null,
-        saldoAtualizado: !!registroTemporario.custodiaId
+        saldoAtualizado: !!registroTemporario.custodiaId,
+        mesReferencia: mesReferencia // <-- TAG AQUI
     });
 
     if (typeof _tickOnboardingAposRegistro === "function") _tickOnboardingAposRegistro();
     salvarEstado();
     limparPendenteRegistroFuturo();
 
-    // 5. Confirmação (reaproveita o passo 3 do modal)
     const modalReg = document.getElementById('modal-registro');
     if (modalReg && modalReg.classList.contains('ativo')) {
         document.getElementById('modal-registro-passo-1').style.display = 'none';
@@ -8373,9 +8450,7 @@ function confirmarPagamentoParcela() {
 
         const total = cat.parcelasTotais || 0;
         const pagas = cat.parcelasPagas || 0;
-        const linhaCustodia = custodiaNome
-            ? `Saiu de <strong>${custodiaNome}</strong>.`
-            : '';
+        const linhaCustodia = custodiaNome ? `Saiu de <strong>${custodiaNome}</strong>.` : '';
 
         let falaFinal;
         if (total > 0 && pagas >= total) {
@@ -8387,7 +8462,10 @@ function confirmarPagamentoParcela() {
         }
         if (custodiaDestinoNome) falaFinal += ` Guardado em <strong>${custodiaDestinoNome}</strong>.`;
         if (cat.subtipo === 'reserva' && !custodiaDestinoId && state.orcamento.nivel >= 3) {
-            falaFinal += ' Nenhuma conta de reserva ligada — o dinheiro saiu da conta mas ainda não apareceu em uma reserva. Ligue em Futuro → Reservas.';
+            falaFinal += ' Nenhuma conta de reserva ligada — o dinheiro saiu da conta mas ainda não apareceu em uma reserva.';
+        }
+        if (mesReferencia) {
+            falaFinal += ` Anotado como adiantamento de <strong>${_rotuloMesAno(mesReferencia)}</strong>.`;
         }
 
         const falaEl = document.getElementById('modal-registro-fala');
@@ -8399,7 +8477,6 @@ function confirmarPagamentoParcela() {
         }
     }
 
-    // Limpa contexto e atualiza a tela de fundo
     registroTemporario = null;
     renderizarDetalheFuturo();
 }
@@ -10218,6 +10295,20 @@ function _mesAtualYYYYMM() {
  * Extraído de _contaEstaPagaNoMes para permitir reuso na decisão
  * de quando perguntar "já paguei?".
  */
+ 
+ function _mesSeguinteYYYYMM() {
+    const h = new Date();
+    h.setMonth(h.getMonth() + 1);
+    return h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0');
+}
+
+function _rotuloMesAno(yyyymm) {
+    if (!yyyymm) return '';
+    const [ano, mes] = yyyymm.split('-');
+    const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    return meses[parseInt(mes)-1] + '/' + ano.slice(2);
+}
+ 
 function _temRegistroPagoNoMes(cat, orc) {
     if (!cat || !orc) return false;
     const hist = orc.historicoRegistros || [];
@@ -10622,16 +10713,34 @@ function confirmarRegistroCartao() {
         return;
     }
 
-    // Fatia 4 / B1 — COMPRA NO CARTÃO:
-    // competência: debita meta (envelope) se a data cair na semana atual
-    // fatura: sobe
-    // caixa à vista: NÃO mexe
     cartao.faturaAcumulada = (cartao.faturaAcumulada || 0) + valor;
 
     const dataISO = registroTemporario.data || new Date().toISOString();
     const dataCompra = dataISO;
     const caixa = registroTemporario.caixa || null;
     const semana = state.orcamento.semanaAtual;
+
+    let mesReferencia = null;
+    // NOVO: INTELIGÊNCIA DE ADIANTAMENTO
+    if (registroTemporario.categoriaId) {
+        const cat = (state.orcamento.categorias || []).find(c => c.id === registroTemporario.categoriaId);
+        if (cat && cat.tipo === 'conta') {
+            const jaPagoNoMes = _temRegistroPagoNoMes(cat, state.orcamento);
+            if (jaPagoNoMes) {
+                const dataRef = new Date(dataISO);
+                const proxMes = new Date(dataRef.getFullYear(), dataRef.getMonth() + 1, 1);
+                const proxMesStr = proxMes.getFullYear() + '-' + String(proxMes.getMonth() + 1).padStart(2, '0');
+                const rotuloProxMes = _rotuloMesAno(proxMesStr);
+
+                const ehAdiantamento = confirm(
+                    `Você já registrou um pagamento para "${cat.nome}" neste mês.\n\n` +
+                    `Esta compra no cartão é um ADIANTAMENTO para o mês de ${rotuloProxMes}?`
+                );
+                if (ehAdiantamento) mesReferencia = proxMesStr;
+            }
+        }
+    }
+
     if (semana && !semana.fechada && caixa && semana[caixa] && dataNaSemanaAtual(dataISO)) {
         semana[caixa].gasto = (semana[caixa].gasto || 0) + valor;
     }
@@ -10648,13 +10757,13 @@ function confirmarRegistroCartao() {
         valor: valor,
         custodiaId: null,
         cartaoId: cartaoId,
-        saldoAtualizado: false // não tocou saldo à vista
+        saldoAtualizado: false,
+        mesReferencia: mesReferencia // <-- TAG AQUI
     });
 
     if (typeof _tickOnboardingAposRegistro === "function") _tickOnboardingAposRegistro();
     salvarEstado();
 
-    // Nota sobre ciclo da fatura (só se diaFechamento declarado)
     let notaCiclo = '';
     const fechamento = cartao.diaFechamento;
     if (typeof fechamento === 'number' && fechamento >= 1 && fechamento <= 31) {
@@ -10672,7 +10781,12 @@ function confirmarRegistroCartao() {
     }
 
     const faturaFmt = cartao.faturaAcumulada.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const falaCartao = `Entrou na fatura de ${cartao.nome} (agora ${faturaFmt}).${notaCiclo.replace(/<[^>]+>/g, '')} Isso já entrou na meta da semana — porque você já gastou. O dinheiro só sai da conta quando pagar a fatura. Por enquanto, é uma dívida.`;
+    let falaCartao = `Entrou na fatura de ${cartao.nome} (agora ${faturaFmt}).${notaCiclo.replace(/<[^>]+>/g, '')} Isso já entrou na meta da semana. O dinheiro só sai da conta quando pagar a fatura.`;
+    
+    if (mesReferencia) {
+        falaCartao += ` Anotado como adiantamento para <strong>${_rotuloMesAno(mesReferencia)}</strong>.`;
+    }
+
     try { dialogoPushUsuario(cartao.nome); } catch (_) {}
     dialogoPushPersonagem('torres', falaCartao);
     _pintarModalRegistroDialogo(
@@ -12622,45 +12736,44 @@ function _eventosRecebimentoDeclarados(orc, inicio, fim) {
         
         let cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
         const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
+        
         while (cursor <= fimMes) {
             const ano = cursor.getFullYear();
             const mes = cursor.getMonth();
+            const mesRefStr = `${ano}-${String(mes + 1).padStart(2, '0')}`;
             
-            // NOVO: Verifica se já foi recebido (com janela de 7 dias antes do mês para pegar adiantamentos)
-            const janelaInicio = new Date(ano, mes, 1);
-            janelaInicio.setDate(janelaInicio.getDate() - 7);
-            const janelaFim = new Date(ano, mes + 1, 0);
+            // NOVO CÉREBRO: Checa se já houve adiantamento para este mês
+            const temAdiantamento = (orc.historicoRegistros || []).some(r => 
+                !r.anulado &&
+                r.mesReferencia === mesRefStr &&
+                (r.categoriaId === f.id || r.categoria === f.nome)
+            );
             
-            const realizadoNoMes = (orc.historicoRegistros || [])
-                .filter(r => 
-                    r.tipo === 'recebimento' && 
-                    !r.anulado && 
-                    r.categoria === f.nome &&
-                    new Date(r.data) >= janelaInicio &&
-                    new Date(r.data) <= janelaFim
-                )
-                .reduce((s, r) => s + (r.valor || 0), 0);
+            if (!temAdiantamento) {
+                // Verifica se já foi recebido no mês corrente normal
+                const jaRecebido = (orc.historicoRegistros || []).some(r => 
+                    r.tipo === 'recebimento' && !r.anulado && _pertenceMesAtual(r.data) && (r.categoriaId === f.id || r.categoria === f.nome)
+                );
                 
-            const valorRestante = Math.max(0, valorMes - realizadoNoMes);
-            
-            if (valorRestante > 0) {
-                const valorPorOcorrencia = valorRestante / dias.length;
-                dias.forEach(dia => {
-                    const data = _dataNoMes(ano, mes, dia);
-                    if (data >= inicio && data <= fim) {
-                        eventos.push({
-                            tipo: 'recebimento',
-                            data: data.toISOString().split('T')[0],
-                            dia: data.getDate(),
-                            nome: f.nome || 'Recebimento',
-                            fonteId: f.id || null,
-                            valor: valorPorOcorrencia,
-                            caixa: null,
-                            categoriaId: null,
-                            custodiaId: f.custodiaPadraoId || null
-                        });
-                    }
-                });
+                if (!jaRecebido) {
+                    const valorPorOcorrencia = valorMes / dias.length;
+                    dias.forEach(dia => {
+                        const data = _dataNoMes(ano, mes, dia);
+                        if (data >= inicio && data <= fim) {
+                            eventos.push({
+                                tipo: 'recebimento',
+                                data: data.toISOString().split('T')[0],
+                                dia: data.getDate(),
+                                nome: f.nome || 'Recebimento',
+                                fonteId: f.id || null,
+                                valor: valorPorOcorrencia,
+                                caixa: null,
+                                categoriaId: null,
+                                custodiaId: f.custodiaPadraoId || null
+                            });
+                        }
+                    });
+                }
             }
             cursor = new Date(ano, mes + 1, 1);
         }
@@ -12676,38 +12789,46 @@ function _eventosVencimentoDeclarados(orc, inicio, fim) {
     const eventos = [];
     let cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
     const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
+    
     while (cursor <= fimMes) {
         const ano = cursor.getFullYear();
         const mes = cursor.getMonth();
+        const mesRefStr = `${ano}-${String(mes + 1).padStart(2, '0')}`;
+        
         categorias.forEach(c => {
             const data = _dataNoMes(ano, mes, c.vencimento);
             if (data >= inicio && data <= fim) {
-                // NOVO: Verifica se já foi pago (janela de 7 dias antes do mês)
-                const janelaInicio = new Date(ano, mes, 1);
-                janelaInicio.setDate(janelaInicio.getDate() - 7);
-                const janelaFim = new Date(ano, mes + 1, 0);
-
-                const jaPago = (orc.historicoRegistros || []).some(r =>
+                
+                // NOVO CÉREBRO: Checa se já houve adiantamento para este mês
+                const temAdiantamento = (orc.historicoRegistros || []).some(r => 
                     !r.anulado &&
-                    (r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao' || r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') &&
-                    (r.categoriaId === c.id || r.categoria === c.nome) &&
-                    new Date(r.data) >= janelaInicio &&
-                    new Date(r.data) <= janelaFim
+                    r.mesReferencia === mesRefStr &&
+                    (r.categoriaId === c.id || r.categoria === c.nome)
                 );
-
-                if (!jaPago) {
-                    eventos.push({
-                        tipo: 'vencimento',
-                        data: data.toISOString().split('T')[0],
-                        dia: data.getDate(),
-                        nome: c.nome || 'Conta',
-                        fonteId: null,
-                        valor: c.valor || 0,
-                        caixa: c.caixa || null,
-                        categoriaId: c.id || null,
-                        custodiaId: c.custodiaPadraoId || null,
-                        subtipo: c.subtipo || null
-                    });
+                
+                if (!temAdiantamento) {
+                    // Verifica se já foi pago no mês corrente normal
+                    const jaPago = (orc.historicoRegistros || []).some(r => 
+                        !r.anulado &&
+                        (r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao' || r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') &&
+                        _pertenceMesAtual(r.data) &&
+                        (r.categoriaId === c.id || r.categoria === c.nome)
+                    );
+                    
+                    if (!jaPago) {
+                        eventos.push({
+                            tipo: 'vencimento',
+                            data: data.toISOString().split('T')[0],
+                            dia: data.getDate(),
+                            nome: c.nome || 'Conta',
+                            fonteId: null,
+                            valor: c.valor || 0,
+                            caixa: c.caixa || null,
+                            categoriaId: c.id || null,
+                            custodiaId: c.custodiaPadraoId || null,
+                            subtipo: c.subtipo || null
+                        });
+                    }
                 }
             }
         });
@@ -13300,6 +13421,8 @@ function renderizarModalListaRegistros() {
                 if (r.tipo === 'ajuste_semana_anterior') meta += (meta ? ' · ' : '') + (r.operacao === 'exclusao' ? 'exclusão' : 'edição');
                 const cust = _nomeCustodia(r.custodiaId) || _nomeCustodia(r.cartaoId);
                 if (cust) meta += (meta ? ' · ' : '') + cust;
+                if (r.mesReferencia) { meta += ` · <span style="color:var(--warning); font-weight:bold;">[Adiantamento ${_rotuloMesAno(r.mesReferencia)}]</span>`; }
+                
                 if (r.anulado) meta += (meta ? ' · ' : '') + 'histórico fechado preservado';
                 const corValor = r.anulado ? 'var(--secondary)' : (isReceb ? 'var(--success)' : 'var(--primary)');
                 const sinal = isReceb ? '+' : '−';
