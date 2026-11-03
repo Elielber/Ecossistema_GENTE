@@ -1893,6 +1893,14 @@ if (c.tipo !== 'conta' && c.tipo !== 'consumo') {
 if ('forcarMostrar' in state.orcamento.uiApoio) {
     delete state.orcamento.uiApoio.forcarMostrar;
 }
+
+    // Fatia de alisamento — estado do simulador (fora de state.n4)
+    if (!state.orcamento.cenarioAlisamento || typeof state.orcamento.cenarioAlisamento !== 'object') {
+        state.orcamento.cenarioAlisamento = { ativo: false, ajustes: [], criadoEm: null };
+    }
+    if (!Array.isArray(state.orcamento.cenarioAlisamento.ajustes)) {
+        state.orcamento.cenarioAlisamento.ajustes = [];
+    }
 }
 
 // ============================================================
@@ -12321,13 +12329,15 @@ function renderizarFluxoCaixa() {
          });
     }
 
+    const htmlGraficoAlisamento = renderizarGraficoAlisamento(orc, { diasAtras: 14, diasFrente: 30 });
+
     container.innerHTML = `
         <div style="margin-bottom: 16px;">
             <span style="font-size: 0.9rem; font-weight: bold; color: var(--secondary); text-transform: uppercase;">Fluxo de caixa</span>
             <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--primary); margin-top: 4px;">Olhar à frente</h2>
         </div>
         ${htmlResumo}
-        
+        ${htmlGraficoAlisamento}
         ${htmlConexaoEnvelopes}
         
         ${htmlSeletorCustodia}
@@ -12923,6 +12933,538 @@ function _estoqueOperacionalAtual(orc) {
     return somaSaldo - somaFatura;
 }
 
+// ============================================================
+// FATIA DE ALISAMENTO (N3) — simulação de datas de vencimento/recebimento
+// Estado próprio: state.orcamento.cenarioAlisamento (fora de state.n4)
+// ============================================================
+
+function _garantirCenarioAlisamento() {
+    if (!state.orcamento) return { ativo: false, ajustes: [], criadoEm: null };
+    if (!state.orcamento.cenarioAlisamento || typeof state.orcamento.cenarioAlisamento !== 'object') {
+        state.orcamento.cenarioAlisamento = { ativo: false, ajustes: [], criadoEm: null };
+    }
+    const ca = state.orcamento.cenarioAlisamento;
+    if (!Array.isArray(ca.ajustes)) ca.ajustes = [];
+    return ca;
+}
+
+/**
+ * Efeito de um registro no estoque operacional (saldos − faturas).
+ * Positivo = aumentou o que o usuário tem; negativo = diminuiu.
+ * Função pura: não toca state.
+ */
+function _efeitoEstoqueRegistro(r) {
+    if (!r || r.anulado) return 0;
+    const v = Number(r.valor) || 0;
+    const d = Number(r.delta) || 0;
+    switch (r.tipo) {
+        case 'recebimento':          return +v;
+        case 'gasto_direto':         return -v;
+        case 'gasto_cartao':         return -v;
+        case 'pagamento_fatura':     return 0;
+        case 'pagamento_divida':     return -v;
+        case 'aporte_reserva':       return -v;
+        case 'transferencia': {
+            const orc = state.orcamento;
+            const orig = (orc.custodias || []).find(c => c.id === r.custodiaId);
+            const dest = (orc.custodias || []).find(c => c.id === r.custodiaDestinoId);
+            const origRes = orig && _custodiaEhReserva(orig);
+            const destRes = dest && _custodiaEhReserva(dest);
+            if (origRes && !destRes) return +v;
+            if (!origRes && destRes) return -v;
+            return 0;
+        }
+        case 'ajuste_semana_anterior': {
+            if (r.tipoOriginal === 'recebimento') return +d;
+            if (r.tipoOriginal === 'gasto_direto') return -d;
+            if (r.tipoOriginal === 'gasto_cartao') return -d;
+            if (r.tipoOriginal === 'pagamento_divida' || r.tipoOriginal === 'aporte_reserva') return -d;
+            return 0;
+        }
+        case 'ajuste_conciliacao':
+            if (r.campo === 'saldo')  return +d;
+            if (r.campo === 'fatura') return -d;
+            return 0;
+        default: return 0;
+    }
+}
+
+/**
+ * Reconstrói o saldo operacional diário dos últimos N dias.
+ * Âncora = última conciliação por custódia.
+ */
+function reconstruirSaldoHistorico(orc, opcoes) {
+    opcoes = opcoes || {};
+    const diasAtras = (typeof opcoes.diasAtras === 'number' && opcoes.diasAtras > 0)
+        ? opcoes.diasAtras : 14;
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const estoque = _estoqueOperacionalAtual(orc);
+    if (estoque === null) {
+        return { temAncora: false, pontos: [], motivo: 'sem_estoque_operacional' };
+    }
+
+    const ancoras = [];
+    (orc.custodias || []).forEach(c => {
+        if (_custodiaEhReserva(c)) return;
+        const hist = c.historicoReconciliacoes || [];
+        if (hist.length === 0) return;
+        let maisRecente = hist[0];
+        for (let i = 1; i < hist.length; i++) {
+            if (new Date(hist[i].data) > new Date(maisRecente.data)) maisRecente = hist[i];
+        }
+        ancoras.push({
+            custodiaId: c.id,
+            data: maisRecente.data,
+            campo: maisRecente.campo
+        });
+    });
+
+    const registros = (orc.historicoRegistros || []).filter(r => !r.anulado);
+    const dataAncoras = new Set(ancoras.map(a => String(a.data || '').split('T')[0]));
+
+    const pontos = [];
+    const dataHojeStr = hoje.toISOString().split('T')[0];
+
+    let saldoCorrente = estoque;
+    pontos.push({
+        data: dataHojeStr,
+        saldo: saldoCorrente,
+        ancora: dataAncoras.has(dataHojeStr)
+    });
+
+    for (let i = 1; i <= diasAtras; i++) {
+        const dia = new Date(hoje);
+        dia.setDate(hoje.getDate() - i);
+        const diaStr = dia.toISOString().split('T')[0];
+
+        let net = 0;
+        registros.forEach(r => {
+            if (!r.data) return;
+            if (String(r.data).split('T')[0] !== diaStr) return;
+            net += _efeitoEstoqueRegistro(r);
+        });
+
+        saldoCorrente -= net;
+        pontos.push({
+            data: diaStr,
+            saldo: saldoCorrente,
+            ancora: dataAncoras.has(diaStr)
+        });
+    }
+
+    pontos.reverse();
+
+    return {
+        temAncora: ancoras.length > 0,
+        pontos: pontos,
+        ancoras: ancoras,
+        confianca: ancoras.length > 0 ? 'ancorada' : 'reconstruida'
+    };
+}
+
+/**
+ * Projeta o saldo diário dos próximos N dias, a partir do estoque atual.
+ */
+function construirProjecaoDiaria(orc, fluxo) {
+    const estoque = _estoqueOperacionalAtual(orc);
+    if (estoque === null) return [];
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const dataHojeStr = hoje.toISOString().split('T')[0];
+
+    const pontos = [{ data: dataHojeStr, saldo: estoque, eventos: [] }];
+    let saldo = estoque;
+
+    for (let i = 1; i <= fluxo.dias; i++) {
+        const dia = new Date(hoje);
+        dia.setDate(hoje.getDate() + i);
+        const diaStr = dia.toISOString().split('T')[0];
+        const diaData = fluxo.porDia[diaStr] || { entradas: 0, saidas: 0, eventos: [] };
+        saldo += (Number(diaData.entradas) || 0) - (Number(diaData.saidas) || 0);
+        pontos.push({
+            data: diaStr,
+            saldo: saldo,
+            eventos: diaData.eventos || [],
+            entradas: Number(diaData.entradas) || 0,
+            saidas: Number(diaData.saidas) || 0
+        });
+    }
+    return pontos;
+}
+
+function _escSvg(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function _fmtEixo(v) {
+    const n = Number(v) || 0;
+    const abs = Math.abs(n);
+    if (abs >= 1000) return (n / 1000).toFixed(1).replace('.', ',') + 'k';
+    return Math.round(n).toString();
+}
+
+function _fmtDia(iso) {
+    const p = String(iso || '').split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] : '';
+}
+
+/**
+ * SVG de 3 camadas: passado reconstruído, projeção atual, simulado.
+ */
+function montarSVGAlisamento(dados) {
+    const { historico, projAtual, projSimulado } = dados;
+    const todos = [...historico.pontos, ...projAtual, ...(projSimulado || [])];
+    if (todos.length < 2) return '';
+
+    const W = 360, H = 220;
+    const padL = 44, padR = 12, padT = 20, padB = 30;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    const dIni = new Date(todos[0].data + 'T00:00:00');
+    const dFim = new Date(todos[todos.length - 1].data + 'T00:00:00');
+    const totalDias = Math.max(1, Math.round((dFim - dIni) / 86400000));
+    const xDe = (dataStr) => {
+        const d = new Date(dataStr + 'T00:00:00');
+        const dias = Math.round((d - dIni) / 86400000);
+        return padL + (dias / totalDias) * plotW;
+    };
+
+    let yMin = 0, yMax = 0;
+    todos.forEach(p => {
+        if (p.saldo < yMin) yMin = p.saldo;
+        if (p.saldo > yMax) yMax = p.saldo;
+    });
+    const range = Math.max(yMax - yMin, 100);
+    const padY = range * 0.12;
+    yMin -= padY;
+    yMax += padY;
+    const yDe = (saldo) => padT + plotH - ((saldo - yMin) / (yMax - yMin)) * plotH;
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const xHoje = xDe(hoje.toISOString().split('T')[0]);
+
+    const pathHist = historico.pontos.length >= 2
+        ? 'M ' + historico.pontos.map(p => `${xDe(p.data).toFixed(1)} ${yDe(p.saldo).toFixed(1)}`).join(' L ') : '';
+    const pathAtual = projAtual.length >= 2
+        ? 'M ' + projAtual.map(p => `${xDe(p.data).toFixed(1)} ${yDe(p.saldo).toFixed(1)}`).join(' L ') : '';
+    const pathSim = (projSimulado && projSimulado.length >= 2)
+        ? 'M ' + projSimulado.map(p => `${xDe(p.data).toFixed(1)} ${yDe(p.saldo).toFixed(1)}`).join(' L ') : '';
+
+    let corSim = 'var(--warning)';
+    if (projSimulado && projAtual.length > 0) {
+        const minSim = projSimulado.reduce((m, p) => p.saldo < m.saldo ? p : m, projSimulado[0]);
+        const minAtual = projAtual.reduce((m, p) => p.saldo < m.saldo ? p : m, projAtual[0]);
+        if (minSim.saldo > minAtual.saldo + 0.5) corSim = 'var(--success)';
+    }
+
+    let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;font-family:inherit;" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Projeção de saldo diário">`;
+
+    if (yMin < 0) {
+        const yZero = yDe(0);
+        svg += `<rect x="${padL}" y="${yZero.toFixed(1)}" width="${plotW}" height="${Math.max(0, padT + plotH - yZero).toFixed(1)}" fill="var(--warning-soft)" opacity="0.45"/>`;
+    }
+
+    if (yMin < 0 && yMax > 0) {
+        const yZero = yDe(0);
+        svg += `<line x1="${padL}" y1="${yZero.toFixed(1)}" x2="${padL + plotW}" y2="${yZero.toFixed(1)}" stroke="var(--text-main)" stroke-width="1" stroke-dasharray="2 3" opacity="0.35"/>`;
+        svg += `<text x="${padL - 6}" y="${(yZero + 3).toFixed(1)}" font-size="9" fill="var(--secondary)" text-anchor="end">0</text>`;
+    }
+
+    svg += `<text x="${padL - 6}" y="${(yDe(yMax) + 3).toFixed(1)}" font-size="9" fill="var(--secondary)" text-anchor="end">${_escSvg(_fmtEixo(yMax))}</text>`;
+    svg += `<text x="${padL - 6}" y="${(yDe(yMin) + 3).toFixed(1)}" font-size="9" fill="var(--secondary)" text-anchor="end">${_escSvg(_fmtEixo(yMin))}</text>`;
+    svg += `<text x="${padL}" y="${H - 10}" font-size="9" fill="var(--secondary)" text-anchor="start">${_escSvg(_fmtDia(todos[0].data))}</text>`;
+    svg += `<text x="${padL + plotW}" y="${H - 10}" font-size="9" fill="var(--secondary)" text-anchor="end">${_escSvg(_fmtDia(todos[todos.length - 1].data))}</text>`;
+
+    svg += `<line x1="${xHoje.toFixed(1)}" y1="${padT}" x2="${xHoje.toFixed(1)}" y2="${padT + plotH}" stroke="var(--secondary)" stroke-width="1" stroke-dasharray="2 3" opacity="0.45"/>`;
+    svg += `<text x="${xHoje.toFixed(1)}" y="${padT - 6}" font-size="9" fill="var(--secondary)" text-anchor="middle">hoje</text>`;
+
+    if (pathHist) {
+        svg += `<path d="${pathHist}" fill="none" stroke="var(--secondary)" stroke-width="1.5" stroke-dasharray="1 3" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>`;
+        historico.pontos.forEach(p => {
+            if (!p.ancora) return;
+            const x = xDe(p.data), y = yDe(p.saldo);
+            svg += `<rect x="${(x - 3).toFixed(1)}" y="${(y - 3).toFixed(1)}" width="6" height="6" fill="var(--primary)" transform="rotate(45 ${x.toFixed(1)} ${y.toFixed(1)})"/>`;
+        });
+    }
+
+    if (pathAtual) {
+        svg += `<path d="${pathAtual}" fill="none" stroke="var(--primary)" stroke-width="1.8" stroke-dasharray="4 3" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+
+    if (pathSim) {
+        svg += `<path d="${pathSim}" fill="none" stroke="${corSim}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+
+    projAtual.forEach(p => {
+        (p.eventos || []).forEach(e => {
+            if (e.tipo !== 'recebimento' && e.tipo !== 'vencimento') return;
+            const x = xDe(p.data), y = yDe(p.saldo);
+            const cor = e.tipo === 'recebimento' ? 'var(--success)' : 'var(--danger)';
+            svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2" fill="${cor}" opacity="0.85"/>`;
+        });
+    });
+
+    if (projAtual.length > 0) {
+        const min = projAtual.reduce((m, p) => p.saldo < m.saldo ? p : m, projAtual[0]);
+        if (min.saldo < 0) {
+            const x = xDe(min.data), y = yDe(min.saldo);
+            svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="var(--warning)" stroke="var(--card-bg)" stroke-width="1.5"/>`;
+        }
+    }
+
+    svg += '</svg>';
+    return svg;
+}
+
+function montarPainelComparacao(dados) {
+    const { projAtual, projSimulado } = dados;
+    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    if (projAtual.length === 0) {
+        return `<div style="padding:12px;background:var(--bg-color);border-radius:10px;font-size:0.9rem;color:var(--secondary);line-height:1.45;">
+            Sem dados suficientes para projetar. Cadastre renda com dia e contas com vencimento.
+        </div>`;
+    }
+
+    const minAtual = projAtual.reduce((m, p) => p.saldo < m.saldo ? p : m, projAtual[0]);
+    const diasVermelhoAtual = projAtual.filter(p => p.saldo < 0).length;
+
+    let linhas = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.85rem;">
+            <span style="color:var(--primary);font-weight:700;">Atual</span>
+            <span style="color:var(--secondary);">mín <strong style="color:${minAtual.saldo < 0 ? 'var(--warning)' : 'var(--success)'};">${fmt(minAtual.saldo)}</strong> em ${_fmtDia(minAtual.data)}</span>
+            <span style="font-size:0.78rem;color:${diasVermelhoAtual > 0 ? 'var(--warning)' : 'var(--success)'};">
+                ${diasVermelhoAtual > 0 ? diasVermelhoAtual + ' dia(s) no vermelho' : 'nenhum dia no vermelho'}
+            </span>
+        </div>`;
+
+    if (projSimulado && projSimulado.length > 0) {
+        const minSim = projSimulado.reduce((m, p) => p.saldo < m.saldo ? p : m, projSimulado[0]);
+        const diasVermelhoSim = projSimulado.filter(p => p.saldo < 0).length;
+        const melhorou = minSim.saldo > minAtual.saldo + 0.5;
+        const piorou = minSim.saldo < minAtual.saldo - 0.5;
+
+        let fala = '';
+        if (melhorou) {
+            fala = `<div class="fala-avatar" style="margin-top:10px;border-left-color:var(--success);">
+                <span class="icone">🛡️</span>
+                <span class="texto">Com esse ajuste, o dia ${_fmtDia(minSim.data)} deixa de ser vermelho. Quem decide a data é o credor — mas você chega na conversa sabendo o que pedir.</span>
+            </div>`;
+        } else if (piorou) {
+            fala = `<div class="fala-avatar" style="margin-top:10px;border-left-color:var(--warning);">
+                <span class="icone">🌿</span>
+                <span class="texto">Esse ajuste troca um aperto por outro. Vale testar outra data. Não é erro seu: às vezes não tem data boa.</span>
+            </div>`;
+        } else {
+            fala = `<div class="fala-avatar" style="margin-top:10px;border-left-color:var(--secondary);">
+                <span class="icone">🔭</span>
+                <span class="texto">Esse ajuste não muda o resultado. O aperto continua no dia ${_fmtDia(minSim.data)}.</span>
+            </div>`;
+        }
+
+        linhas += `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;font-size:0.85rem;">
+                <span style="color:${melhorou ? 'var(--success)' : 'var(--warning)'};font-weight:700;">Simulado</span>
+                <span style="color:var(--secondary);">mín <strong style="color:${minSim.saldo < 0 ? 'var(--warning)' : 'var(--success)'};">${fmt(minSim.saldo)}</strong> em ${_fmtDia(minSim.data)}</span>
+                <span style="font-size:0.78rem;color:${diasVermelhoSim > 0 ? 'var(--warning)' : 'var(--success)'};">
+                    ${diasVermelhoSim > 0 ? diasVermelhoSim + ' dia(s) no vermelho' : 'nenhum dia no vermelho'}
+                </span>
+            </div>
+            ${fala}`;
+    }
+
+    return `<div style="padding:10px 4px 0;">${linhas}</div>`;
+}
+
+function montarControlesAlisamento(orc, cen) {
+    const ehAtivo = cen.ativo && cen.ajustes.length > 0;
+
+    if (!ehAtivo) {
+        const vencComDia = (orc.categorias || []).filter(c => c.vencimento && !_categoriaParcelasQuitada(c));
+        const fontesComDia = ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [])
+            .filter(f => _diasRecebimento(f.diaRecebimento).length > 0);
+
+        if (vencComDia.length === 0 && fontesComDia.length === 0) {
+            return `
+                <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
+                    <div style="font-size:0.9rem;color:var(--secondary);line-height:1.45;">
+                        Para testar outra data, preciso de pelo menos uma conta com vencimento ou uma renda com dia declarado.
+                    </div>
+                </div>`;
+        }
+
+        let chips = '';
+        vencComDia.forEach(c => {
+            const icone = c.caixa === 'base' ? '🛡️' : c.caixa === 'vida' ? '🌿' : '🔭';
+            chips += `<div class="chip" onclick="alisamentoEscolherAlvo('vencimento','${c.id}')">${icone} ${_escSvg(c.nome)} <span style="color:var(--secondary);">(dia ${c.vencimento})</span></div>`;
+        });
+        fontesComDia.forEach(f => {
+            const dias = _diasRecebimento(f.diaRecebimento);
+            chips += `<div class="chip" onclick="alisamentoEscolherAlvo('recebimento','${f.id}')">💰 ${_escSvg(f.nome)} <span style="color:var(--secondary);">(dia ${dias.join(', ')})</span></div>`;
+        });
+
+        return `
+            <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--primary);background:var(--purple-light);">
+                <div style="font-size:0.9rem;font-weight:700;color:var(--primary);margin-bottom:6px;">E se uma data mudasse?</div>
+                <p style="font-size:0.9rem;color:var(--primary-press);line-height:1.4;margin:0 0 10px;">
+                    Testa sem mexer em nada. Quem decide a data é o credor — mas você chega na conversa sabendo o que pedir.
+                </p>
+                <div class="chip-container" style="margin:0;">${chips}</div>
+            </div>`;
+    }
+
+    const ajuste = cen.ajustes[0];
+    const alvo = ajuste.tipo === 'vencimento'
+        ? (orc.categorias || []).find(c => c.id === ajuste.id)
+        : ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || []).find(f => f.id === ajuste.id);
+    const nome = alvo ? alvo.nome : '(removido)';
+    const diasOriginais = ajuste.tipo === 'vencimento'
+        ? [alvo && alvo.vencimento]
+        : _diasRecebimento(alvo && alvo.diaRecebimento);
+    const diaOriginal = diasOriginais[0] || '?';
+
+    let chipsDia = '';
+    [5, 10, 15, 20, 25].forEach(d => {
+        const sel = ajuste.dia === d ? ' selecionado' : '';
+        chipsDia += `<div class="chip${sel}" onclick="alisamentoAplicarDia(${d})">${d}</div>`;
+    });
+
+    return `
+        <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--warning);background:var(--warning-soft);">
+            <div style="font-size:0.9rem;font-weight:700;color:var(--warning);margin-bottom:6px;">
+                Testando: ${_escSvg(nome)} do dia ${diaOriginal} para o dia ${ajuste.dia || '?'}
+            </div>
+            <div style="font-size:0.82rem;color:var(--warning);margin-bottom:8px;">Novo dia:</div>
+            <div class="chip-container" style="margin:0 0 12px 0;">${chipsDia}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn-sm" style="background:var(--secondary);color:white;" onclick="alisamentoVoltarReal()">Voltar ao real</button>
+                <button class="btn-sm" style="background:var(--primary);color:white;" onclick="alisamentoCopiarMensagem()">Copiar o que pedir</button>
+                <button class="btn-sm" style="background:var(--card-bg);color:var(--primary);border:1px solid var(--primary);" onclick="alisamentoEscolherOutroAlvo()">Testar outra</button>
+            </div>
+        </div>`;
+}
+
+/**
+ * Orquestrador do gráfico. Pure render: lê orc, não muta.
+ */
+function renderizarGraficoAlisamento(orc, opcoes) {
+    opcoes = opcoes || {};
+    if (!orc || (orc.nivel || 1) < 3) return '';
+    if (_estoqueOperacionalAtual(orc) === null) {
+        return `
+            <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
+                <div style="font-size:0.9rem;font-weight:700;color:var(--secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Saldo dia a dia</div>
+                <p style="font-size:0.9rem;color:var(--secondary);line-height:1.4;margin:0 0 10px;">
+                    Para ver o saldo dia a dia, preciso de pelo menos uma conta cadastrada com saldo.
+                </p>
+                <button class="btn-option" style="justify-content:center;border-color:var(--primary);color:var(--primary);" onclick="abrirTelaCustodias()">🏦 Cadastrar conta</button>
+            </div>`;
+    }
+
+    const diasAtras = opcoes.diasAtras || 14;
+    const diasFrente = opcoes.diasFrente || 30;
+
+    const historico = reconstruirSaldoHistorico(orc, { diasAtras });
+    const fluxoAtual = projetarFluxo(orc, { dias: diasFrente });
+    const projAtual = construirProjecaoDiaria(orc, fluxoAtual);
+
+    const cen = _garantirCenarioAlisamento();
+    let projSimulado = null;
+    if (cen.ativo && cen.ajustes.length > 0) {
+        const sim = simularCenario(orc, { dias: diasFrente, ajustes: cen.ajustes });
+        projSimulado = construirProjecaoDiaria(orc, sim.fluxo);
+    }
+
+    const dados = { historico, projAtual, projSimulado, cenarioAplicado: cen };
+    const svg = montarSVGAlisamento(dados);
+    const painel = montarPainelComparacao(dados);
+    const controles = montarControlesAlisamento(orc, cen);
+
+    return `
+        <div class="card" style="padding:14px 16px;margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+                <div style="font-size:0.9rem;font-weight:700;color:var(--primary);">Saldo dia a dia</div>
+                <div style="font-size:0.72rem;color:var(--secondary);">−${diasAtras}d · +${diasFrente}d</div>
+            </div>
+            <div style="font-size:0.72rem;color:var(--secondary);margin-bottom:10px;line-height:1.35;">
+                <span style="color:var(--secondary);">···</span> reconstruído
+                · <span style="color:var(--primary);">- - -</span> projeção atual
+                ${projSimulado ? ' · <span style="color:var(--warning);font-weight:700;">—</span> simulado' : ''}
+            </div>
+            ${svg}
+            ${painel}
+        </div>
+        ${controles}
+    `;
+}
+
+function alisamentoEscolherAlvo(tipo, id) {
+    const cen = _garantirCenarioAlisamento();
+    cen.ativo = true;
+    // dia 15 como default: a linha simulada aparece de imediato; o usuário só refina
+    cen.ajustes = [{ tipo, id, dia: 15 }];
+    cen.criadoEm = new Date().toISOString();
+    salvarEstado();
+    renderizarFluxoCaixa();
+}
+
+function alisamentoAplicarDia(dia) {
+    const cen = _garantirCenarioAlisamento();
+    if (!cen.ativo || cen.ajustes.length === 0) return;
+    cen.ajustes[0].dia = dia;
+    salvarEstado();
+    renderizarFluxoCaixa();
+}
+
+function alisamentoVoltarReal() {
+    const cen = _garantirCenarioAlisamento();
+    cen.ativo = false;
+    cen.ajustes = [];
+    salvarEstado();
+    renderizarFluxoCaixa();
+}
+
+function alisamentoEscolherOutroAlvo() {
+    alisamentoVoltarReal();
+}
+
+function alisamentoCopiarMensagem() {
+    const cen = _garantirCenarioAlisamento();
+    if (!cen.ativo || cen.ajustes.length === 0 || !cen.ajustes[0].dia) {
+        alert('Escolha um novo dia antes de copiar.');
+        return;
+    }
+    const orc = state.orcamento;
+    const aj = cen.ajustes[0];
+    const alvo = aj.tipo === 'vencimento'
+        ? (orc.categorias || []).find(c => c.id === aj.id)
+        : ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || []).find(f => f.id === aj.id);
+    if (!alvo) return;
+
+    const diasOriginais = aj.tipo === 'vencimento' ? [alvo.vencimento] : _diasRecebimento(alvo.diaRecebimento);
+    const diaOriginal = diasOriginais[0] || '?';
+    const verbo = aj.tipo === 'vencimento' ? 'vencimento' : 'recebimento';
+    const msg = `Olá. Gostaria de saber se é possível alterar a data de ${verbo} do ${alvo.nome} do dia ${diaOriginal} para o dia ${aj.dia}. Meu orçamento fica mais equilibrado nessa data. Obrigado(a).`;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(msg)
+            .then(() => alert('Mensagem copiada. Cole no seu canal com o credor.'))
+            .catch(() => prompt('Copie a mensagem:', msg));
+    } else {
+        prompt('Copie a mensagem:', msg);
+    }
+}
+
 /**
  * Avalia liquidez no horizonte (default 14 dias) com eventos declarados.
  * pontoDePartida: estoque N3 se houver; senão movimento da semana.
@@ -13104,13 +13646,36 @@ function _cloneOrcParaSimulacao(orc) {
         base: orc.base || null, vida: orc.vida || null, futuro: orc.futuro || null,
         rendaDetalhe: orc.rendaDetalhe || null, categorias: orc.categorias || [],
         custodias: orc.custodias || [], custodiaPadrao: orc.custodiaPadrao || null,
-        nivel: orc.nivel || 1, semanaAtual: orc.semanaAtual || null
+        nivel: orc.nivel || 1, semanaAtual: orc.semanaAtual || null,
+        // historicoRegistros: necessário para projetarFluxo pular eventos já liquidados
+        // no mês (recebimento/vencimento). Sem isso, a linha simulada re-inclui o que
+        // a linha atual já descontou — e o painel de comparação mente sobre melhorou/piorou.
+        historicoRegistros: orc.historicoRegistros || []
     }));
 }
 
 function simularCenario(orc, overrides) {
     overrides = overrides || {};
     const clone = _cloneOrcParaSimulacao(orc);
+
+    // Fatia de alisamento — suporte a múltiplos ajustes num só cenário
+    if (Array.isArray(overrides.ajustes)) {
+        overrides.ajustes.forEach(aj => {
+            if (!aj || !aj.tipo || !aj.id || !aj.dia) return;
+            if (aj.tipo === 'vencimento') {
+                const cat = (clone.categorias || []).find(c => c.id === aj.id);
+                if (cat) cat.vencimento = aj.dia;
+            } else if (aj.tipo === 'recebimento') {
+                if (!clone.rendaDetalhe) clone.rendaDetalhe = { fontes: [] };
+                const fonte = (clone.rendaDetalhe.fontes || []).find(f => f.id === aj.id);
+                if (fonte) {
+                    if (Array.isArray(fonte.diaRecebimento)) fonte.diaRecebimento = [aj.dia];
+                    else fonte.diaRecebimento = aj.dia;
+                }
+            }
+        });
+    }
+
     if (Array.isArray(overrides.categorias)) clone.categorias = overrides.categorias;
     if (Array.isArray(overrides.fontes)) {
         if (!clone.rendaDetalhe) clone.rendaDetalhe = { fontes: [] };
