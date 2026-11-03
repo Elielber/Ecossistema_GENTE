@@ -1053,6 +1053,11 @@
         <div id="fluxo-caixa-conteudo"></div>
     </div>
 
+    <!-- TELA 15: Simulador de datas (Nível 3) — tela própria -->
+    <div id="screen-simulador" class="screen">
+        <div id="simulador-conteudo"></div>
+    </div>
+
     <!-- ============================================================
          FATIA D — Slots reservados N0 e N4 (Ciclo 4.1)
          Não alterar fluxo N1–N3. Telas e estado prontos para evolução.
@@ -1333,6 +1338,7 @@ const TITULOS_TELAS = {
     'screen-plano-recuperacao': 'Plano de Recuperação',
     'screen-transferencia': 'Transferir',
     'screen-fluxo-caixa': 'Fluxo de Caixa',
+    'screen-simulador': 'Simulador',
     'screen-n0-acolhimento': 'Acolhimento',
     'screen-n4-estrategias': 'Estratégias',
     'screen-ajustes': 'Ajustes',
@@ -3344,9 +3350,11 @@ function renderizarCtaPrioritarioHome(orc) {
 function renderizarAtalhosHome(orc) {
     const nivel = (orc && orc.nivel) || 1;
     let html = '<div class="home-atalhos">';
-    // N2+: Fluxo e Mapa
+    // N2+: Fluxo vive na pill; o atalho agora abre o Simulador no N3
     if (nivel >= 2) {
-        html += `<button type="button" class="home-atalho" onclick="abrirTelaFluxoCaixa()">🧭 Fluxo</button>`;
+        if (nivel >= 3) {
+            html += `<button type="button" class="home-atalho" onclick="abrirTelaSimulador()">🧪 Simulador</button>`;
+        }
         html += `<button type="button" class="home-atalho" onclick="abrirTelaMapaMes()">🗓️ Agenda</button>`;
     }
     // Sempre: Semanas
@@ -12329,7 +12337,17 @@ function renderizarFluxoCaixa() {
          });
     }
 
-    const htmlGraficoAlisamento = renderizarGraficoAlisamento(orc, { diasAtras: 14, diasFrente: 30 });
+    // Link para o simulador (agora em tela própria)
+    let htmlLinkSimulador = '';
+    if ((orc.nivel || 1) >= 3 && _estoqueOperacionalAtual(orc) !== null) {
+        const cen = _garantirCenarioAlisamento();
+        const temAjustes = cen.ativo && cen.ajustes.length > 0;
+        htmlLinkSimulador = `
+            <button type="button" class="btn-option" style="justify-content:center;border-color:var(--accent);color:var(--accent);margin-bottom:16px;background:var(--card-bg);" onclick="abrirTelaSimulador()">
+                🧪 ${temAjustes ? 'Ver simulação ativa (' + cen.ajustes.length + ')' : 'Testar uma data no simulador'}
+            </button>
+        `;
+    }
 
     container.innerHTML = `
         <div style="margin-bottom: 16px;">
@@ -12337,7 +12355,7 @@ function renderizarFluxoCaixa() {
             <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--primary); margin-top: 4px;">Olhar à frente</h2>
         </div>
         ${htmlResumo}
-        ${htmlGraficoAlisamento}
+        ${htmlLinkSimulador}
         ${htmlConexaoEnvelopes}
         
         ${htmlSeletorCustodia}
@@ -13409,13 +13427,8 @@ function renderizarGraficoAlisamento(orc, opcoes) {
 }
 
 function alisamentoEscolherAlvo(tipo, id) {
-    const cen = _garantirCenarioAlisamento();
-    cen.ativo = true;
-    // dia 15 como default: a linha simulada aparece de imediato; o usuário só refina
-    cen.ajustes = [{ tipo, id, dia: 15 }];
-    cen.criadoEm = new Date().toISOString();
-    salvarEstado();
-    renderizarFluxoCaixa();
+    // Delegado para o modelo multi-ajuste da nova tela
+    simuladorAdicionarAjuste(tipo, id);
 }
 
 function alisamentoAplicarDia(dia) {
@@ -13463,6 +13476,340 @@ function alisamentoCopiarMensagem() {
     } else {
         prompt('Copie a mensagem:', msg);
     }
+}
+
+// ============================================================
+// TELA SIMULADOR (N3) — tela própria, acesso da home e do fluxo
+// Suporta múltiplos ajustes simultâneos (cen.ajustes[]).
+// ============================================================
+
+let _simuladorPickerAberto = false;
+
+function abrirTelaSimulador() {
+    _simuladorPickerAberto = false;
+    goToScreen('screen-simulador');
+    renderizarSimulador();
+}
+
+function simuladorTogglePicker() {
+    _simuladorPickerAberto = !_simuladorPickerAberto;
+    renderizarSimulador();
+}
+
+function simuladorAdicionarAjuste(tipo, id) {
+    const cen = _garantirCenarioAlisamento();
+    const jaExiste = cen.ajustes.findIndex(a => a.tipo === tipo && a.id === id);
+    if (jaExiste >= 0) {
+        alert('Essa data já está na simulação. Ajuste o dia dela abaixo.');
+        _simuladorPickerAberto = false;
+        renderizarSimulador();
+        return;
+    }
+    cen.ativo = true;
+    if (!cen.criadoEm) cen.criadoEm = new Date().toISOString();
+    cen.ajustes.push({ tipo, id, dia: 15 });
+    _simuladorPickerAberto = false;
+    salvarEstado();
+    renderizarSimulador();
+}
+
+function simuladorRemoverAjuste(idx) {
+    const cen = _garantirCenarioAlisamento();
+    if (!cen.ajustes[idx]) return;
+    cen.ajustes.splice(idx, 1);
+    if (cen.ajustes.length === 0) {
+        cen.ativo = false;
+        cen.criadoEm = null;
+        _simuladorPickerAberto = false;
+    }
+    salvarEstado();
+    renderizarSimulador();
+}
+
+function simuladorAplicarDia(idx, dia) {
+    const cen = _garantirCenarioAlisamento();
+    if (!cen.ajustes[idx]) return;
+    cen.ajustes[idx].dia = dia;
+    salvarEstado();
+    renderizarSimulador();
+}
+
+function simuladorVoltarReal() {
+    const cen = _garantirCenarioAlisamento();
+    cen.ativo = false;
+    cen.ajustes = [];
+    cen.criadoEm = null;
+    _simuladorPickerAberto = false;
+    salvarEstado();
+    renderizarSimulador();
+}
+
+function simuladorCopiarMensagem() {
+    const cen = _garantirCenarioAlisamento();
+    if (!cen.ativo || cen.ajustes.length === 0) {
+        alert('Nenhuma simulação ativa.');
+        return;
+    }
+    const orc = state.orcamento;
+    const linhas = [];
+    cen.ajustes.forEach(aj => {
+        if (!aj.dia) return;
+        const alvo = aj.tipo === 'vencimento'
+            ? (orc.categorias || []).find(c => c.id === aj.id)
+            : ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || []).find(f => f.id === aj.id);
+        if (!alvo) return;
+        const diasOriginais = aj.tipo === 'vencimento' ? [alvo.vencimento] : _diasRecebimento(alvo.diaRecebimento);
+        const diaOriginal = diasOriginais[0] || '?';
+        const verbo = aj.tipo === 'vencimento' ? 'vencimento' : 'recebimento';
+        linhas.push(`- ${verbo} do ${alvo.nome} do dia ${diaOriginal} para o dia ${aj.dia}`);
+    });
+    if (linhas.length === 0) {
+        alert('Escolha um novo dia antes de copiar.');
+        return;
+    }
+    let msg;
+    if (linhas.length === 1) {
+        msg = `Olá. Gostaria de saber se é possível alterar a data de ${linhas[0].replace(/^- /, '')}. Meu orçamento fica mais equilibrado nessa data. Obrigado(a).`;
+    } else {
+        msg = `Olá. Gostaria de saber se é possível alterar as seguintes datas:\n${linhas.join('\n')}\n\nMeu orçamento fica mais equilibrado com essas mudanças. Obrigado(a).`;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(msg)
+            .then(() => alert('Mensagem copiada. Cole no seu canal com o credor.'))
+            .catch(() => prompt('Copie a mensagem:', msg));
+    } else {
+        prompt('Copie a mensagem:', msg);
+    }
+}
+
+function renderizarSimulador() {
+    const container = document.getElementById('simulador-conteudo');
+    if (!container) return;
+
+    const orc = state.orcamento;
+    if (!orc || (orc.nivel || 1) < 3) {
+        container.innerHTML = `
+            ${cabecalhoTelaSecundaria('Simulador de datas', 'Teste antes de falar com o credor')}
+            <div class="card" style="padding:16px;border-left:4px solid var(--secondary);">
+                <p style="font-size:0.9rem;color:var(--secondary);line-height:1.45;margin:0 0 12px;">
+                    O simulador abre no Nível 3, quando você já tem carteiras e o app sabe o que entra e o que sai.
+                </p>
+                <button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--secondary);margin:0;" onclick="voltarTela()">Voltar</button>
+            </div>
+        `;
+        return;
+    }
+
+    if (_estoqueOperacionalAtual(orc) === null) {
+        container.innerHTML = `
+            ${cabecalhoTelaSecundaria('Simulador de datas', 'Teste antes de falar com o credor')}
+            <div class="card" style="padding:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
+                <p style="font-size:0.9rem;color:var(--secondary);line-height:1.45;margin:0 0 12px;">
+                    Para simular, preciso de pelo menos uma conta com saldo. É dela que sai a linha de partida.
+                </p>
+                <button type="button" class="btn-primary" style="margin-top:0;margin-bottom:8px;" onclick="abrirTelaCustodias()">🏦 Cadastrar conta</button>
+                <button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--secondary);margin:0;" onclick="voltarTela()">Voltar</button>
+            </div>
+        `;
+        return;
+    }
+
+    const diasAtras = 14;
+    const diasFrente = 30;
+    const historico = reconstruirSaldoHistorico(orc, { diasAtras });
+    const fluxoAtual = projetarFluxo(orc, { dias: diasFrente });
+    const projAtual = construirProjecaoDiaria(orc, fluxoAtual);
+
+    const cen = _garantirCenarioAlisamento();
+    let projSimulado = null;
+    if (cen.ativo && cen.ajustes.length > 0) {
+        const sim = simularCenario(orc, { dias: diasFrente, ajustes: cen.ajustes });
+        projSimulado = construirProjecaoDiaria(orc, sim.fluxo);
+    }
+
+    const dados = { historico, projAtual, projSimulado, cenarioAplicado: cen };
+    const svg = montarSVGAlisamento(dados);
+    const painel = montarPainelComparacao(dados);
+
+    const legendaSim = projSimulado
+        ? ` · <span style="color:var(--warning);font-weight:700;">—</span> simulado${cen.ajustes.length > 1 ? ' (' + cen.ajustes.length + ' ajustes)' : ''}`
+        : '';
+
+    const intro = `
+        <div class="fala-avatar" style="margin-bottom:16px;">
+            <span class="icone">🧪</span>
+            <span class="texto">Aqui você testa <strong>e se</strong> antes de falar com o credor. Nada muda no seu orçamento — é só um ensaio.</span>
+        </div>
+    `;
+
+    const chartCard = `
+        <div class="card" style="padding:14px 16px;margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+                <div style="font-size:0.9rem;font-weight:700;color:var(--primary);">Saldo dia a dia</div>
+                <div style="font-size:0.72rem;color:var(--secondary);">−${diasAtras}d · +${diasFrente}d</div>
+            </div>
+            <div style="font-size:0.72rem;color:var(--secondary);margin-bottom:10px;line-height:1.35;">
+                <span style="color:var(--secondary);">···</span> reconstruído
+                · <span style="color:var(--primary);">- - -</span> projeção atual${legendaSim}
+            </div>
+            ${svg}
+            ${painel}
+        </div>
+    `;
+
+    const ajustes = cen.ajustes || [];
+
+    // -------- Empty state (sem ajustes e picker fechado) --------
+    if (ajustes.length === 0 && !_simuladorPickerAberto) {
+        const vencComDia = (orc.categorias || []).filter(c => c.vencimento && !_categoriaParcelasQuitada(c));
+        const fontesComDia = ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [])
+            .filter(f => _diasRecebimento(f.diaRecebimento).length > 0);
+        const temAlvos = vencComDia.length > 0 || fontesComDia.length > 0;
+
+        if (!temAlvos) {
+            container.innerHTML = `
+                ${cabecalhoTelaSecundaria('Simulador de datas', 'Teste antes de falar com o credor')}
+                ${intro}
+                ${chartCard}
+                <div class="card" style="padding:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
+                    <p style="font-size:0.9rem;color:var(--secondary);line-height:1.45;margin:0 0 12px;">
+                        Para testar uma nova data, preciso de pelo menos uma conta com vencimento ou uma fonte de renda com dia declarado.
+                    </p>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <button type="button" class="btn-primary" style="margin-top:0;" onclick="abrirDetalheRenda()">📈 Informar renda com dia</button>
+                        <button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--secondary);margin:0;" onclick="abrirDetalheGastos('base')">🛡️ Cadastrar contas da Base</button>
+                    </div>
+                </div>
+                <button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--secondary);margin-top:12px;margin-bottom:0;" onclick="voltarTela()">Voltar</button>
+            `;
+            return;
+        }
+
+        container.innerHTML = `
+            ${cabecalhoTelaSecundaria('Simulador de datas', 'Teste antes de falar com o credor')}
+            ${intro}
+            ${chartCard}
+            <div class="card" style="padding:16px;border-left:4px solid var(--primary);background:var(--purple-light);margin-bottom:16px;">
+                <div style="font-size:0.9rem;font-weight:700;color:var(--primary);margin-bottom:6px;">E se uma data mudasse?</div>
+                <p style="font-size:0.9rem;color:var(--primary-press);line-height:1.45;margin:0 0 12px;">
+                    Escolha uma conta ou fonte de renda. Quem decide a data é o credor — mas você chega na conversa sabendo o que pedir.
+                </p>
+                <button type="button" class="btn-primary" style="margin-top:0;margin-bottom:0;" onclick="simuladorTogglePicker()">＋ Escolher uma data</button>
+            </div>
+            <button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--secondary);margin-top:12px;margin-bottom:0;" onclick="voltarTela()">Voltar</button>
+        `;
+        return;
+    }
+
+    // -------- Lista de ajustes ativos --------
+    let ajustesHtml = '';
+    if (ajustes.length > 0) {
+        ajustesHtml += '<div class="home-section-title" style="margin-bottom:6px;">Testando agora</div>';
+        ajustes.forEach((aj, idx) => {
+            const alvo = aj.tipo === 'vencimento'
+                ? (orc.categorias || []).find(c => c.id === aj.id)
+                : ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || []).find(f => f.id === aj.id);
+            const nome = alvo ? alvo.nome : '(removido)';
+            const diasOriginais = aj.tipo === 'vencimento'
+                ? [alvo && alvo.vencimento]
+                : _diasRecebimento(alvo && alvo.diaRecebimento);
+            const diaOriginal = diasOriginais[0] || '?';
+            const icone = aj.tipo === 'recebimento' ? '💰'
+                : (alvo && alvo.caixa === 'base' ? '🛡️' : alvo && alvo.caixa === 'vida' ? '🌿' : '🔭');
+
+            let chipsDia = '';
+            [5, 10, 15, 20, 25].forEach(d => {
+                const sel = aj.dia === d ? ' selecionado' : '';
+                chipsDia += `<div class="chip${sel}" onclick="simuladorAplicarDia(${idx}, ${d})" style="padding:8px 12px;font-size:0.85rem;">${d}</div>`;
+            });
+
+            ajustesHtml += `
+                <div class="card" style="padding:12px 14px;margin-bottom:10px;border-left:4px solid var(--warning);background:var(--warning-soft);">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:0.9rem;font-weight:700;color:var(--warning);line-height:1.3;">
+                                ${icone} ${_escSvg(nome)}
+                            </div>
+                            <div style="font-size:0.8rem;color:var(--warning);margin-top:2px;">
+                                do dia ${diaOriginal} → dia ${aj.dia || '?'}
+                            </div>
+                        </div>
+                        <button type="button" onclick="simuladorRemoverAjuste(${idx})" style="background:none;border:1px solid var(--warning);color:var(--warning);border-radius:8px;width:28px;height:28px;font-size:1rem;cursor:pointer;flex-shrink:0;" title="Remover esta simulação">×</button>
+                    </div>
+                    <div class="chip-container" style="margin:0;">${chipsDia}</div>
+                </div>
+            `;
+        });
+    }
+
+    // -------- Picker de nova data --------
+    let pickerHtml = '';
+    if (_simuladorPickerAberto) {
+        const vencComDia = (orc.categorias || []).filter(c => c.vencimento && !_categoriaParcelasQuitada(c));
+        const fontesComDia = ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [])
+            .filter(f => _diasRecebimento(f.diaRecebimento).length > 0);
+        const jaSelecionados = new Set(ajustes.map(a => `${a.tipo}:${a.id}`));
+
+        let chips = '';
+        vencComDia.forEach(c => {
+            if (jaSelecionados.has(`vencimento:${c.id}`)) return;
+            const icone = c.caixa === 'base' ? '🛡️' : c.caixa === 'vida' ? '🌿' : '🔭';
+            chips += `<div class="chip" onclick="simuladorAdicionarAjuste('vencimento','${c.id}')">${icone} ${_escSvg(c.nome)} <span style="color:var(--secondary);">(dia ${c.vencimento})</span></div>`;
+        });
+        fontesComDia.forEach(f => {
+            if (jaSelecionados.has(`recebimento:${f.id}`)) return;
+            const dias = _diasRecebimento(f.diaRecebimento);
+            chips += `<div class="chip" onclick="simuladorAdicionarAjuste('recebimento','${f.id}')">💰 ${_escSvg(f.nome)} <span style="color:var(--secondary);">(dia ${dias.join(', ')})</span></div>`;
+        });
+
+        if (chips === '') {
+            chips = '<div style="font-size:0.85rem;color:var(--secondary);padding:6px 0;line-height:1.4;">Todas as datas disponíveis já estão na simulação.</div>';
+        }
+
+        pickerHtml = `
+            <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--primary);background:var(--purple-light);">
+                <div style="font-size:0.9rem;font-weight:700;color:var(--primary);margin-bottom:6px;">Qual data testar?</div>
+                <p style="font-size:0.85rem;color:var(--primary-press);line-height:1.4;margin:0 0 10px;">
+                    Toque numa categoria ou fonte de renda. Depois você escolhe o novo dia.
+                </p>
+                <div class="chip-container" style="margin:0;">${chips}</div>
+                <button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--secondary);margin-top:10px;margin-bottom:0;" onclick="simuladorTogglePicker()">Cancelar</button>
+            </div>
+        `;
+    }
+
+    // -------- CTA Adicionar outra --------
+    let addBtnHtml = '';
+    if (ajustes.length > 0 && !_simuladorPickerAberto) {
+        const vencComDia = (orc.categorias || []).filter(c => c.vencimento && !_categoriaParcelasQuitada(c));
+        const fontesComDia = ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [])
+            .filter(f => _diasRecebimento(f.diaRecebimento).length > 0);
+        const jaSelecionados = new Set(ajustes.map(a => `${a.tipo}:${a.id}`));
+        const restantes = vencComDia.length + fontesComDia.length - jaSelecionados.size;
+        if (restantes > 0) {
+            addBtnHtml = `<button type="button" class="btn-option" style="justify-content:center;border-color:var(--primary);color:var(--primary);margin-bottom:12px;" onclick="simuladorTogglePicker()">＋ Adicionar outra data</button>`;
+        }
+    }
+
+    // -------- Footer --------
+    let footerHtml = '';
+    if (ajustes.length > 0) {
+        footerHtml = `
+            <button type="button" class="btn-primary" style="background:var(--primary);margin-top:0;" onclick="simuladorCopiarMensagem()">📋 Copiar o que pedir ao credor</button>
+            <button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--secondary);margin-top:10px;margin-bottom:0;" onclick="simuladorVoltarReal()">↺ Limpar simulação</button>
+        `;
+    }
+
+    container.innerHTML = `
+        ${cabecalhoTelaSecundaria('Simulador de datas', 'Teste antes de falar com o credor')}
+        ${intro}
+        ${chartCard}
+        ${ajustesHtml}
+        ${pickerHtml}
+        ${addBtnHtml}
+        ${footerHtml}
+        <button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--secondary);margin-top:12px;margin-bottom:0;" onclick="voltarTela()">Voltar</button>
+    `;
 }
 
 /**
