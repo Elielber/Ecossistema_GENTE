@@ -1338,6 +1338,18 @@ const TITULOS_TELAS = {
 
 
 const DIVISOR_SEMANAL = 4.33;
+
+function sincronizarRendaBase() {
+    if (!state || !state.orcamento) return;
+    
+    // Se tem fontes detalhadas, a renda base é a soma delas
+    if (state.orcamento.rendaDetalhe && Array.isArray(state.orcamento.rendaDetalhe.fontes) && state.orcamento.rendaDetalhe.fontes.length > 0) {
+        state.orcamento.base.rendaBase = state.orcamento.rendaDetalhe.fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0);
+    }
+}
+
+function obterRendaMensalReal() { if (!state || !state.orcamento) return 0; if (state.orcamento.rendaDetalhe && Array.isArray(state.orcamento.rendaDetalhe.fontes) && state.orcamento.rendaDetalhe.fontes.length > 0) { return state.orcamento.rendaDetalhe.fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0); } return state.orcamento.base?.rendaBase || 0; }
+
 const CHAVE_STORAGE = 'd_mais_1_orcamento';
 const REGISTROS_PARA_NIVEL2 = 10;
 const SEMANAS_PARA_NIVEL2 = 2;
@@ -1350,6 +1362,7 @@ const NATUREZAS_RENDA = {
 };
 
 const RESERVA_FAIXA_MESES = { min: 3, max: 6 };
+
 
 function _custodiaEhReserva(c) {
     return !!(c && c.finalidade === 'reserva');
@@ -1790,6 +1803,10 @@ state.orcamento.categorias.forEach(c => {
             if (f.diaRecebimento === undefined) f.diaRecebimento = null;
             if (f.natureza === undefined) f.natureza = null;
         });
+        if (state.orcamento.rendaDetalhe.fontes.length > 0) {
+            state.orcamento.base.rendaBase = state.orcamento.rendaDetalhe.fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0);
+        }
+        sincronizarRendaBase();
     }
 
     // 2. vencimento em categorias de Vida (N2)
@@ -1867,6 +1884,10 @@ if ('forcarMostrar' in state.orcamento.uiApoio) {
     }
     if (!Array.isArray(state.orcamento.cenarioAlisamento.ajustes)) {
         state.orcamento.cenarioAlisamento.ajustes = [];
+    }
+    
+    if (typeof atualizarTotaisEnvelopes === 'function') {
+        atualizarTotaisEnvelopes();
     }
 }
 
@@ -7158,6 +7179,12 @@ function salvarFonteRenda(origem, temGenerica) { const nome = document.getElemen
     if (novaFonteFrágil || mudouParaFrágil) {
         state.orcamento._sugestaoReservaPendente = true;
     }
+    
+    if (state.orcamento.rendaDetalhe && state.orcamento.rendaDetalhe.fontes.length > 0) {
+        state.orcamento.base.rendaBase = state.orcamento.rendaDetalhe.fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0);
+    }
+    
+    sincronizarRendaBase();
 
     salvarEstado();
     renderizarDetalheRenda();
@@ -7169,6 +7196,7 @@ function removerFonteRenda(id) {
 
     state.orcamento.rendaDetalhe.fontes = (state.orcamento.rendaDetalhe.fontes || []).filter(f => f.id !== id);
     if (typeof _tickOnboardingNivel2AposFonte === "function") _tickOnboardingNivel2AposFonte();
+    sincronizarRendaBase();
     salvarEstado();
     renderizarDetalheRenda();
 }
