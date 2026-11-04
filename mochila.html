@@ -11143,10 +11143,12 @@ function renderizarFluxoCaixa() {
             const netEventos = entradas - saidas;
             const saldoAntes = saldoCorrido + netEventos;
             
-            let quotaDia = 0;
+                       let quotaDia = 0;
             let isReduzido = false;
 
-           if (saldoAntes > 0 || !protegerSaldo) { const qBase = totalMensalSemVenc / fluxo.dias;
+            if (saldoAntes > 0 || !protegerSaldo) {
+                // O ritmo diário é a média cheia do mês (gastoDiarioPlanejado)
+                let alvoDia = gastoDiarioPlanejado;
                 
                 if (protegerSaldo) {
                     let minFuturo = 0;
@@ -11171,8 +11173,12 @@ function renderizarFluxoCaixa() {
                     let limiteHoje = saldoAntes + minFuturo - 10;
                     if (limiteHoje < 0) limiteHoje = 0;
                     
-                    if (distribuidoRestante > 0) { let alvoDia = qBase; // CORREÇÃO: Remove aceleração quotaDia = Math.min(alvoDia, limiteHoje, distribuidoRestante);
-                    }
+                    // Aplica a proteção
+                    quotaDia = Math.min(alvoDia, limiteHoje, distribuidoRestante);
+                    if (quotaDia < alvoDia - 0.01) isReduzido = true;
+                } else {
+                    // CORREÇÃO RESTAURADA: Quando Proteger Saldo está DESLIGADO, mantém o plano sem travar
+                    quotaDia = Math.min(alvoDia, distribuidoRestante);
                 }
             }
 
