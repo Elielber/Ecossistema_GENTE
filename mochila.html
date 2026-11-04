@@ -3096,6 +3096,31 @@ function sincronizarLimitesSemanaAtual() {
     }
 }
 
+function atualizarTotaisEnvelopes() {
+    if (!state.orcamento) return;
+    const cats = state.orcamento.categorias || [];
+
+    // Calcula a soma real de cada caixa
+    const baseTotal = cats.filter(c => c.caixa === 'base' && !_categoriaParcelasQuitada(c)).reduce((s, c) => s + (c.valor || 0), 0);
+    const vidaTotal = cats.filter(c => c.caixa === 'vida' && !_categoriaParcelasQuitada(c)).reduce((s, c) => s + (c.valor || 0), 0);
+    const futuroTotal = cats.filter(c => c.caixa === 'futuro' && !_categoriaParcelasQuitada(c)).reduce((s, c) => s + (c.valor || 0), 0);
+
+    // Atualiza o estado global
+    if (!state.orcamento.base) state.orcamento.base = {};
+    state.orcamento.base.fortalezaTotal = baseTotal;
+
+    if (!state.orcamento.vida) state.orcamento.vida = {};
+    state.orcamento.vida.total = vidaTotal;
+
+    if (!state.orcamento.futuro) state.orcamento.futuro = {};
+    state.orcamento.futuro.total = futuroTotal;
+
+    // Atualiza os limites da semana atual
+    if (state.orcamento.semanaAtual && !state.orcamento.semanaAtual.fechada) {
+        sincronizarLimitesSemanaAtual();
+    }
+}
+
 
 // ORÇAMENTO COMPLETO (Nível 1 + Nível 2)
 
@@ -7348,7 +7373,7 @@ const pctMes = cat.valor > 0 ? (gastoMes / cat.valor) * 100 : 0;
             ${cat.valor > 0 ? `<strong style="color: var(--text-main);">${pctMes.toFixed(0)}%</strong> <span style="color: var(--secondary); font-size: 0.8rem; margin: 0 2px;">de</span> ` : ''}
             <strong>R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')}</strong>
           </span> 
-           <button class="btn-remover" style="color: var(--primary); font-size: 0.9rem; margin-left: 6px;" onclick="abrirFormularioCategoriaFuturo('${cat.id}')" title="Editar">✏️</button> 
+           <button class="btn-remover" style="color: var(--primary); font-size: 0.9rem; margin-left: 6px;" onclick="abrirFormularioCategoria('${cat.id}')" title="Editar">✏️</button> 
            <button class="btn-remover" onclick="removerCategoria('${cat.id}')">&times;</button> 
         </div>
       </div>
@@ -7370,10 +7395,41 @@ const pctMes = cat.valor > 0 ? (gastoMes / cat.valor) * 100 : 0;
 
         ${htmlCategorias}
 
-        <div class="totalizador">
-            Total: <strong>R$ ${totalCadastrado.toFixed(2).replace('.', ',')}</strong> de R$ ${totalMensal.toFixed(2).replace('.', ',')}
-            ${falta > 0 ? `<br><span style="font-size: 0.9rem;">Falta detalhar R$ ${falta.toFixed(2).replace('.', ',')}</span>` : '<br><span style="font-size: 0.9rem;">✓ Tudo detalhado</span>'}
-        </div>
+                ${(() => {
+            const rendaBase = state.orcamento.base?.rendaBase || 0;
+            const totalPlano = (state.orcamento.base?.fortalezaTotal || 0) + 
+                               (state.orcamento.vida?.total || 0) + 
+                               (state.orcamento.futuro?.total || 0);
+            const sobraGlobal = rendaBase - totalPlano;
+            const corSobra = sobraGlobal >= 0 ? 'var(--success)' : 'var(--danger)';
+            
+            return `
+            <div class="totalizador" style="background: var(--bg-color); border-left: 4px solid var(--primary); text-align: left; padding: 16px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom: 8px; font-size: 0.9rem;">
+                    <span style="color: var(--secondary);">Planejado nesta caixinha:</span>
+                    <strong>R$ ${totalCadastrado.toFixed(2).replace('.', ',')}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom: 8px; font-size: 0.9rem; padding-bottom: 8px; border-bottom: 1px dashed var(--border);">
+                    <span style="color: var(--secondary);">Falta detalhar aqui:</span>
+                    <strong>R$ ${falta.toFixed(2).replace('.', ',')}</strong>
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; margin-bottom: 4px; font-size: 0.85rem;">
+                    <span style="color: var(--secondary);">Sua Renda Mensal:</span>
+                    <span>R$ ${rendaBase.toFixed(2).replace('.', ',')}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom: 8px; font-size: 0.85rem;">
+                    <span style="color: var(--secondary);">Plano Total (Base+Vida+Futuro):</span>
+                    <span>R$ ${totalPlano.toFixed(2).replace('.', ',')}</span>
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 1rem;">
+                    <strong style="color: ${corSobra};">${sobraGlobal >= 0 ? 'Sobra Livre:' : 'Estourou a renda em:'}</strong>
+                    <strong style="color: ${corSobra};">R$ ${Math.abs(sobraGlobal).toFixed(2).replace('.', ',')}</strong>
+                </div>
+            </div>
+            `;
+        })()}
 
         ${(() => {
             if ((state.orcamento.nivel || 1) < 3) return '';
@@ -7829,18 +7885,35 @@ if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
         }
     }
 
+       // === VALIDAÇÃO GLOBAL DO TETO DE RENDA ===
+    let totalAtualGlobal = (state.orcamento.base?.fortalezaTotal || 0) + (state.orcamento.vida?.total || 0) + (state.orcamento.futuro?.total || 0);
+    
+    // Se estiver editando, subtrai o valor antigo para não contar duas vezes
+    if (categoriaEditandoId) {
+        const catAntiga = state.orcamento.categorias.find(c => c.id === categoriaEditandoId);
+        if (catAntiga) totalAtualGlobal -= (catAntiga.valor || 0);
+    }
+    
+    const novoTotalGlobal = totalAtualGlobal + valor;
+    const rendaBase = state.orcamento.base?.rendaBase || 0;
+
+    // Modal de Aviso do Torres
+    if (rendaBase > 0 && novoTotalGlobal > rendaBase) {
+        const excedente = novoTotalGlobal - rendaBase;
+        const continuar = confirm(
+            `🛡️ Torres: O plano estourou a renda!\n\n` +
+            `Sua renda mensal é R$ ${rendaBase.toFixed(2).replace('.', ',')}.\n` +
+            `Com este gasto, seu planejamento (Base + Vida + Futuro) chegará a R$ ${novoTotalGlobal.toFixed(2).replace('.', ',')}.\n\n` +
+            `Faltarão R$ ${excedente.toFixed(2).replace('.', ',')} para tudo caber.\n\n` +
+            `Deseja salvar assim mesmo?`
+        );
+        if (!continuar) return; // Cancela o salvamento e mantém a tela de edição aberta
+    }
+
+    // === SALVAMENTO ===
     if (categoriaEditandoId) {
         const cat = (state.orcamento.categorias || []).find(c => c.id === categoriaEditandoId);
-        if (!cat) {
-            categoriaEditandoId = null;
-            alert('Categoria não encontrada.');
-            renderizarDetalheGastos();
-            return;
-        }
-
-        const valorAntigo = cat.valor || 0;
-        const delta = valor - valorAntigo;
-        const caixaCat = cat.caixa || caixa;
+        if (!cat) return;
 
         cat.nome = nome;
         cat.valor = valor;
@@ -7851,124 +7924,40 @@ if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
         cat.provisionar = !!provisao.provisionar;
         cat.valorProvisaoTotal = provisao.provisionar ? provisao.valorProvisaoTotal : null;
         cat.periodicidadeProvisao = provisao.provisionar ? provisao.periodicidadeProvisao : null;
-        // caixa permanece a original (não migra Base↔Vida na edição)
-
-        if (delta !== 0) {
-            if (caixaCat === 'base') {
-                state.orcamento.base.fortalezaTotal = Math.max(
-                    (state.orcamento.base.fortalezaTotal || 0) + delta, 0
-                );
-                if (state.orcamento.semanaAtual) {
-                    state.orcamento.semanaAtual.base.limite = state.orcamento.base.fortalezaTotal / DIVISOR_SEMANAL;
-                }
-            } else if (caixaCat === 'vida') {
-                state.orcamento.vida.total = Math.max(
-                    (state.orcamento.vida.total || 0) + delta, 0
-                );
-                if (state.orcamento.semanaAtual) {
-                    state.orcamento.semanaAtual.vida.limite = state.orcamento.vida.total / DIVISOR_SEMANAL;
-                }
-            }
-        }
-
-        const custodiaLog = cat.custodiaPadraoId;
+        
         categoriaEditandoId = null;
-        tipoCategoriaSelecionado = null;
-        custodiaPadraoCategoriaSelecionada = null;
-        salvarEstado();
-        if ((cat.caixa || caixa) === 'base' && typeof _tickOnboardingNivel2AposCategoriaBase === 'function') {
-            _tickOnboardingNivel2AposCategoriaBase();
-        }
-        renderizarDetalheGastos();
-        return;
-    }
-
-    const categoriasExistentes = (state.orcamento.categorias || []).filter(c => c.caixa === caixa);
-
-    const totalMensalAtual = caixa === 'base'
-        ? (state.orcamento.base?.fortalezaTotal || 0)
-        : (state.orcamento.vida?.total || 0);
-
-    // Primeira categoria: pergunta se quer substituir o valor genérico do N1
-    if (categoriasExistentes.length === 0 && totalMensalAtual > 0) {
-        const atualizar = confirm(
-            `Você tinha um valor genérico de R$ ${totalMensalAtual.toFixed(2).replace('.', ',')} para esta caixa. ` +
-            `Quer substituir por esta categoria detalhada?`
-        );
-        if (atualizar) {
-            if (caixa === 'base') {
-                state.orcamento.base.fortalezaTotal = valor;
-                if (!state.orcamento.semanaAtual) { iniciarNovaSemana(); } else { sincronizarLimitesSemanaAtual(); }
-            } else {
-                state.orcamento.vida.total = valor;
-                if (state.orcamento.semanaAtual) {
-                    state.orcamento.semanaAtual.vida.limite = valor / DIVISOR_SEMANAL;
-                }
-            }
-        } else {
-            // Mantém o envelope N1 e soma o detalhe (aproveitamento sem apagar)
-            if (caixa === 'base') {
-                state.orcamento.base.fortalezaTotal = (state.orcamento.base.fortalezaTotal || 0) + valor;
-                if (state.orcamento.semanaAtual) {
-                    state.orcamento.semanaAtual.base.limite = state.orcamento.base.fortalezaTotal / DIVISOR_SEMANAL;
-                }
-            } else {
-                state.orcamento.vida.total = (state.orcamento.vida.total || 0) + valor;
-                if (state.orcamento.semanaAtual) {
-                    state.orcamento.semanaAtual.vida.limite = state.orcamento.vida.total / DIVISOR_SEMANAL;
-                }
-            }
-        }
-    } else if (categoriasExistentes.length > 0) {
-        if (caixa === 'base') {
-            state.orcamento.base.fortalezaTotal = (state.orcamento.base.fortalezaTotal || 0) + valor;
-            if (state.orcamento.semanaAtual) {
-                state.orcamento.semanaAtual.base.limite = state.orcamento.base.fortalezaTotal / DIVISOR_SEMANAL;
-            }
-        } else {
-            state.orcamento.vida.total = (state.orcamento.vida.total || 0) + valor;
-            if (state.orcamento.semanaAtual) {
-                state.orcamento.semanaAtual.vida.limite = state.orcamento.vida.total / DIVISOR_SEMANAL;
-            }
-        }
     } else {
-        // Sem total N1 e sem categorias: define o total com o primeiro valor
-        if (caixa === 'base') {
-            state.orcamento.base.fortalezaTotal = valor;
-           if (!state.orcamento.semanaAtual) { iniciarNovaSemana(); } else { sincronizarLimitesSemanaAtual(); }
-        } else {
-            state.orcamento.vida.total = valor;
-            if (state.orcamento.semanaAtual) {
-                state.orcamento.semanaAtual.vida.limite = valor / DIVISOR_SEMANAL;
-            }
-        }
+        if (!state.orcamento.categorias) state.orcamento.categorias = [];
+        state.orcamento.categorias.push({
+            id: 'cat_' + Date.now(),
+            nome: nome,
+            valor: valor,
+            tipo: tipoCategoriaSelecionado,
+            vencimento: vencimento,
+            caixa: caixa,
+            custodiaPadraoId: custodiaPadraoCategoriaSelecionada || null,
+            provisionar: !!provisao.provisionar,
+            valorProvisaoTotal: provisao.provisionar ? provisao.valorProvisaoTotal : null,
+            periodicidadeProvisao: provisao.provisionar ? provisao.periodicidadeProvisao : null,
+            pagamentoConfirmadoMes: pagamentoConfirmadoMes
+        });
     }
 
-    if (!state.orcamento.categorias) state.orcamento.categorias = [];
-    state.orcamento.categorias.push({
-        id: 'cat_' + Date.now(),
-        nome: nome,
-        valor: valor,
-        tipo: tipoCategoriaSelecionado,
-        vencimento: vencimento,
-        caixa: caixa,
-        custodiaPadraoId: custodiaPadraoCategoriaSelecionada || null,
-        provisionar: !!provisao.provisionar,
-        valorProvisaoTotal: provisao.provisionar ? provisao.valorProvisaoTotal : null,
-        periodicidadeProvisao: provisao.provisionar ? provisao.periodicidadeProvisao : null,
-        pagamentoConfirmadoMes: pagamentoConfirmadoMes
-    });
-
-    const custodiaLog = custodiaPadraoCategoriaSelecionada;
     tipoCategoriaSelecionado = null;
     custodiaPadraoCategoriaSelecionada = null;
-    categoriaEditandoId = null;
+    
+    // A MÁGICA ACONTECE AQUI: Recalcula todos os totais baseados nas categorias
+    atualizarTotaisEnvelopes(); 
+    
     salvarEstado();
     if (caixa === 'base' && typeof _tickOnboardingNivel2AposCategoriaBase === 'function') {
         _tickOnboardingNivel2AposCategoriaBase();
     }
     renderizarDetalheGastos();
-}
+        return;
+    }
+
+  
 
 
 function desfazerPagamentoConfirmado(catId) {
@@ -7986,38 +7975,18 @@ function removerCategoria(id) {
     if (!confirmar) return;
     if (categoriaEditandoId === id) categoriaEditandoId = null;
 
-    const categoria = (state.orcamento.categorias || []).find(c => c.id === id);
-    if (!categoria) return;
-
-    const caixa = categoria.caixa || 'base';
-    const valor = categoria.valor || 0;
-
-    if (caixa === 'base') {
-        state.orcamento.base.fortalezaTotal = Math.max(
-            (state.orcamento.base.fortalezaTotal || 0) - valor, 0
-        );
-        if (state.orcamento.semanaAtual) {
-            state.orcamento.semanaAtual.base.limite = state.orcamento.base.fortalezaTotal / DIVISOR_SEMANAL;
-        }
-    } else if (caixa === 'vida') {
-        state.orcamento.vida.total = Math.max(
-            (state.orcamento.vida.total || 0) - valor, 0
-        );
-        if (state.orcamento.semanaAtual) {
-            state.orcamento.semanaAtual.vida.limite = state.orcamento.vida.total / DIVISOR_SEMANAL;
-        }
-    } else if (caixa === 'futuro') {
-        // Recalcula o total do Futuro inteiro
-        state.orcamento.categorias = (state.orcamento.categorias || []).filter(c => c.id !== id);
-        recalcularTotalFuturo();
-        salvarEstado();
-        renderizarDetalheFuturo();
-        return;
-    }
-
     state.orcamento.categorias = (state.orcamento.categorias || []).filter(c => c.id !== id);
+    
+    // Mágica: Recalcula tudo do zero
+    atualizarTotaisEnvelopes();
     salvarEstado();
-    renderizarDetalheGastos();
+    
+    // Redireciona para a tela correta dependendo de onde o usuário estava
+    if (caixaGastosAtiva === 'base' || caixaGastosAtiva === 'vida') {
+        renderizarDetalheGastos();
+    } else {
+        renderizarDetalheFuturo();
+    }
 }
 
 // SEÇÃO 3: FUTURO (Dívidas e Reservas)
@@ -11418,7 +11387,7 @@ function renderizarFluxoCaixa() {
         const temAjustes = cen.ativo && cen.ajustes.length > 0;
         htmlLinkSimulador = `
             <button type="button" class="btn-option" style="justify-content:center;border-color:var(--accent);color:var(--accent);margin-bottom:16px;background:var(--card-bg);" onclick="abrirTelaSimulador()">
-                🧪 ${temAjustes ? 'Ver simulação ativa (' + cen.ajustes.length + ')' : 'Testar um cenário no simulador'}
+                🧪 ${temAjustes ? 'Ver simulação ativa (' + cen.ajustes.length + ')' : 'Testar uma data no simulador'}
             </button>
         `;
     }
@@ -13894,7 +13863,7 @@ function _desfazerEfeitosRegistro(r) {
         }
     
     
-        } else if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
+       } else if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
         // Reverter gasto da caixa Futuro
         if (naSemana && semana && semana.futuro) {
             semana.futuro.gasto = Math.max(0, (semana.futuro.gasto || 0) - (r.valor || 0));
@@ -13977,7 +13946,7 @@ function _aplicarEfeitosRegistro(r) {
                 cartao.faturaAcumulada = Math.max(0, (cartao.faturaAcumulada || 0) - (r.valor || 0));
             }
         }
-        } else if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
+       } else if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
         // Aplicar gasto na caixa Futuro
         if (naSemana && semana && semana.futuro) {
             semana.futuro.gasto = (semana.futuro.gasto || 0) + (r.valor || 0);
