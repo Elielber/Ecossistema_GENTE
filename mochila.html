@@ -2965,10 +2965,13 @@ function calcularTaxaViabilidadeConsumo(orc) {
         return { taxaBase: 1, taxaVida: 1, totalAlocado: null, totalOriginal: 0, corteTotal: 0, totalBaseOriginal: 0, totalVidaOriginal: 0 };
     }
 
-    let totalDistribuidoReal = 0;
+        let totalDistribuidoReal = 0;
     let saldoCorrido = (orc.custodias || []).filter(c => !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura).reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
     const inicioDt = new Date(fluxo.inicio + 'T00:00:00');
     let distribuidoRestante = totalRestante;
+    
+    // CORREÇÃO: O ritmo diário deve ser a média cheia, não baseada no que sobrou do mês.
+    const gastoDiarioBase = (totalBaseRestante + totalVidaRestante) / 30; 
 
     for (let i = 0; i < fluxo.dias; i++) {
         const d = new Date(inicioDt);
@@ -2995,12 +2998,10 @@ function calcularTaxaViabilidadeConsumo(orc) {
                 if (acumuladoFuturo < minFuturo) minFuturo = acumuladoFuturo;
             }
 
-            let limiteHoje = Math.max(0, saldoAntes + minFuturo - 10);
-            let qBase = totalRestante / fluxo.dias;
-            let qRestanteMedia = distribuidoRestante / (fluxo.dias - i);
-            let alvoDia = Math.max(qBase, qRestanteMedia);
-            if (saldoAntes > distribuidoRestante * 2) alvoDia *= 1.5; 
-            else if (saldoAntes > distribuidoRestante) alvoDia *= 1.2;
+                      let limiteHoje = Math.max(0, saldoAntes + minFuturo - 10);
+            
+            // CORREÇÃO: Usa a média diária real e remove a aceleração artificial.
+            let alvoDia = gastoDiarioBase;
 
             quotaDia = Math.min(alvoDia, limiteHoje, distribuidoRestante);
         }
@@ -11056,7 +11057,9 @@ function renderizarFluxoCaixa() {
         totSaidas = (fluxo.eventos || []).filter(e => e.tipo === 'vencimento' && e.custodiaId === fluxoCustodiaFiltro).reduce((s, e) => s + (e.valor || 0), 0);
     }
 
-    const distribuicaoTeorica = (totalMensalSemVenc / 30) * fluxo.dias;
+        // CORREÇÃO: Usa o orçamento cheio do mês para a média diária, ignorando o que sobrou.
+    const gastoDiarioPlanejado = totalMensalPlanejado / 30;
+    const distribuicaoTeorica = gastoDiarioPlanejado * fluxo.dias;
     let totalDistribuidoReal = 0;
 
     let htmlDiaADia = '';
@@ -11143,8 +11146,7 @@ function renderizarFluxoCaixa() {
             let quotaDia = 0;
             let isReduzido = false;
 
-            if (saldoAntes > 0 || !protegerSaldo) {
-                let qBase = totalMensalSemVenc / fluxo.dias;
+           if (saldoAntes > 0 || !protegerSaldo) { const qBase = totalMensalSemVenc / fluxo.dias;
                 
                 if (protegerSaldo) {
                     let minFuturo = 0;
@@ -11169,18 +11171,7 @@ function renderizarFluxoCaixa() {
                     let limiteHoje = saldoAntes + minFuturo - 10;
                     if (limiteHoje < 0) limiteHoje = 0;
                     
-                    if (distribuidoRestante > 0) {
-                        let qRestanteMedia = distribuidoRestante / (fluxo.dias - i);
-                        let alvoDia = Math.max(qBase, qRestanteMedia);
-                        if (saldoAntes > distribuidoRestante * 2) alvoDia *= 1.5; 
-                        else if (saldoAntes > distribuidoRestante) alvoDia *= 1.2;
-
-                        quotaDia = Math.min(alvoDia, limiteHoje, distribuidoRestante);
-                        if (quotaDia < alvoDia - 0.01) isReduzido = true;
-                    }
-                } else {
-                    if (distribuidoRestante > 0) {
-                        quotaDia = Math.min(qBase, distribuidoRestante);
+                    if (distribuidoRestante > 0) { let alvoDia = qBase; // CORREÇÃO: Remove aceleração quotaDia = Math.min(alvoDia, limiteHoje, distribuidoRestante);
                     }
                 }
             }
