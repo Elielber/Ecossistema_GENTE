@@ -3187,20 +3187,138 @@ function renderizarCardDisponivelAgora(orc) {
 }
 
 /** Pílula de status + ícone de notificações/andaime */
+function calcularLiquidezProjetada(orc) {
+    const fluxo = projetarFluxo(orc, { dias: 30 });
+    const temAlgumEvento = (fluxo.eventos || []).length > 0;
+    if (!temAlgumEvento) return { temAlgumEvento: false, status: 'sem_dados', dataExibicao: null, saldoMinimo: 0 };
+
+    const categoriasSemVenc = (orc.categorias || []).filter(c => !c.vencimento && !_categoriaParcelasQuitada(c));
+    const totalMensalPlanejado = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+    
+    let gastoRealizadoMes = 0;
+    (orc.historicoRegistros || []).forEach(r => {
+        if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data)) {
+            if (categoriasSemVenc.some(c => c.id === r.categoriaId)) {
+                gastoRealizadoMes += (Number(r.valor) || 0);
+            }
+        }
+    });
+    const totalMensalSemVenc = Math.max(0, totalMensalPlanejado - gastoRealizadoMes);
+    
+    let saldoInicialProj = (orc.custodias || []).filter(c => !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura).reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
+    let saldoCorrido = saldoInicialProj;
+    let distribuidoRestante = totalMensalSemVenc;
+    const protegerSaldo = orc.configFluxo?.protegerSaldo !== false;
+    
+    let saldoMinimo = saldoCorrido;
+    let dataMinimo = null;
+    let primeiroDiaNegativo = null; // NOVO: Guarda a data do primeiro dia no vermelho
+
+    const inicioDt = new Date(fluxo.inicio + 'T00:00:00');
+    
+    for (let i = 0; i < fluxo.dias; i++) {
+        const d = new Date(inicioDt);
+        d.setDate(inicioDt.getDate() + i);
+        const dataKey = d.toISOString().split('T')[0];
+        const diaData = fluxo.porDia[dataKey] || { entradas: 0, saidas: 0, eventos: [] };
+        
+        let eventosDia = diaData.eventos || [];
+        const entradas = eventosDia.filter(e => e.tipo === 'recebimento').reduce((s, e) => s + (e.valor || 0), 0);
+        const saidas = eventosDia.filter(e => e.tipo === 'vencimento').reduce((s, e) => s + (e.valor || 0), 0);
+        const netEventos = entradas - saidas;
+        const saldoAntes = saldoCorrido + netEventos;
+        
+        let quotaDia = 0;
+        if (saldoAntes > 0 || !protegerSaldo) {
+            let qBase = totalMensalSemVenc / fluxo.dias;
+            if (protegerSaldo) {
+                let minFuturo = 0;
+                let acumuladoFuturo = 0;
+                const diasParaOlhar = Math.min(20, fluxo.dias - i - 1);
+                for (let j = 1; j <= diasParaOlhar; j++) {
+                    const dataFutura = new Date(inicioDt);
+                    dataFutura.setDate(inicioDt.getDate() + i + j);
+                    const dataKeyFutura = dataFutura.toISOString().split('T')[0];
+                    const diaFuturo = fluxo.porDia[dataKeyFutura] || { entradas: 0, saidas: 0, eventos: [] };
+                    let evsFut = diaFuturo.eventos || [];
+                    const entFut = evsFut.filter(e => e.tipo === 'recebimento').reduce((s, e) => s + (e.valor || 0), 0);
+                    const saiFut = evsFut.filter(e => e.tipo === 'vencimento').reduce((s, e) => s + (e.valor || 0), 0);
+                    acumuladoFuturo += (entFut - saiFut);
+                    if (acumuladoFuturo < minFuturo) minFuturo = acumuladoFuturo;
+                }
+                let limiteHoje = saldoAntes + minFuturo - 10;
+                if (limiteHoje < 0) limiteHoje = 0;
+                if (distribuidoRestante > 0) {
+                    let qRestanteMedia = distribuidoRestante / (fluxo.dias - i);
+                    let alvoDia = Math.max(qBase, qRestanteMedia);
+                    if (saldoAntes > distribuidoRestante * 2) alvoDia *= 1.5; 
+                    else if (saldoAntes > distribuidoRestante) alvoDia *= 1.2;
+                    quotaDia = Math.min(alvoDia, limiteHoje, distribuidoRestante);
+                }
+            } else {
+                if (distribuidoRestante > 0) quotaDia = Math.min(qBase, distribuidoRestante);
+            }
+        }
+        
+        saldoCorrido = saldoAntes - quotaDia;
+        distribuidoRestante -= quotaDia;
+        
+        // Rastreia o pior saldo (para o status "Atenção")
+        if (saldoCorrido < saldoMinimo) {
+            saldoMinimo = saldoCorrido;
+            dataMinimo = dataKey;
+        }
+        
+        // NOVO: Registra o primeiro dia negativo
+        if (saldoCorrido < -0.01 && !primeiroDiaNegativo) {
+            primeiroDiaNegativo = dataKey;
+        }
+    }
+    
+    let status = 'folga';
+    let dataExibicao = dataMinimo; // Padrão: mostra o pior dia
+    
+    if (primeiroDiaNegativo) {
+        status = 'aperto';
+        dataExibicao = primeiroDiaNegativo; // Se houver negativo, a pílula aponta para o 1º dia
+    } else if (saldoMinimo < saldoInicialProj * 0.15 && saldoInicialProj > 0) {
+        status = 'atencao';
+    }
+    
+    return { temAlgumEvento: true, status, dataExibicao, saldoMinimo };
+}
+
+/** Pílula de status + ícone de notificações/andaime */
 function renderizarPilulaStatusHome(orc) {
     if (!orc || (orc.nivel || 1) < 2) return '';
     let pill = `<button type="button" class="home-pill" onclick="abrirTelaFluxoCaixa()">✨ Ver horizonte ›</button>`;
     try {
-        if (typeof avaliarLiquidezHorizonte === 'function') {
-            const liq = avaliarLiquidezHorizonte(orc, {});
-            if (liq && liq.temAlgumEvento) {
-                let cls = 'home-pill';
-                let txt = '✨ Folga no horizonte';
-                if (liq.status === 'aperto') { cls += ' danger'; txt = '⚠️ Aperto no horizonte'; }
-                else if (liq.status === 'atencao') { cls += ' warn'; txt = '🟡 Atenção no horizonte'; }
-                const data = liq.dataMinimo ? String(liq.dataMinimo).slice(5).replace('-', '/') : '';
-                pill = `<button type="button" class="${cls}" onclick="abrirTelaFluxoCaixa()">${txt}${data ? ' · ' + data : ''} ›</button>`;
+        const liq = calcularLiquidezProjetada(orc);
+        if (liq && liq.temAlgumEvento) {
+            let cls = 'home-pill';
+            let txt = '✨ Folga no horizonte';
+            
+            if (liq.status === 'aperto') { 
+                cls += ' danger'; 
+                txt = '⚠️ Saldo fica negativo'; 
+            } else if (liq.status === 'atencao') { 
+                cls += ' warn'; 
+                txt = '🟡 Atenção no horizonte'; 
             }
+            
+            let dataFmt = '';
+            if (liq.dataExibicao) {
+                const p = String(liq.dataExibicao).split('-');
+                dataFmt = p.length === 3 ? `${p[2]}/${p[1]}` : '';
+            }
+            
+            let textoFinal = txt;
+            if (dataFmt) {
+                // Muda a preposição para ficar claro que é o dia em que o saldo fica negativo
+                textoFinal += (liq.status === 'aperto' ? ' em ' : ' · ') + dataFmt;
+            }
+            
+            pill = `<button type="button" class="${cls}" onclick="abrirTelaFluxoCaixa()">${textoFinal} ›</button>`;
         }
     } catch (_) {}
     return `<div class="home-pill-row">${pill}</div>`;
