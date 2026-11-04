@@ -9,10 +9,8 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
     
     <style>
-        /* ============================================================
-           BLOCO A — Design System (Ciclo 4.1)
-           Tokens claros (aprovados pelos sócios) + dark opcional
-           ============================================================ */
+        /* BLOCO A — Design System (Ciclo 4.1)
+           Tokens claros (aprovados pelos sócios) + dark opcional */
         :root {
             --bg-color: #F8F7FC;
             --card-bg: #FFFFFF;
@@ -215,7 +213,7 @@
             color: var(--primary);
         }
 
-        /* ===== Home layout novo (Ciclo 4.1 Fatia A) ===== */
+        /* Home layout novo (Ciclo 4.1 Fatia A) */
         .home-header {
             display: flex;
             justify-content: space-between;
@@ -255,7 +253,7 @@
             font-size: 0.9rem;
         }
 
-        /* ===== Fase 0 — Drawer lateral ===== */
+        /* Fase 0 — Drawer lateral */
         .drawer-backdrop {
             position: fixed;
             inset: 0;
@@ -614,7 +612,7 @@
             margin-left: auto;
         }
 
-        /* ===== NÍVEL 2 ===== */
+        /* NÍVEL 2 */
 
         .card-nivel2 {
             background: var(--card-bg);
@@ -789,7 +787,7 @@
         }
         .btn-sm:active { transform: scale(0.97); }
 
-        /* ===== DIÁLOGO ESTRUTURADO (piloto N1 etapas) ===== */
+        /* DIÁLOGO ESTRUTURADO (piloto N1 etapas) */
         .dialogo-thread {
             display: flex;
             flex-direction: column;
@@ -1116,23 +1114,15 @@
         <div id="modal-registro-passo-1" style="display:none;">
             <input type="number" id="registro-valor" style="display:none;">
             <input type="date" id="registro-data" style="display:none;">
-            <div id="registro-opcoes-gasto" style="display:none;"></div>
-            <div id="registro-opcoes-recebimento" style="display:none;"></div>
-            <h3 id="registro-titulo-passo-1" style="display:none;"></h3>
-        </div>
+</div>
         <div id="modal-registro-passo-2-categoria" style="display:none;">
-            <div class="chip-container" id="chips-categorias-registro"></div>
-            <button id="btn-pular-categoria" style="display:none;"></button>
-            <h3 id="titulo-passo-2-categoria" style="display:none;"></h3>
-        </div>
+</div>
         <div id="modal-registro-passo-3-custodia" style="display:none;">
-            <div class="chip-container" id="chips-custodias-registro"></div>
-        </div>
+</div>
         <div id="modal-registro-passo-3" style="display:none;">
             <div id="modal-registro-fala"></div>
         </div>
-        <button id="btn-opcao-recebimento" style="display:none;"></button>
-    </div>
+</div>
 </div>
 
 <!-- MODAL: QR Code -->
@@ -1318,9 +1308,6 @@
 </div>
 
 <script>
-// ============================================================
-// CONSTANTES
-// ============================================================
 // Mapa de Títulos das Telas para o Cabeçalho Global
 const TITULOS_TELAS = {
     'screen-welcome': 'Bem-vindo',
@@ -1373,29 +1360,20 @@ function _custodiasOperacionais(orc) {
 function _custodiasReserva(orc) {
     return ((orc && orc.custodias) || []).filter(_custodiaEhReserva);
 }
-function traduzirNatureza(nat) {
-    const n = NATUREZAS_RENDA[nat];
-    return n ? n.label : '—';
-}
 
-// ============================================================
 // ESTADO GLOBAL
-// ============================================================
 
 let state = {
     orcamento: null,
-    // Fatia D — slots no root (não dentro de orcamento)
     n0: null,
     n4: null,
     theme: 'light'
 };
 
-// ============================================================
 // FATIA D — N0 / N4 (slots reservados, Ciclo 4.1)
 // N0 = acolhimento/triagem antes do N1 (ainda não ativo no fluxo)
 // N4 = estratégias avançadas após N3 estável (ainda não ativo)
 // API pública: n0EstaDisponivel, n4EstaDisponivel, abrirTelaN0, abrirTelaN4
-// ============================================================
 
 function _garantirStubN0(n0) {
     const base = {
@@ -1439,7 +1417,6 @@ function _garantirStubN4(n4) {
             exigeSemanasFechadas: 4,
             exigeConciliacaoRecente: true
         },
-        // metadados
         ultimaAbertura: null
     };
     if (!n4 || typeof n4 !== 'object') return base;
@@ -1553,10 +1530,7 @@ function n4DesbloquearStub() {
     renderizarTelaN4();
 }
 
-// ============================================================
-// BLOCO C — PERSISTÊNCIA (Ciclo 4.1)
 // IndexedDB com fallback localStorage + migração one-shot
-// ============================================================
 
 const DB_NAME = 'dMochila';
 const DB_VERSION = 1;
@@ -1629,7 +1603,6 @@ function salvarEstado() {
             // espelho residual em LS até confirmação estável (migração)
             try { localStorage.setItem(CHAVE_STORAGE, JSON.stringify(snapshot)); } catch (_) {}
         } catch (e) {
-            console.warn('[PERSIST] IDB falhou, usando localStorage', e);
             try { localStorage.setItem(CHAVE_STORAGE, JSON.stringify(snapshot)); } catch (e2) {
                 console.error('[PERSIST] Falha total ao salvar', e2);
             }
@@ -1644,10 +1617,8 @@ async function carregarEstado() {
         const row = await _idbGet(CHAVE_STORAGE);
         if (row && row.state) {
             loaded = row.state;
-            console.log('[BOOT] Estado carregado do IndexedDB');
         }
     } catch (e) {
-        console.warn('[BOOT] IDB indisponível no load', e);
     }
 
     if (!loaded) {
@@ -1655,13 +1626,11 @@ async function carregarEstado() {
         if (salvo) {
             try {
                 loaded = JSON.parse(salvo);
-                console.log('[BOOT] Estado carregado do localStorage — migrando para IDB');
                 state = loaded;
                 migrarEstado();
                 salvarEstado(); // grava no IDB
                 return;
             } catch (e) {
-                console.warn('[BOOT] Estado LS corrompido', e);
             }
         }
     }
@@ -1669,7 +1638,6 @@ async function carregarEstado() {
     if (loaded) {
         state = loaded;
         migrarEstado();
-        console.log('[BOOT] Estado pronto:', state);
     } else {
         state = { orcamento: null };
     }
@@ -1680,10 +1648,8 @@ async function limparPersistencia() {
     try { localStorage.removeItem(CHAVE_STORAGE); } catch (_) {}
 }
 
-// Garante que a estrutura do Nível 2 exista (para usuários do Nível 1)
 
 function migrarEstado() {
-    // Fatia D + tema: sempre no root, mesmo sem orçamento
     state.n0 = _garantirStubN0(state.n0);
     state.n4 = _garantirStubN4(state.n4);
     if (state.theme !== 'light' && state.theme !== 'dark') {
@@ -1772,7 +1738,6 @@ if (Array.isArray(state.orcamento.resumos)) {
     if (state.orcamento.nivel3LinhaDeBase === undefined) {
         state.orcamento.nivel3LinhaDeBase = null;
     }
-    // Garante que custódias antigas (se houver) tenham todos os campos
     state.orcamento.custodias.forEach(c => {
         if (c.saldoAtual === undefined) c.saldoAtual = c.saldoInicial || 0;
         if (!Array.isArray(c.historicoReconciliacoes)) c.historicoReconciliacoes = [];
@@ -1791,7 +1756,6 @@ if (Array.isArray(state.orcamento.resumos)) {
         if (r.custodiaId === undefined) r.custodiaId = null;
         if (r.cartaoId === undefined) r.cartaoId = null;
         if (r.saldoAtualizado === undefined) r.saldoAtualizado = false;
-        // Bloco 11: dataCompra em gastos de cartão
         if (r.tipo === 'gasto_cartao' && r.dataCompra === undefined) {
             r.dataCompra = r.data || null;
         }
@@ -1841,7 +1805,6 @@ if (c.tipo !== 'conta' && c.tipo !== 'consumo') {
         // 3. custodiaPadraoId por categoria (N3)
         if (c.custodiaPadraoId === undefined) c.custodiaPadraoId = null;
 
-        // Fatia 5 — C2 provisionamento (sinking fund)
         if (c.provisionar === undefined) c.provisionar = false;
         if (c.valorProvisaoTotal === undefined) c.valorProvisaoTotal = null;
         if (c.periodicidadeProvisao === undefined) c.periodicidadeProvisao = null; // anual|semestral|trimestral|mensal
@@ -1854,7 +1817,6 @@ if (c.tipo !== 'conta' && c.tipo !== 'consumo') {
         };
     }
 
-    // Fatia 9 — E1 âncora de ciclo da semana
     if (!state.orcamento.configSemana || typeof state.orcamento.configSemana !== 'object') {
         state.orcamento.configSemana = {
             inicioDiaSemana: 0,
@@ -1900,7 +1862,6 @@ if ('forcarMostrar' in state.orcamento.uiApoio) {
     delete state.orcamento.uiApoio.forcarMostrar;
 }
 
-    // Fatia de alisamento — estado do simulador (fora de state.n4)
     if (!state.orcamento.cenarioAlisamento || typeof state.orcamento.cenarioAlisamento !== 'object') {
         state.orcamento.cenarioAlisamento = { ativo: false, ajustes: [], criadoEm: null };
     }
@@ -1909,9 +1870,7 @@ if ('forcarMostrar' in state.orcamento.uiApoio) {
     }
 }
 
-// ============================================================
 // CICLO 4.0 — BOTÃO DE FEEDBACK (visibilidade)
-// ============================================================
 
 // Telas onde o botão NÃO aparece
 const TELAS_SEM_FEEDBACK = ['screen-welcome'];
@@ -1931,9 +1890,6 @@ function atualizarBotaoFeedback(screenId) {
     btn.classList.toggle('visivel', deveAparecer);
 }
 
-// ============================================================
-// NAVEGAÇÃO
-// ============================================================
 let screenHistory = [];
 function goToScreen(id, pushHistory = true) {
     const currentScreen = document.querySelector('.screen.active')?.id;
@@ -2016,9 +1972,6 @@ function voltarParaOrcamento() {
     goToScreen('screen-orcamento-inicio');
 }
 
-// ============================================================
-// INICIALIZAÇÃO
-// ============================================================
 
 function iniciarJornada() {
     if (!state.orcamento) {
@@ -2066,9 +2019,7 @@ function retomarJornada() {
     iniciarJornada();
 }
 
-// ============================================================
 // PRÉVIA SÓ LEITURA DA SEMANA (tela de abertura)
-// ============================================================
 
 function renderizarPreviaSemana() {
     const container = document.getElementById('welcome-previa-semana');
@@ -2119,7 +2070,7 @@ function renderizarPreviaSemana() {
         `;
     };
 
-    // ---- Renda: só mostra barra comparativa quando há recebimento real ----
+// Renda: só mostra barra comparativa quando há recebimento real
     let htmlRenda;
     if (rendaReal > 0 && rendaEstimada > 0) {
         // Barra mostra o quanto do previsto já entrou (pode passar de 100%)
@@ -2154,7 +2105,7 @@ function renderizarPreviaSemana() {
         `;
     }
 
-    // ---- Montagem do conteúdo interno (sem o wrapper) ----
+// Montagem do conteúdo interno (sem o wrapper)
     const conteudoInterno = `
         <div style="padding: 4px 16px 16px;">
             <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px;">
@@ -2183,7 +2134,7 @@ function renderizarPreviaSemana() {
         </div>
     `;
 
-    // ---- Acordeon: lê estado persistido ----
+// Acordeon: lê estado persistido
     const chaveAberta = 'welcome_previa_aberta';
     const aberta = localStorage.getItem(chaveAberta) === '1';
 
@@ -2270,9 +2221,7 @@ function comecarDeNovo() {
 }
 
 
-// ============================================================
 // DIÁLOGO ESTRUTURADO — piloto (hub + etapas N1)
-// ============================================================
 
 const PERSONAGENS_DIALOGO = {
     torres: { nome: 'Torres', icone: '🛡️' },
@@ -2334,9 +2283,7 @@ function _fmtDialogoBRL(v) {
     return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-// ============================================================
 // TELA INICIAL DO ORÇAMENTO
-// ============================================================
 
 function renderizarOrcamentoInicio(opcoes) {
     opcoes = opcoes || {};
@@ -2396,7 +2343,6 @@ function renderizarOrcamentoInicio(opcoes) {
                     </span>
                 </button>`;
         } else if (concluida && forcarHub) {
-            // Fase 5 — modo revisão: etapas concluídas clicáveis
             opcoesHtml += `
                 <button class="btn-option" style="border-color:var(--success);" onclick="escolherEtapaDialogo('${etapa.id}', '${etapa.titulo.replace(/'/g, "\\'")}')">
                     <span>${etapa.icone}</span>
@@ -2477,9 +2423,7 @@ function iniciarEtapa(etapaId) {
     else if (etapaId === 'futuro') iniciarEtapaFuturo();
 }
 
-// ============================================================
 // ETAPA BASE (Torres)
-// ============================================================
 
 function iniciarEtapaBase() {
     const container = document.getElementById('orcamento-conteudo');
@@ -2671,9 +2615,7 @@ function concluirEtapaBase() {
         alert('Não consegui salvar a base. Tente de novo. Se continuar, envie um feedback pelo botão 💬.');
     }
 }
-// ============================================================
 // ETAPA VIDA (Bela)
-// ============================================================
 
 function iniciarEtapaVida() {
     const container = document.getElementById('orcamento-conteudo');
@@ -2789,9 +2731,7 @@ function concluirEtapaVida() {
     }
 }
 
-// ============================================================
 // ETAPA FUTURO (Zé)
-// ============================================================
 
 function iniciarEtapaFuturo() {
     // Guard defensivo: só entra aqui se Base e Vida existirem.
@@ -2897,7 +2837,6 @@ function concluirEtapaFuturo() {
         state.orcamento.etapasConcluidas.push('futuro');
     }
 
-    // Garante semana e limites alinhados ao envelope (N1) / vencimentos (N2+)
     if (!state.orcamento.semanaAtual) {
         iniciarNovaSemana();
     } else if (!state.orcamento.semanaAtual.fechada) {
@@ -2970,7 +2909,6 @@ function calcularTaxaViabilidadeConsumo(orc) {
     const categoriasBase = categoriasSemVenc.filter(c => c.caixa === 'base');
     const categoriasVida = categoriasSemVenc.filter(c => c.caixa === 'vida');
     
-    // Calcula o orçamento restante por caixa, subtraindo o que já foi gasto no mês
     let totalBaseRestante = 0;
     let totalVidaRestante = 0;
     
@@ -3159,14 +3097,10 @@ function sincronizarLimitesSemanaAtual() {
 }
 
 
-// ============================================================
 // ORÇAMENTO COMPLETO (Nível 1 + Nível 2)
-// ============================================================
 
 
-// ============================================================
 // UX-ANDAIME — GRADUAÇÃO, NÚMERO PRINCIPAL, ONBOARDING, FREQUENTES
-// ============================================================
 
 const SEMANAS_PARA_RECUAR_APOIO = 4; // após N semanas no nível, cards de apoio recolhem
 
@@ -3224,7 +3158,6 @@ function calcularDisponivelAgora(orc) {
     let sub = 'Por enquanto a gente usa o que você planejou. Quando você contar os dias e as carteiras, mostramos o que está acontecendo de verdade.';
     let origem = 'plano';
     
-    // Se o plano estourou a renda, avisa e muda a origem para o app saber que precisa alertar
     if (lim > rendaEstimada && rendaEstimada > 0) {
         const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         sub = `Atenção: você separou ${fmt(lim)} nas caixinhas, mas o que entra nesta semana é ${fmt(rendaEstimada)}. O app guarda seu plano, e o valor em destaque segue o que realmente entra.`;
@@ -3244,7 +3177,6 @@ function renderizarCardDisponivelAgora(orc) {
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const estourou = d.origem === 'plano_estourado';
     const neg = d.valor < 0 || estourou;
-    // Fase 5 — hero clicável sempre
     return `
         <div class="home-hero" onclick="abrirModalSaldoSemana()" role="button" style="cursor:pointer;" title="Ver saldo da semana">
             <div class="home-hero-label">${d.rotulo}</div>
@@ -3256,7 +3188,6 @@ function renderizarCardDisponivelAgora(orc) {
 
 /** Pílula de status + ícone de notificações/andaime */
 function renderizarPilulaStatusHome(orc) {
-    // Fase 2: pílula só N2+; 🔔 foi para o topo
     if (!orc || (orc.nivel || 1) < 2) return '';
     let pill = `<button type="button" class="home-pill" onclick="abrirTelaFluxoCaixa()">✨ Ver horizonte ›</button>`;
     try {
@@ -3307,7 +3238,6 @@ function _contarAvisosAndaime(orc) {
 function _temAvisoUnificado(orc) {
     if (!orc) return false;
 
-    // 1. Resumo semanal pronto
     if (orc.semanaAtual && orc.semanaAtual.fechada && !orc.semanaAtual.resumoLido) {
         return true;
     }
@@ -3346,7 +3276,6 @@ function renderizarCtaPrioritarioHome(orc) {
     return `<button type="button" class="home-cta" onclick="abrirModalRegistro()">＋ Registrar movimento</button>`;
 }
 
-/** Fase 3 — Atalhos progressivos sob o CTA */
 function renderizarAtalhosHome(orc) {
     const nivel = (orc && orc.nivel) || 1;
     let html = '<div class="home-atalhos">';
@@ -3375,44 +3304,6 @@ function renderizarBlocoApoio(htmlInterno, expandido) {
             <summary style="cursor:pointer;font-size:0.9rem;font-weight:600;color:var(--primary);">Mostrar apoio e detalhes</summary>
             <div style="margin-top:12px;">${htmlInterno}</div>
         </details>
-    `;
-}
-
-function renderizarConviteConciliacaoHome(orc) {
-    if (!orc || (orc.nivel || 1) < 3) return '';
-    const custodias = (orc.custodias || []).filter(c => {
-        const t = TIPOS_CUSTODIA[c.tipo] || {};
-        return !t.temFatura;
-    });
-    if (custodias.length === 0) return '';
-    const agora = Date.now();
-    const DIAS = 7;
-    let candidata = null;
-    let diasSem = 0;
-    custodias.forEach(c => {
-        let d = 999;
-        if (c.ultimaReconciliacao) {
-            const t = new Date(c.ultimaReconciliacao).getTime();
-            if (!isNaN(t)) d = Math.floor((agora - t) / 86400000);
-        }
-        if (d >= DIAS && d >= diasSem) {
-            diasSem = d;
-            candidata = c;
-        }
-    });
-    if (!candidata) return '';
-    const texto = candidata.ultimaReconciliacao
-        ? `A conta <strong>${candidata.nome}</strong> está há cerca de ${diasSem} dias sem olhar o saldo real.`
-        : `A conta <strong>${candidata.nome}</strong> ainda não foi conferida com o banco.`;
-    return `
-        <div class="card" style="padding:12px 14px;margin-bottom:14px;border-left:4px solid var(--primary);background:var(--info-soft);">
-            <div style="font-size:0.9rem;color:var(--primary);line-height:1.4;">
-                <span style="font-size:0.9rem;">🎯</span> ${texto}
-                <div style="margin-top:8px;">
-                    <button class="btn-sm" style="background:var(--primary);color:#fff;" onclick="abrirTelaCustodias()">Atualizar saldo real</button>
-                </div>
-            </div>
-        </div>
     `;
 }
 
@@ -3484,18 +3375,8 @@ function _tickOnboardingNivel2AposCategoriaBase() {
     }
 }
 
-function avancarOnboardingNivel2(etapaAtual) {
-    if (!state.orcamento.onboardingNivel2) state.orcamento.onboardingNivel2 = { etapa: 1, concluido: false };
-    if (etapaAtual === 1) state.orcamento.onboardingNivel2.etapa = 2;
-    else if (etapaAtual === 2) state.orcamento.onboardingNivel2.etapa = 3;
-    else state.orcamento.onboardingNivel2.concluido = true;
-    salvarEstado();
-}
 
-
-// ============================================================
 // GUIADO N1 — mapa da Home (layout painel)
-// ============================================================
 function renderizarOnboardingNivel1Home(orc) {
     if (!orc) return '';
     // Home completa (hub com 3 etapas); disponível em qualquer nível (mapa do painel)
@@ -3658,7 +3539,6 @@ function abrirPrimeiraCustodiaParaConciliar() {
         return !t.temFatura;
     });
     if (lista.length === 0) {
-        // tenta qualquer custódia
         const todas = state.orcamento.custodias || [];
         if (todas.length === 0) {
             alert('Cadastre uma conta primeiro (banco, dinheiro ou cartão).');
@@ -3778,7 +3658,6 @@ function renderizarOrcamentoCompleto(container, orc) {
                 subRecuperacao = `${sinal.contasVencidas.length} conta${sinal.contasVencidas.length > 1 ? 's' : ''} vencida${sinal.contasVencidas.length > 1 ? 's' : ''}`;
             }
 
-            // Bloco 12: projeção só como rodapé se houver gargalo à frente
             const rodapeProjecao = renderizarRodapeProjecaoNaRecuperacao(orc);
 
             cardRecuperacao = `
@@ -3826,7 +3705,6 @@ function renderizarOrcamentoCompleto(container, orc) {
                 ` : ''}
         `;
     }
-    // Fatia D — atalhos de QA/desenvolvimento (não mudam o fluxo padrão)
     chipsAjustes += `
             <div class="chip" onclick="abrirTelaN0()" title="Slot N0">🌱 N0 Acolhimento</div>
             <div class="chip" onclick="abrirTelaN4()" title="Slot N4">🧭 N4 Estratégias</div>
@@ -3867,12 +3745,10 @@ function renderizarOrcamentoCompleto(container, orc) {
             </div>`;
         if (!orc.uiApoio) orc.uiApoio = {};
         orc.uiApoio.celebrouRecuo = true;
-        // persist after paint
         setTimeout(() => { try { salvarEstado(); } catch (e) {} }, 0);
     }
     
 
-    // Garante guiado N1 na primeira vez que a Home completa aparece na sessão
     if ((orc.nivel || 1) === 1 && orc.etapasConcluidas && orc.etapasConcluidas.length >= 3) {
         if (!orc.onboardingNivel1 || typeof orc.onboardingNivel1 !== 'object') {
             const temHist = (orc.historicoRegistros || []).length > 0;
@@ -3936,7 +3812,6 @@ function alternarTemaHome() {
         meta.content = novo === 'dark' ? '#0F0F12' : '#F8F7FC';
     } catch (_) {}
     try { salvarEstado(); } catch (_) {}
-    // Atualiza chip e ícone sem perder scroll desnecessário
     const chip = document.getElementById('chip-tema');
     if (chip) chip.textContent = novo === 'dark' ? '☀️ Tema claro' : '🌙 Tema escuro';
     const ativa = document.querySelector('.screen.active');
@@ -3979,11 +3854,7 @@ function aplicarTemaSalvo() {
     } catch (_) {}
 }
 
-/** Ciclo 4.2-C — cabeçalho padrão das telas secundárias */
-
-// ============================================================
 // FASE 0/1 — Drawer + stubs de telas (conteúdo nas fases 4+)
-// ============================================================
 
 let _drawerEscHandler = null;
 let _drawerPopHandler = null;
@@ -4094,7 +3965,6 @@ function fecharDrawer(fromPopstate) {
         _drawerPopHandler = null;
     }
 
-    // Se fechou por botão/backdrop e havia pushState, volta o history sem re-disparar
     if (!fromPopstate && _drawerHistoryPushed) {
         _drawerHistoryPushed = false;
         try { history.back(); } catch (_) {}
@@ -4518,16 +4388,6 @@ function cabecalhoTelaSecundaria(titulo, subtitulo) {
 }
 
 
-function traduzirTipoRenda(tipo) {
-    const mapa = {
-        constante: 'constante',
-        varia_pouco: 'varia pouco',
-        varia_muito: 'varia muito'
-    };
-    return mapa[tipo] || 'não definido';
-}
-
-
 /**
  * Fatia 8 — D1/D2: lembrete de hierarquia só quando há passivo ou N2+.
  * Caixinha = total; categoria = analítico. Não somar.
@@ -4565,7 +4425,6 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         if (!opcoes.sobraAnterior && cx.sobraAnterior) sobraAnterior = Number(cx.sobraAnterior) || 0;
     }
 
-    // NOVO: Consumido real e percentual visual considerando o passivo
     const consumidoReal = gastoSeguro + carrego;
     const disponivelReal = limiteSeguro - consumidoReal;
 
@@ -4582,7 +4441,6 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
             aviso = '<div style="font-size: 0.9rem; color: var(--danger); margin-top: 6px;">Sem orçamento definido. Todo gasto aqui é acima do planejado.</div>';
         }
     } else {
-        // NOVO: Usa uma margem de tolerância de 5 centavos para evitar problemas de arredondamento do JavaScript
         if (consumidoReal > limiteSeguro + 0.05) {
             cor = 'barra-vermelha'; // Estourou de verdade
         } else if (consumidoReal >= limiteSeguro - 0.05) {
@@ -4596,7 +4454,6 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         const fmt = (v) => v.toFixed(2).replace('.', ',');
     let linhaReal = '';
     
-    // NOVO: Adiciona disponivelReal < -0.05 para mostrar o texto quando estourar o limite na própria semana
     if (carrego > 0 || sobraAnterior > 0 || disponivelReal < -0.05) {
         const bits = [];
         if (carrego > 0) {
@@ -4759,15 +4616,12 @@ function renderizarCardsCustodiaHome(orc, semana) {
     return html;
 }
 
-// ============================================================
 // PERSONAGENS DO SALDO — Torres (base firme), Bela (acolhe), Zé (caminho)
-// ============================================================
 function _falaSaldoPersonagem({ saldo, saldoAnterior, rendaReal, totalGasto, percentualDisponivel, fmt }) {
     const temCarryPos = saldoAnterior > 0;
     const temCarryNeg = saldoAnterior < 0;
     const semRecebimento = rendaReal <= 0;
 
-    // === SEM RECEBIMENTO ===
     if (semRecebimento && temCarryPos && saldo >= 0) {
         // Zé: caminho andando
         return {
@@ -4807,7 +4661,6 @@ function _falaSaldoPersonagem({ saldo, saldoAnterior, rendaReal, totalGasto, per
         };
     }
 
-    // === COM RECEBIMENTO ===
     if (temCarryNeg && saldo >= 0) {
         // Torres: virada
         return {
@@ -4865,7 +4718,6 @@ function _falaSaldoPersonagem({ saldo, saldoAnterior, rendaReal, totalGasto, per
 function renderizarCardSaldo(semana, orc, opcoes) {
     opcoes = opcoes || {};
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    // Fase 5: opcoes.semOnclick desliga o clique no card (modal da Home)
 
     const rendaReal     = semana.rendaReal || 0;
     const rendaEstimada = semana.rendaEstimada || (orc.base?.rendaBase || 0) / DIVISOR_SEMANAL;
@@ -4877,9 +4729,7 @@ function renderizarCardSaldo(semana, orc, opcoes) {
 
     const nivel = orc.nivel || 1;
 
-    // ============================================================
-    // RAMO N1 — base prevista + carryover
-    // ============================================================
+// RAMO N1 — base prevista + carryover
     if (rendaReal <= 0 && nivel < 2) {
         const base = rendaEstimada > 0 ? rendaEstimada : 0;
         const saldoN1 = saldoAnterior + base - totalGasto;
@@ -4939,11 +4789,9 @@ function renderizarCardSaldo(semana, orc, opcoes) {
         `;
     }
 
-    // ============================================================
     // RAMO N2+ SEM RECEBIMENTO
     // - Sem carryover: card "aguardando" (comportamento antigo)
     // - Com carryover: card normal, com aviso de que não houve recebimento
-    // ============================================================
     if (rendaReal <= 0) {
         if (saldoAnterior === 0) {
             return `
@@ -5020,9 +4868,7 @@ function renderizarCardSaldo(semana, orc, opcoes) {
         `;
     }
 
-    // ============================================================
-    // RAMO N2+ COM RECEBIMENTO — carryover como entrada algébrica
-    // ============================================================
+// RAMO N2+ COM RECEBIMENTO — carryover como entrada algébrica
     const saldo = saldoAnterior + rendaReal - totalGasto;
     const basePercentual = saldoAnterior + rendaReal;
 
@@ -5104,10 +4950,8 @@ function renderizarCardSaldo(semana, orc, opcoes) {
     `;
 }
 
-// ============================================================
 // CONTINUIDADE SEMANAL — carrego por caixinha e categoria
 // Decisões § 10.7: sobra C, barra B, fallback caixinha, sem rateio
-// ============================================================
 
 /**
  * Estouro/sobra de uma caixinha no fechamento.
@@ -5176,7 +5020,6 @@ function calcularCarregoCategoriasDaSemana(semana) {
                 return false;
             })
             .reduce((s, r) => s + (Number(r.valor) || 0), 0);
-        // Fatia 7: passivo de meta herdado não expira se a semana só "bate" o limite
         const passivoEntrada = Number((abertos[cat.id] && abertos[cat.id].estouro) || 0) || 0;
         const posicao = gastoSem + passivoEntrada - metaSem;
         const estouro = Math.max(0, posicao);
@@ -5376,7 +5219,6 @@ function temCarregoSemanaAnterior(semana) {
 function renderizarAvisoCarregoVirada(semana) {
     if (!semana || !temCarregoSemanaAnterior(semana)) return '';
     
-    // NOVO: Se o usuário já fechou o aviso nesta semana, não mostra mais
     if (semana.avisoCarregoLido) return '';
 
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -5420,9 +5262,7 @@ function fecharAvisoCarrego() {
 }
 
 
-// ============================================================
 // FATIA 9 — E1 ÂNCORA · E2 DESTINO SOBRA · E3 MINI BALANÇO
-// ============================================================
 
 function _diaRecebimentoPrincipal(orc) {
     const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
@@ -5722,7 +5562,6 @@ function iniciarNovaSemana() {
     if (state.orcamento.resumos && state.orcamento.resumos.length > 0) {
         const ultimoResumo = state.orcamento.resumos[0];
         saldoAnterior = (typeof ultimoResumo.saldo === 'number') ? ultimoResumo.saldo : 0;
-        // Fatia 7: passivo de meta (não caixa). Preferir passivoMeta; fallback estouro.
         const pm = (cx) => {
             if (!cx) return 0;
             if (typeof cx.passivoMeta === 'number') return Math.max(0, cx.passivoMeta);
@@ -5771,9 +5610,7 @@ function formatarData(dataStr) {
     return `${dia}/${mes}`;
 }
 
-// ============================================================
 // MODAL DE REGISTRO (com passo de categoria no Nível 2)
-// ============================================================
 
 let registroTemporario = null;
 /** Handoff do + → Futuro: { valor, subtipo } até concluir pagamento/aporte */
@@ -6146,7 +5983,6 @@ function confirmarRegistro(nomeCategoria) {
         return; 
     }
     
-    // Bloco 10: só soma na semana atual se a data cair nela
     if (dataNaSemanaAtual(dataISO)) {
         semana[caixa].gasto += valor;
     }
@@ -6179,9 +6015,7 @@ function confirmarRegistro(nomeCategoria) {
         fala = "Mais um tijolo. Olha a parede crescendo.";
     }
 
-    // ============================================================
-    // NOVO: INTELIGÊNCIA DE ADIANTAMENTO (COMPETÊNCIA vs CAIXA)
-    // ============================================================
+// NOVO: INTELIGÊNCIA DE ADIANTAMENTO (COMPETÊNCIA vs CAIXA)
     if (registroTemporario.categoriaId) {
         const cat = (state.orcamento.categorias || []).find(c => c.id === registroTemporario.categoriaId);
         
@@ -6208,7 +6042,6 @@ function confirmarRegistro(nomeCategoria) {
             }
         }
     }
-    // ============================================================
 
     // Custódia de origem (gasto sai)
     if (state.orcamento.nivel >= 3 && registroTemporario.custodiaId) {
@@ -6225,7 +6058,6 @@ function confirmarRegistro(nomeCategoria) {
 
     if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
     
-    // NOVO: Adicionado o mesReferencia no objeto
     state.orcamento.historicoRegistros.push({
         id: 'reg_' + Date.now(),
         data: dataISO,
@@ -6240,13 +6072,11 @@ function confirmarRegistro(nomeCategoria) {
         mesReferencia: mesReferencia // <-- TAG SALVA AQUI
     });
 
-    // Verifica se o gatilho do Nível 2 foi atingido
     verificarGatilhoNivel2();
     if (typeof _tickOnboardingAposRegistro === 'function') _tickOnboardingAposRegistro();
 
     salvarEstado();
 
-    // Bloco 10: nota se a data ficou fora da semana atual
     if (!dataNaSemanaAtual(dataISO)) {
         const d = dataISO.split('T')[0].split('-').reverse().join('/');
         fala += ` Registrado em ${d} (fora desta semana — não entra nas caixinhas de agora).`;
@@ -6262,9 +6092,7 @@ function confirmarRegistro(nomeCategoria) {
 
     renderizarOrcamentoInicio();
 }
-// ============================================================
 // REGISTRO — TIPO (gasto ou recebimento)
-// ============================================================
 
 function escolherTipoRegistro(tipo) {
     registroTemporario.tipo = tipo;
@@ -6285,21 +6113,6 @@ function registroConfirmarValorECaixa(caixa) {
     const dataTxt = _fmtDataBolha(registroTemporario.data);
     dialogoPushUsuario(dataTxt ? `${fmt} · ${dataTxt}` : fmt);
     registrarGasto(caixa);
-}
-
-/** Bloco 10 — data do registro: default hoje, max hoje, min 90 dias atrás */
-function prepararCampoDataRegistro() {
-    const input = document.getElementById('registro-data');
-    if (!input) return;
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const max = hoje.toISOString().split('T')[0];
-    const minD = new Date(hoje);
-    minD.setDate(minD.getDate() - 90);
-    const min = minD.toISOString().split('T')[0];
-    input.max = max;
-    input.min = min;
-    input.value = max;
 }
 
 /** Lê a data do input; devolve ISO datetime local meio-dia ou agora se inválida. */
@@ -6336,9 +6149,7 @@ function dataNaSemanaAtual(isoStr) {
     return d >= ini && d <= fim;
 }
 
-// ============================================================
 // RECEBIMENTO — fluxo
-// ============================================================
 
 function continuarRecebimento() {
     const valor = _parseValorRegistro((document.getElementById('registro-valor') || {}).value);
@@ -6384,29 +6195,6 @@ function registroEscolherFonteRecebimento(id, nome) {
     tentarPassoCustodiaRecebimento();
 }
 
-function mostrarPassoCategoriaRecebimento_LEGACY_CHIP_BUILD(fontes) {
-    const containerChips = document.getElementById('chips-categorias-registro');
-    if (!containerChips) return;
-    containerChips.innerHTML = '';
-
-    fontes.forEach(f => {
-        const chip = document.createElement('div');
-        chip.className = 'chip';
-        chip.innerText = `${f.nome} · R$ ${(f.valor || 0).toFixed(2).replace('.', ',')}`;
-        chip.onclick = () => {
-            // ⚠️ Guarda a fonte e SEGUE para a custódia, em vez de confirmar direto
-            registroTemporario.categoriaNome = f.nome;
-            tentarPassoCustodiaRecebimento();
-        };
-        containerChips.appendChild(chip);
-    });
-
-    // O botão "pular" também segue para a custódia
-    document.getElementById('btn-pular-categoria').onclick = () => {
-        registroTemporario.categoriaNome = null;
-        tentarPassoCustodiaRecebimento();
-    };
-}
 
 function tentarPassoCustodiaRecebimento() {
     const custodias = (state.orcamento.custodias || [])
@@ -6461,7 +6249,6 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
     }
 
     let mesReferencia = null;
-    // NOVO: INTELIGÊNCIA DE ADIANTAMENTO
     if (registroTemporario.categoriaId || registroTemporario.categoriaNome) {
         const fonte = (state.orcamento.rendaDetalhe?.fontes || []).find(f => 
             f.id === registroTemporario.categoriaId || f.nome === registroTemporario.categoriaNome
@@ -6530,7 +6317,6 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
     if (custodiaNome) fala += ` Entrou em ${custodiaNome}.`;
     else if ((state.orcamento.nivel || 1) >= 3) fala += ' Sem conta ligada — a entrada não foi somada a nenhum saldo.';
     
-    // NOVO: Feedback visual de adiantamento
     if (mesReferencia) {
         fala += ` Anotado como adiantamento para <strong>${_rotuloMesAno(mesReferencia)}</strong>.`;
     }
@@ -6543,9 +6329,7 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
 
     renderizarOrcamentoInicio();
 }
-// ============================================================
 // GATILHO E TRANSIÇÃO DE NÍVEL
-// ============================================================
 
 function verificarGatilhoNivel2() {
     const orc = state.orcamento;
@@ -6558,7 +6342,6 @@ function verificarGatilhoNivel2() {
     if (registros >= REGISTROS_PARA_NIVEL2 && semanasFechadas >= SEMANAS_PARA_NIVEL2) {
         orc.transicaoNivelPendente = 2;
         salvarEstado();
-        console.log('[NÍVEL 2] Gatilho atingido. Transição pendente.');
     }
 }
 
@@ -6602,7 +6385,6 @@ function aceitarNivel2() {
     state.orcamento.onboardingNivel2 = { etapa: 1, concluido: false };
    
     salvarEstado();
-    console.log('[NÍVEL 2] Aceito. Nível agora é 2.');
     renderizarOrcamentoInicio();
     goToScreen('screen-orcamento-inicio');
 }
@@ -6610,14 +6392,11 @@ function aceitarNivel2() {
 function adiarNivel2() {
     state.orcamento.transicaoNivelPendente = null;
     salvarEstado();
-    console.log('[NÍVEL 2] Adiado pelo usuário.');
     renderizarOrcamentoInicio();
     goToScreen('screen-orcamento-inicio');
 }
 
-// ============================================================
 // TRANSIÇÃO NÍVEL 3 — custódias + correlação no +
-// ============================================================
 
 function abrirTelaTransicaoNivel3() {
     goToScreen('screen-transicao-nivel');
@@ -6681,7 +6460,6 @@ function aceitarNivel3() {
     };
     
     salvarEstado();
-    console.log('[NÍVEL 3] Aceito + onboarding.');
     if (!temCust) {
         abrirTelaCustodias();
     } else {
@@ -6693,14 +6471,11 @@ function aceitarNivel3() {
 function adiarNivel3() {
     state.orcamento.transicaoNivelPendente = null;
     salvarEstado();
-    console.log('[NÍVEL 3] Adiado.');
     renderizarOrcamentoInicio();
     goToScreen('screen-orcamento-inicio');
 }
 
-// ============================================================
 // SEÇÃO 1: SUA RENDA
-// ============================================================
 
 function abrirDetalheRenda() {
     goToScreen('screen-renda-detalhe');
@@ -6784,7 +6559,6 @@ function renderizarDetalheRenda() {
         return;
     }
 
-    // Se já detalhou: mostra lista de fontes + adicionar
     const fontes = renda.fontes || [];
     let blocoSugestaoReserva = '';
     if (state.orcamento._sugestaoReservaPendente) {
@@ -6834,7 +6608,6 @@ if (diasRec.length > 0) {
     metaSem = 0;
     const semanaAtual = state.orcamento.semanaAtual;
     if (semanaAtual) {
-        // Usa a mesma lógica de datas da calcularLimiteCategoriaSemana
         const ini = new Date(semanaAtual.inicio + 'T00:00:00');
         const fim = new Date(semanaAtual.fim + 'T23:59:59');
         const ano = ini.getFullYear();
@@ -6842,10 +6615,8 @@ if (diasRec.length > 0) {
         
         diasRec.forEach(dia => {
             let d = new Date(ano, mes, dia);
-            // Se a data já passou no mês atual, considera o mês seguinte (virada de mês)
             if (d < ini) d = new Date(ano, mes + 1, dia);
             
-            // Se o dia de recebimento cai nesta semana, adiciona a fração do valor
             // (divide por diasRec.length caso seja quinzenal, ex: dias 5 e 20)
             if (d >= ini && d <= fim) {
                 metaSem += (f.valor || 0) / diasRec.length;
@@ -7047,8 +6818,6 @@ function responderFrequenciaRenda(el, freq) {
     }
 
 
-
-    // Se estiver editando a mesma frequência, mantém os dias
     let diasExistentes = null;
     if (fonteRendaEditandoId) {
         const fonte = (state.orcamento.rendaDetalhe.fontes || []).find(f => f.id === fonteRendaEditandoId);
@@ -7160,7 +6929,6 @@ function salvarFonteRenda(origem, temGenerica) { const nome = document.getElemen
         const v1 = i1 && i1.value.trim() !== '' ? parseInt(i1.value) : null;
         const v2 = i2 && i2.value.trim() !== '' ? parseInt(i2.value) : null;
 
-        // Se o usuário preencheu um, precisa preencher o outro
         if ((v1 !== null || v2 !== null) && (v1 === null || v2 === null)) {
             alert('Preencha os dois dias ou deixe em branco.');
             return;
@@ -7249,7 +7017,6 @@ function salvarFonteRenda(origem, temGenerica) { const nome = document.getElemen
     }
 
     salvarEstado();
-    console.log('[NÍVEL 2] Fonte de renda salva:', nome, '| dia:', diaRecebimento);
     renderizarDetalheRenda();
 }
 
@@ -7384,9 +7151,7 @@ function refazerDetalheRenda() {
     renderizarDetalheRenda();
 }
 
-// ============================================================
 // SEÇÃO 2: SEUS GASTOS (Base e Vida)
-// ============================================================
 
 let caixaGastosAtiva = 'base'; // 'base' ou 'vida'
 
@@ -7450,7 +7215,6 @@ function renderizarDetalheGastos() {
 					const gastoMes = gastoCategoriaNoMes(cat.id, cat.nome);
 const pctMes = cat.valor > 0 ? (gastoMes / cat.valor) * 100 : 0;
             
-            // Agora usa a nova função que calcula se é conta ou consumo
             const metaSem = calcularLimiteCategoriaSemana(cat, state.orcamento.semanaAtual); 
             const barraHtml = renderizarBarraCategoria(gastoSem, metaSem, cat.id);
             htmlCategorias += `
@@ -7513,10 +7277,8 @@ let categoriaEditandoId = null; // null = nova; id = edição
  * @param {string} [idExistente] — se informado, edita a categoria (reaproveita N2→N3: vencimento, custódia).
  */
 
-// ============================================================
 // FATIA 5 — C2 PROVISIONAMENTO (sinking fund)
 // Distinto de carrego/passivo de meta: é acúmulo declarado para despesa irregular.
-// ============================================================
 
 const PERIODICIDADE_PROVISAO = {
     anual:      { label: 'Em 12 meses', divisor: 52 },
@@ -7590,7 +7352,6 @@ function selecionarPeriodicidadeProvisao(el, per) {
     document.querySelectorAll('#chips-periodicidade-provisao .chip').forEach(c => c.classList.remove('selecionado'));
     el.classList.add('selecionado');
     el.setAttribute('data-selected', '1');
-    // mark only this
     document.querySelectorAll('#chips-periodicidade-provisao .chip').forEach(c => {
         if (c !== el) c.removeAttribute('data-selected');
     });
@@ -7626,7 +7387,6 @@ function abrirFormularioCategoria(idExistente) {
         : null;
     categoriaEditandoId = catExistente ? catExistente.id : null;
 
-    // Se veio de outra caixa (ex.: lista filtrada), alinha a caixa ativa
     if (catExistente && catExistente.caixa) {
         caixaGastosAtiva = catExistente.caixa;
     }
@@ -7951,7 +7711,6 @@ if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
         }
     }
 
-    // ---------- EDIÇÃO ----------
     if (categoriaEditandoId) {
         const cat = (state.orcamento.categorias || []).find(c => c.id === categoriaEditandoId);
         if (!cat) {
@@ -7999,7 +7758,6 @@ if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
         tipoCategoriaSelecionado = null;
         custodiaPadraoCategoriaSelecionada = null;
         salvarEstado();
-        console.log('[EDIÇÃO] Categoria atualizada:', nome, '| Custódia padrão:', custodiaLog);
         if ((cat.caixa || caixa) === 'base' && typeof _tickOnboardingNivel2AposCategoriaBase === 'function') {
             _tickOnboardingNivel2AposCategoriaBase();
         }
@@ -8007,7 +7765,6 @@ if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
         return;
     }
 
-    // ---------- CRIAÇÃO ----------
     const categoriasExistentes = (state.orcamento.categorias || []).filter(c => c.caixa === caixa);
 
     const totalMensalAtual = caixa === 'base'
@@ -8089,7 +7846,6 @@ if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
     custodiaPadraoCategoriaSelecionada = null;
     categoriaEditandoId = null;
     salvarEstado();
-    console.log('[NÍVEL 2] Categoria salva:', nome, '| Caixa:', caixa, '| Custódia padrão:', custodiaLog);
     if (caixa === 'base' && typeof _tickOnboardingNivel2AposCategoriaBase === 'function') {
         _tickOnboardingNivel2AposCategoriaBase();
     }
@@ -8146,9 +7902,7 @@ function removerCategoria(id) {
     renderizarDetalheGastos();
 }
 
-// ============================================================
 // SEÇÃO 3: FUTURO (Dívidas e Reservas)
-// ============================================================
 
 function abrirDetalheFuturo(subtipo) {
     caixaFuturoAtiva = subtipo || 'divida';
@@ -8194,7 +7948,6 @@ function renderizarDetalheFuturo() {
         ? { icone: '🔭', fala: 'Cada dívida é um alvo. Vamos nomear e dimensionar.', cor: 'var(--warning)' }
         : { icone: '🐖', fala: 'Reserva é o colchão. Vamos construir devagar.', cor: 'var(--primary)' };
 
-    // Se veio do +: fala orienta a concluir o pagamento/aporte
     if (pendenteRegistroFuturo && pendenteRegistroFuturo.valor > 0) {
         const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         if (subtipo === 'divida') {
@@ -8329,7 +8082,6 @@ function pagarParcela(categoriaId) {
     if (valorParcela <= 0) { alert('Valor da parcela inválido.'); return; }
 
     // Pergunta confirmação (com opção de mudar o valor)
-    // Se veio do +, sugere o valor digitado no modal
     const valorSugerido = (pendenteRegistroFuturo && pendenteRegistroFuturo.valor > 0)
         ? pendenteRegistroFuturo.valor
         : valorParcela;
@@ -8341,7 +8093,6 @@ function pagarParcela(categoriaId) {
     const valorPago = parseFloat(valorStr) || 0;
     if (valorPago <= 0) { alert('Valor inválido.'); return; }
 
-    // Monta o registro temporário como se fosse um gasto no Futuro
     registroTemporario = {
         valor: valorPago,
         caixa: 'futuro',
@@ -8398,7 +8149,6 @@ function confirmarPagamentoParcela() {
     }
 
     let mesReferencia = null;
-    // NOVO: INTELIGÊNCIA DE ADIANTAMENTO
     if (cat.tipo === 'conta') {
         const jaPagoNoMes = _temRegistroPagoNoMes(cat, state.orcamento);
         if (jaPagoNoMes) {
@@ -8630,7 +8380,6 @@ container.innerHTML = `
         document.getElementById('nova-cat-nome').value = catExistente.nome || '';
         document.getElementById('nova-cat-valor').value = catExistente.valor != null ? catExistente.valor : '';
 
-        // Tipo
         tipoCategoriaSelecionado = catExistente.tipo || 'conta';
         const chipTipo = document.querySelector(`#chips-tipo-cat .chip[data-tipo="${tipoCategoriaSelecionado}"]`);
         if (chipTipo) selecionarTipoCategoria(chipTipo, tipoCategoriaSelecionado);
@@ -8639,7 +8388,6 @@ container.innerHTML = `
             document.getElementById('nova-cat-vencimento').value = catExistente.vencimento;
         }
 
-        // Parcelamento
         parcelamentoSelecionado = catExistente.parcelasTotais ? 'sim' : 'nao';
         const chipParc = document.querySelector(`#chips-parcelamento .chip[onclick*="${parcelamentoSelecionado}"]`);
         if (chipParc) selecionarParcelamento(chipParc, parcelamentoSelecionado);
@@ -8711,7 +8459,6 @@ function salvarCategoriaFuturo() {
         if (confirmou) pagamentoConfirmadoMes = mesAtual;
     }
 
-    // ---------- EDIÇÃO ----------
     if (categoriaEditandoId) {
         const cat = (state.orcamento.categorias || []).find(c => c.id === categoriaEditandoId);
         if (!cat) {
@@ -8744,7 +8491,6 @@ function salvarCategoriaFuturo() {
         return;
     }
 
-    // ---------- CRIAÇÃO ----------
     if (!state.orcamento.categorias) state.orcamento.categorias = [];
     state.orcamento.categorias.push({
         id: 'cat_' + Date.now(),
@@ -8786,9 +8532,7 @@ function recalcularTotalFuturo(opcoes) {
     }
 }
 
-// ============================================================
 // FECHAMENTO DE SEMANA E RESUMO
-// ============================================================
 
 function verificarFechamentoSemana() {
     if (!state.orcamento || !state.orcamento.semanaAtual) return;
@@ -8829,7 +8573,6 @@ function fecharSemana() {
     semana.carregoCategorias = calcularCarregoCategoriasDaSemana(semana);
 
     // Saldo da semana = saldoAnterior + renda efetiva − gastos
-    // Fatia 1: em N1 a renda efetiva é o previsto (mesma base da UI do card de saldo)
     const totalGasto = (semana.base.gasto || 0) + (semana.vida.gasto || 0) + (semana.futuro.gasto || 0);
     semana.totalGasto = totalGasto;
     const rendaInfo = rendaEfetivaDaSemana(semana, state.orcamento);
@@ -8894,7 +8637,6 @@ function abrirResumoSemanal() {
     const rendaReal     = semana.rendaReal || 0;
     const rendaEstimada = semana.rendaEstimada || (state.orcamento.base?.rendaBase || 0) / DIVISOR_SEMANAL;
     const totalGasto    = (semana.base?.gasto || 0) + (semana.vida?.gasto || 0) + (semana.futuro?.gasto || 0);
-    // Fatia 1: saldo do resumo usa a mesma renda efetiva do fechamento
     const _ri = (typeof semana.rendaEfetivaFechamento === 'number')
         ? { valor: semana.rendaEfetivaFechamento }
         : rendaEfetivaDaSemana(semana, state.orcamento);
@@ -9079,10 +8821,8 @@ const saldo = (typeof r.saldo === 'number') ? r.saldo : (rendaReal - totalGasto)
         `;
     }).join('');
 }
-// ============================================================
 // FATIA E — CADERNO (inventário N4: desejos + dívidas latentes)
 // Guardado em state.n4.inventarios — fora do orçamento.
-// ============================================================
 
 function _lerInventarioN4() {
     state.n4 = _garantirStubN4(state.n4);
@@ -9142,20 +8882,14 @@ function renderizarPreviewInventarioN3() {
         </button>
     `;
 }
-// ============================================================
 // FATIA E — Tela do Caderno (inventário N4)
 // Lista, formulário, salvar, remover. Não toca state.orcamento.
-// ============================================================
 
 function abrirTelaInventario() {
     renderizarInventario();
     goToScreen('screen-inventario');
 }
 
-function voltarInventarioParaFuturo() {
-    renderizarDetalheFuturo();
-    goToScreen('screen-divida-detalhe');
-}
 
 function renderizarInventario() {
     const container = document.getElementById('inventario-conteudo');
@@ -9376,9 +9110,6 @@ function removerInventarioItem(id) {
     salvarEstado();
     renderizarInventario();
 }
-// ============================================================
-// BOOT
-// ============================================================
 
 window.addEventListener('DOMContentLoaded', async () => {
     await carregarEstado();
@@ -9394,9 +9125,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// ============================================================
 // NÍVEL 3 — CUSTÓDIAS
-// ============================================================
 
 const TIPOS_CUSTODIA = {
     conta_corrente: { icone: '🏦', nome: 'Conta corrente',  temSaldo: true,  temFatura: false },
@@ -9409,10 +9138,8 @@ const TIPOS_CUSTODIA = {
 };
 
 
-// ============================================================
 // FATIA 2 — A4 RECONCILIAÇÃO DE CUSTÓDIA
 // Atualizar saldo real sem inventar gasto/receita de envelope.
-// ============================================================
 
 /**
  * Aplica conciliação: só mexe no estoque da custódia + histórico auditável.
@@ -9466,7 +9193,6 @@ function confirmarReconciliacaoCustodia(custodiaId) {
         delta: delta
     };
     c.historicoReconciliacoes.unshift(ajuste);
-    // mantém no máximo 20
     if (c.historicoReconciliacoes.length > 20) {
         c.historicoReconciliacoes = c.historicoReconciliacoes.slice(0, 20);
     }
@@ -9902,7 +9628,6 @@ function salvarCustodia(id) {
     }
 
     if (id) {
-        // Edição
         const custodia = state.orcamento.custodias.find(c => c.id === id);
         if (!custodia) return;
         custodia.nome = nome;
@@ -9915,7 +9640,6 @@ function salvarCustodia(id) {
             custodia.diaVencimento = diaVencimento;
         }
     } else {
-        // Nova
         const nova = {
             id: 'cust_' + Date.now(),
             nome: nome,
@@ -10121,9 +9845,7 @@ function confirmarTransferencia() {
     renderizarCustodias();
     goToScreen('screen-custodias');
 }
-// ============================================================
 // NÍVEL 3 — PAGAMENTO DE FATURA
-// ============================================================
 
 function abrirPagamentoFatura(cartaoId) {
     origemFaturaSelecionada = null;
@@ -10235,9 +9957,6 @@ function confirmarPagamentoFatura(cartaoId) {
     const origem = state.orcamento.custodias.find(c => c.id === origemFaturaSelecionada);
     if (!origem) { alert('Conta não encontrada.'); return; }
 
-    // Fatia 4 / B1 — PAGAMENTO DE FATURA:
-    // caixa: sai da origem
-    // fatura: desce
     // envelope: NÃO regasta (compra já debitou a meta)
     if ((TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
         alert('Escolha uma conta com saldo (não outro cartão de crédito) para pagar a fatura.');
@@ -10280,11 +9999,8 @@ function confirmarPagamentoFatura(cartaoId) {
     );
     voltarParaOrcamento();
 }
-// ============================================================
 // FASE 11 — CONTA VENCIDA PAGA PARA DE ALARMAR
-// Helpers read-only: reconhecem pagamento no mês corrente via
 // historicoRegistros. Não escrevem em state, não migram nada.
-// ============================================================
 
 /**
  * Mesma granularidade ano-mês que o sinal s2 usa.
@@ -10318,11 +10034,6 @@ function _mesAtualYYYYMM() {
  * de quando perguntar "já paguei?".
  */
  
- function _mesSeguinteYYYYMM() {
-    const h = new Date();
-    h.setMonth(h.getMonth() + 1);
-    return h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0');
-}
 
 function _rotuloMesAno(yyyymm) {
     if (!yyyymm) return '';
@@ -10354,7 +10065,6 @@ function _temRegistroPagoNoMes(cat, orc) {
 function _contaEstaPagaNoMes(cat, orc) {
     if (!cat || !orc) return false;
 
-    // Fatia nova — confirmação explícita do usuário no cadastro.
     // "já paguei" para a conta cujo dia já passou neste mês.
     if (cat.pagamentoConfirmadoMes && cat.pagamentoConfirmadoMes === _mesAtualYYYYMM()) {
         return true;
@@ -10362,9 +10072,7 @@ function _contaEstaPagaNoMes(cat, orc) {
 
     return _temRegistroPagoNoMes(cat, orc);
 }
-// ============================================================
 // NÍVEL 3 — PLANO DE RECUPERAÇÃO
-// ============================================================
 
 // Detecta os sinais de estouro. Retorna um objeto ou null.
 function detectarSinalRecuperacao(orc) {
@@ -10527,7 +10235,6 @@ function renderizarPlanoRecuperacao() {
             ${listaPriorizacao}
         `;
     }
-    // Fase 11 — confirmação visual: o app reconheceu como pagas neste mês
     const contasPagas = (orc.categorias || []).filter(c =>
         c.vencimento && _contaEstaPagaNoMes(c, orc)
     );
@@ -10582,17 +10289,13 @@ function renderizarPlanoRecuperacao() {
         </div>
     `;
 }
-// ============================================================
 // NÍVEL 3 — MAPA DO MÊS
-// ============================================================
 
 function abrirTelaMapaMes() {
     goToScreen('screen-mapa-mes');
     renderizarMapaMes();
 }
-// ============================================================
 // NÍVEL 3 — REGISTRO COM CUSTÓDIA
-// ============================================================
 
 // Custódias que podem ser usadas como origem de um gasto.
 // Cartão de crédito é incluído, mas o tratamento é diferente (acumula fatura).
@@ -10743,7 +10446,6 @@ function confirmarRegistroCartao() {
     const semana = state.orcamento.semanaAtual;
 
     let mesReferencia = null;
-    // NOVO: INTELIGÊNCIA DE ADIANTAMENTO
     if (registroTemporario.categoriaId) {
         const cat = (state.orcamento.categorias || []).find(c => c.id === registroTemporario.categoriaId);
         if (cat && cat.tipo === 'conta') {
@@ -10941,9 +10643,7 @@ function renderizarMapaMes() {
         </div>
     `;
 }
-// ============================================================
 // NÍVEL 3 — PROVISÃO
-// ============================================================
 
 function calcularProvisao(orc) {
     const categorias = (orc.categorias || []).filter(c =>
@@ -10960,32 +10660,6 @@ function calcularProvisao(orc) {
 }
 
 // Retorna as contas que vencem nos próximos `dias` dias a partir de hoje
-function contasNaJanela(orc, dias) {
-    const categorias = (orc.categorias || []).filter(c =>
-        c.vencimento && !_categoriaParcelasQuitada(c)
-    );
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-
-    const resultado = [];
-
-    for (let i = 0; i < dias; i++) {
-        const d = new Date(hoje);
-        d.setDate(hoje.getDate() + i);
-        const dia = d.getDate();
-
-        const contasDoDia = categorias.filter(c => c.vencimento === dia);
-        contasDoDia.forEach(c => {
-            resultado.push({
-                ...c,
-                dataVencimento: d,
-                diasAte: i
-            });
-        });
-    }
-
-    return resultado;
-}
 
 function renderizarBlocoProvisao(orc) {
     if (orc.nivel < 3) return '';
@@ -10995,7 +10669,7 @@ function renderizarBlocoProvisao(orc) {
 
     const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-    // --- Aqui entra a decisão (A), (B) ou (C) ---
+// Aqui entra a decisão (A), (B) ou (C)
     // Por enquanto, deixo o esqueleto com a opção (C) — as duas linhas.
 
         const semana = state.orcamento.semanaAtual;
@@ -11075,7 +10749,6 @@ function categoriasFuturoNaSemana(semana) {
         const mes = ini.getMonth();
 
         let venc = new Date(ano, mes, c.vencimento);
-        // Se a semana cruza o fim do mês, o vencimento pode cair no mês seguinte
         if (venc < ini) {
             venc = new Date(ano, mes + 1, c.vencimento);
         }
@@ -11084,14 +10757,11 @@ function categoriasFuturoNaSemana(semana) {
     });
 }
 
-// Calcula o limite da semana com base no que realmente vence nela
 function calcularLimiteFuturoSemana(semana) {
     const categorias = categoriasFuturoNaSemana(semana);
     return categorias.reduce((s, c) => s + (c.valor || 0), 0);
 }
-// ============================================================
 // QR CODE — geração local
-// ============================================================
 
 	function montarResumoParaQR() {
     const orc = state.orcamento;
@@ -11202,728 +10872,6 @@ function copiarCodigoQR() {
         alert('Não foi possível copiar. Selecione manualmente.');
     }
 }
-// ============================================================
-// SIMULADOR DE TEMPO (DEBUG)
-// ============================================================
-// Ativa/desativa com Ctrl+Shift+T (desktop) ou toque longo no logo (mobile)
-
-let modoDebugAtivo = false;
-
-function alternarModoDebug() {
-    modoDebugAtivo = !modoDebugAtivo;
-
-    const painelExistente = document.getElementById('painel-debug');
-
-    if (modoDebugAtivo && !painelExistente) {
-        const painel = document.createElement('div');
-        painel.id = 'painel-debug';
-        painel.style.cssText = `
-            position: fixed;
-            bottom: 100px;
-            left: 15px;
-            right: 15px;
-            max-width: 450px;
-            margin: 0 auto;
-            background: var(--text-main);
-            color: white;
-            border-radius: 12px;
-            padding: 16px;
-            z-index: 9998;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-            font-size: 0.9rem;
-            max-height: 70vh;
-            overflow-y: auto;
-        `;
-        painel.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <strong style="color: var(--primary);">🔧 Simulador de Tempo</strong>
-                <button onclick="alternarModoDebug()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
-            </div>
-            <div id="debug-status" style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; margin-bottom: 12px; font-size: 0.9rem; line-height: 1.5;"></div>
-
-            <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 6px;">Tempo</div>
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
-                <button onclick="debugPassarDias(1)" style="background: var(--primary); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">+1 dia</button>
-                <button onclick="debugPassarDias(7)" style="background: var(--primary); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">+7 dias (fecha semana)</button>
-                <button onclick="debugPassarDias(14)" style="background: var(--primary); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">+14 dias (2 semanas)</button>
-            </div>
-
-            <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 6px;">Nível 1 → 2</div>
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
-                <button onclick="debugForcarRegistros(10)" style="background: var(--warning); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">+10 registros</button>
-                <button onclick="debugForcarGatilhoNivel2()" style="background: var(--success); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">⚡ Forçar gatilho Nível 2</button>
-            </div>
-
-            <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 6px;">Nível 2 → 3</div>
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
-                <button onclick="debugForcarGatilhoNivel3()" style="background: var(--success); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">⚡ Forçar gatilho Nível 3</button>
-                <button onclick="debugPularParaNivel3()" style="background: var(--primary); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">⏭️ Pular direto pro Nível 3</button>
-                <button onclick="debugCriarCustodiasExemplo()" style="background: var(--primary); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">🏦 Criar 3 contas de exemplo</button>
-                <button onclick="debugCriarCategoriasComVencimento()" style="background: var(--primary); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">🗓️ Criar 3 categorias com vencimento</button>
-            </div>
-            <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 6px;">Carryover (teste do saldo anterior)</div>
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
-                <button onclick="debugAjustarSaldoAnteriorSemana()" style="background: var(--warning); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
-                    Ajustar saldoAnterior da semana atual
-                </button>
-                <button onclick="debugAjustarSaldoUltimoResumo()" style="background: var(--primary); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
-                    Ajustar saldo do último resumo
-                </button>
-                <button onclick="debugZerarCarryover()" style="background: var(--secondary); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
-                    Zerar carryover (semana atual + resumos)
-                </button>
-                
-            </div>
-            <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 6px;">Andaime (recuo do apoio)</div>
-<div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
-    <button onclick="debugForcarRecuoApoio()" style="background: var(--primary); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
-        🪜 Forçar recuo do apoio
-    </button>
-    
-    <button onclick="debugResetarAndaime()" style="background: var(--secondary); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
-        ↺ Resetar andaime
-    </button>
-</div>
-            <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 6px;">Reset</div>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-                <button onclick="debugResetarNivel()" style="background: var(--danger); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">🔄 Resetar para Nível 1</button>
-                <button onclick="zerarLocalStorage()" style="background: var(--danger); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">💥 Zerar tudo</button>
-            </div>
-                        <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 6px; margin-top: 10px;">Manutenção de Dados</div>
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;">
-                <button onclick="debugLimparResiduoParcelas()" style="background: var(--warning); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer;">
-                    🧹 Limpar Resíduos de Dívidas
-                </button>
-            </div>
-        `;
-        document.body.appendChild(painel);
-        atualizarDebugStatus();
-        console.log('[DEBUG] Simulador de tempo ATIVO.');
-    } else if (!modoDebugAtivo && painelExistente) {
-        painelExistente.remove();
-        console.log('[DEBUG] Simulador de tempo DESATIVADO.');
-    }
-}
-
-function atualizarDebugStatus() {
-    const el = document.getElementById('debug-status');
-    if (!el || !state.orcamento) return;
-    const orc = state.orcamento;
-    const categoriasComVenc = (orc.categorias || []).filter(c => c.vencimento).length;
-    el.innerHTML = `
-        <div><strong>Nível:</strong> ${orc.nivel || 1}</div>
-        <div><strong>Registros:</strong> ${(orc.historicoRegistros || []).length}</div>
-        <div><strong>Semanas fechadas:</strong> ${orc.semanasFechadas || 0}</div>
-        <div><strong>Categorias:</strong> ${(orc.categorias || []).length} (${categoriasComVenc} com venc.)</div>
-        <div><strong>Custódias:</strong> ${(orc.custodias || []).length}</div>
-        <div><strong>Semana atual:</strong> ${orc.semanaAtual ? orc.semanaAtual.inicio + ' a ' + orc.semanaAtual.fim : '—'}</div>
-                <div><strong>Transição pendente:</strong> ${orc.transicaoNivelPendente || 'não'}</div>
-        <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.15);">
-            <strong>Carryover:</strong>
-            <div>· Semana atual saldoAnterior: R$ ${((orc.semanaAtual && orc.semanaAtual.saldoAnterior) || 0).toFixed(2)}</div>
-            <div>· Último resumo saldo: R$ ${((orc.resumos && orc.resumos[0] && orc.resumos[0].saldo) || 0).toFixed(2)}</div>
-        </div>
-        <div><strong>Andaime:</strong>
-    semanas=${orc.semanasNoNivelAtual || 0},
-    
-    recuoForcado=${(orc.uiApoio && orc.uiApoio._debugForcarRecuo) || false},
-    celebrou=${(orc.uiApoio && orc.uiApoio.celebrouRecuo) || false}
-</div>
-    `;
-}
-
-// ============================================================
-// DEBUG — CARRYOVER (teste do saldo anterior entre semanas)
-// ============================================================
-
-/**
- * Ajusta o saldoAnterior da SEMANA ATUAL.
- * Efeito imediato no card "Saldo da semana" da home.
- * Também afeta o fechamento desta semana (o saldo dela incluirá esse valor).
- */
-function debugAjustarSaldoAnteriorSemana() {
-    if (!state.orcamento || !state.orcamento.semanaAtual) {
-        alert('Nenhuma semana em andamento. Inicie a jornada primeiro.');
-        return;
-    }
-    const atual = state.orcamento.semanaAtual.saldoAnterior || 0;
-    const entrada = prompt(
-        'Novo saldoAnterior da semana atual (pode ser negativo):\n\n' +
-        'Isso afeta o card da home IMEDIATAMENTE e será somado ao saldo ' +
-        'desta semana quando ela fechar.',
-        atual.toFixed(2)
-    );
-    if (entrada === null) return;
-    const novo = parseFloat(String(entrada).replace(',', '.'));
-    if (isNaN(novo)) {
-        alert('Valor inválido.');
-        return;
-    }
-    state.orcamento.semanaAtual.saldoAnterior = novo;
-    salvarEstado();
-    renderizarOrcamentoInicio();
-    atualizarDebugStatus();
-    console.log('[DEBUG carryover] semanaAtual.saldoAnterior =', novo);
-}
-
-/**
- * Ajusta o saldo do ÚLTIMO resumo arquivado.
- * NÃO afeta a semana atual imediatamente.
- * Só tem efeito quando a próxima semana começar (iniciarNovaSemana lê resumos[0].saldo).
- */
-function debugAjustarSaldoUltimoResumo() {
-    if (!state.orcamento || !state.orcamento.resumos || state.orcamento.resumos.length === 0) {
-        alert('Nenhum resumo arquivado. Feche uma semana (debug +7 dias) primeiro.');
-        return;
-    }
-    const atual = state.orcamento.resumos[0].saldo || 0;
-    const entrada = prompt(
-        'Novo saldo do último resumo (semana ' +
-        state.orcamento.resumos[0].inicio + ' a ' + state.orcamento.resumos[0].fim + '):\n\n' +
-        'NÃO afeta a semana atual. Só entra em jogo quando a próxima semana começar.',
-        atual.toFixed(2)
-    );
-    if (entrada === null) return;
-    const novo = parseFloat(String(entrada).replace(',', '.'));
-    if (isNaN(novo)) {
-        alert('Valor inválido.');
-        return;
-    }
-    state.orcamento.resumos[0].saldo = novo;
-    salvarEstado();
-    atualizarDebugStatus();
-    console.log('[DEBUG carryover] resumos[0].saldo =', novo);
-}
-
-/**
- * Zera o carryover em TODOS os lugares (semana atual + todos os resumos).
- * Útil para voltar a um estado "limpo" sem perder o resto dos dados.
- */
-function debugZerarCarryover() {
-    if (!state.orcamento) return;
-    if (!confirm('Zerar saldoAnterior da semana atual e saldo de TODOS os resumos?')) return;
-
-    if (state.orcamento.semanaAtual) {
-        state.orcamento.semanaAtual.saldoAnterior = 0;
-    }
-    (state.orcamento.resumos || []).forEach(r => { r.saldo = 0; });
-
-    salvarEstado();
-    renderizarOrcamentoInicio();
-    atualizarDebugStatus();
-    console.log('[DEBUG carryover] zerado (semana atual + resumos).');
-}
-// ============================================================
-// DEBUG — ANDAIME (recuo do apoio expandido)
-// ============================================================
-
-function debugForcarRecuoApoio() {
-    if (!state.orcamento) {
-        alert('Inicie a jornada primeiro.');
-        return;
-    }
-    if (!state.orcamento.uiApoio) state.orcamento.uiApoio = { forcarMostrar: false };
-
-    // Override: força recuo mesmo em N1 (que normalmente exige expandido)
-    state.orcamento.uiApoio._debugForcarRecuo = true;
-    state.orcamento.uiApoio.forcarMostrar = false;
-    state.orcamento.uiApoio.celebrouRecuo = false; // permite ver a fala de recuo de novo
-
-    // Garante que o limiar de semanas também bate (para o toggle aparecer)
-    state.orcamento.semanasNoNivelAtual = Math.max(
-        state.orcamento.semanasNoNivelAtual || 0,
-        SEMANAS_PARA_RECUAR_APOIO
-    );
-
-    salvarEstado();
-    renderizarOrcamentoInicio();
-    goToScreen('screen-orcamento-inicio');
-    atualizarDebugStatus();
-    console.log('[DEBUG andaime] Recuo forçado:', {
-        nivel: state.orcamento.nivel,
-        semanasNoNivelAtual: state.orcamento.semanasNoNivelAtual,
-        _debugForcarRecuo: true,
-        forcarMostrar: false,
-        celebrouRecuo: false
-    });
-}
-
-
-
-function debugResetarAndaime() {
-    if (!state.orcamento) return;
-    state.orcamento.semanasNoNivelAtual = 0;
-    if (!state.orcamento.uiApoio) state.orcamento.uiApoio = {};
-    state.orcamento.uiApoio.celebrouRecuo = false;
-    salvarEstado();
-    renderizarOrcamentoInicio();
-    goToScreen('screen-orcamento-inicio');
-    atualizarDebugStatus();
-}
-function debugLimparResiduoParcelas() {
-    if (!state.orcamento) return;
-    if (!confirm("Isso vai varrer o histórico e limpar pagamentos de dívidas órfãs (de dívidas excluídas) e recalcular os gastos do Futuro. Continuar?")) return;
-
-    // 1. Limpar registros órfãos de dívidas que foram excluídas
-    const idsCategoriasValidas = new Set((state.orcamento.categorias || []).map(c => c.id));
-    const registrosAntigos = state.orcamento.historicoRegistros || [];
-    
-    let removidos = 0;
-    state.orcamento.historicoRegistros = registrosAntigos.filter(r => {
-        // Se for pagamento de dívida/aporte e a categoria não existe mais
-        if ((r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') && r.categoriaId) {
-            if (!idsCategoriasValidas.has(r.categoriaId)) {
-                removidos++;
-                return false; // Remove o registro órfão
-            }
-        }
-        return true; // Mantém os válidos
-    });
-
-    // 2. Recalcular parcelasPagas de cada categoria com base nos registros reais
-    (state.orcamento.categorias || []).forEach(cat => {
-        if (cat.caixa === 'futuro') {
-            const pagamentos = state.orcamento.historicoRegistros.filter(r => 
-                (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') && 
-                r.categoriaId === cat.id
-            );
-            cat.parcelasPagas = pagamentos.length;
-        }
-    });
-
-    // 3. Recalcular o gasto da semana atual do Futuro
-    const semana = state.orcamento.semanaAtual;
-    if (semana && !semana.fechada) {
-        const gastosFuturoSemana = state.orcamento.historicoRegistros.filter(r => {
-            if (!_pertenceSemanaAtual(r.data)) return false;
-            if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva' || (r.tipo === 'gasto_direto' && r.caixa === 'futuro')) {
-                return true;
-            }
-            return false;
-        });
-        semana.futuro.gasto = gastosFuturoSemana.reduce((s, r) => s + (Number(r.valor) || 0), 0);
-    }
-
-    // 4. Recalcular total do futuro
-    if (typeof recalcularTotalFuturo === 'function') {
-        recalcularTotalFuturo();
-    }
-
-    salvarEstado();
-    renderizarOrcamentoInicio();
-    atualizarDebugStatus();
-    alert(`Limpeza concluída!\n${removidos} registro(s) órfão(s) removido(s).\nValores recalculados.`);
-}
-function debugPassarDias(dias) {
-    if (!state.orcamento || !state.orcamento.semanaAtual) {
-        alert("Inicie a jornada primeiro.");
-        return;
-    }
-
-    const semana = state.orcamento.semanaAtual;
-    const fim = new Date(semana.fim + 'T23:59:59-03:00');
-    fim.setDate(fim.getDate() + dias);
-
-    semana.fim = fim.toISOString().split('T')[0];
-
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    if (hoje > fim && !semana.fechada) {
-        fecharSemana();
-        salvarEstado();
-        atualizarDebugStatus();
-        abrirResumoSemanal();
-        console.log('[DEBUG] Semana fechada. Resumo aberto.');
-        return;
-    }
-
-    salvarEstado();
-    atualizarDebugStatus();
-    renderizarOrcamentoInicio();
-    console.log(`[DEBUG] +${dias} dias. Semana:`, state.orcamento.semanaAtual);
-}
-
-function debugForcarRegistros(qtd) {
-    if (!state.orcamento) return;
-    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
-
-    for (let i = 0; i < qtd; i++) {
-        state.orcamento.historicoRegistros.push({
-            data: new Date().toISOString(),
-            caixa: 'vida',
-            categoria: null,
-            valor: 10
-        });
-    }
-
-    salvarEstado();
-    atualizarDebugStatus();
-    verificarGatilhoNivel2();
-    renderizarOrcamentoInicio();
-    console.log(`[DEBUG] +${qtd} registros. Total:`, state.orcamento.historicoRegistros.length);
-}
-
-function debugForcarGatilhoNivel2() {
-    if (!state.orcamento) return;
-
-    state.orcamento.semanasFechadas = Math.max(state.orcamento.semanasFechadas || 0, 2);
-    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
-    while (state.orcamento.historicoRegistros.length < 10) {
-        state.orcamento.historicoRegistros.push({
-            data: new Date().toISOString(),
-            caixa: 'vida',
-            categoria: null,
-            valor: 10
-        });
-    }
-
-    verificarGatilhoNivel2();
-    salvarEstado();
-    atualizarDebugStatus();
-    renderizarOrcamentoInicio();
-
-    console.log('[DEBUG] Gatilho do Nível 2 forçado. Transição pendente:', state.orcamento.transicaoNivelPendente);
-}
-
-// ============================================================
-// DEBUG — NÍVEL 3
-// ============================================================
-
-function debugForcarGatilhoNivel3() {
-    if (!state.orcamento) return;
-
-    // Garante que o usuário já está no Nível 2
-    if (state.orcamento.nivel < 2) {
-        state.orcamento.nivel = 2;
-    }
-
-    // Cria 3 categorias (se não houver)
-    if ((state.orcamento.categorias || []).length < 3) {
-        const categoriasFaltantes = 3 - (state.orcamento.categorias || []).length;
-        for (let i = 0; i < categoriasFaltantes; i++) {
-            state.orcamento.categorias.push({
-                id: 'cat_debug_' + Date.now() + '_' + i,
-                nome: 'Categoria debug ' + (i + 1),
-                valor: 100,
-                tipo: 'fixo',
-                vencimento: 5 + i * 5,
-                caixa: 'base'
-            });
-        }
-    }
-
-    // Garante pelo menos 2 categorias com vencimento
-    const comVenc = state.orcamento.categorias.filter(c => c.vencimento);
-    if (comVenc.length < 2) {
-        state.orcamento.categorias.forEach((c, i) => {
-            if (!c.vencimento && i < 2) c.vencimento = 10 + i * 10;
-        });
-    }
-
-    // Garante pelo menos 1 semana fechada
-    state.orcamento.semanasFechadas = Math.max(state.orcamento.semanasFechadas || 0, 1);
-
-    // Força transição pendente
-    if (state.orcamento.nivel < 3) {
-        state.orcamento.transicaoNivelPendente = 3;
-    }
-
-    salvarEstado();
-    atualizarDebugStatus();
-    renderizarOrcamentoInicio();
-    console.log('[DEBUG] Gatilho do Nível 3 forçado. Transição pendente:', state.orcamento.transicaoNivelPendente);
-}
-
-function debugPularParaNivel3() {
-    if (!state.orcamento) return;
-
-    state.orcamento.nivel = 3;
-    state.orcamento.transicaoNivelPendente = null;
-    if (!state.orcamento.nivel3LinhaDeBase) {
-        state.orcamento.nivel3LinhaDeBase = new Date().toISOString();
-    }
-    if (!Array.isArray(state.orcamento.custodias)) {
-        state.orcamento.custodias = [];
-    }
-
-    salvarEstado();
-    atualizarDebugStatus();
-    renderizarOrcamentoInicio();
-    console.log('[DEBUG] Pulado para Nível 3. Custódias:', state.orcamento.custodias.length);
-}
-
-function debugCriarCustodiasExemplo() {
-    if (!state.orcamento) return;
-
-    // Garante que está no Nível 3
-    if (state.orcamento.nivel < 3) {
-        state.orcamento.nivel = 3;
-    }
-    if (!Array.isArray(state.orcamento.custodias)) {
-        state.orcamento.custodias = [];
-    }
-
-    // Remove custódias de debug anteriores (para não duplicar)
-    state.orcamento.custodias = state.orcamento.custodias.filter(c => !c.id.startsWith('cust_debug_'));
-
-    const agora = Date.now();
-
-    // Conta corrente com saldo
-    state.orcamento.custodias.push({
-        id: 'cust_debug_cc_' + agora,
-        nome: 'Nubank',
-        tipo: 'conta_corrente',
-        saldoInicial: 850.00,
-        saldoAtual: 850.00,
-        criadaEm: new Date().toISOString(),
-        faturaAcumulada: 0
-    });
-
-    // Cartão de crédito com fechamento e vencimento
-    state.orcamento.custodias.push({
-        id: 'cust_debug_cc2_' + agora,
-        nome: 'Cartão X',
-        tipo: 'cartao_credito',
-        saldoInicial: 0,
-        saldoAtual: 0,
-        criadaEm: new Date().toISOString(),
-        faturaAcumulada: 320.50,
-        diaFechamento: 15,
-        diaVencimento: 22
-    });
-
-    // Vale com saldo
-    state.orcamento.custodias.push({
-        id: 'cust_debug_vale_' + agora,
-        nome: 'Vale alimentação',
-        tipo: 'vale',
-        saldoInicial: 200.00,
-        saldoAtual: 200.00,
-        criadaEm: new Date().toISOString(),
-        faturaAcumulada: 0
-    });
-
-    salvarEstado();
-    atualizarDebugStatus();
-    renderizarOrcamentoInicio();
-    console.log('[DEBUG] 3 custódias de exemplo criadas. Total:', state.orcamento.custodias.length);
-}
-
-function debugCriarCategoriasComVencimento() {
-    if (!state.orcamento) return;
-
-    // Garante que está no Nível 2+
-    if (state.orcamento.nivel < 2) {
-        state.orcamento.nivel = 2;
-    }
-    if (!Array.isArray(state.orcamento.categorias)) {
-        state.orcamento.categorias = [];
-    }
-
-    // Remove categorias de debug anteriores
-    state.orcamento.categorias = state.orcamento.categorias.filter(c => !c.id.startsWith('cat_debug_venc_'));
-
-    const agora = Date.now();
-
-    // Aluguel — vence dia 5, base
-    state.orcamento.categorias.push({
-        id: 'cat_debug_venc_aluguel_' + agora,
-        nome: 'Aluguel',
-        valor: 1200,
-        tipo: 'fixo',
-        vencimento: 5,
-        caixa: 'base'
-    });
-
-    // Luz — vence dia 12, base
-    state.orcamento.categorias.push({
-        id: 'cat_debug_venc_luz_' + agora,
-        nome: 'Luz',
-        valor: 180,
-        tipo: 'variavel',
-        vencimento: 12,
-        caixa: 'base'
-    });
-
-    // Internet — vence dia 20, base
-    state.orcamento.categorias.push({
-        id: 'cat_debug_venc_internet_' + agora,
-        nome: 'Internet',
-        valor: 120,
-        tipo: 'fixo',
-        vencimento: 20,
-        caixa: 'base'
-    });
-
-    // Atualiza o fortalezaTotal da base (soma das categorias)
-    if (state.orcamento.base) {
-        const totalBase = state.orcamento.categorias
-            .filter(c => c.caixa === 'base')
-            .reduce((s, c) => s + (c.valor || 0), 0);
-        state.orcamento.base.fortalezaTotal = totalBase;
-
-        if (!state.orcamento.semanaAtual) { iniciarNovaSemana(); } else { sincronizarLimitesSemanaAtual(); }
-    }
-
-    salvarEstado();
-    atualizarDebugStatus();
-    renderizarOrcamentoInicio();
-    console.log('[DEBUG] 3 categorias com vencimento criadas (dias 5, 12, 20).');
-}
-
-function debugResetarNivel() {
-    const confirmar = confirm("Isso volta o app para o Nível 1 (mantém os dados do diário). Continuar?");
-    if (!confirmar) return;
-
-    state.orcamento.nivel = 1;
-    state.orcamento.rendaDetalhe = null;
-    state.orcamento.categorias = [];
-    state.orcamento.dividaReserva = null;
-    state.orcamento.transicaoNivelPendente = null;
-    state.orcamento.categoriasConcluidas = false;
-    state.orcamento.dividaConcluida = false;
-    state.orcamento.custodias = [];
-    state.orcamento.custodiaPadrao = null;
-    state.orcamento.nivel3LinhaDeBase = null;
-
-    salvarEstado();
-    atualizarDebugStatus();
-    renderizarOrcamentoInicio();
-    console.log('[DEBUG] Resetado para Nível 1.');
-}
-
-function zerarLocalStorage() {
-    const confirmar = confirm("⚠️ Isso apaga TUDO. Tem certeza?");
-    if (!confirmar) return;
-    limparPersistencia().then(() => location.reload());
-}
-
-// ============================================================
-// DEBUG — CICLO 3.9 (PROJEÇÃO)
-// ============================================================
-
-function debugProjetarFluxo(dias) {
-    dias = dias || 30;
-    const fluxo = projetarFluxo(state.orcamento, { dias: dias });
-    console.log('[DEBUG 3.9] projetarFluxo', fluxo);
-    const gargalos = detectarGargalos(fluxo);
-    console.log('[DEBUG 3.9] gargalos', gargalos);
-    console.log('[DEBUG 3.9] sugestões', sugerirEquilibrio(gargalos, state.orcamento));
-    return fluxo;
-}
-
-function debugProjetarCustodias() {
-    const map = {};
-    (state.orcamento.custodias || []).forEach(c => {
-        map[c.id] = projetarCustodia(state.orcamento, c.id, { dias: 30 });
-    });
-    console.log('[DEBUG 3.9] projetarCustodia (todas)', map);
-    return map;
-}
-
-function debugSimularCenario(overrides) {
-    const r = simularCenario(state.orcamento, overrides || { dias: 30 });
-    console.log('[DEBUG 3.9] simularCenario', r);
-    return r;
-}
-
-function debugSeedProjecaoN2() {
-    // Garante dados mínimos para N2a→N2b
-    if (!state.orcamento.rendaDetalhe) state.orcamento.rendaDetalhe = { fontes: [] };
-    if (state.orcamento.rendaDetalhe.fontes.length === 0) {
-        state.orcamento.rendaDetalhe.fontes.push({
-            id: 'fonte_debug_' + Date.now(),
-            nome: 'Salário (debug)',
-            valor: 3000,
-            diaRecebimento: 5
-        });
-    } else {
-        state.orcamento.rendaDetalhe.fontes.forEach(f => {
-            if (!f.diaRecebimento) f.diaRecebimento = 5;
-        });
-    }
-    if (!(state.orcamento.categorias || []).some(c => c.vencimento)) {
-        debugCriarCategoriasComVencimento();
-    }
-    state.orcamento.nivel = Math.max(state.orcamento.nivel || 1, 2);
-    salvarEstado();
-    renderizarOrcamentoInicio();
-    console.log('[DEBUG 3.9] Seed N2 projeção pronto.');
-}
-
-function debugSeedProjecaoN3() {
-    debugSeedProjecaoN2();
-    if (!(state.orcamento.custodias || []).length) {
-        debugCriarCustodiasExemplo();
-    }
-    // Liga categorias às custódias
-    const cust = (state.orcamento.custodias || []).find(c => !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura);
-    if (cust) {
-        (state.orcamento.categorias || []).forEach(c => {
-            if (!c.custodiaPadraoId) c.custodiaPadraoId = cust.id;
-        });
-    }
-    state.orcamento.nivel = 3;
-    salvarEstado();
-    renderizarOrcamentoInicio();
-    console.log('[DEBUG 3.9] Seed N3 projeção pronto.');
-}
-
-function debugForcarGargaloCustodia() {
-    const cust = (state.orcamento.custodias || []).find(c => !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura);
-    if (!cust) {
-        console.warn('[DEBUG 3.9] Sem custódia de saldo.');
-        return;
-    }
-    cust.saldoAtual = 50;
-    const cat = (state.orcamento.categorias || []).find(c => c.vencimento);
-    if (cat) {
-        cat.valor = 500;
-        cat.custodiaPadraoId = cust.id;
-    }
-    salvarEstado();
-    renderizarOrcamentoInicio();
-    console.log('[DEBUG 3.9] Gargalo de custódia forçado (saldo 50, conta 500).');
-}
-
-
-// Atalho de teclado (desktop)
-document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.shiftKey && e.key === 'M') {
-        e.preventDefault();
-        alternarModoDebug();
-    }
-});
-
-// Toque longo no logo (mobile) — 2 segundos
-(function prepararToqueLongo() {
-    let timerToque = null;
-    document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(() => {
-            const logo = document.querySelector('#screen-welcome div[style*="font-size: 3rem"]');
-            if (!logo) return;
-
-            const iniciarToque = () => {
-                timerToque = setTimeout(() => {
-                    alternarModoDebug();
-                    if (navigator.vibrate) navigator.vibrate(100);
-                }, 2000);
-            };
-            const cancelarToque = () => {
-                if (timerToque) { clearTimeout(timerToque); timerToque = null; }
-            };
-
-            logo.addEventListener('touchstart', iniciarToque);
-            logo.addEventListener('touchend', cancelarToque);
-            logo.addEventListener('touchcancel', cancelarToque);
-        }, 100);
-    });
-})();
-// ============================================================
-// CICLO 3.9 — FLUXO DE CAIXA (placeholder)
-// ============================================================
-// Bloco 0 apenas declara a tela e o ponto de entrada.
-// Bloco 7 implementa a renderização real.
 
 function abrirTelaFluxoCaixa(custodiaId) {
     fluxoCustodiaFiltro = custodiaId || null;
@@ -11955,8 +10903,6 @@ function renderizarFluxoCaixa() {
             projMapFluxo[c.id] = projetarCustodia(orc, c.id, { dias: 30 });
         });
     }
-    const gargalos = detectarGargalos(fluxo, { custodias: projMapFluxo });
-    const sugestoes = sugerirEquilibrio(gargalos, orc);
 
     const categoriasSemVenc = (orc.categorias || []).filter(c => 
         !c.vencimento && 
@@ -11990,10 +10936,11 @@ function renderizarFluxoCaixa() {
     let htmlDiaADia = '';
     let saldoInicialProj = null;
     let saldoFinalProj = null;
+    let diasCompletosParaGargalos = null; // Armazena para passar aos alertas
 
     const protegerSaldo = orc.configFluxo?.protegerSaldo !== false;
-
     const taxasInfo = calcularTaxaViabilidadeConsumo(orc);
+    
     let totaisPorCaixa = {
         base: { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 },
         vida: { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 },
@@ -12036,76 +10983,9 @@ function renderizarFluxoCaixa() {
         dados.corteProtecao = dados.diluidosRestante - dados.diluidosAjustado;
     });
 
-    let htmlConexaoEnvelopes = `
-        <div class="card" style="margin-bottom: 16px; padding: 16px;">
-            <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 12px; font-weight: 700;">
-                Conexão com a Home
-            </div>
-            <p style="font-size: 0.9rem; color: var(--secondary); margin-bottom: 14px; line-height: 1.4;">
-                O que você planejou nos envelopes (Home) aparece aqui distribuído no tempo. ${protegerSaldo && taxasInfo.corteTotal > 0 ? 'A <strong>Vida</strong> sofreu uma redução maior para proteger a sua <strong>Base</strong>.' : ''}
-            </p>
-            <div style="font-size: 0.9rem; margin-bottom: 14px; padding: 10px 12px; background: var(--bg-color); border-radius: 8px; border-left: 3px solid var(--primary);">
-                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                    <span style="color:var(--secondary);">Planejado para consumo (sem vencimento)</span>
-                    <strong>${fmt(totalMensalPlanejado)}</strong>
-                </div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                    <span style="color:var(--secondary);">Já gasto e registrado (+)</span>
-                    <strong style="color:var(--danger);">− ${fmt(gastoRealizadoMes)}</strong>
-                </div>
-                <div style="display:flex; justify-content:space-between; border-top: 1px dashed var(--border); padding-top:4px;">
-                    <strong style="color:var(--primary);">Restante a distribuir</strong>
-                    <strong style="color:var(--primary);">${fmt(totalMensalSemVenc)}</strong>
-                </div>
-            </div>
-    `;
-
-        ['base', 'vida', 'futuro'].forEach(k => {
-        const dados = totaisPorCaixa[k];
-        if (!dados || (dados.contas === 0 && dados.diluidosOriginal === 0)) return;
-
-        const icone = k === 'base' ? '🛡️' : k === 'vida' ? '🌿' : '🔭';
-        const nome = k === 'base' ? 'Base' : k === 'vida' ? 'Vida' : 'Futuro';
-        const cor = k === 'base' ? 'var(--primary)' : k === 'vida' ? 'var(--warning)' : 'var(--success)';
-        
-        // CORREÇÃO: O valor riscado deve ser o que estava na tela ANTES da proteção (contas + restante diluído)
-        const totalOriginal = dados.contas + dados.diluidosRestante;
-        const totalAjustado = dados.contas + dados.diluidosAjustado;
-        
-        let visualValor = `<strong style="color: var(--text-main); font-size: 0.9rem;">${fmt(totalAjustado)}</strong>`;
-        let notaReducao = '';
-        
-        if (dados.corteProtecao > 0.01) {
-            visualValor = `
-                <div style="text-align: right;">
-                    <div style="font-size: 0.9rem; color: var(--secondary); text-decoration: line-through;">${fmt(totalOriginal)}</div>
-                    <strong style="color: ${k === 'vida' ? 'var(--warning)' : 'var(--danger)'}; font-size: 0.9rem;">${fmt(totalAjustado)}</strong>
-                </div>
-            `;
-            notaReducao = `<div style="font-size: 0.9rem; color: var(--warning); margin-top: 4px; line-height: 1.3;">
-                ⚠️ Reduzido em ${fmt(dados.corteProtecao)} para proteger o caixa.
-            </div>`;
-        } else if (dados.gastoRealizado > 0.01) {
-            notaReducao = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 4px; line-height: 1.3;">
-                💡 ${fmt(dados.gastoRealizado)} já gastos neste mês.
-            </div>`;
-        }
-
-        htmlConexaoEnvelopes += `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: 0.9rem;">
-                <div>
-                    <strong style="color: ${cor}; font-size: 0.9rem;">${icone} ${nome}</strong>
-                    <div style="font-size: 0.9rem; color: var(--secondary); margin-top: 2px;">
-                        Contas: ${fmt(dados.contas)} + Diluídos: ${fmt(dados.diluidosAjustado)}
-                    </div>
-                    ${notaReducao}
-                </div>
-                ${visualValor}
-            </div>
-        `;
-    });
-    htmlConexaoEnvelopes += `</div>`;
-
+    // ============================================================
+    // MUDANÇA: Calcula a projeção dia a dia ANTES de chamar os alertas
+    // ============================================================
     if ((orc.nivel || 1) >= 3 && (orc.custodias || []).length > 0) {
         if (fluxoCustodiaFiltro) {
             const c = orc.custodias.find(x => x.id === fluxoCustodiaFiltro);
@@ -12191,6 +11071,7 @@ function renderizarFluxoCaixa() {
         }
 
         saldoFinalProj = saldoCorrido;
+        diasCompletosParaGargalos = diasCompletos; // Guarda a projeção exata
         htmlDiaADia = `<div class="secao-titulo">Saldo depois de cada dia</div>`;
 
         diasCompletos.forEach(d => {
@@ -12221,6 +11102,81 @@ function renderizarFluxoCaixa() {
             }
         });
     }
+
+    // ============================================================
+    // MUDANÇA: Agora sim chamamos os alertas com os dados reais
+    // ============================================================
+    const gargalos = detectarGargalos(fluxo, { custodias: projMapFluxo, diasCompletos: diasCompletosParaGargalos });
+    const sugestoes = sugerirEquilibrio(gargalos, orc);
+
+    let htmlConexaoEnvelopes = `
+        <div class="card" style="margin-bottom: 16px; padding: 16px;">
+            <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 12px; font-weight: 700;">
+                Conexão com a Home
+            </div>
+            <p style="font-size: 0.9rem; color: var(--secondary); margin-bottom: 14px; line-height: 1.4;">
+                O que você planejou nos envelopes (Home) aparece aqui distribuído no tempo. ${protegerSaldo && taxasInfo.corteTotal > 0 ? 'A <strong>Vida</strong> sofreu uma redução maior para proteger a sua <strong>Base</strong>.' : ''}
+            </p>
+            <div style="font-size: 0.9rem; margin-bottom: 14px; padding: 10px 12px; background: var(--bg-color); border-radius: 8px; border-left: 3px solid var(--primary);">
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span style="color:var(--secondary);">Planejado para consumo (sem vencimento)</span>
+                    <strong>${fmt(totalMensalPlanejado)}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span style="color:var(--secondary);">Já gasto e registrado (+)</span>
+                    <strong style="color:var(--danger);">− ${fmt(gastoRealizadoMes)}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; border-top: 1px dashed var(--border); padding-top:4px;">
+                    <strong style="color:var(--primary);">Restante a distribuir</strong>
+                    <strong style="color:var(--primary);">${fmt(totalMensalSemVenc)}</strong>
+                </div>
+            </div>
+    `;
+
+    ['base', 'vida', 'futuro'].forEach(k => {
+        const dados = totaisPorCaixa[k];
+        if (!dados || (dados.contas === 0 && dados.diluidosOriginal === 0)) return;
+
+        const icone = k === 'base' ? '🛡️' : k === 'vida' ? '🌿' : '🔭';
+        const nome = k === 'base' ? 'Base' : k === 'vida' ? 'Vida' : 'Futuro';
+        const cor = k === 'base' ? 'var(--primary)' : k === 'vida' ? 'var(--warning)' : 'var(--success)';
+        
+        const totalOriginal = dados.contas + dados.diluidosRestante;
+        const totalAjustado = dados.contas + dados.diluidosAjustado;
+        
+        let visualValor = `<strong style="color: var(--text-main); font-size: 0.9rem;">${fmt(totalAjustado)}</strong>`;
+        let notaReducao = '';
+        
+        if (dados.corteProtecao > 0.01) {
+            visualValor = `
+                <div style="text-align: right;">
+                    <div style="font-size: 0.9rem; color: var(--secondary); text-decoration: line-through;">${fmt(totalOriginal)}</div>
+                    <strong style="color: ${k === 'vida' ? 'var(--warning)' : 'var(--danger)'}; font-size: 0.9rem;">${fmt(totalAjustado)}</strong>
+                </div>
+            `;
+            notaReducao = `<div style="font-size: 0.9rem; color: var(--warning); margin-top: 4px; line-height: 1.3;">
+                ⚠️ Reduzido em ${fmt(dados.corteProtecao)} para proteger o caixa.
+            </div>`;
+        } else if (dados.gastoRealizado > 0.01) {
+            notaReducao = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 4px; line-height: 1.3;">
+                💡 ${fmt(dados.gastoRealizado)} já gastos neste mês.
+            </div>`;
+        }
+
+        htmlConexaoEnvelopes += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: 0.9rem;">
+                <div>
+                    <strong style="color: ${cor}; font-size: 0.9rem;">${icone} ${nome}</strong>
+                    <div style="font-size: 0.9rem; color: var(--secondary); margin-top: 2px;">
+                        Contas: ${fmt(dados.contas)} + Diluídos: ${fmt(dados.diluidosAjustado)}
+                    </div>
+                    ${notaReducao}
+                </div>
+                ${visualValor}
+            </div>
+        `;
+    });
+    htmlConexaoEnvelopes += `</div>`;
 
     const sobraAjustada = (totEntradas - totSaidas) - totalDistribuidoReal;
     const subtotalFluxo = totEntradas - totSaidas;
@@ -12272,12 +11228,11 @@ function renderizarFluxoCaixa() {
         </div>
     `;
 
-	    let htmlGargalos = '';
+    let htmlGargalos = '';
     if (gargalos.resumo.temGargalo) {
         const itens = (sugestoes.length > 0 ? sugestoes : gargalos.gargalos.slice(0, 3)).slice(0, 4);
         htmlGargalos = `<div class="secao-titulo">Pontos de atenção</div>${itens.map(s => `<div class="card" style="padding: 12px 14px; margin-bottom: 8px; border-left: 3px solid var(--warning); font-size: 0.9rem; color: var(--primary); line-height: 1.45;">${s.mensagem || s.tipo}</div>`).join('')}`;
     }
-
 
     let htmlSeletorCustodia = '';
     if ((orc.nivel || 1) >= 3 && (orc.custodias || []).length > 0) {
@@ -12299,7 +11254,6 @@ function renderizarFluxoCaixa() {
         if (fluxo.lacunas.categoriasSemVencimento > 0) bits.push(`${fluxo.lacunas.categoriasSemVencimento} categoria(s) de consumo (diluídas no cálculo)`);
         htmlLacunas = `<div style="background: var(--bg-color); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.9rem; color: var(--secondary); line-height: 1.45;">💡 Fora do calendário diário: ${bits.join(' · ')}.</div>`;
     }
-
 
     // Timeline Restaurada para o Nível 2 (quando não há custódias)
     let porDiaView = fluxo.porDia;
@@ -12369,9 +11323,7 @@ function renderizarFluxoCaixa() {
         </button>
     `;
 }
-// ============================================================
 // CICLO 3.9 — ANDAIME DE PROJEÇÃO (cards na home)
-// ============================================================
 
 function renderizarCardProjecao(orc) {
     if (!orc) return '';
@@ -12382,7 +11334,6 @@ function renderizarCardProjecao(orc) {
     return '';
 }
 
-/** Bloco 5 — N1 motivação */
 function renderizarCardProjecaoN1(orc) {
     return `
         <div class="card" style="border-left: 4px solid var(--primary); margin-top: 8px; margin-bottom: 16px; background: var(--info-soft);">
@@ -12521,7 +11472,6 @@ function renderizarCardProjecaoN2b(orc) {
         </div>
     `;
 
-    // Bloco 12: se o aperto não é crítico (só concentração/dia), card recolhido
     if (corBorda === 'var(--warning)' && projecaoSoConcentracao(orc) && !(gargalos.resumo.saldoMinimo < 0)) {
         return envolverProjecaoRecolhida(htmlCard, 'Há concentração de saídas — expandir');
     }
@@ -12737,10 +11687,7 @@ function projecaoSoConcentracao(orc) {
 }
 
 
-
-// ============================================================
 // CICLO 3.9 — BLOCO 4: FUNÇÕES PURAS DE PROJEÇÃO
-// ============================================================
 
 function _dataNoMes(ano, mes, dia) {
     const ultimo = new Date(ano, mes + 1, 0).getDate();
@@ -12786,7 +11733,6 @@ function _eventosRecebimentoDeclarados(orc, inicio, fim) {
             );
             
             if (!temAdiantamento) {
-                // Verifica se já foi recebido no mês corrente normal
                 const jaRecebido = (orc.historicoRegistros || []).some(r => 
                     r.tipo === 'recebimento' && !r.anulado && _pertenceMesAtual(r.data) && (r.categoriaId === f.id || r.categoria === f.nome)
                 );
@@ -12843,7 +11789,6 @@ function _eventosVencimentoDeclarados(orc, inicio, fim) {
                 );
                 
                 if (!temAdiantamento) {
-                    // Verifica se já foi pago no mês corrente normal
                     const jaPago = (orc.historicoRegistros || []).some(r => 
                         !r.anulado &&
                         (r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao' || r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') &&
@@ -12928,10 +11873,8 @@ function projetarFluxo(orc, opcoes) {
 }
 
 
-// ============================================================
 // FATIA 6 — C1 LIQUIDEZ 7–14 DIAS
 // Só o declarado. 4,33 continua ritmo de plano, não juiz único.
-// ============================================================
 
 const HORIZONTE_LIQUIDEZ_DIAS = 14;
 
@@ -12953,10 +11896,8 @@ function _estoqueOperacionalAtual(orc) {
     return somaSaldo - somaFatura;
 }
 
-// ============================================================
 // FATIA DE ALISAMENTO (N3) — simulação de datas de vencimento/recebimento
 // Estado próprio: state.orcamento.cenarioAlisamento (fora de state.n4)
-// ============================================================
 
 function _garantirCenarioAlisamento() {
     if (!state.orcamento) return { ativo: false, ajustes: [], criadoEm: null };
@@ -13306,184 +12247,12 @@ function montarPainelComparacao(dados) {
     return `<div style="padding:10px 4px 0;">${linhas}</div>`;
 }
 
-function montarControlesAlisamento(orc, cen) {
-    const ehAtivo = cen.ativo && cen.ajustes.length > 0;
-
-    if (!ehAtivo) {
-        const vencComDia = (orc.categorias || []).filter(c => c.vencimento && !_categoriaParcelasQuitada(c));
-        const fontesComDia = ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [])
-            .filter(f => _diasRecebimento(f.diaRecebimento).length > 0);
-
-        if (vencComDia.length === 0 && fontesComDia.length === 0) {
-            return `
-                <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
-                    <div style="font-size:0.9rem;color:var(--secondary);line-height:1.45;">
-                        Para testar outra data, preciso de pelo menos uma conta com vencimento ou uma renda com dia declarado.
-                    </div>
-                </div>`;
-        }
-
-        let chips = '';
-        vencComDia.forEach(c => {
-            const icone = c.caixa === 'base' ? '🛡️' : c.caixa === 'vida' ? '🌿' : '🔭';
-            chips += `<div class="chip" onclick="alisamentoEscolherAlvo('vencimento','${c.id}')">${icone} ${_escSvg(c.nome)} <span style="color:var(--secondary);">(dia ${c.vencimento})</span></div>`;
-        });
-        fontesComDia.forEach(f => {
-            const dias = _diasRecebimento(f.diaRecebimento);
-            chips += `<div class="chip" onclick="alisamentoEscolherAlvo('recebimento','${f.id}')">💰 ${_escSvg(f.nome)} <span style="color:var(--secondary);">(dia ${dias.join(', ')})</span></div>`;
-        });
-
-        return `
-            <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--primary);background:var(--purple-light);">
-                <div style="font-size:0.9rem;font-weight:700;color:var(--primary);margin-bottom:6px;">E se uma data mudasse?</div>
-                <p style="font-size:0.9rem;color:var(--primary-press);line-height:1.4;margin:0 0 10px;">
-                    Testa sem mexer em nada. Quem decide a data é o credor — mas você chega na conversa sabendo o que pedir.
-                </p>
-                <div class="chip-container" style="margin:0;">${chips}</div>
-            </div>`;
-    }
-
-    const ajuste = cen.ajustes[0];
-    const alvo = ajuste.tipo === 'vencimento'
-        ? (orc.categorias || []).find(c => c.id === ajuste.id)
-        : ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || []).find(f => f.id === ajuste.id);
-    const nome = alvo ? alvo.nome : '(removido)';
-    const diasOriginais = ajuste.tipo === 'vencimento'
-        ? [alvo && alvo.vencimento]
-        : _diasRecebimento(alvo && alvo.diaRecebimento);
-    const diaOriginal = diasOriginais[0] || '?';
-
-    let chipsDia = '';
-    [5, 10, 15, 20, 25].forEach(d => {
-        const sel = ajuste.dia === d ? ' selecionado' : '';
-        chipsDia += `<div class="chip${sel}" onclick="alisamentoAplicarDia(${d})">${d}</div>`;
-    });
-
-    return `
-        <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--warning);background:var(--warning-soft);">
-            <div style="font-size:0.9rem;font-weight:700;color:var(--warning);margin-bottom:6px;">
-                Testando: ${_escSvg(nome)} do dia ${diaOriginal} para o dia ${ajuste.dia || '?'}
-            </div>
-            <div style="font-size:0.82rem;color:var(--warning);margin-bottom:8px;">Novo dia:</div>
-            <div class="chip-container" style="margin:0 0 12px 0;">${chipsDia}</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn-sm" style="background:var(--secondary);color:white;" onclick="alisamentoVoltarReal()">Voltar ao real</button>
-                <button class="btn-sm" style="background:var(--primary);color:white;" onclick="alisamentoCopiarMensagem()">Copiar o que pedir</button>
-                <button class="btn-sm" style="background:var(--card-bg);color:var(--primary);border:1px solid var(--primary);" onclick="alisamentoEscolherOutroAlvo()">Testar outra</button>
-            </div>
-        </div>`;
-}
-
 /**
  * Orquestrador do gráfico. Pure render: lê orc, não muta.
  */
-function renderizarGraficoAlisamento(orc, opcoes) {
-    opcoes = opcoes || {};
-    if (!orc || (orc.nivel || 1) < 3) return '';
-    if (_estoqueOperacionalAtual(orc) === null) {
-        return `
-            <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
-                <div style="font-size:0.9rem;font-weight:700;color:var(--secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Saldo dia a dia</div>
-                <p style="font-size:0.9rem;color:var(--secondary);line-height:1.4;margin:0 0 10px;">
-                    Para ver o saldo dia a dia, preciso de pelo menos uma conta cadastrada com saldo.
-                </p>
-                <button class="btn-option" style="justify-content:center;border-color:var(--primary);color:var(--primary);" onclick="abrirTelaCustodias()">🏦 Cadastrar conta</button>
-            </div>`;
-    }
 
-    const diasAtras = opcoes.diasAtras || 14;
-    const diasFrente = opcoes.diasFrente || 30;
-
-    const historico = reconstruirSaldoHistorico(orc, { diasAtras });
-    const fluxoAtual = projetarFluxo(orc, { dias: diasFrente });
-    const projAtual = construirProjecaoDiaria(orc, fluxoAtual);
-
-    const cen = _garantirCenarioAlisamento();
-    let projSimulado = null;
-    if (cen.ativo && cen.ajustes.length > 0) {
-        const sim = simularCenario(orc, { dias: diasFrente, ajustes: cen.ajustes });
-        projSimulado = construirProjecaoDiaria(orc, sim.fluxo);
-    }
-
-    const dados = { historico, projAtual, projSimulado, cenarioAplicado: cen };
-    const svg = montarSVGAlisamento(dados);
-    const painel = montarPainelComparacao(dados);
-    const controles = montarControlesAlisamento(orc, cen);
-
-    return `
-        <div class="card" style="padding:14px 16px;margin-bottom:16px;">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-                <div style="font-size:0.9rem;font-weight:700;color:var(--primary);">Saldo dia a dia</div>
-                <div style="font-size:0.72rem;color:var(--secondary);">−${diasAtras}d · +${diasFrente}d</div>
-            </div>
-            <div style="font-size:0.72rem;color:var(--secondary);margin-bottom:10px;line-height:1.35;">
-                <span style="color:var(--secondary);">···</span> reconstruído
-                · <span style="color:var(--primary);">- - -</span> projeção atual
-                ${projSimulado ? ' · <span style="color:var(--warning);font-weight:700;">—</span> simulado' : ''}
-            </div>
-            ${svg}
-            ${painel}
-        </div>
-        ${controles}
-    `;
-}
-
-function alisamentoEscolherAlvo(tipo, id) {
-    // Delegado para o modelo multi-ajuste da nova tela
-    simuladorAdicionarAjuste(tipo, id);
-}
-
-function alisamentoAplicarDia(dia) {
-    const cen = _garantirCenarioAlisamento();
-    if (!cen.ativo || cen.ajustes.length === 0) return;
-    cen.ajustes[0].dia = dia;
-    salvarEstado();
-    renderizarFluxoCaixa();
-}
-
-function alisamentoVoltarReal() {
-    const cen = _garantirCenarioAlisamento();
-    cen.ativo = false;
-    cen.ajustes = [];
-    salvarEstado();
-    renderizarFluxoCaixa();
-}
-
-function alisamentoEscolherOutroAlvo() {
-    alisamentoVoltarReal();
-}
-
-function alisamentoCopiarMensagem() {
-    const cen = _garantirCenarioAlisamento();
-    if (!cen.ativo || cen.ajustes.length === 0 || !cen.ajustes[0].dia) {
-        alert('Escolha um novo dia antes de copiar.');
-        return;
-    }
-    const orc = state.orcamento;
-    const aj = cen.ajustes[0];
-    const alvo = aj.tipo === 'vencimento'
-        ? (orc.categorias || []).find(c => c.id === aj.id)
-        : ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || []).find(f => f.id === aj.id);
-    if (!alvo) return;
-
-    const diasOriginais = aj.tipo === 'vencimento' ? [alvo.vencimento] : _diasRecebimento(alvo.diaRecebimento);
-    const diaOriginal = diasOriginais[0] || '?';
-    const verbo = aj.tipo === 'vencimento' ? 'vencimento' : 'recebimento';
-    const msg = `Olá. Gostaria de saber se é possível alterar a data de ${verbo} do ${alvo.nome} do dia ${diaOriginal} para o dia ${aj.dia}. Meu orçamento fica mais equilibrado nessa data. Obrigado(a).`;
-
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(msg)
-            .then(() => alert('Mensagem copiada. Cole no seu canal com o credor.'))
-            .catch(() => prompt('Copie a mensagem:', msg));
-    } else {
-        prompt('Copie a mensagem:', msg);
-    }
-}
-
-// ============================================================
 // TELA SIMULADOR (N3) — tela própria, acesso da home e do fluxo
 // Suporta múltiplos ajustes simultâneos (cen.ajustes[]).
-// ============================================================
 
 let _simuladorPickerAberto = false;
 
@@ -13661,7 +12430,7 @@ function renderizarSimulador() {
 
     const ajustes = cen.ajustes || [];
 
-    // -------- Empty state (sem ajustes e picker fechado) --------
+// Empty state (sem ajustes e picker fechado)
     if (ajustes.length === 0 && !_simuladorPickerAberto) {
         const vencComDia = (orc.categorias || []).filter(c => c.vencimento && !_categoriaParcelasQuitada(c));
         const fontesComDia = ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [])
@@ -13703,7 +12472,7 @@ function renderizarSimulador() {
         return;
     }
 
-    // -------- Lista de ajustes ativos --------
+// Lista de ajustes ativos
     let ajustesHtml = '';
     if (ajustes.length > 0) {
         ajustesHtml += '<div class="home-section-title" style="margin-bottom:6px;">Testando agora</div>';
@@ -13744,7 +12513,7 @@ function renderizarSimulador() {
         });
     }
 
-    // -------- Picker de nova data --------
+// Picker de nova data
     let pickerHtml = '';
     if (_simuladorPickerAberto) {
         const vencComDia = (orc.categorias || []).filter(c => c.vencimento && !_categoriaParcelasQuitada(c));
@@ -13780,7 +12549,7 @@ function renderizarSimulador() {
         `;
     }
 
-    // -------- CTA Adicionar outra --------
+// CTA Adicionar outra
     let addBtnHtml = '';
     if (ajustes.length > 0 && !_simuladorPickerAberto) {
         const vencComDia = (orc.categorias || []).filter(c => c.vencimento && !_categoriaParcelasQuitada(c));
@@ -13793,7 +12562,6 @@ function renderizarSimulador() {
         }
     }
 
-    // -------- Footer --------
     let footerHtml = '';
     if (ajustes.length > 0) {
         footerHtml = `
@@ -14007,7 +12775,6 @@ function simularCenario(orc, overrides) {
     overrides = overrides || {};
     const clone = _cloneOrcParaSimulacao(orc);
 
-    // Fatia de alisamento — suporte a múltiplos ajustes num só cenário
     if (Array.isArray(overrides.ajustes)) {
         overrides.ajustes.forEach(aj => {
             if (!aj || !aj.tipo || !aj.id || !aj.dia) return;
@@ -14068,26 +12835,67 @@ function detectarGargalos(fluxo, opcoes) {
     if (!fluxo || !fluxo.porDia) {
         return { gargalos: [], resumo: { temGargalo: false, piorDia: null, saldoMinimo: 0 } };
     }
-    const datas = Object.keys(fluxo.porDia).sort();
-    let acumulado = 0, saldoMinimo = 0, piorDia = null;
-    datas.forEach(data => {
-        const dia = fluxo.porDia[data];
-        const liquido = (dia.entradas || 0) - (dia.saidas || 0);
-        acumulado += liquido;
-        if ((dia.saidas || 0) > (dia.entradas || 0) && (dia.saidas || 0) > 0) {
-            gargalos.push({
-                tipo: 'dia_negativo', data: data,
-                entradas: dia.entradas || 0, saidas: dia.saidas || 0,
-                deficit: (dia.saidas || 0) - (dia.entradas || 0), eventos: dia.eventos || []
-            });
-        }
-        if (acumulado < saldoMinimo) { saldoMinimo = acumulado; piorDia = data; }
-        if (acumulado < 0 && !gargalos.some(g => g.tipo === 'acumulado_negativo' && g.data === data)) {
-            gargalos.push({ tipo: 'acumulado_negativo', data: data, saldoAcumulado: acumulado, entradas: dia.entradas || 0, saidas: dia.saidas || 0 });
-        }
-    });
+
+    let saldoMinimo = Infinity;
+    let piorDia = null;
+
+    // NOVO: Usa a projeção real (com saldo inicial e gastos diluídos) para gerar alertas
+    if (opcoes.diasCompletos && opcoes.diasCompletos.length > 0) {
+        opcoes.diasCompletos.forEach(d => {
+            if (d.saldoCorrido < saldoMinimo) {
+                saldoMinimo = d.saldoCorrido;
+                piorDia = d.dataKey;
+            }
+            
+            // Alerta de dia negativo (saídas totais, incluindo diluídos, passam das entradas)
+            const saidasTotais = d.saidas + d.quotaDistribuida;
+            const deficitDia = saidasTotais - d.entradas;
+            if (deficitDia > 0) {
+                gargalos.push({
+                    tipo: 'dia_negativo', data: d.dataKey,
+                    entradas: d.entradas, saidas: saidasTotais,
+                    deficit: deficitDia, eventos: d.eventos || []
+                });
+            }
+            
+            // Alerta de saldo acumulado negativo
+            if (d.saldoCorrido < 0 && !gargalos.some(g => g.tipo === 'acumulado_negativo' && g.data === d.dataKey)) {
+                gargalos.push({ 
+                    tipo: 'acumulado_negativo', 
+                    data: d.dataKey, 
+                    saldoAcumulado: d.saldoCorrido, 
+                    entradas: d.entradas, 
+                    saidas: saidasTotais 
+                });
+            }
+        });
+    } else {
+        // Fallback: Caso a tela não envie os dias completos (ex: cards da Home)
+        let acumulado = 0;
+        saldoMinimo = 0;
+        const datas = Object.keys(fluxo.porDia).sort();
+        datas.forEach(data => {
+            const dia = fluxo.porDia[data];
+            const liquido = (dia.entradas || 0) - (dia.saidas || 0);
+            acumulado += liquido;
+            if ((dia.saidas || 0) > (dia.entradas || 0) && (dia.saidas || 0) > 0) {
+                gargalos.push({
+                    tipo: 'dia_negativo', data: data,
+                    entradas: dia.entradas || 0, saidas: dia.saidas || 0,
+                    deficit: (dia.saidas || 0) - (dia.entradas || 0), eventos: dia.eventos || []
+                });
+            }
+            if (acumulado < saldoMinimo) { saldoMinimo = acumulado; piorDia = data; }
+            if (acumulado < 0 && !gargalos.some(g => g.tipo === 'acumulado_negativo' && g.data === data)) {
+                gargalos.push({ tipo: 'acumulado_negativo', data: data, saldoAcumulado: acumulado, entradas: dia.entradas || 0, saidas: dia.saidas || 0 });
+            }
+        });
+    }
+
+    // Concentração de saídas (baseada apenas nos eventos fixos)
     const totalSaidas = fluxo.totais ? fluxo.totais.saidas : 0;
     if (totalSaidas > 0) {
+        const datas = Object.keys(fluxo.porDia).sort();
         datas.forEach(data => {
             const saidas = fluxo.porDia[data].saidas || 0;
             if (saidas / totalSaidas > 0.4) {
@@ -14095,6 +12903,8 @@ function detectarGargalos(fluxo, opcoes) {
             }
         });
     }
+
+    // Custódias
     if (opcoes.custodias) {
         Object.keys(opcoes.custodias).forEach(id => {
             const proj = opcoes.custodias[id];
@@ -14108,61 +12918,9 @@ function detectarGargalos(fluxo, opcoes) {
             }
         });
     }
+
     return { gargalos: gargalos, resumo: { temGargalo: gargalos.length > 0, piorDia: piorDia, saldoMinimo: saldoMinimo } };
 }
-
-function sugerirEquilibrio(gargalos, orc) {
-    if (!gargalos || !gargalos.gargalos || gargalos.gargalos.length === 0) return [];
-    const sugestoes = [];
-    const lista = gargalos.gargalos;
-    lista.filter(g => g.tipo === 'custodia_negativa').forEach(g => {
-        const outras = (orc.custodias || []).filter(c => c.id !== g.custodiaId && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura);
-        const comSaldo = outras.filter(c => (c.saldoAtual || 0) > 0);
-        if (comSaldo.length > 0) {
-            sugestoes.push({
-                tipo: 'transferencia',
-                mensagem: `"${g.nome}" pode ficar negativa. Você tem saldo em ${comSaldo.map(c => c.nome).join(', ')}.`,
-                dados: { custodiaId: g.custodiaId, saldoFinal: g.saldoFinal, alternativas: comSaldo.map(c => ({ id: c.id, nome: c.nome, saldo: c.saldoAtual || 0 })) }
-            });
-        } else {
-            sugestoes.push({ tipo: 'custodia_apertada', mensagem: `"${g.nome}" projeta saldo negativo (R$ ${Math.abs(g.saldoFinal).toFixed(2).replace('.', ',')}).`, dados: { custodiaId: g.custodiaId, saldoFinal: g.saldoFinal } });
-        }
-    });
-    lista.filter(g => g.tipo === 'concentracao').forEach(g => {
-        const nomes = (g.eventos || []).filter(e => e.tipo === 'vencimento').map(e => e.nome);
-        sugestoes.push({
-            tipo: 'concentracao',
-            mensagem: nomes.length > 0
-                ? `No dia ${g.data.slice(8)} concentra ${g.percentual.toFixed(0)}% das saídas: ${nomes.join(', ')}.`
-                : `No dia ${g.data.slice(8)} concentra ${g.percentual.toFixed(0)}% das saídas da janela.`,
-            dados: { data: g.data, percentual: g.percentual, eventos: g.eventos || [] }
-        });
-    });
-    const acumulados = lista.filter(g => g.tipo === 'acumulado_negativo');
-    if (acumulados.length > 0) {
-        const pior = acumulados.reduce((a, b) => (a.saldoAcumulado < b.saldoAcumulado) ? a : b);
-        sugestoes.push({ tipo: 'janela_apertada', mensagem: `Na janela, o saldo acumulado chega a R$ ${pior.saldoAcumulado.toFixed(2).replace('.', ',')} em ${pior.data.slice(8)}.`, dados: { data: pior.data, saldoAcumulado: pior.saldoAcumulado } });
-    }
-    lista.filter(g => g.tipo === 'dia_negativo').forEach(g => {
-        const jaCoberto = sugestoes.some(s => (s.dados && s.dados.data === g.data));
-        if (jaCoberto) return;
-        const nomes = (g.eventos || []).filter(e => e.tipo === 'vencimento').map(e => e.nome);
-        sugestoes.push({
-            tipo: 'dia_apertado',
-            mensagem: nomes.length > 0
-                ? `Em ${g.data.slice(8)} as saídas passam as entradas em R$ ${g.deficit.toFixed(2).replace('.', ',')}: ${nomes.join(', ')}.`
-                : `Em ${g.data.slice(8)} as saídas passam as entradas em R$ ${g.deficit.toFixed(2).replace('.', ',')}.`,
-            dados: { data: g.data, deficit: g.deficit, eventos: g.eventos || [] }
-        });
-    });
-    return sugestoes;
-}
-// ============================================================
-// LISTA DE REGISTROS (caixinha / renda / categoria)
-// ============================================================
-
-let listaRegistrosContexto = null; // { modo: 'caixa'|'categoria'|'renda', caixa?, categoriaId?, categoriaNome? }
-
 function _pertenceSemanaAtual(isoStr) {
     const semana = state.orcamento && state.orcamento.semanaAtual;
     if (!semana || !isoStr) return false;
@@ -14215,7 +12973,6 @@ function _filtrarRegistrosLista(ctx) {
         return todos.filter(r => {
             if (!_pertenceSemanaAtual(r.data)) return false;
             if (r.tipo === 'ajuste_semana_anterior' && r.caixa === ctx.caixa) return true;
-            // Agora aceita os 4 tipos (gasto_direto, gasto_cartao, pagamento_divida, aporte_reserva)
             return TIPOS_DEBITAM_ENVELOPE.indexOf(r.tipo) !== -1 && r.caixa === ctx.caixa;
         });
     }
@@ -14397,7 +13154,6 @@ function fecharModalListaRegistros() {
     listaRegistrosContexto = null;
     registroEditandoId = null;
 
-    // Fase 6 — limpar rodapé contextual
     const rodapeFecharRegistros = document.getElementById('lista-registros-rodape-edit');
     if (rodapeFecharRegistros) rodapeFecharRegistros.innerHTML = '';
 
@@ -14409,12 +13165,10 @@ function fecharModalListaRegistros() {
 }
 
 
-// ============================================================
 // FATIA 3 (restauro P0) — SEMANA FECHADA IMUTÁVEL + AJUSTE
 // AVISO: edição/exclusão de registros e efeitos de lançamento
 // vivem APENAS nesta seção. Não duplicar _desfazer/_aplicar/
 // excluir/editar/salvarEdicao em outro trecho do arquivo.
-// ============================================================
 
 function _registroEmPeriodoFechado(r) {
     if (!r || !r.data) return false;
@@ -14748,7 +13502,6 @@ function atualizarChipsCompetencia(dataStr) {
     const container = document.getElementById('chips-mes-referencia');
     if (!container) return;
 
-    // Usa a data do input, ou hoje se estiver vazio
     let dataBase = new Date();
     if (dataStr) {
         const partes = dataStr.split('-'); // YYYY-MM-DD
@@ -14768,7 +13521,6 @@ function atualizarChipsCompetencia(dataStr) {
     const rotuloAtual = _rotuloMesAno(mesAtualStr);
     const rotuloProx = _rotuloMesAno(proxMesStr);
 
-    // Verifica se a variável temp já estava no próximo mês
     const isProx = mesReferenciaEditandoTemp === proxMesStr;
     const isAtual = !isProx;
 
@@ -14920,7 +13672,6 @@ function salvarEdicaoRegistro() {
         blocoErro.textContent = '';
     }
 
-    // Fatia 3: período fechado → não reescreve o passado; ajuste no corrente
     if (_registroEmPeriodoFechado(r)) {
         const dataOriginalStr = (r.data || '').split('T')[0];
         const dataNovaStr = novaData.split('T')[0];
@@ -14932,7 +13683,6 @@ function salvarEdicaoRegistro() {
         if (!valorMudou && !dataMudou) {
             const dataAnoMes = novaData.split('T')[0].substring(0, 7);
             
-            // Atualiza a TAG (ou limpa se for o mês padrão)
             if (mesReferenciaEditandoTemp && mesReferenciaEditandoTemp !== dataAnoMes) {
                 r.mesReferencia = mesReferenciaEditandoTemp;
             } else {
@@ -14994,9 +13744,7 @@ function salvarEdicaoRegistro() {
         return;
     }
 
-    // =========================================================
-    // FLUXO NORMAL: Semana Aberta
-    // =========================================================
+// FLUXO NORMAL: Semana Aberta
     _desfazerEfeitosRegistro(r);
     r.valor = novoValor;
     r.data = novaData;
@@ -15055,23 +13803,11 @@ function gastoCategoriaNoMes(categoriaId, categoriaNome) {
         })
         .reduce((s, r) => s + (Number(r.valor) || 0), 0);
 }
-function gastoCategoriaTotal(categoriaId, categoriaNome) {
-    const todos = state.orcamento.historicoRegistros || [];
-    return todos
-        .filter(r => {
-            if (r.tipo !== 'gasto_direto' && r.tipo !== 'gasto_cartao') return false;
-            if (categoriaId && r.categoriaId === categoriaId) return true;
-            if (categoriaNome && r.categoria === categoriaNome) return true;
-            return false;
-        })
-        .reduce((s, r) => s + (r.valor || 0), 0);
-}
 
 function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
     const limiteSeguro = (limite && limite > 0) ? limite : 0;
     const gastoSeguro = Number(gasto) || 0;
     
-    // Pega o carrego (dívida de semanas anteriores)
     const carrego = categoriaId ? obterCarregoCategoria(categoriaId) : 0;
     const consumidoReal = gastoSeguro + carrego;
 
@@ -15132,9 +13868,7 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
         </div>
     `;
 }
-// ============================================================
 // CICLO 4.0 — CANAL DE FEEDBACK (Bloco 1: modal + estado)
-// ============================================================
 
 const FEEDBACK_VERSAO = '4.2';
 const FEEDBACK_MIN = 10;
@@ -15179,7 +13913,6 @@ if (btnEnv) {
     if (blocoErro) blocoErro.style.display = 'none';
     document.getElementById('modal-feedback').classList.add('ativo');
 
-    // Esconde o botão de feedback enquanto o modal está aberto
     atualizarBotaoFeedback(feedbackTemp.telaOrigem);
 }
 
@@ -15195,7 +13928,6 @@ function fecharModalFeedback() {
     const blocoErro = document.getElementById('feedback-erro');
     if (blocoErro) blocoErro.style.display = 'none';
 
-    // Limpa o estado (defensivo; abrirModalFeedback também reseta)
     feedbackTemp = {
         categoria: null,
         mensagem: '',
@@ -15300,7 +14032,6 @@ function irParaConfirmacaoFeedback() {
 }
 
 function voltarParaTextoFeedback() {
-    // Limpa estado de erro (caso tenha vindo de uma falha de envio)
     const blocoErro = document.getElementById('feedback-erro');
     if (blocoErro) blocoErro.style.display = 'none';
 
@@ -15354,8 +14085,6 @@ function enviarFeedback() {
     params.append('Tela', feedbackTemp.telaOrigem || '');
     params.append('Versao', FEEDBACK_VERSAO);
 
-    console.log('[CICLO 4.0] POST →', FEEDBACK_URL);
-    console.log('[CICLO 4.0] params:', Object.fromEntries(params.entries()));
 
     fetch(FEEDBACK_URL, {
         method: 'POST',
@@ -15363,7 +14092,6 @@ function enviarFeedback() {
         mode: 'no-cors'
     })
     .then(() => {
-        console.log('[CICLO 4.0] Envio concluído (resposta opaca).');
         irParaSucessoFeedback();
     })
     .catch((error) => {
