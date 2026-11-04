@@ -1604,6 +1604,10 @@ async function _idbDelete(id) {
 
 /** Grava estado. Fire-and-forget seguro; serializa writes. */
 function salvarEstado() {
+if (state && state.orcamento && state.orcamento.rendaDetalhe && Array.isArray(state.orcamento.rendaDetalhe.fontes) && state.orcamento.rendaDetalhe.fontes.length > 0) {
+        if (!state.orcamento.base) state.orcamento.base = {};
+        state.orcamento.base.rendaBase = state.orcamento.rendaDetalhe.fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0);
+    }
     const snapshot = JSON.parse(JSON.stringify(state));
     const payload = {
         id: CHAVE_STORAGE,
@@ -2308,6 +2312,7 @@ function _fmtDialogoBRL(v) {
 // TELA INICIAL DO ORÇAMENTO
 
 function renderizarOrcamentoInicio(opcoes) {
+sincronizarRendaBase();
     opcoes = opcoes || {};
     const forcarHub = !!opcoes.forcarHub;
     const container = document.getElementById('orcamento-conteudo');
@@ -6703,6 +6708,7 @@ function avaliarSugestaoReservaN3(orc) {
 }
 
 function renderizarDetalheRenda() {
+sincronizarRendaBase();
     const container = document.getElementById('renda-detalhe-conteudo');
     const renda = state.orcamento.rendaDetalhe;
     const valorBase = state.orcamento.base?.rendaBase || 0;
@@ -7339,6 +7345,8 @@ function abrirDetalheGastos(caixa) {
 }
 
 function renderizarDetalheGastos() {
+sincronizarRendaBase();
+if (typeof atualizarTotaisEnvelopes === 'function') atualizarTotaisEnvelopes();
     const container = document.getElementById('gastos-detalhe-conteudo');
     const caixa = caixaGastosAtiva;
     const categorias = (state.orcamento.categorias || []).filter(c => c.caixa === caixa);
