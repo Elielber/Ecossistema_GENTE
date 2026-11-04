@@ -12921,6 +12921,52 @@ function detectarGargalos(fluxo, opcoes) {
 
     return { gargalos: gargalos, resumo: { temGargalo: gargalos.length > 0, piorDia: piorDia, saldoMinimo: saldoMinimo } };
 }
+	function sugerirEquilibrio(gargalos, orc) {
+    if (!gargalos || !gargalos.gargalos || gargalos.gargalos.length === 0) return [];
+    const sugestoes = [];
+    const lista = gargalos.gargalos;
+    lista.filter(g => g.tipo === 'custodia_negativa').forEach(g => {
+        const outras = (orc.custodias || []).filter(c => c.id !== g.custodiaId && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura);
+        const comSaldo = outras.filter(c => (c.saldoAtual || 0) > 0);
+        if (comSaldo.length > 0) {
+            sugestoes.push({
+                tipo: 'transferencia',
+                mensagem: `"${g.nome}" pode ficar negativa. Você tem saldo em ${comSaldo.map(c => c.nome).join(', ')}.`,
+                dados: { custodiaId: g.custodiaId, saldoFinal: g.saldoFinal, alternativas: comSaldo.map(c => ({ id: c.id, nome: c.nome, saldo: c.saldoAtual || 0 })) }
+            });
+        } else {
+            sugestoes.push({ tipo: 'custodia_apertada', mensagem: `"${g.nome}" projeta saldo negativo (R$ ${Math.abs(g.saldoFinal).toFixed(2).replace('.', ',')}).`, dados: { custodiaId: g.custodiaId, saldoFinal: g.saldoFinal } });
+        }
+    });
+    lista.filter(g => g.tipo === 'concentracao').forEach(g => {
+        const nomes = (g.eventos || []).filter(e => e.tipo === 'vencimento').map(e => e.nome);
+        sugestoes.push({
+            tipo: 'concentracao',
+            mensagem: nomes.length > 0
+                ? `No dia ${g.data.slice(8)} concentra ${g.percentual.toFixed(0)}% das saídas: ${nomes.join(', ')}.`
+                : `No dia ${g.data.slice(8)} concentra ${g.percentual.toFixed(0)}% das saídas da janela.`,
+            dados: { data: g.data, percentual: g.percentual, eventos: g.eventos || [] }
+        });
+    });
+    const acumulados = lista.filter(g => g.tipo === 'acumulado_negativo');
+    if (acumulados.length > 0) {
+        const pior = acumulados.reduce((a, b) => (a.saldoAcumulado < b.saldoAcumulado) ? a : b);
+        sugestoes.push({ tipo: 'janela_apertada', mensagem: `Na janela, o saldo acumulado chega a R$ ${pior.saldoAcumulado.toFixed(2).replace('.', ',')} em ${pior.data.slice(8)}.`, dados: { data: pior.data, saldoAcumulado: pior.saldoAcumulado } });
+    }
+    lista.filter(g => g.tipo === 'dia_negativo').forEach(g => {
+        const jaCoberto = sugestoes.some(s => (s.dados && s.dados.data === g.data));
+        if (jaCoberto) return;
+        const nomes = (g.eventos || []).filter(e => e.tipo === 'vencimento').map(e => e.nome);
+        sugestoes.push({
+            tipo: 'dia_apertado',
+            mensagem: nomes.length > 0
+                ? `Em ${g.data.slice(8)} as saídas passam as entradas em R$ ${g.deficit.toFixed(2).replace('.', ',')}: ${nomes.join(', ')}.`
+                : `Em ${g.data.slice(8)} as saídas passam as entradas em R$ ${g.deficit.toFixed(2).replace('.', ',')}.`,
+            dados: { data: g.data, deficit: g.deficit, eventos: g.eventos || [] }
+        });
+    });
+    return sugestoes;
+}
 function _pertenceSemanaAtual(isoStr) {
     const semana = state.orcamento && state.orcamento.semanaAtual;
     if (!semana || !isoStr) return false;
