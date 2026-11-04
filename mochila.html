@@ -11858,13 +11858,16 @@ function _eventosRecebimentoDeclarados(orc, inicio, fim) {
                 (r.categoriaId === f.id || r.categoria === f.nome)
             );
             
-            if (!temAdiantamento) {
-                // CORREÇÃO: Verifica se existe um registro no mês exato que está sendo projetado (mesRefStr), e não no mês atual do sistema.
-                const jaRecebido = (orc.historicoRegistros || []).some(r => 
-                    r.tipo === 'recebimento' && !r.anulado && String(r.data || '').substring(0, 7) === mesRefStr && (r.categoriaId === f.id || r.categoria === f.nome)
-                );
-                
-                if (!jaRecebido) {
+                              if (!temAdiantamento) {
+                        // CORREÇÃO DEFINITIVA: Usa objetos Date para garantir a comparação exata de mês e ano, ignorando formatos de string.
+                        const jaRecebido = (orc.historicoRegistros || []).some(r => {
+                            if (r.tipo !== 'recebimento' || r.anulado) return false;
+                            if (r.categoriaId !== f.id && r.categoria !== f.nome) return false;
+                            const dataReg = new Date(r.data);
+                            return dataReg.getFullYear() === ano && dataReg.getMonth() === mes;
+                        });
+                        
+                        if (!jaRecebido) {
                     const valorPorOcorrencia = valorMes / dias.length;
                     dias.forEach(dia => {
                         const data = _dataNoMes(ano, mes, dia);
@@ -11915,14 +11918,15 @@ function _eventosVencimentoDeclarados(orc, inicio, fim) {
                     (r.categoriaId === c.id || r.categoria === c.nome)
                 );
                 
-                               if (!temAdiantamento) {
-                    // CORREÇÃO: Verifica se existe um registro no mês exato que está sendo projetado (mesRefStr), e não no mês atual do sistema.
-                    const jaPago = (orc.historicoRegistros || []).some(r => 
-                        !r.anulado &&
-                        (r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao' || r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') &&
-                        String(r.data || '').substring(0, 7) === mesRefStr &&
-                        (r.categoriaId === c.id || r.categoria === c.nome)
-                    );
+                                               if (!temAdiantamento) {
+                    // CORREÇÃO DEFINITIVA: Usa objetos Date para garantir a comparação exata de mês e ano.
+                    const jaPago = (orc.historicoRegistros || []).some(r => {
+                        if (r.anulado) return false;
+                        if (r.tipo !== 'gasto_direto' && r.tipo !== 'gasto_cartao' && r.tipo !== 'pagamento_divida' && r.tipo !== 'aporte_reserva') return false;
+                        if (r.categoriaId !== c.id && r.categoria !== c.nome) return false;
+                        const dataReg = new Date(r.data);
+                        return dataReg.getFullYear() === ano && dataReg.getMonth() === mes;
+                    });
                     
                     if (!jaPago) {
                         eventos.push({
