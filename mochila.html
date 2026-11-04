@@ -2939,27 +2939,13 @@ function calcularTaxaViabilidadeConsumo(orc) {
     let totalBaseRestante = 0;
     let totalVidaRestante = 0;
     
-    categoriasBase.forEach(c => {
-        let gastoCat = 0;
-        (orc.historicoRegistros || []).forEach(r => {
-            if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data) && r.categoriaId === c.id) {
-                gastoCat += (Number(r.valor) || 0);
-            }
-        });
-        totalBaseRestante += Math.max(0, (Number(c.valor) || 0) - gastoCat);
+        categoriasBase.forEach(c => {
+        totalBaseRestante += Math.max(0, (Number(c.valor) || 0));
     });
     
     categoriasVida.forEach(c => {
-        let gastoCat = 0;
-        (orc.historicoRegistros || []).forEach(r => {
-            if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data) && r.categoriaId === c.id) {
-                gastoCat += (Number(r.valor) || 0);
-            }
-        });
-        totalVidaRestante += Math.max(0, (Number(c.valor) || 0) - gastoCat);
+        totalVidaRestante += Math.max(0, (Number(c.valor) || 0));
     });
-
-    const totalRestante = totalBaseRestante + totalVidaRestante;
     
     if (totalRestante <= 0) {
         return { taxaBase: 1, taxaVida: 1, totalAlocado: null, totalOriginal: 0, corteTotal: 0, totalBaseOriginal: 0, totalVidaOriginal: 0 };
@@ -11127,7 +11113,7 @@ function renderizarFluxoCaixa() {
         const diasSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
         const diasCompletos = [];
         let saldoCorrido = saldoInicialProj;
-        let distribuidoRestante = totalMensalSemVenc;
+                let distribuidoRestante = totalMensalPlanejado;
 
         for (let i = 0; i < fluxo.dias; i++) {
             const d = new Date(inicioDt);
@@ -12185,12 +12171,12 @@ function projetarSaldoDiarioCompleto(orc, fluxo) {
             }
         }
     });
-    const totalMensalSemVenc = Math.max(0, totalMensalPlanejado - gastoRealizadoMes);
+        const totalMensalSemVenc = Math.max(0, totalMensalPlanejado - gastoRealizadoMes);
 
     const inicioDt = new Date(fluxo.inicio + 'T00:00:00');
     const diasCompletos = [];
     let saldoCorrido = estoque;
-    let distribuidoRestante = totalMensalSemVenc;
+    let distribuidoRestante = totalMensalPlanejado;
     let totalDistribuido = 0;
 
     for (let i = 0; i < fluxo.dias; i++) {
