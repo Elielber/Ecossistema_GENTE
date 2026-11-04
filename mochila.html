@@ -12609,6 +12609,179 @@ function simuladorCopiarMensagem() {
     }
 }
 
+
+function calcularFolegoFinanceiro(orc, cenario) {
+    cenario = cenario || {};
+    const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
+    const categorias = (orc.categorias || []).filter(c => !_categoriaParcelasQuitada(c));
+
+    const rendaBase = fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0);
+    const gastosMes = categorias.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+    const gastoDiario = gastosMes / 30;
+
+    let rendaCenario = 0;
+    fontes.forEach(f => {
+        if ((cenario.fontesDesativadas || []).includes(f.id)) return;
+        let v = Number(f.valor) || 0;
+        if (cenario.reducaoRendaPercentual) v *= (1 - cenario.reducaoRendaPercentual / 100);
+        rendaCenario += v;
+    });
+
+    const reserva = (orc.custodias || [])
+        .filter(_custodiaEhReserva)
+        .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
+
+    const margemBase = rendaBase - gastosMes;
+    const diasExtraBase = gastoDiario > 0 ? margemBase / gastoDiario : null;
+
+    const burnDiario = Math.max(0, gastoDiario - rendaCenario / 30);
+    let diasReserva = null;
+    if (burnDiario === 0 && gastosMes > 0) diasReserva = Infinity;
+    else if (burnDiario > 0 && reserva > 0) diasReserva = Math.floor(reserva / burnDiario);
+    else if (burnDiario > 0) diasReserva = 0;
+
+    let diasSemRenda = null;
+    if (gastoDiario > 0 && reserva > 0) diasSemRenda = Math.floor(reserva / gastoDiario);
+
+    const temSimulacao =
+        (cenario.reducaoRendaPercentual || 0) > 0 ||
+        (cenario.fontesDesativadas || []).length > 0;
+
+    return {
+        rendaBase, gastosMes, gastoDiario,
+        rendaCenario, reserva,
+        margemBase, diasExtraBase,
+        burnDiario, diasReserva,
+        diasSemRenda, temSimulacao
+    };
+}
+
+function renderizarCardFolegoFinanceiro(orc, cen) {
+    cen = cen || {};
+    const d = calcularFolegoFinanceiro(orc, {
+        reducaoRendaPercentual: cen.reducaoRendaPercentual || 0,
+        fontesDesativadas: cen.fontesDesativadas || []
+    });
+
+    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmtDias = (n) => {
+        if (n === null) return '—';
+        if (n === Infinity) return '∞';
+        if (n === 0) return 'menos de 1 dia';
+        return n + (n === 1 ? ' dia' : ' dias');
+    };
+    const fmtMeses = (n) => {
+        if (n === null || n === Infinity || n === 0) return '';
+        const m = n / 30;
+        if (m < 1) return '';
+        return ` (~${m.toFixed(1).replace('.', ',')} ${m < 2 ? 'mês' : 'meses'})`;
+    };
+
+    if (d.gastosMes <= 0) {
+        return `
+            <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
+                <div style="font-size:0.9rem;font-weight:700;color:var(--secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">🧭 Fôlego financeiro</div>
+                <p style="font-size:0.9rem;color:var(--secondary);line-height:1.4;margin:0;">
+                    Sem gastos mensais declarados, não há como medir o fôlego. Cadastre as contas da Base e da Vida.
+                </p>
+            </div>
+        `;
+    }
+
+    let blocoBase;
+    if (d.margemBase >= 0) {
+        blocoBase = `
+            <div style="font-size:0.9rem;line-height:1.45;margin-bottom:12px;">
+                <div style="color:var(--secondary);">
+                    Renda cobre os gastos com sobra de
+                    <strong style="color:var(--success);">${fmt(d.margemBase)}/mês</strong>.
+                </div>
+                ${d.diasExtraBase !== null ? `
+                    <div style="color:var(--secondary);margin-top:4px;">
+                        Em 1 mês, essa sobra cobre
+                        <strong style="color:var(--primary);">${d.diasExtraBase.toFixed(0)} dias</strong>
+                        de despesa — é o que pode virar reserva.
+                    </div>` : ''}
+            </div>`;
+    } else {
+        blocoBase = `
+            <div style="font-size:0.9rem;line-height:1.45;margin-bottom:12px;">
+                <div style="color:var(--secondary);">
+                    A renda <strong style="color:var(--danger);">não cobre</strong> os gastos.
+                    Faltam <strong style="color:var(--danger);">${fmt(Math.abs(d.margemBase))}/mês</strong>.
+                </div>
+                <div style="color:var(--secondary);margin-top:4px;">
+                    Antes de pensar em reserva, vale fechar essa conta.
+                </div>
+            </div>`;
+    }
+
+    let blocoReserva;
+    if (d.reserva <= 0) {
+        blocoReserva = `
+            <div style="font-size:0.9rem;line-height:1.45;padding-top:10px;border-top:1px solid var(--border);">
+                <div style="color:var(--secondary);">Sem reserva cadastrada ainda.</div>
+                <div style="color:var(--secondary);margin-top:4px;">
+                    Se a renda caísse hoje, não haveria colchão.
+                </div>
+            </div>`;
+    } else {
+        let linhas = `
+            <div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-top:6px;">
+                <span style="color:var(--secondary);">Se perdesse <strong>toda</strong> a renda</span>
+                <strong style="color:${d.diasSemRenda !== null && d.diasSemRenda < 90 ? 'var(--warning)' : 'var(--success)'};">
+                    ${fmtDias(d.diasSemRenda)}${fmtMeses(d.diasSemRenda)}
+                </strong>
+            </div>`;
+
+        if (d.temSimulacao) {
+            const pct = d.rendaBase > 0
+                ? (((d.rendaBase - d.rendaCenario) / d.rendaBase) * 100).toFixed(0)
+                : '0';
+
+            if (d.burnDiario <= 0) {
+                linhas += `
+                    <div style="font-size:0.9rem;line-height:1.45;margin-top:10px;padding:10px 12px;background:var(--success-soft);border-radius:8px;border-left:3px solid var(--success);">
+                        <div style="color:var(--success);font-weight:700;margin-bottom:4px;">No cenário simulado (renda −${pct}%)</div>
+                        <div style="color:var(--secondary);">
+                            Mesmo reduzida para ${fmt(d.rendaCenario)}/mês, a renda ainda cobre os gastos.
+                            A reserva <strong>não é consumida</strong>.
+                        </div>
+                    </div>`;
+            } else if (d.diasReserva !== null) {
+                linhas += `
+                    <div style="font-size:0.9rem;line-height:1.45;margin-top:10px;padding:10px 12px;background:var(--warning-soft);border-radius:8px;border-left:3px solid var(--warning);">
+                        <div style="color:var(--warning);font-weight:700;margin-bottom:4px;">No cenário simulado (renda −${pct}%)</div>
+                        <div style="color:var(--secondary);">
+                            Renda cai para ${fmt(d.rendaCenario)}/mês.
+                            Burn mensal: ${fmt(d.burnDiario * 30)}.
+                        </div>
+                        <div style="color:var(--text-main);margin-top:6px;">
+                            A reserva cobre <strong>${fmtDias(d.diasReserva)}</strong>${fmtMeses(d.diasReserva)}.
+                        </div>
+                    </div>`;
+            }
+        }
+
+        blocoReserva = `
+            <div style="font-size:0.9rem;line-height:1.45;padding-top:10px;border-top:1px solid var(--border);">
+                <div style="color:var(--secondary);margin-bottom:2px;">
+                    Reserva de <strong style="color:var(--primary);">${fmt(d.reserva)}</strong>
+                </div>
+                ${linhas}
+            </div>`;
+    }
+
+    return `
+        <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--primary);">
+            <div style="font-size:0.9rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:10px;">
+                🧭 Fôlego financeiro
+            </div>
+            ${blocoBase}
+            ${blocoReserva}
+        </div>`;
+}
+
 function renderizarSimulador() {
     const container = document.getElementById('simulador-conteudo');
     if (!container) return;
@@ -12667,6 +12840,7 @@ function renderizarSimulador() {
     const dados = { historico, projAtual, projSimulado, cenarioAplicado: cen };
     const svg = montarSVGAlisamento(dados);
     const painel = montarPainelComparacao(dados);
+    const folegoCard = renderizarCardFolegoFinanceiro(orc, cen);
 
     const legendaBits = [];
     if (cen.ajustes && cen.ajustes.length > 0) legendaBits.push(cen.ajustes.length + (cen.ajustes.length > 1 ? ' datas' : ' data'));
@@ -12712,6 +12886,7 @@ function renderizarSimulador() {
                 ${cabecalhoTelaSecundaria('Simulador de datas', 'Teste antes de falar com o credor')}
                 ${intro}
                 ${chartCard}
+                ${folegoCard}
                 <div class="card" style="padding:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
                     <p style="font-size:0.9rem;color:var(--secondary);line-height:1.45;margin:0 0 12px;">
                         Para testar uma nova data, preciso de pelo menos uma conta com vencimento ou uma fonte de renda com dia declarado.
@@ -12725,11 +12900,15 @@ function renderizarSimulador() {
             `;
             return;
         }
+        
+        const temSimRenda = (cen.reducaoRendaPercentual || 0) > 0
+                         || (cen.fontesDesativadas || []).length > 0;
 
         container.innerHTML = `
             ${cabecalhoTelaSecundaria('Simulador de datas', 'Teste antes de falar com o credor')}
             ${intro}
             ${chartCard}
+            ${folegoCard}
             
             ${(() => {
                 const fontesRenda = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
@@ -12759,15 +12938,7 @@ function renderizarSimulador() {
                 </div>
                 ${temSimulacaoRenda ? '<button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--secondary);margin-bottom:12px;" onclick="simuladorVoltarReal()">↺ Limpar simulação</button>' : ''}`;
             })()}
-<div class="card" style="padding:16px;border-left:4px solid var(--primary);background:var(--purple-light);margin-bottom:16px;">
-                <div style="font-size:0.9rem;font-weight:700;color:var(--primary);margin-bottom:6px;">E se uma data mudasse?</div>
-                <p style="font-size:0.9rem;color:var(--primary-press);line-height:1.45;margin:0 0 12px;">
-                    Escolha uma conta ou fonte de renda. Quem decide a data é o credor — mas você chega na conversa sabendo o que pedir.
-                </p>
-                <button type="button" class="btn-primary" style="margin-top:0;margin-bottom:0;" onclick="simuladorTogglePicker()">＋ Escolher uma data</button>
-            </div>
-            <button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--secondary);margin-top:12px;margin-bottom:0;" onclick="voltarTela()">Voltar</button>
-        `;
+<div class="card" style="padding:16px;border-left:4px solid var(--primary);background:var(--purple-light);margin-bottom:16px;"> <div style="font-size:0.9rem;font-weight:700;color:var(--primary);margin-bottom:6px;"> ${temSimRenda ? 'Continue testando outras variáveis' : 'E se uma data mudasse?'} </div> <p style="font-size:0.9rem;color:var(--primary-press);line-height:1.45;margin:0 0 12px;"> ${temSimRenda ? 'Agora você pode testar também uma data — a simulação de renda continua ativa.' : 'Escolha uma conta ou fonte de renda. Quem decide a data é o credor — mas você chega na conversa sabendo o que pedir.'} </p> <button type="button" class="btn-primary" style="margin-top:0;margin-bottom:0;" onclick="simuladorTogglePicker()">＋ Escolher uma data</button> </div> <button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--secondary);margin-top:12px;margin-bottom:0;" onclick="voltarTela()">Voltar</button> `;
         return;
     }
 
@@ -12903,6 +13074,7 @@ function renderizarSimulador() {
         ${cabecalhoTelaSecundaria('Simulador de datas', 'Teste antes de falar com o credor')}
         ${intro}
         ${chartCard}
+        ${folegoCard}
         ${ajustesHtml}
         ${pickerHtml}
         ${addBtnHtml}
