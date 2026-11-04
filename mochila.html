@@ -2943,10 +2943,15 @@ function calcularTaxaViabilidadeConsumo(orc) {
         totalBaseRestante += Math.max(0, (Number(c.valor) || 0));
     });
     
-    categoriasVida.forEach(c => {
+        categoriasVida.forEach(c => {
         totalVidaRestante += Math.max(0, (Number(c.valor) || 0));
     });
-    
+
+    // FIX: agrega o total de consumo (base + vida) usado como teto do corte.
+    // Sem esta linha, `totalRestante` era undefined e derrubava toda a
+    // proteção de saldo (barras, sincronização de limites, fluxo).
+    const totalRestante = totalBaseRestante + totalVidaRestante;
+
     if (totalRestante <= 0) {
         return { taxaBase: 1, taxaVida: 1, totalAlocado: null, totalOriginal: 0, corteTotal: 0, totalBaseOriginal: 0, totalVidaOriginal: 0 };
     }
@@ -12192,8 +12197,14 @@ function projetarSaldoDiarioCompleto(orc, fluxo) {
         let quotaDia = 0;
         let isReduzido = false;
 
-        if (saldoAntes > 0 || !protegerSaldo) {
-            const qBase = totalMensalSemVenc / fluxo.dias;
+                if (saldoAntes > 0 || !protegerSaldo) {
+            // FIX: usa o orçamento cheio do mês como ritmo diário (mesma
+            // regra de renderizarFluxoCaixa), não o restante já gasto.
+            // `distribuidoRestante` já começa em `totalMensalPlanejado`,
+            // então esta troca alinha os dois caminhos (tela Fluxo e gráfico
+            // do Simulador) ao mesmo ritmo.
+            const gastoDiarioBase = totalMensalPlanejado / 30;
+            const qBase = gastoDiarioBase;
 
             if (protegerSaldo) {
                 let minFuturo = 0;
