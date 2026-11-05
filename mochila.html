@@ -2958,12 +2958,15 @@ function _categoriaParcelasQuitada(cat) {
 
 let _cacheTaxaViabilidade = { timestamp: 0, valor: 1 };
 
-function calcularTaxaViabilidadeConsumo(orc) {
-    if (!orc || (orc.nivel || 1) < 3 || !orc.configFluxo || !orc.configFluxo.protegerSaldo) {
+function calcularTaxaViabilidadeConsumo(orc, forcarProtecao = null) {
+    const proteger = forcarProtecao !== null ? forcarProtecao : (orc && orc.configFluxo && orc.configFluxo.protegerSaldo !== false);
+    
+    if (!orc || (orc.nivel || 1) < 3 || !proteger) {
         return { taxaBase: 1, taxaVida: 1, totalAlocado: null, totalOriginal: 0, corteTotal: 0, totalBaseOriginal: 0, totalVidaOriginal: 0 };
     }
     
-    if (Date.now() - _cacheTaxaViabilidade.timestamp < 1000) {
+    // Ignora cache se for simulação para garantir o cálculo exato
+    if (forcarProtecao === null && Date.now() - _cacheTaxaViabilidade.timestamp < 1000) {
         return _cacheTaxaViabilidade.valor;
     }
 
@@ -3071,7 +3074,9 @@ function calcularTaxaViabilidadeConsumo(orc) {
         totalVidaOriginal: totalVidaRestante
     };
     
-    _cacheTaxaViabilidade = { timestamp: Date.now(), valor: resultado };
+    if (forcarProtecao === null) {
+        _cacheTaxaViabilidade = { timestamp: Date.now(), valor: resultado };
+    }
     return resultado;
 }
 
@@ -12082,16 +12087,17 @@ function _estoqueOperacionalAtual(orc) {
 // Estado próprio: state.orcamento.cenarioAlisamento (fora de state.n4)
 
 function _garantirCenarioAlisamento() {
-    if (!state.orcamento) return { ativo: false, ajustes: [], reducaoRendaPercentual: 0, fontesDesativadas: [], criadoEm: null };
+    if (!state.orcamento) return { ativo: false, ajustes: [], reducaoRendaPercentual: 0, fontesDesativadas: [], protegerSaldoSimulador: null, criadoEm: null };
     if (!state.orcamento.cenarioAlisamento || typeof state.orcamento.cenarioAlisamento !== 'object') {
         state.orcamento.cenarioAlisamento = {
-            ativo: false, ajustes: [], reducaoRendaPercentual: 0, fontesDesativadas: [], criadoEm: null
+            ativo: false, ajustes: [], reducaoRendaPercentual: 0, fontesDesativadas: [], protegerSaldoSimulador: null, criadoEm: null
         };
     }
     const ca = state.orcamento.cenarioAlisamento;
     if (!Array.isArray(ca.ajustes)) ca.ajustes = [];
     if (!Array.isArray(ca.fontesDesativadas)) ca.fontesDesativadas = [];
     if (typeof ca.reducaoRendaPercentual !== 'number') ca.reducaoRendaPercentual = 0;
+    if (ca.protegerSaldoSimulador === undefined) ca.protegerSaldoSimulador = null;
     return ca;
 }
 
@@ -12217,11 +12223,11 @@ function reconstruirSaldoHistorico(orc, opcoes) {
  */
 // Projeta saldo diário COM gastos diluídos e proteção.
 // Reutilizável em Fluxo de Caixa e Simulador.
-function projetarSaldoDiarioCompleto(orc, fluxo) {
+function projetarSaldoDiarioCompleto(orc, fluxo, protegerSaldoOverride = null) {
     const estoque = _estoqueOperacionalAtual(orc);
     if (estoque === null) return null;
 
-    const protegerSaldo = orc.configFluxo?.protegerSaldo !== false;
+    const protegerSaldo = protegerSaldoOverride !== null ? protegerSaldoOverride : (orc.configFluxo?.protegerSaldo !== false);
 
     const categoriasSemVenc = (orc.categorias || []).filter(c =>
         !c.vencimento && !_categoriaParcelasQuitada(c)
@@ -12319,6 +12325,7 @@ function projetarSaldoDiarioCompleto(orc, fluxo) {
 function construirProjecaoDiaria(orc, fluxo, opcoes) {
     opcoes = opcoes || {};
     const incluirDiluidos = opcoes.incluirDiluidos !== false; // default: true
+    const protegerSaldoOverride = opcoes.protegerSaldo !== undefined ? opcoes.protegerSaldo : null;
 
     if (!incluirDiluidos) {
         const estoque = _estoqueOperacionalAtual(orc);
@@ -12337,7 +12344,7 @@ function construirProjecaoDiaria(orc, fluxo, opcoes) {
         return pontos;
     }
 
-    const proj = projetarSaldoDiarioCompleto(orc, fluxo);
+    const proj = projetarSaldoDiarioCompleto(orc, fluxo, protegerSaldoOverride);
     if (!proj) return [];
 
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
@@ -12554,8 +12561,23 @@ function montarPainelComparacao(dados) {
 let _simuladorPickerAberto = false;
 
 function abrirTelaSimulador() {
+    const orc = state.orcamento;
+    const cen = _garantirCenarioAlisamento();
+    
+    // Captura o estado do mundo real apenas na entrada (sandbox isolado)
+    if (cen.protegerSaldoSimulador === null) {
+        cen.protegerSaldoSimulador = (orc && orc.configFluxo?.protegerSaldo !== false);
+    }
+    
     _simuladorPickerAberto = false;
     goToScreen('screen-simulador');
+    renderizarSimulador();
+}
+
+function toggleProtecaoSaldoSimulador() {
+    const cen = _garantirCenarioAlisamento();
+    cen.protegerSaldoSimulador = !cen.protegerSaldoSimulador;
+    // Não grava no mundo real — só re-renderiza o ensaio
     renderizarSimulador();
 }
 
@@ -12614,6 +12636,7 @@ function simuladorVoltarReal() {
     cen.ajustes = [];
     cen.reducaoRendaPercentual = 0;
     cen.fontesDesativadas = [];
+    cen.protegerSaldoSimulador = null; // libera a foto do sandbox; próxima entrada re-captura o mundo real
     cen.criadoEm = null;
     _simuladorPickerAberto = false;
     salvarEstado();
@@ -12686,7 +12709,16 @@ function calcularFolegoFinanceiro(orc, cenario) {
     const categorias = (orc.categorias || []).filter(c => !_categoriaParcelasQuitada(c));
 
     const rendaBase = fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0);
-    const gastosMes = categorias.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+    
+    // O gasto mensal respeita a proteção de saldo (corte dos diluídos)
+    const proteger = cenario.protegerSaldo !== undefined ? cenario.protegerSaldo : (orc.configFluxo?.protegerSaldo !== false);
+    let gastosMes = categorias.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+    
+    if (proteger) {
+        const taxas = calcularTaxaViabilidadeConsumo(orc, true); // true força o cálculo sem cache
+        gastosMes = Math.max(0, gastosMes - (taxas.corteTotal || 0));
+    }
+
     const gastoDiario = gastosMes / 30;
 
     let rendaCenario = 0;
@@ -12730,7 +12762,8 @@ function renderizarCardFolegoFinanceiro(orc, cen) {
     cen = cen || {};
     const d = calcularFolegoFinanceiro(orc, {
         reducaoRendaPercentual: cen.reducaoRendaPercentual || 0,
-        fontesDesativadas: cen.fontesDesativadas || []
+        fontesDesativadas: cen.fontesDesativadas || [],
+        protegerSaldo: cen.protegerSaldo
     });
 
     const fmt = formatarMoeda;
@@ -12852,6 +12885,142 @@ function renderizarCardFolegoFinanceiro(orc, cen) {
         </div>`;
 }
 
+
+/**
+ * Card "Conexão com a Home" — compartilhado entre Fluxo de Caixa e Simulador.
+ * @param {object} orc
+ * @param {boolean} protegerSaldo — se true, aplica taxas de viabilidade (corte)
+ */
+function renderizarConexaoEnvelopes(orc, protegerSaldo) {
+    const taxasInfo = calcularTaxaViabilidadeConsumo(orc, protegerSaldo ? true : false);
+    const fmt = formatarMoeda;
+
+    const categoriasSemVenc = (orc.categorias || []).filter(c => !c.vencimento && !_categoriaParcelasQuitada(c));
+    const totalMensalPlanejado = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
+
+    let gastoRealizadoMes = 0;
+    (orc.historicoRegistros || []).forEach(r => {
+        if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data)) {
+            if (categoriasSemVenc.some(c => c.id === r.categoriaId)) {
+                gastoRealizadoMes += (Number(r.valor) || 0);
+            }
+        }
+    });
+
+    const totalMensalSemVenc = Math.max(0, totalMensalPlanejado - gastoRealizadoMes);
+
+    let totaisPorCaixa = {
+        base: { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 },
+        vida: { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 },
+        futuro: { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 }
+    };
+
+    const fluxo = projetarFluxo(orc, { dias: 30 });
+    (fluxo.eventos || []).forEach(e => {
+        if (e.tipo === 'vencimento' && e.caixa) {
+            if (!totaisPorCaixa[e.caixa]) totaisPorCaixa[e.caixa] = { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 };
+            totaisPorCaixa[e.caixa].contas += (e.valor || 0);
+        }
+    });
+
+    categoriasSemVenc.forEach(c => {
+        if (c.caixa) {
+            if (!totaisPorCaixa[c.caixa]) totaisPorCaixa[c.caixa] = { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 };
+            let gastoCatMes = 0;
+            (orc.historicoRegistros || []).forEach(r => {
+                if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data) && r.categoriaId === c.id) {
+                    gastoCatMes += (Number(r.valor) || 0);
+                }
+            });
+            totaisPorCaixa[c.caixa].diluidosOriginal += (Number(c.valor) || 0);
+            totaisPorCaixa[c.caixa].gastoRealizado += gastoCatMes;
+        }
+    });
+
+    if (protegerSaldo) {
+        totaisPorCaixa.base.taxa = taxasInfo.taxaBase;
+        totaisPorCaixa.vida.taxa = taxasInfo.taxaVida;
+    }
+
+    ['base', 'vida', 'futuro'].forEach(k => {
+        if (!totaisPorCaixa[k]) return;
+        const dados = totaisPorCaixa[k];
+        dados.diluidosRestante = Math.max(0, dados.diluidosOriginal - dados.gastoRealizado);
+        dados.diluidosAjustado = dados.diluidosRestante * dados.taxa;
+        dados.corteProtecao = dados.diluidosRestante - dados.diluidosAjustado;
+    });
+
+    let html = `
+        <div class="card" style="margin-bottom: 16px; padding: 16px;">
+            <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: var(--secondary); margin-bottom: 12px; font-weight: 700;">
+                Conexão com a Home
+            </div>
+            <p style="font-size: 0.9rem; color: var(--secondary); margin-bottom: 14px; line-height: 1.4;">
+                O que você planejou nos envelopes (Home) aparece aqui distribuído no tempo. ${protegerSaldo && taxasInfo.corteTotal > 0 ? 'A <strong>Vida</strong> sofreu uma redução maior para proteger a sua <strong>Base</strong>.' : ''}
+            </p>
+            <div style="font-size: 0.9rem; margin-bottom: 14px; padding: 10px 12px; background: var(--bg-color); border-radius: 8px; border-left: 3px solid var(--primary);">
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span style="color:var(--secondary);">Gastos diluídos planejados</span>
+                    <strong>${fmt(totalMensalPlanejado)}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <span style="color:var(--secondary);">Já gasto e registrado (+)</span>
+                    <strong style="color:var(--danger);">− ${fmt(gastoRealizadoMes)}</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between; border-top: 1px dashed var(--border); padding-top:4px;">
+                    <strong style="color:var(--primary);">Disponível do planejado</strong>
+                    <strong style="color:var(--primary);">${fmt(totalMensalSemVenc)}</strong>
+                </div>
+            </div>
+    `;
+
+    ['base', 'vida', 'futuro'].forEach(k => {
+        const dados = totaisPorCaixa[k];
+        if (!dados || (dados.contas === 0 && dados.diluidosOriginal === 0)) return;
+
+        const icone = k === 'base' ? '🛡️' : k === 'vida' ? '🌿' : '🔭';
+        const nome = k === 'base' ? 'Base' : k === 'vida' ? 'Vida' : 'Futuro';
+        const cor = k === 'base' ? 'var(--primary)' : k === 'vida' ? 'var(--warning)' : 'var(--success)';
+
+        const totalOriginal = dados.contas + dados.diluidosRestante;
+        const totalAjustado = dados.contas + dados.diluidosAjustado;
+
+        let visualValor = `<strong style="color: var(--text-main); font-size: 0.9rem;">${fmt(totalAjustado)}</strong>`;
+        let notaReducao = '';
+
+        if (dados.corteProtecao > 0.01) {
+            visualValor = `
+                <div style="text-align: right;">
+                    <div style="font-size: 0.9rem; color: var(--secondary); text-decoration: line-through;">${fmt(totalOriginal)}</div>
+                    <strong style="color: ${k === 'vida' ? 'var(--warning)' : 'var(--danger)'}; font-size: 0.9rem;">${fmt(totalAjustado)}</strong>
+                </div>
+            `;
+            notaReducao = `<div style="font-size: 0.9rem; color: var(--warning); margin-top: 4px; line-height: 1.3;">
+                ⚠️ Reduzido em ${fmt(dados.corteProtecao)} para proteger o caixa.
+            </div>`;
+        } else if (dados.gastoRealizado > 0.01) {
+            notaReducao = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 4px; line-height: 1.3;">
+                💡 ${fmt(dados.gastoRealizado)} já gastos neste mês.
+            </div>`;
+        }
+
+        html += `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: 0.9rem;">
+                <div>
+                    <strong style="color: ${cor}; font-size: 0.9rem;">${icone} ${nome}</strong>
+                    <div style="font-size: 0.9rem; color: var(--secondary); margin-top: 2px;">
+                        Contas: ${fmt(dados.contas)} + Diluídos: ${fmt(dados.diluidosAjustado)}
+                    </div>
+                    ${notaReducao}
+                </div>
+                ${visualValor}
+            </div>
+        `;
+    });
+    html += `</div>`;
+    return html;
+}
+
 function renderizarSimulador() {
     const container = document.getElementById('simulador-conteudo');
     if (!container) return;
@@ -12888,9 +13057,15 @@ function renderizarSimulador() {
     const diasFrente = 30;
     const historico = reconstruirSaldoHistorico(orc, { diasAtras });
     const fluxoAtual = projetarFluxo(orc, { dias: diasFrente });
-    const projAtual = construirProjecaoDiaria(orc, fluxoAtual);
 
     const cen = _garantirCenarioAlisamento();
+    const protegerSaldoSim = cen.protegerSaldoSimulador !== null
+        ? cen.protegerSaldoSimulador
+        : (orc.configFluxo?.protegerSaldo !== false);
+
+    // Passa o override para as projeções (ambas as linhas do gráfico)
+    const projAtual = construirProjecaoDiaria(orc, fluxoAtual, { protegerSaldo: protegerSaldoSim });
+
     let projSimulado = null;
     const temSimulacao = cen.ativo && (
         (cen.ajustes && cen.ajustes.length > 0) ||
@@ -12902,15 +13077,20 @@ function renderizarSimulador() {
             dias: diasFrente,
             ajustes: cen.ajustes,
             reducaoRendaPercentual: cen.reducaoRendaPercentual,
-            fontesDesativadas: cen.fontesDesativadas
+            fontesDesativadas: cen.fontesDesativadas,
+            protegerSaldo: protegerSaldoSim
         });
-        projSimulado = construirProjecaoDiaria(orc, sim.fluxo);
+        projSimulado = construirProjecaoDiaria(orc, sim.fluxo, { protegerSaldo: protegerSaldoSim });
     }
 
     const dados = { historico, projAtual, projSimulado, cenarioAplicado: cen };
     const svg = montarSVGAlisamento(dados);
     const painel = montarPainelComparacao(dados);
-    const folegoCard = renderizarCardFolegoFinanceiro(orc, cen);
+    const folegoCard = renderizarCardFolegoFinanceiro(orc, {
+        reducaoRendaPercentual: cen.reducaoRendaPercentual || 0,
+        fontesDesativadas: cen.fontesDesativadas || [],
+        protegerSaldo: protegerSaldoSim
+    });
 
     const legendaBits = [];
     if (cen.ajustes && cen.ajustes.length > 0) legendaBits.push(cen.ajustes.length + (cen.ajustes.length > 1 ? ' datas' : ' data'));
@@ -12942,6 +13122,23 @@ function renderizarSimulador() {
         </div>
     `;
 
+    const bgSwitch = protegerSaldoSim ? 'var(--success)' : 'var(--secondary)';
+    const posSwitch = protegerSaldoSim ? 'translateX(16px)' : 'translateX(0px)';
+    const htmlSwitchSandbox = `
+        <div style="display: flex; align-items: center; justify-content: space-between; background: var(--card-bg); padding: 12px 16px; border-radius: 12px; border: 1px solid var(--primary); margin-bottom: 16px; cursor: pointer;" onclick="toggleProtecaoSaldoSimulador()">
+            <div>
+                <div style="font-size: 0.9rem; font-weight: 700; color: var(--primary);">🧪 Proteger Saldo (Simulação)</div>
+                <div style="font-size: 0.9rem; color: var(--secondary); margin-top: 2px;">
+                    ${protegerSaldoSim ? 'Simulando com proteção ativada.' : 'Simulando com proteção desativada.'}
+                </div>
+            </div>
+            <div style="width: 36px; height: 20px; background: ${bgSwitch}; border-radius: 10px; position: relative; transition: 0.2s;">
+                <div style="width: 16px; height: 16px; background: white; border-radius: 50%; position: absolute; top: 2px; left: 2px; transform: ${posSwitch}; transition: 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>
+            </div>
+        </div>
+    `;
+    const conexaoCard = renderizarConexaoEnvelopes(orc, protegerSaldoSim);
+
     const ajustes = cen.ajustes || [];
 
 // Empty state (sem ajustes e picker fechado)
@@ -12955,8 +13152,10 @@ function renderizarSimulador() {
             container.innerHTML = `
                 ${cabecalhoTelaSecundaria('Simulador de datas', 'Teste antes de falar com o credor')}
                 ${intro}
+                ${htmlSwitchSandbox}
                 ${chartCard}
                 ${folegoCard}
+                ${conexaoCard}
                 <div class="card" style="padding:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
                     <p style="font-size:0.9rem;color:var(--secondary);line-height:1.45;margin:0 0 12px;">
                         Para testar uma nova data, preciso de pelo menos uma conta com vencimento ou uma fonte de renda com dia declarado.
@@ -12977,8 +13176,10 @@ function renderizarSimulador() {
         container.innerHTML = `
             ${cabecalhoTelaSecundaria('Simulador de datas', 'Teste antes de falar com o credor')}
             ${intro}
+            ${htmlSwitchSandbox}
             ${chartCard}
             ${folegoCard}
+            ${conexaoCard}
             
             ${(() => {
                 const fontesRenda = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
@@ -13143,8 +13344,10 @@ function renderizarSimulador() {
     container.innerHTML = `
         ${cabecalhoTelaSecundaria('Simulador de datas', 'Teste antes de falar com o credor')}
         ${intro}
+        ${htmlSwitchSandbox}
         ${chartCard}
         ${folegoCard}
+        ${conexaoCard}
         ${ajustesHtml}
         ${pickerHtml}
         ${addBtnHtml}
@@ -13336,6 +13539,7 @@ function _cloneOrcParaSimulacao(orc) {
         rendaDetalhe: orc.rendaDetalhe || null, categorias: orc.categorias || [],
         custodias: orc.custodias || [], custodiaPadrao: orc.custodiaPadrao || null,
         nivel: orc.nivel || 1, semanaAtual: orc.semanaAtual || null,
+        configFluxo: orc.configFluxo || { protegerSaldo: true },
         // historicoRegistros: necessário para projetarFluxo pular eventos já liquidados
         // no mês (recebimento/vencimento). Sem isso, a linha simulada re-inclui o que
         // a linha atual já descontou — e o painel de comparação mente sobre melhorou/piorou.
@@ -13346,6 +13550,12 @@ function _cloneOrcParaSimulacao(orc) {
 function simularCenario(orc, overrides) {
     overrides = overrides || {};
     const clone = _cloneOrcParaSimulacao(orc);
+
+    // Força o clone a usar a proteção escolhida no sandbox do simulador
+    if (overrides.protegerSaldo !== undefined) {
+        if (!clone.configFluxo) clone.configFluxo = {};
+        clone.configFluxo.protegerSaldo = overrides.protegerSaldo;
+    }
 
     if (Array.isArray(overrides.ajustes)) {
         overrides.ajustes.forEach(aj => {
