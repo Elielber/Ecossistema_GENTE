@@ -934,6 +934,9 @@
         <div id="nav-screen-title" class="nav-screen-title">🎒 Mochila</div>
 </div>
         <div class="nav-right">
+            <button type="button" class="home-icon-btn" title="Ocultar valores" onclick="toggleOcultarValores()" aria-label="Ocultar valores" id="nav-btn-olho">
+        <span id="nav-icon-olho">👁️</span>
+    </button>
             <button type="button" class="home-icon-btn" title="Avisos" onclick="abrirTelaNotificacoes()" aria-label="Avisos" id="nav-btn-avisos">
                 <span class="badge-dot" id="nav-badge-dot" style="display: none;"></span>🔔
             </button>
@@ -1335,7 +1338,40 @@ const TITULOS_TELAS = {
     'screen-projeto': 'Projeto',
     'screen-tutorial': 'Tutorial'
 };
+// Funções globais para formatar valores (respeitando a privacidade)
+function formatarMoeda(v) {
+    if (state && state.ocultarValores) return 'R$ ••••';
+    return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
 
+function formatarNumero(v) {
+    if (state && state.ocultarValores) return '••••';
+    return (Number(v) || 0).toFixed(2).replace('.', ',');
+}
+
+function toggleOcultarValores() {
+    if (!state) state = {};
+    state.ocultarValores = !state.ocultarValores;
+    salvarEstado();
+    
+    // Atualiza o ícone
+    const icon = document.getElementById('nav-icon-olho');
+    if (icon) icon.textContent = state.ocultarValores ? '⌣' : '👁️';
+    
+    // Re-renderiza a tela atual para aplicar a máscara imediatamente
+    const tela = document.querySelector('.screen.active')?.id;
+    if (tela === 'screen-orcamento-inicio') renderizarOrcamentoInicio();
+    else if (tela === 'screen-resumo-semanal') abrirResumoSemanal();
+    else if (tela === 'screen-historico-resumos') renderizarHistoricoResumos();
+    else if (tela === 'screen-renda-detalhe') renderizarDetalheRenda();
+    else if (tela === 'screen-gastos-detalhe') renderizarDetalheGastos();
+    else if (tela === 'screen-divida-detalhe') renderizarDetalheFuturo();
+    else if (tela === 'screen-custodias') renderizarCustodias();
+    else if (tela === 'screen-mapa-mes') renderizarMapaMes();
+    else if (tela === 'screen-plano-recuperacao') renderizarPlanoRecuperacao();
+    else if (tela === 'screen-fluxo-caixa') renderizarFluxoCaixa();
+    else if (tela === 'screen-inventario') renderizarInventario();
+}
 
 const DIVISOR_SEMANAL = 4.33;
 
@@ -1674,6 +1710,8 @@ function migrarEstado() {
         state.theme = 'light';
     }
     if (state.fontSize !== 'normal' && state.fontSize !== 'grande' && state.fontSize !== 'maior') { state.fontSize = 'normal'; } try { document.documentElement.setAttribute('data-theme', state.theme || 'light'); const _sizes = { normal: '16px', grande: '18px', maior: '20px' }; document.documentElement.style.fontSize = _sizes[state.fontSize] || '16px'; } catch (_) {} if (!state.orcamento) return;
+    
+    if (typeof state.ocultarValores !== 'boolean') { state.ocultarValores = false; }
     
     if (!state.orcamento.configFluxo) {
     state.orcamento.configFluxo = { protegerSaldo: true };
@@ -2059,7 +2097,7 @@ function renderizarPreviaSemana() {
     }
 
     const semana = orc.semanaAtual;
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     // Renda: usa a real se houver recebimento; senão a estimada
     const rendaReal     = semana.rendaReal || 0;
@@ -2306,8 +2344,7 @@ function scrollDialogoFim() {
 }
 
 function _fmtDialogoBRL(v) {
-    return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
+    return formatarMoeda(v); }
 
 // TELA INICIAL DO ORÇAMENTO
 
@@ -2616,7 +2653,7 @@ function concluirEtapaBase() {
         const contaReal = rendaBase - valor - vidaTotal;
 
         if (vidaFeita && rendaBase > 0 && contaReal < 0) {
-            const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const fmt = formatarMoeda;
             dialogoPushPersonagem('torres',
                 `Renda ${fmt(rendaBase)} − Base ${fmt(valor)} − Vida ${fmt(vidaTotal)} = ${fmt(contaReal)}. A Vida que você anotou antes puxou a conta para o vermelho.`);
             dialogoPushPersonagem('torres',
@@ -2661,7 +2698,7 @@ function iniciarEtapaVida() {
     let notaComposer = '';
     if (baseFeita && rendaBase > 0) {
         const limiteVida = rendaBase - fortalezaTotal;
-        const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const fmt = formatarMoeda;
         if (limiteVida > 0) {
             notaComposer = `Sua Base já está anotada (${fmt(fortalezaTotal)} de ${fmt(rendaBase)}). O que passar de ${fmt(limiteVida)} na Vida vira déficit no Futuro — mas o app aceita, sem bloqueio.`;
         } else {
@@ -2731,7 +2768,7 @@ function concluirEtapaVida() {
         const contaReal = rendaBase - fortalezaTotal - valor;
 
         if (baseFeita && rendaBase > 0 && contaReal < 0) {
-            const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const fmt = formatarMoeda;
             dialogoPushPersonagem('bela',
                 `Renda ${fmt(rendaBase)} − Base ${fmt(fortalezaTotal)} − Vida ${fmt(valor)} = ${fmt(contaReal)}. A conta ficou negativa em ${fmt(Math.abs(contaReal))}.`);
             dialogoPushPersonagem('bela',
@@ -2882,7 +2919,7 @@ const futuroTotal = state.orcamento.futuro?.total || 0;
 const planoTotal = baseTotal + vidaTotal + futuroTotal;
 
 if (planoTotal > rendaBase && rendaBase > 0) {
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     dialogoPushPersonagem('ze', 
         `Seu plano total (Base + Vida + Futuro) é ${fmt(planoTotal)}, mas sua renda é ${fmt(rendaBase)}. Faltam ${fmt(planoTotal - rendaBase)} pra tudo isso caber.`);
     dialogoPushPersonagem('ze', 
@@ -3163,7 +3200,7 @@ function deveMostrarApoioExpandido(orc) {
 function calcularDisponivelAgora(orc) {
     const semana = orc && orc.semanaAtual;
     const nivel = (orc && orc.nivel) || 1;
-    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     if (!semana) {
         return { valor: 0, rotulo: 'Disponível agora', sub: 'Sem semana aberta', origem: 'vazio' };
     }
@@ -3203,7 +3240,7 @@ function calcularDisponivelAgora(orc) {
     let origem = 'plano';
     
     if (lim > rendaEstimada && rendaEstimada > 0) {
-        const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const fmt = formatarMoeda;
         sub = `Atenção: você separou ${fmt(lim)} nas caixinhas, mas o que entra nesta semana é ${fmt(rendaEstimada)}. O app guarda seu plano, e o valor em destaque segue o que realmente entra.`;
         origem = 'plano_estourado';
     }
@@ -3218,7 +3255,7 @@ function calcularDisponivelAgora(orc) {
 
 function renderizarCardDisponivelAgora(orc) {
     const d = calcularDisponivelAgora(orc);
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     const estourou = d.origem === 'plano_estourado';
     const neg = d.valor < 0 || estourou;
     return `
@@ -4613,7 +4650,7 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
     }
 
     
-        const fmt = (v) => v.toFixed(2).replace('.', ',');
+        const fmt = formatarNumero;
     let linhaReal = '';
     
     if (carrego > 0 || sobraAnterior > 0 || disponivelReal < -0.05) {
@@ -4685,7 +4722,7 @@ function renderizarCardsCustodiaHome(orc, semana) {
 
     const custodias = (orc.custodias || []).filter(c => !_custodiaEhReserva(c));
     const rendaMensal = (orc.base && orc.base.rendaBase) ? orc.base.rendaBase : 0;
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     // Sem custódias: orientação clara (cadastro + correlação no +)
     if (custodias.length === 0) {
@@ -4879,7 +4916,7 @@ function _falaSaldoPersonagem({ saldo, saldoAnterior, rendaReal, totalGasto, per
 
 function renderizarCardSaldo(semana, orc, opcoes) {
     opcoes = opcoes || {};
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     const rendaReal     = semana.rendaReal || 0;
     const rendaEstimada = semana.rendaEstimada || (orc.base?.rendaBase || 0) / DIVISOR_SEMANAL;
@@ -5285,7 +5322,7 @@ function renderizarVerdadeDecisao(orc) {
  */
 function renderizarConciliacaoHome(semana, orc) {
     if (!semana) return '';
-    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     const nivel = (orc && orc.nivel) || 1;
 
     const plano = (semana.base?.limite || 0) + (semana.vida?.limite || 0) + (semana.futuro?.limite || 0);
@@ -5383,7 +5420,7 @@ function renderizarAvisoCarregoVirada(semana) {
     
     if (semana.avisoCarregoLido) return '';
 
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     const partes = [];
     const b = (semana.base && semana.base.carrego) || 0;
     const v = (semana.vida && semana.vida.carrego) || 0;
@@ -5573,7 +5610,7 @@ function abrirDestinoSobra(caixaId) {
         alert('Não há sobra informativa nesta caixinha.');
         return;
     }
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     const nomes = { base: 'Base', vida: 'Vida', futuro: 'Futuro' };
     const passivo = Number(semana[caixaId].passivoMeta || semana[caixaId].carrego) || 0;
 
@@ -5666,7 +5703,7 @@ function renderizarMiniBalancoOperacional(orc) {
         else somaSaldo += (c.saldoAtual || 0);
     });
     const foto = somaSaldo - somaFatura;
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     return `
         <div class="card" style="padding:14px 16px;margin:8px 0 16px;border:1px solid var(--border);">
@@ -5982,7 +6019,7 @@ function registrarGasto(caixa) {
 
 /** + → Futuro: escolher dívida ou reserva (sempre com alvo) */
 function mostrarHandoffFuturo(valor) {
-    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     dialogoPushPersonagem('ze',
         'Futuro precisa de nome. Os ' + fmt(valor) + ' são para <strong>pagar uma dívida</strong> ou <strong>guardar numa reserva</strong>?');
     const html = `
@@ -6023,7 +6060,7 @@ function _bannerPendenteFuturoHtml(subtipo) {
     if (pendenteRegistroFuturo.subtipo && pendenteRegistroFuturo.subtipo !== subtipo) {
         // subtipo diferente: ainda mostra, mas orienta a trocar a aba se preciso
     }
-    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     const label = subtipo === 'reserva' ? 'aporte' : 'pagamento';
     return `
         <div class="card" style="border-left:4px solid var(--primary);margin-bottom:14px;background:var(--purple-light);">
@@ -6679,7 +6716,7 @@ function avaliarSugestaoReservaN3(orc) {
         mesesMax = Math.ceil(Math.max(0, reservaMax - acumulado) / reservaMensal);
     }
 
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     let mensagem;
     if (reservaMensal <= 0) {
@@ -7520,7 +7557,7 @@ function renderizarCardProvisaoSemana(orc) {
     const lista = listarCategoriasComProvisao();
     if (lista.length === 0) return '';
 
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     const total = totalProvisaoSemanal();
     const linhas = lista.map(c => {
         const sem = provisaoSemanalCategoria(c);
@@ -8067,7 +8104,7 @@ function renderizarDetalheFuturo() {
         : { icone: '🐖', fala: 'Reserva é o colchão. Vamos construir devagar.', cor: 'var(--primary)' };
 
     if (pendenteRegistroFuturo && pendenteRegistroFuturo.valor > 0) {
-        const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const fmt = formatarMoeda;
         if (subtipo === 'divida') {
             avatar.fala = 'Você trouxe ' + fmt(pendenteRegistroFuturo.valor) + '. Escolha a dívida e registre o pagamento — ou cadastre uma nova.';
         } else {
@@ -8745,7 +8782,7 @@ function abrirResumoSemanal() {
         return;
     }
 
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     const baseEstouro = semana.base?.estouro || 0;
     const vidaEstouro = semana.vida?.estouro || 0;
@@ -8898,7 +8935,7 @@ function renderizarHistoricoResumos() {
         return;
     }
 
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     container.innerHTML = resumos.map(r => {
         const baseEstouro = (r.base && r.base.estouro) || 0;
@@ -8971,7 +9008,7 @@ function renderizarPreviewInventarioN3() {
     const itens = _lerInventarioN4();
     const n = itens.length;
     const total = _totalEstimadoInventario();
-    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     if (n === 0) {
         return `
@@ -9013,7 +9050,7 @@ function renderizarInventario() {
     const container = document.getElementById('inventario-conteudo');
     if (!container) return;
     const itens = _lerInventarioN4();
-    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     let listaHtml = '';
     if (itens.length === 0) {
@@ -9232,6 +9269,8 @@ function removerInventarioItem(id) {
 window.addEventListener('DOMContentLoaded', async () => {
     await carregarEstado();
     if (typeof aplicarTemaSalvo === 'function') aplicarTemaSalvo();
+    const icon = document.getElementById('nav-icon-olho');
+    if (icon) icon.textContent = state.ocultarValores ? '⌣' : '👁️';
     if (typeof aplicarTamanhoFonte === 'function') aplicarTamanhoFonte();
     atualizarBotaoFeedback('screen-welcome');
     atualizarBotaoRetomada();
@@ -9337,7 +9376,7 @@ function confirmarReconciliacaoCustodia(custodiaId) {
     salvarEstado();
     if (typeof _tickOnboardingAposConciliacao === "function") _tickOnboardingAposConciliacao();
 
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     const sinal = delta >= 0 ? '+' : '−';
     alert(
         (campo === 'fatura' ? 'Fatura' : 'Saldo') +
@@ -9353,7 +9392,7 @@ function abrirReconciliacaoCustodia(custodiaId) {
     if (!c) return;
     const tipo = TIPOS_CUSTODIA[c.tipo] || TIPOS_CUSTODIA.outro;
     const container = document.getElementById('custodias-conteudo');
-    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     let atual, rotuloCampo, ajuda;
     if (tipo.temFatura) {
@@ -9444,7 +9483,7 @@ function sugerirSaldoInicialCustodia() {
         return t.temSaldo;
     });
     const { saldo, rendaReal, totalGasto, temMovimento } = calcularSaldoSemanaAtual();
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     if (comSaldo.length > 0) {
         return {
@@ -9980,7 +10019,7 @@ function renderizarPagamentoFatura(cartaoId) {
     }
 
     const fatura = cartao.faturaAcumulada || 0;
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     // Origem = só custódias com saldo (não outro cartão de crédito)
     const custodiaOrigem = (state.orcamento.custodias || []).filter(c => {
@@ -10199,7 +10238,7 @@ function detectarSinalRecuperacao(orc) {
     const semana = orc.semanaAtual;
     if (!semana) return null;
 
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     // S1 — Situação real negativa (mesma base do fechamento / conciliação)
     const mov = calcularMovimentoSemana(semana, orc);
@@ -10651,7 +10690,7 @@ function renderizarMapaMes() {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     // Monta um mapa dia → contas
     const dias = [];
@@ -10785,7 +10824,7 @@ function renderizarBlocoProvisao(orc) {
     const prov = calcularProvisao(orc);
     if (prov.categorias.length === 0) return '';
 
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
 // Aqui entra a decisão (A), (B) ou (C)
     // Por enquanto, deixo o esqueleto com a opção (C) — as duas linhas.
@@ -11012,7 +11051,7 @@ function renderizarFluxoCaixa() {
         return;
     }
 
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     const fluxo = projetarFluxo(orc, { dias: 30 });
     
     let projMapFluxo = {};
@@ -11543,7 +11582,7 @@ function renderizarCardProjecaoN2(orc) {
  * Só aparece quando há dados declarados suficientes.
  */
 function renderizarCardProjecaoN2b(orc) {
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     const fluxo = projetarFluxo(orc, { dias: 30 });
     const gargalos = detectarGargalos(fluxo);
 
@@ -11599,7 +11638,7 @@ function renderizarCardProjecaoN2b(orc) {
  */
 function renderizarCardProjecaoN3(orc) {
     const custodias = orc.custodias || [];
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     // Sem custódias: convite leve (coleta N3)
     if (custodias.length === 0) {
@@ -11655,7 +11694,7 @@ function renderizarCardProjecaoN3(orc) {
  * Oferece atalhos úteis sem alarmismo.
  */
 function renderizarCardProjecaoN3b(orc, fluxo, projMap) {
-    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     projMap = projMap || {};
     fluxo = fluxo || projetarFluxo(orc, { dias: 30 });
 
@@ -12447,7 +12486,7 @@ function montarSVGAlisamento(dados) {
 
 function montarPainelComparacao(dados) {
     const { projAtual, projSimulado } = dados;
-    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
 
     if (projAtual.length === 0) {
         return `<div style="padding:12px;background:var(--bg-color);border-radius:10px;font-size:0.9rem;color:var(--secondary);line-height:1.45;">
@@ -12694,7 +12733,7 @@ function renderizarCardFolegoFinanceiro(orc, cen) {
         fontesDesativadas: cen.fontesDesativadas || []
     });
 
-    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     const fmtDias = (n) => {
         if (n === null) return '—';
         if (n === Infinity) return '∞';
@@ -13188,7 +13227,7 @@ function renderizarCardLiquidezHorizonte(orc) {
     if (nivel < 2) return '';
 
     const liq = avaliarLiquidezHorizonte(orc, { dias: HORIZONTE_LIQUIDEZ_DIAS });
-    const fmt = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmt = formatarMoeda;
     const fmtData = (iso) => {
         if (!iso) return '';
         const p = String(iso).split('-');
@@ -13530,7 +13569,7 @@ function _pertenceSemanaAtual(isoStr) {
 }
 
 function _fmtBRL(v) {
-    return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    return formatarMoeda(v);
 }
 
 function _fmtDataCurta(iso) {
