@@ -7691,6 +7691,7 @@ function abrirFormularioCategoria(idExistente) {
     const btnSalvar = catExistente ? 'Salvar alterações' : 'Salvar categoria';
 
     // Lista de registros da categoria (ao editar)
+      // Lista de registros da categoria (ao editar) agrupada por mês
     let htmlListaRegistrosCat = '';
     if (catExistente) {
         const regs = (state.orcamento.historicoRegistros || [])
@@ -7702,26 +7703,55 @@ function abrirFormularioCategoria(idExistente) {
             })
             .slice()
             .sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+
         if (regs.length === 0) {
             htmlListaRegistrosCat = `
                 <div class="secao-titulo" style="margin-top: 28px;">Registros desta categoria</div>
                 <div class="placeholder-info" style="padding: 16px;">Nenhum lançamento ainda.</div>
             `;
         } else {
-            const total = regs.reduce((s, r) => s + (r.valor || 0), 0);
-            htmlListaRegistrosCat = `
-                <div class="secao-titulo" style="margin-top: 28px;">Registros desta categoria</div>
-                <div style="font-size: 0.9rem; color: var(--secondary); margin-bottom: 10px;">
-                    ${regs.length} · total ${_fmtBRL(total)}
-                </div>
-                ${regs.map(r => {
+            const totalGeral = regs.reduce((s, r) => s + (Number(r.valor) || 0), 0);
+
+            // Agrupamento por mês (YYYY-MM)
+            const grupos = {};
+            regs.forEach(r => {
+                const dStr = r.data || '';
+                const mesAno = dStr.split('T')[0].substring(0, 7);
+                const chave = (mesAno && mesAno.length === 7) ? mesAno : 'sem-data';
+                
+                if (!grupos[chave]) {
+                    grupos[chave] = { itens: [], total: 0 };
+                }
+                grupos[chave].itens.push(r);
+                grupos[chave].total += (Number(r.valor) || 0);
+            });
+
+            const mesesNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+            
+            let gruposHtml = '';
+            
+            // Ordena os meses do mais recente para o mais antigo
+            Object.keys(grupos).sort((a, b) => b.localeCompare(a)).forEach(mesAno => {
+                const grupo = grupos[mesAno];
+                const qtd = grupo.itens.length;
+                const totalMesFmt = _fmtBRL(grupo.total);
+                
+                let labelMes = 'Sem data';
+                if (mesAno !== 'sem-data') {
+                    const [ano, mes] = mesAno.split('-');
+                    labelMes = `${mesesNomes[parseInt(mes, 10) - 1]} / ${ano}`;
+                }
+
+                let itensHtml = '';
+                grupo.itens.forEach(r => {
                     const data = _fmtDataCurta(r.data);
                     let meta = data || '';
                     if (r.tipo === 'gasto_cartao') meta += (meta ? ' · ' : '') + 'cartão';
                     const cust = _nomeCustodia(r.custodiaId) || _nomeCustodia(r.cartaoId);
                     if (cust) meta += (meta ? ' · ' : '') + cust;
-                    return `
-                        <div class="item-registro">
+
+                    itensHtml += `
+                        <div class="item-registro" style="margin-bottom: 8px;">
                             <div class="info">
                                 <div class="nome-reg">${r.categoria || catExistente.nome}</div>
                                 <div class="meta-reg">${meta || '—'}</div>
@@ -7735,7 +7765,34 @@ function abrirFormularioCategoria(idExistente) {
                             </div>
                         </div>
                     `;
-                }).join('')}
+                });
+
+                gruposHtml += `
+                    <details style="margin-bottom: 10px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;">
+                        <summary style="cursor: pointer; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; list-style: none; user-select: none; outline: none;">
+                            <div>
+                                <div style="font-size: 0.9rem; font-weight: 700; color: var(--primary);">${labelMes}</div>
+                                <div style="font-size: 0.8rem; color: var(--secondary); margin-top: 2px;">${qtd} registro${qtd > 1 ? 's' : ''}</div>
+                            </div>
+                            <div style="text-align: right; display: flex; align-items: center; gap: 8px;">
+                                <strong style="font-size: 0.9rem; color: var(--text-main);">${totalMesFmt}</strong>
+                                <span style="font-size: 0.9rem; color: var(--secondary);">▾</span>
+                            </div>
+                        </summary>
+                        <div style="padding: 0 16px 16px; border-top: 1px solid var(--border); padding-top: 12px; background: var(--bg-color);">
+                            ${itensHtml}
+                        </div>
+                    </details>
+                `;
+            });
+
+            htmlListaRegistrosCat = `
+                <div class="secao-titulo" style="margin-top: 28px;">Registros desta categoria</div>
+                <div style="font-size: 0.9rem; color: var(--secondary); margin-bottom: 12px; display: flex; justify-content: space-between;">
+                    <span>${regs.length} no total</span>
+                    <strong>${_fmtBRL(totalGeral)}</strong>
+                </div>
+                ${gruposHtml}
             `;
         }
     }
