@@ -11363,7 +11363,7 @@ function renderizarFluxoCaixa() {
     let htmlLacunas = '';
     if (fluxo.lacunas.fontesSemDia > 0 || (fluxo.lacunas.fontesSemCustodia || 0) > 0 || fluxo.lacunas.categoriasSemVencimento > 0) {
         const bits = [];
-        if (fluxo.lacunas.fontesSemDia > 0) bits.push(`${fluxo.lacunas.fontesSemDia} fonte(s) sem dia de recebimento`);
+                if (fluxo.lacunas.fontesSemDia > 0) bits.push(`${fluxo.lacunas.fontesSemDia} fonte(s) sem dia fixo (agendadas para o fim do mês)`);
         if ((fluxo.lacunas.fontesSemCustodia || 0) > 0) bits.push(`${fluxo.lacunas.fontesSemCustodia} fonte(s) sem conta de destino`);
         if (fluxo.lacunas.categoriasSemVencimento > 0) bits.push(`${fluxo.lacunas.categoriasSemVencimento} categoria(s) de consumo (diluídas no cálculo)`);
         htmlLacunas = `<div style="background: var(--bg-color); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.9rem; color: var(--secondary); line-height: 1.45;">💡 Fora do calendário diário: ${bits.join(' · ')}.</div>`;
@@ -11825,37 +11825,41 @@ function _diasRecebimento(diaRecebimento) {
 function _eventosRecebimentoDeclarados(orc, inicio, fim) {
     const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
     const eventos = [];
-    fontes.forEach(f => {
-        const dias = _diasRecebimento(f.diaRecebimento);
-        if (dias.length === 0) return;
-        const valorMes = f.valor || 0;
-        if (valorMes <= 0) return;
+    
+    let cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
+    const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
+    
+    while (cursor <= fimMes) {
+        const ano = cursor.getFullYear();
+        const mes = cursor.getMonth();
+        const mesRefStr = `${ano}-${String(mes + 1).padStart(2, '0')}`;
+        const ultimoDiaMes = new Date(ano, mes + 1, 0).getDate();
         
-        let cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
-        const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
-        
-        while (cursor <= fimMes) {
-            const ano = cursor.getFullYear();
-            const mes = cursor.getMonth();
-            const mesRefStr = `${ano}-${String(mes + 1).padStart(2, '0')}`;
+        fontes.forEach(f => {
+            const valorMes = Number(f.valor) || 0;
+            if (valorMes <= 0) return;
             
-                        // NOVO CÉREBRO: Checa se já houve adiantamento para este mês
             const temAdiantamento = (orc.historicoRegistros || []).some(r => 
-                !r.anulado &&
-                r.mesReferencia === mesRefStr &&
+                !r.anulado && r.mesReferencia === mesRefStr &&
                 (r.categoriaId === f.id || r.categoria === f.nome)
             );
+            if (temAdiantamento) return;
             
-                              if (!temAdiantamento) {
-                        // CORREÇÃO DEFINITIVA: Usa objetos Date para garantir a comparação exata de mês e ano, ignorando formatos de string.
-                        const jaRecebido = (orc.historicoRegistros || []).some(r => {
-                            if (r.tipo !== 'recebimento' || r.anulado) return false;
-                            if (r.categoriaId !== f.id && r.categoria !== f.nome) return false;
-                            const dataReg = new Date(r.data);
-                            return dataReg.getFullYear() === ano && dataReg.getMonth() === mes;
-                        });
-                        
-                        if (!jaRecebido) {
+            let jaRecebido = 0;
+            (orc.historicoRegistros || []).forEach(r => {
+                if (r.tipo !== 'recebimento' || r.anulado) return;
+                if (r.categoriaId !== f.id && r.categoria !== f.nome) return;
+                const dataReg = new Date(r.data);
+                if (dataReg.getFullYear() === ano && dataReg.getMonth() === mes) {
+                    jaRecebido += (Number(r.valor) || 0);
+                }
+            });
+            
+            const dias = _diasRecebimento(f.diaRecebimento);
+            
+            if (dias.length > 0) {
+                // Lógica original: Fontes com dia fixo
+                if (jaRecebido === 0) {
                     const valorPorOcorrencia = valorMes / dias.length;
                     dias.forEach(dia => {
                         const data = _dataNoMes(ano, mes, dia);
@@ -11874,10 +11878,29 @@ function _eventosRecebimentoDeclarados(orc, inicio, fim) {
                         }
                     });
                 }
+            } else {
+                // NOVA REGRA: Fontes sem dia fixo vão para o último dia do mês, pelo valor restante.
+                const restanteMes = valorMes - jaRecebido;
+                if (restanteMes > 0.01) {
+                    const data = _dataNoMes(ano, mes, ultimoDiaMes);
+                    if (data >= inicio && data <= fim) {
+                        eventos.push({
+                            tipo: 'recebimento',
+                            data: data.toISOString().split('T')[0],
+                            dia: data.getDate(),
+                            nome: `${f.nome || 'Recebimento'} (restante do mês)`,
+                            fonteId: f.id || null,
+                            valor: restanteMes,
+                            caixa: null,
+                            categoriaId: null,
+                            custodiaId: f.custodiaPadraoId || null
+                        });
+                    }
+                }
             }
-            cursor = new Date(ano, mes + 1, 1);
-        }
-    });
+        });
+        cursor = new Date(ano, mes + 1, 1);
+    }
     return eventos;
 }
 
