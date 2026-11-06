@@ -9581,12 +9581,229 @@ function sugerirSaldoInicialCustodia() {
     };
 }
 
+
+// === FATIA NOVA — Extrato da carteira (lista de registros) ===
+
+/**
+ * Mapeia histórico → lançamentos desta carteira, com direção semântica.
+ * - Conta/dinheiro/poupança/vale: entrada = +saldo, saída = −saldo
+ * - Cartão (fatura): "saída" = compra (fatura sobe), "entrada" = pagamento (fatura desce)
+ * - Transferência: aparece como saída na origem e entrada no destino
+ * - aporte_reserva: saída na operacional, entrada na reserva (via custodiaDestinoId)
+ * Ajustes de semana fechada e de conciliação aparecem como "auditável".
+ */
+function _registrosDaCustodia(custodia) {
+    if (!custodia || !custodia.id) return [];
+    const todos = state.orcamento.historicoRegistros || [];
+    const tipoInfo = TIPOS_CUSTODIA[custodia.tipo] || TIPOS_CUSTODIA.outro;
+    const ehCartao = !!tipoInfo.temFatura;
+    const out = [];
+
+    todos.forEach(r => {
+        if (!r) return;
+
+        // ---- Cartão de crédito ----
+        if (ehCartao) {
+            if (r.tipo === 'gasto_cartao' && r.cartaoId === custodia.id) {
+                out.push({ registro: r, direcao: 'saida', rotulo: 'Compra no cartão',
+                    categoriaMostrar: r.categoria || 'Compra' });
+            } else if (r.tipo === 'pagamento_fatura' && r.cartaoId === custodia.id) {
+                out.push({ registro: r, direcao: 'entrada', rotulo: 'Pagamento de fatura',
+                    categoriaMostrar: 'Pagamento de fatura' });
+            } else if (r.tipo === 'ajuste_conciliacao'
+                    && r.custodiaId === custodia.id && r.campo === 'fatura') {
+                const d = Number(r.delta) || 0;
+                out.push({ registro: r, direcao: d >= 0 ? 'saida' : 'entrada',
+                    rotulo: 'Conciliação de fatura', categoriaMostrar: 'Conciliação' });
+            } else if (r.tipo === 'ajuste_semana_anterior' && r.cartaoId === custodia.id) {
+                const d = Number(r.delta) || 0;
+                out.push({ registro: r, direcao: d >= 0 ? 'saida' : 'entrada',
+                    rotulo: 'Ajuste de compra', categoriaMostrar: r.categoria || 'Ajuste',
+                    isAjuste: true });
+            }
+            return;
+        }
+
+        // ---- Contas com saldo (operacional e reserva) ----
+        if (r.tipo === 'recebimento' && r.custodiaId === custodia.id) {
+            out.push({ registro: r, direcao: 'entrada', rotulo: 'Recebimento',
+                categoriaMostrar: r.categoria || 'Recebimento' });
+        } else if (r.tipo === 'gasto_direto' && r.custodiaId === custodia.id) {
+            out.push({ registro: r, direcao: 'saida', rotulo: 'Gasto',
+                categoriaMostrar: r.categoria || 'Gasto' });
+        } else if (r.tipo === 'pagamento_fatura' && r.custodiaId === custodia.id) {
+            out.push({ registro: r, direcao: 'saida', rotulo: 'Pagamento de fatura',
+                categoriaMostrar: 'Pagamento de fatura' });
+        } else if (r.tipo === 'pagamento_divida' && r.custodiaId === custodia.id) {
+            out.push({ registro: r, direcao: 'saida', rotulo: 'Pagamento de dívida',
+                categoriaMostrar: r.categoria || 'Pagamento de dívida' });
+        } else if (r.tipo === 'aporte_reserva' && r.custodiaId === custodia.id) {
+            out.push({ registro: r, direcao: 'saida', rotulo: 'Aporte enviado',
+                categoriaMostrar: r.categoria || 'Aporte' });
+        } else if ((r.tipo === 'aporte_reserva' || r.tipo === 'transferencia')
+                && r.custodiaDestinoId === custodia.id) {
+            out.push({ registro: r, direcao: 'entrada',
+                rotulo: r.tipo === 'transferencia' ? 'Transferência recebida' : 'Aporte recebido',
+                categoriaMostrar: r.categoria || (r.tipo === 'transferencia' ? 'Transferência' : 'Aporte') });
+        } else if (r.tipo === 'transferencia' && r.custodiaId === custodia.id) {
+            out.push({ registro: r, direcao: 'saida', rotulo: 'Transferência enviada',
+                categoriaMostrar: 'Transferência' });
+        } else if (r.tipo === 'ajuste_conciliacao'
+                && r.custodiaId === custodia.id && r.campo === 'saldo') {
+            const d = Number(r.delta) || 0;
+            out.push({ registro: r, direcao: d >= 0 ? 'entrada' : 'saida',
+                rotulo: 'Conciliação', categoriaMostrar: 'Conciliação de saldo' });
+        } else if (r.tipo === 'ajuste_semana_anterior' && r.custodiaId === custodia.id) {
+            const d = Number(r.delta) || 0;
+            const tp = r.tipoOriginal;
+            // Em gasto_direto, delta positivo = mais gasto = menos saldo (saída)
+            let direcao;
+            if (tp === 'gasto_direto') direcao = d >= 0 ? 'saida' : 'entrada';
+            else direcao = d >= 0 ? 'entrada' : 'saida';
+            out.push({ registro: r, direcao, rotulo: 'Ajuste de semana anterior',
+                categoriaMostrar: r.categoria || 'Ajuste', isAjuste: true });
+        }
+    });
+
+    return out;
+}
+
+/**
+ * Renderiza o extrato agrupado por mês.
+ * Mesmo padrão visual de abrirFormularioCategoria (details/summary com total).
+ */
+function _renderizarListaRegistrosCustodia(custodia) {
+    const itens = _registrosDaCustodia(custodia);
+    if (itens.length === 0) {
+        return `
+            <div class="secao-titulo" style="margin-top:28px;">Extrato da carteira</div>
+            <div class="placeholder-info" style="padding:16px;">Nenhum lançamento ainda.</div>
+        `;
+    }
+
+    const ordenados = [...itens].sort((a, b) => {
+        const da = a.registro.data || '';
+        const db = b.registro.data || '';
+        return db.localeCompare(da);
+    });
+
+    // Agrupa por mês
+    const grupos = {};
+    ordenados.forEach(it => {
+        const dStr = it.registro.data || '';
+        const mesAno = dStr.split('T')[0].substring(0, 7);
+        const chave = (mesAno && mesAno.length === 7) ? mesAno : 'sem-data';
+        if (!grupos[chave]) grupos[chave] = { itens: [], entradas: 0, saidas: 0 };
+        grupos[chave].itens.push(it);
+        const v = Number(it.registro.valor) || Math.abs(Number(it.registro.delta) || 0) || 0;
+        if (it.direcao === 'entrada') grupos[chave].entradas += v;
+        else grupos[chave].saidas += v;
+    });
+
+    const mesesNomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                        'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+    let gruposHtml = '';
+    Object.keys(grupos).sort((a, b) => b.localeCompare(a)).forEach(mesAno => {
+        const grupo = grupos[mesAno];
+        const qtd = grupo.itens.length;
+        const liquido = grupo.entradas - grupo.saidas;
+        const corLiq = liquido >= 0 ? 'var(--success)' : 'var(--danger)';
+        const sinalLiq = liquido >= 0 ? '+' : '−';
+
+        let labelMes = 'Sem data';
+        if (mesAno !== 'sem-data') {
+            const [ano, mes] = mesAno.split('-');
+            labelMes = `${mesesNomes[parseInt(mes, 10) - 1]} / ${ano}`;
+        }
+
+        let itensHtml = '';
+        grupo.itens.forEach(it => {
+            const r = it.registro;
+            const data = _fmtDataCurta(r.data);
+            let meta = data || '';
+            const valorMostrar = Number(r.valor) || Math.abs(Number(r.delta) || 0) || 0;
+
+            if (r.mesReferencia) {
+                meta += (meta ? ' · ' : '') +
+                    `<span style="color:var(--warning);font-weight:600;">[Adiant. ${_rotuloMesAno(r.mesReferencia)}]</span>`;
+            }
+            // Transferência: mostra a outra ponta
+            if (r.tipo === 'transferencia') {
+                const outraId = it.direcao === 'entrada' ? r.custodiaId : r.custodiaDestinoId;
+                const outra = (state.orcamento.custodias || []).find(c => c.id === outraId);
+                if (outra) meta += (meta ? ' · ' : '') + '↔ ' + _escInventario(outra.nome);
+            }
+            // Pagamento de fatura no cartão: mostra de onde saiu
+            if (r.tipo === 'pagamento_fatura'
+                    && r.custodiaId && r.custodiaId !== custodia.id) {
+                const origem = (state.orcamento.custodias || []).find(c => c.id === r.custodiaId);
+                if (origem) meta += (meta ? ' · ' : '') + 'de ' + _escInventario(origem.nome);
+            }
+
+            const corValor = it.direcao === 'entrada' ? 'var(--success)' : 'var(--primary)';
+            const sinal = it.direcao === 'entrada' ? '+' : '−';
+            const isAjuste = !!it.isAjuste ||
+                r.tipo === 'ajuste_semana_anterior' ||
+                r.tipo === 'ajuste_conciliacao';
+
+            const acoes = isAjuste
+                ? '<span style="font-size:0.75rem;color:var(--secondary);">auditável</span>'
+                : (r.anulado
+                    ? '<span style="font-size:0.75rem;color:var(--secondary);">anulado</span>'
+                    : `<button class="btn-reg editar" onclick="editarRegistro('${r.id}')">Editar</button>
+                       <button class="btn-reg excluir" onclick="excluirRegistro('${r.id}')">Excluir</button>`);
+
+            itensHtml += `
+                <div class="item-registro" style="margin-bottom:8px;${r.anulado ? 'opacity:0.65;' : ''}">
+                    <div class="info">
+                        <div class="nome-reg">${_escInventario(it.categoriaMostrar)}</div>
+                        <div class="meta-reg">${it.rotulo}${meta ? ' · ' + meta : ''}</div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div class="valor-reg" style="color:${corValor};${r.anulado ? 'text-decoration:line-through;' : ''};">
+                            ${sinal} ${_fmtBRL(valorMostrar)}
+                        </div>
+                        <div class="acoes-reg" style="margin-top:6px;justify-content:flex-end;">${acoes}</div>
+                    </div>
+                </div>`;
+        });
+
+        gruposHtml += `
+            <details style="margin-bottom:10px;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+                <summary style="cursor:pointer;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;list-style:none;user-select:none;outline:none;">
+                    <div>
+                        <div style="font-size:0.9rem;font-weight:700;color:var(--primary);">${labelMes}</div>
+                        <div style="font-size:0.8rem;color:var(--secondary);margin-top:2px;">${qtd} lançamento${qtd > 1 ? 's' : ''}</div>
+                    </div>
+                    <div style="text-align:right;display:flex;align-items:center;gap:8px;">
+                        <strong style="font-size:0.9rem;color:${corLiq};">${sinalLiq} ${_fmtBRL(Math.abs(liquido))}</strong>
+                        <span style="font-size:0.9rem;color:var(--secondary);">▾</span>
+                    </div>
+                </summary>
+                <div style="padding:12px 16px 16px;border-top:1px solid var(--border);background:var(--bg-color);">
+                    ${itensHtml}
+                </div>
+            </details>`;
+    });
+
+    return `
+        <div class="secao-titulo" style="margin-top:28px;">Extrato da carteira</div>
+        <div style="font-size:0.9rem;color:var(--secondary);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+            <span>${ordenados.length} lançamento${ordenados.length > 1 ? 's' : ''} no total</span>
+            <span style="font-size:0.75rem;">Inclui transferências</span>
+        </div>
+        ${gruposHtml}
+    `;
+}
+
 function abrirTelaCustodias() {
     goToScreen('screen-custodias');
     renderizarCustodias();
 }
 
 function renderizarCustodias() {
+    custodiaEditandoId = null;
     const container = document.getElementById('custodias-conteudo');
     const todas = state.orcamento.custodias || [];
     const operacionais = todas.filter(c => !_custodiaEhReserva(c));
@@ -9673,8 +9890,10 @@ function renderizarCustodias() {
 }
 
 let finalidadeCustodiaForm = 'operacional'; // módulo
+let custodiaEditandoId = null;   // usado por _atualizarTelasAposRegistro
 
 function abrirFormularioCustodia(id, opcoes) {
+    custodiaEditandoId = id || null;
     opcoes = opcoes || {};
     const finalidadeForcada = opcoes.finalidade || null;
     const container = document.getElementById('custodias-conteudo');
@@ -9780,6 +9999,7 @@ function abrirFormularioCustodia(id, opcoes) {
         <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="renderizarCustodias()">
             Cancelar
         </button>
+        ${editando ? _renderizarListaRegistrosCustodia(custodia) : ''}
     `;
 }
 
@@ -9898,6 +10118,7 @@ function salvarCustodia(id) {
 
     tipoCustodiaSelecionado = null;
     finalidadeCustodiaForm = 'operacional';
+    custodiaEditandoId = null;
     salvarEstado();
     if (typeof _tickOnboardingAposCustodia === 'function') _tickOnboardingAposCustodia();
     renderizarCustodias();
@@ -14256,6 +14477,20 @@ function _desfazerEfeitosRegistro(r) {
                 destino.saldoAtual = (destino.saldoAtual || 0) - (r.valor || 0);
             }
         }
+    } else if (r.tipo === 'transferencia') {
+        // Desfazer: devolve para a origem, tira do destino
+        if (r.custodiaId) {
+            const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
+            if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
+                origem.saldoAtual = (origem.saldoAtual || 0) + (r.valor || 0);
+            }
+        }
+        if (r.custodiaDestinoId) {
+            const destino = (state.orcamento.custodias || []).find(x => x.id === r.custodiaDestinoId);
+            if (destino && !(TIPOS_CUSTODIA[destino.tipo] || {}).temFatura) {
+                destino.saldoAtual = (destino.saldoAtual || 0) - (r.valor || 0);
+            }
+        }
     }
 }
 
@@ -14340,6 +14575,20 @@ function _aplicarEfeitosRegistro(r) {
                 destino.saldoAtual = (destino.saldoAtual || 0) + (r.valor || 0);
             }
         }
+    } else if (r.tipo === 'transferencia') {
+        // Aplicar: tira da origem, soma no destino
+        if (r.custodiaId) {
+            const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
+            if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
+                origem.saldoAtual = (origem.saldoAtual || 0) - (r.valor || 0);
+            }
+        }
+        if (r.custodiaDestinoId) {
+            const destino = (state.orcamento.custodias || []).find(x => x.id === r.custodiaDestinoId);
+            if (destino && !(TIPOS_CUSTODIA[destino.tipo] || {}).temFatura) {
+                destino.saldoAtual = (destino.saldoAtual || 0) + (r.valor || 0);
+            }
+        }
     }
 }
 
@@ -14395,6 +14644,10 @@ function _atualizarTelasAposRegistro() {
     else if (tela === 'screen-renda-detalhe') renderizarDetalheRenda();
     else if (tela === 'screen-divida-detalhe') renderizarDetalheFuturo();
     else if (tela === 'screen-plano-recuperacao') renderizarPlanoRecuperacao();
+    else if (tela === 'screen-custodias') {
+        if (custodiaEditandoId) abrirFormularioCustodia(custodiaEditandoId);
+        else renderizarCustodias();
+    }
 }
 
 let registroEditandoId = null;
