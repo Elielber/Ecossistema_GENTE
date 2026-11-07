@@ -1712,6 +1712,8 @@ function migrarEstado() {
     if (state.fontSize !== 'normal' && state.fontSize !== 'grande' && state.fontSize !== 'maior') { state.fontSize = 'normal'; } try { document.documentElement.setAttribute('data-theme', state.theme || 'light'); const _sizes = { normal: '16px', grande: '18px', maior: '20px' }; document.documentElement.style.fontSize = _sizes[state.fontSize] || '16px'; } catch (_) {} if (!state.orcamento) return;
     
     if (typeof state.ocultarValores !== 'boolean') { state.ocultarValores = false; }
+    if (typeof state.orcamento.futuroStreak !== 'number') { state.orcamento.futuroStreak = 0; }
+
     
     if (!state.orcamento.configFluxo) {
     state.orcamento.configFluxo = { protegerSaldo: true };
@@ -1828,12 +1830,29 @@ state.orcamento.categorias.forEach(c => {
         c.subtipo = 'divida'; // ou 'reserva'
     }
 });
-// === FUTURO — parcelas ===
+// === FUTURO — parcelas + saldo devedor (2.5) ===
 state.orcamento.categorias.forEach(c => {
     if (c.caixa === 'futuro') {
         if (typeof c.parcelasPagas !== 'number') c.parcelasPagas = 0;
         if (c.parcelasTotais === undefined) c.parcelasTotais = null;
         if (c.valorTotal === undefined) c.valorTotal = null;
+        if (c.taxaJuros === undefined) c.taxaJuros = null; // % a.m. ou null = "não sei"
+        // saldoDevedor: primário para "quanto devo?". Deriva de parcelas se ainda não existir.
+        if (c.subtipo === 'divida' && (c.saldoDevedor === undefined || c.saldoDevedor === null)) {
+            const tot = Number(c.parcelasTotais) || 0;
+            const pagas = Number(c.parcelasPagas) || 0;
+            const parcela = Number(c.valor) || 0;
+            if (tot > 0 && parcela > 0) {
+                c.saldoDevedor = Math.max(0, parcela * (tot - pagas));
+                c.saldoDevedorEstimado = true; // parcelas restantes × valor, sem juros
+            } else if (c.valorTotal != null) {
+                c.saldoDevedor = Math.max(0, Number(c.valorTotal) - parcela * pagas);
+                c.saldoDevedorEstimado = true;
+            } else {
+                c.saldoDevedor = null; // desconhecido — não inventar
+            }
+        }
+        if (c.subtipo === 'reserva' && c.saldoDevedor === undefined) c.saldoDevedor = null;
     }
     if (c.pagamentoConfirmadoMes === undefined) c.pagamentoConfirmadoMes = null;
 });
@@ -2491,7 +2510,7 @@ function iniciarEtapa(etapaId) {
 
 function iniciarEtapaBase() {
     const container = document.getElementById('orcamento-conteudo');
-    const rendaAtual = state.orcamento.base?.rendaBase || 2500;
+    const rendaAtual = state.orcamento.base?.rendaBase || '';
 
     // Mantém eco da escolha do hub se já houver; senão inicia thread da Base
     if (dialogoTurnoAtual.length === 0) {
@@ -2561,11 +2580,14 @@ function responderRenda(tipo) {
     }
 }
 function responderVariacaoRenda(percentual) {
-    const baseAtual = state.orcamento.base.rendaBase || 2500;
+    // Conservador: NÃO infla a rendaBase com "meses bons".
+    // Guarda a variação só como metadado (cenário otimista), sem inventar caixa.
+    if (!state.orcamento.base) state.orcamento.base = {};
     if (percentual > 0) {
-        state.orcamento.base.rendaBase = baseAtual * (1 + percentual / 100);
-        dialogoPushUsuario('+' + percentual + '% nos meses bons');
+        state.orcamento.base.rendaVariacaoBoaPct = percentual;
+        dialogoPushUsuario('+' + percentual + '% nos meses bons (não entra no plano)');
     } else {
+        state.orcamento.base.rendaVariacaoBoaPct = 0;
         dialogoPushUsuario('Deixa como está');
     }
     proximoPassoBase();
@@ -2587,7 +2609,7 @@ function proximoPassoBase() {
     const composer = `
         <div class="input-com-prefixo">
             <span class="prefixo">R$</span>
-            <input type="number" id="input-fortaleza-valor" class="input-padrao" placeholder="0.00" value="${state.orcamento.base?.fortalezaTotal || 1800}">
+            <input type="number" id="input-fortaleza-valor" class="input-padrao" placeholder="0.00" value="${state.orcamento.base?.fortalezaTotal != null ? state.orcamento.base.fortalezaTotal : ''}">
         </div>
         <div class="chip-container" id="chips-fortaleza">
             <div class="chip" onclick="toggleChip(this)">🏠 Aluguel</div>
@@ -2683,7 +2705,7 @@ function concluirEtapaBase() {
 
 function iniciarEtapaVida() {
     const container = document.getElementById('orcamento-conteudo');
-    const flexivelAtual = state.orcamento.vida?.total || 700;
+    const flexivelAtual = (state.orcamento.vida && state.orcamento.vida.total != null) ? state.orcamento.vida.total : '';
 
     const etapas = state.orcamento.etapasConcluidas || [];
     const baseFeita = etapas.includes('base');
@@ -2958,6 +2980,205 @@ function _categoriaParcelasQuitada(cat) {
 
 let _cacheTaxaViabilidade = { timestamp: 0, valor: 1 };
 
+
+/**
+ * Ritmo diário ÚNICO da diluição (substitui 4 laços divergentes).
+ * Regras (as mesmas em Home, Fluxo, Simulador e taxa de viabilidade):
+ *  - Mês corrente: o que RESTA do combinado (restante) é diluído pelos dias que faltam
+ *    no mês: alvo(dia) = restanteAindaNaoDistribuido / diasQueFaltam. Se a proteção corta
+ *    um dia, o corte é redistribuído nos dias seguintes (sem aceleração artificial 1,2×/1,5×).
+ *  - Meses seguintes (opcional): ritmo = plano mensal / 30 (só o declarado).
+ *  - Proteção de saldo: quota ≤ saldo do dia + pior acumulado dos próximos 20 dias − R$ 10.
+ *  - opcoes.custodiaId filtra eventos por carteira (tela Fluxo).
+ */
+function _chaveDataLocal(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function _simularDiluicaoDiaria(orc, fluxo, opcoes) {
+    opcoes = opcoes || {};
+    const protegerSaldo = opcoes.protegerSaldo !== false;
+    const custodiaId = opcoes.custodiaId || null;
+    const planejado = Math.max(0, Number(opcoes.planejado) || 0);
+    let pool = Math.max(0, Number(opcoes.restante) || 0);
+    const incluirProximosMeses = opcoes.proximosMeses !== false;
+
+    const inicioDt = new Date(fluxo.inicio + 'T00:00:00');
+    const fimMes = new Date(inicioDt.getFullYear(), inicioDt.getMonth() + 1, 0);
+    const diasMes = Math.round((fimMes - inicioDt) / 86400000) + 1;
+    const ritmoProx = planejado / 30;
+
+    const eventosDe = (key) => {
+        const dd = fluxo.porDia[key];
+        let ev = (dd && dd.eventos) || [];
+        if (custodiaId) ev = ev.filter(e => e.custodiaId === custodiaId);
+        return ev;
+    };
+    const soma = (ev, tipo) => ev.filter(e => e.tipo === tipo).reduce((t, e) => t + (e.valor || 0), 0);
+
+    let saldo = Number(opcoes.saldoInicial) || 0;
+    const saldoInicial = saldo;
+    let saldoMinimo = saldo, dataMinimo = null, primeiroDiaNegativo = null;
+    let totalDistribuido = 0, distribuidoMesAtual = 0;
+    const diasNoMesAtual = Math.min(fluxo.dias, diasMes);
+    const diasProx = Math.max(0, fluxo.dias - diasNoMesAtual);
+    const totalTeorico = (diasNoMesAtual > 0 ? pool : 0) + (incluirProximosMeses ? diasProx * ritmoProx : 0);
+    const dias = [];
+
+    for (let i = 0; i < fluxo.dias; i++) {
+        const d = new Date(inicioDt);
+        d.setDate(inicioDt.getDate() + i);
+        const dataKey = _chaveDataLocal(d);
+        const eventos = eventosDe(dataKey);
+        const entradas = soma(eventos, 'recebimento');
+        const saidas = soma(eventos, 'vencimento');
+        const netEventos = entradas - saidas;
+        const saldoAntes = saldo + netEventos;
+
+        const noMesAtual = d.getMonth() === inicioDt.getMonth() && d.getFullYear() === inicioDt.getFullYear();
+        let alvo = 0;
+        if (noMesAtual) alvo = pool > 0 ? pool / Math.max(1, diasMes - i) : 0;
+        else if (incluirProximosMeses) alvo = ritmoProx;
+
+        let quota = 0, isReduzido = false;
+        if (alvo > 0 && (saldoAntes > 0 || !protegerSaldo)) {
+            if (protegerSaldo) {
+                let minFuturo = 0, acumulado = 0;
+                const olhar = Math.min(20, fluxo.dias - i - 1);
+                for (let j = 1; j <= olhar; j++) {
+                    const df = new Date(inicioDt);
+                    df.setDate(inicioDt.getDate() + i + j);
+                    const evf = eventosDe(_chaveDataLocal(df));
+                    acumulado += soma(evf, 'recebimento') - soma(evf, 'vencimento');
+                    if (acumulado < minFuturo) minFuturo = acumulado;
+                }
+                const limiteHoje = Math.max(0, saldoAntes + minFuturo - 10);
+                quota = Math.min(alvo, limiteHoje);
+            } else {
+                quota = alvo;
+            }
+            if (noMesAtual) quota = Math.min(quota, pool);
+            isReduzido = quota < alvo - 0.01;
+        }
+
+        saldo = saldoAntes - quota;
+        if (noMesAtual) { pool -= quota; distribuidoMesAtual += quota; }
+        totalDistribuido += quota;
+
+        if (saldo < saldoMinimo) { saldoMinimo = saldo; dataMinimo = dataKey; }
+        if (saldo < -0.01 && !primeiroDiaNegativo) primeiroDiaNegativo = dataKey;
+
+        dias.push({
+            data: d, dataKey, entradas, saidas, eventos, netEventos, saldoAntes,
+            quotaDistribuida: quota, isReduzido, saldoCorrido: saldo,
+            temEvento: eventos.length > 0
+        });
+    }
+
+    return {
+        dias, saldoInicial, saldoFinal: saldo, saldoMinimo, dataMinimo, primeiroDiaNegativo,
+        totalDistribuido, distribuidoMesAtual, totalTeorico,
+        restanteNaoDistribuido: pool
+    };
+}
+
+
+/**
+ * Módulo único de diluição mensal (item 3).
+ * Uma fonte de verdade para: planejado sem vencimento, já realizado no mês,
+ * restante a distribuir, e breakdown por caixa.
+ *
+ * Abate do restante: gasto_direto, gasto_cartao, pagamento_divida, aporte_reserva
+ * (evita dupla contagem de dívida/reserva no fluxo projetado).
+ *
+ * opcoes.custodiaId — filtra categorias pela custódia padrão (tela Fluxo).
+ * opcoes.somenteCaixas — array opcional ['base','vida'] para ignorar futuro.
+ */
+function _tiposAbatemDiluido() {
+    return ['gasto_direto', 'gasto_cartao', 'pagamento_divida', 'aporte_reserva'];
+}
+
+function _calcularDiluicaoMensal(orc, opcoes) {
+    opcoes = opcoes || {};
+    const vazio = {
+        categorias: [],
+        planejado: 0,
+        realizado: 0,
+        restante: 0,
+        porCaixa: {
+            base:  { planejado: 0, realizado: 0, restante: 0 },
+            vida:  { planejado: 0, realizado: 0, restante: 0 },
+            futuro:{ planejado: 0, realizado: 0, restante: 0 }
+        },
+        porCategoria: {}
+    };
+    if (!orc) return vazio;
+
+    const custodiaFiltro = opcoes.custodiaId || null;
+    const somenteCaixas = Array.isArray(opcoes.somenteCaixas) ? opcoes.somenteCaixas : null;
+
+    const categorias = (orc.categorias || []).filter(c => {
+        if (!c || _categoriaParcelasQuitada(c)) return false;
+        if (c.vencimento !== null && c.vencimento !== undefined && c.vencimento !== '') return false;
+        if (somenteCaixas && somenteCaixas.indexOf(c.caixa) < 0) return false;
+        if (custodiaFiltro && c.custodiaPadraoId !== custodiaFiltro) return false;
+        return true;
+    });
+
+    const ids = new Set(categorias.map(c => c.id));
+    const porCategoria = {};
+    categorias.forEach(c => {
+        porCategoria[c.id] = {
+            id: c.id,
+            nome: c.nome || '',
+            caixa: c.caixa || null,
+            planejado: Number(c.valor) || 0,
+            realizado: 0,
+            restante: Number(c.valor) || 0
+        };
+    });
+
+    const tipos = _tiposAbatemDiluido();
+    (orc.historicoRegistros || []).forEach(r => {
+        if (!r || r.anulado) return;
+        if (tipos.indexOf(r.tipo) < 0) return;
+        if (!_pertenceMesAtual(r.data)) return;
+        const cid = r.categoriaId;
+        if (!cid || !ids.has(cid)) return;
+        const v = Number(r.valor) || 0;
+        if (v <= 0) return;
+        porCategoria[cid].realizado += v;
+    });
+
+    const porCaixa = {
+        base:  { planejado: 0, realizado: 0, restante: 0 },
+        vida:  { planejado: 0, realizado: 0, restante: 0 },
+        futuro:{ planejado: 0, realizado: 0, restante: 0 }
+    };
+    let planejado = 0, realizado = 0;
+    Object.keys(porCategoria).forEach(id => {
+        const row = porCategoria[id];
+        row.restante = Math.max(0, row.planejado - row.realizado);
+        planejado += row.planejado;
+        realizado += row.realizado;
+        const cx = row.caixa;
+        if (porCaixa[cx]) {
+            porCaixa[cx].planejado += row.planejado;
+            porCaixa[cx].realizado += row.realizado;
+            porCaixa[cx].restante += row.restante;
+        }
+    });
+
+    return {
+        categorias: categorias,
+        planejado: planejado,
+        realizado: realizado,
+        restante: Math.max(0, planejado - realizado),
+        porCaixa: porCaixa,
+        porCategoria: porCategoria
+    };
+}
+
 function calcularTaxaViabilidadeConsumo(orc, forcarProtecao = null) {
     const proteger = forcarProtecao !== null ? forcarProtecao : (orc && orc.configFluxo && orc.configFluxo.protegerSaldo !== false);
     
@@ -2965,38 +3186,22 @@ function calcularTaxaViabilidadeConsumo(orc, forcarProtecao = null) {
         return { taxaBase: 1, taxaVida: 1, totalAlocado: null, totalOriginal: 0, corteTotal: 0, totalBaseOriginal: 0, totalVidaOriginal: 0 };
     }
     
-    // Ignora cache se for simulação para garantir o cálculo exato
-    if (forcarProtecao === null && Date.now() - _cacheTaxaViabilidade.timestamp < 1000) {
+    // Cache curto; invalidado por tempo. Simulação (forcarProtecao != null) nunca usa cache.
+    if (forcarProtecao === null && Date.now() - _cacheTaxaViabilidade.timestamp < 400) {
         return _cacheTaxaViabilidade.valor;
     }
 
     const fluxo = projetarFluxo(orc, { dias: 30 });
-    const categoriasSemVenc = (orc.categorias || []).filter(c => !c.vencimento && !_categoriaParcelasQuitada(c));
-    
-    const categoriasBase = categoriasSemVenc.filter(c => c.caixa === 'base');
-    const categoriasVida = categoriasSemVenc.filter(c => c.caixa === 'vida');
-    
-    let totalBaseRestante = 0;
-    let totalVidaRestante = 0;
-    
-        categoriasBase.forEach(c => {
-        totalBaseRestante += Math.max(0, (Number(c.valor) || 0));
-    });
-    
-        categoriasVida.forEach(c => {
-        totalVidaRestante += Math.max(0, (Number(c.valor) || 0));
-    });
-
-    // FIX: agrega o total de consumo (base + vida) usado como teto do corte.
-    // Sem esta linha, `totalRestante` era undefined e derrubava toda a
-    // proteção de saldo (barras, sincronização de limites, fluxo).
+    // Item 3: diluição única — resto de Base/Vida já abatido (inclui dívida/reserva se couber)
+    const dil = _calcularDiluicaoMensal(orc, { somenteCaixas: ['base', 'vida'] });
+    const totalBaseRestante = dil.porCaixa.base.restante;
+    const totalVidaRestante = dil.porCaixa.vida.restante;
     const totalRestante = totalBaseRestante + totalVidaRestante;
 
     if (totalRestante <= 0) {
         return { taxaBase: 1, taxaVida: 1, totalAlocado: null, totalOriginal: 0, corteTotal: 0, totalBaseOriginal: 0, totalVidaOriginal: 0 };
     }
 
-        let totalDistribuidoReal = 0;
     // P0.3: saldo operacional unificado
     let saldoCorrido;
     {
@@ -3005,49 +3210,12 @@ function calcularTaxaViabilidadeConsumo(orc, forcarProtecao = null) {
             .filter(c => !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura)
             .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
     }
-    const inicioDt = new Date(fluxo.inicio + 'T00:00:00');
-    let distribuidoRestante = totalRestante;
-    
-    // CORREÇÃO: O ritmo diário deve ser a média cheia, não baseada no que sobrou do mês.
-    const gastoDiarioBase = (totalBaseRestante + totalVidaRestante) / 30; 
-
-    for (let i = 0; i < fluxo.dias; i++) {
-        const d = new Date(inicioDt);
-        d.setDate(inicioDt.getDate() + i);
-        const dataKey = d.toISOString().split('T')[0];
-        const diaData = fluxo.porDia[dataKey] || { eventos: [] };
-        
-        const entradas = diaData.eventos.filter(e => e.tipo === 'recebimento').reduce((s, e) => s + (e.valor || 0), 0);
-        const saidas = diaData.eventos.filter(e => e.tipo === 'vencimento').reduce((s, e) => s + (e.valor || 0), 0);
-        const saldoAntes = saldoCorrido + (entradas - saidas);
-
-        let quotaDia = 0;
-        if (saldoAntes > 0 && distribuidoRestante > 0) {
-            let minFuturo = 0, acumuladoFuturo = 0;
-            const diasParaOlhar = Math.min(20, fluxo.dias - i - 1);
-            
-            for (let j = 1; j <= diasParaOlhar; j++) {
-                const dataFutura = new Date(inicioDt);
-                dataFutura.setDate(inicioDt.getDate() + i + j);
-                const diaFuturo = fluxo.porDia[dataFutura.toISOString().split('T')[0]] || { eventos: [] };
-                const entFut = diaFuturo.eventos.filter(e => e.tipo === 'recebimento').reduce((s, e) => s + (e.valor || 0), 0);
-                const saiFut = diaFuturo.eventos.filter(e => e.tipo === 'vencimento').reduce((s, e) => s + (e.valor || 0), 0);
-                acumuladoFuturo += (entFut - saiFut);
-                if (acumuladoFuturo < minFuturo) minFuturo = acumuladoFuturo;
-            }
-
-                      let limiteHoje = Math.max(0, saldoAntes + minFuturo - 10);
-            
-            // CORREÇÃO: Usa a média diária real e remove a aceleração artificial.
-            let alvoDia = gastoDiarioBase;
-
-            quotaDia = Math.min(alvoDia, limiteHoje, distribuidoRestante);
-        }
-        
-        saldoCorrido = saldoAntes - quotaDia;
-        distribuidoRestante -= quotaDia;
-        totalDistribuidoReal += quotaDia;
-    }
+    // Ritmo único: só o que resta de Base/Vida neste mês, com proteção
+    const simTaxa = _simularDiluicaoDiaria(orc, fluxo, {
+        saldoInicial: saldoCorrido, restante: totalRestante, planejado: 0,
+        protegerSaldo: true, proximosMeses: false
+    });
+    const totalDistribuidoReal = simTaxa.distribuidoMesAtual;
 
     const corteTotalReal = Math.max(0, totalRestante - totalDistribuidoReal);
     
@@ -3087,7 +3255,13 @@ function calcularTaxaViabilidadeConsumo(orc, forcarProtecao = null) {
     return resultado;
 }
 
-function calcularLimiteCategoriaSemana(cat, semana) {
+/**
+ * Limite semanal de uma categoria.
+ * opcoes.aplicarProtecao = true → multiplica pela taxa de viabilidade (capacidade).
+ * Default false → plano declarado, sem reescrever o combinado.
+ */
+function calcularLimiteCategoriaSemana(cat, semana, opcoes) {
+    opcoes = opcoes || {};
     if (!cat || !semana) return 0;
     
     let estaQuitada = _categoriaParcelasQuitada(cat);
@@ -3116,39 +3290,45 @@ function calcularLimiteCategoriaSemana(cat, semana) {
     }
 
     let baseSemanal = valor / DIVISOR_SEMANAL;
-    if (state.orcamento && state.orcamento.nivel >= 3) {
+    // Item 5: proteção NÃO reescreve o plano — só a capacidade
+    if (opcoes.aplicarProtecao && state.orcamento && (state.orcamento.nivel || 1) >= 3) {
         const taxas = calcularTaxaViabilidadeConsumo(state.orcamento);
-        if (cat.caixa === 'base') {
-            baseSemanal *= taxas.taxaBase;
-        } else if (cat.caixa === 'vida') {
-            baseSemanal *= taxas.taxaVida;
-        }
+        if (cat.caixa === 'base') baseSemanal *= (taxas.taxaBase != null ? taxas.taxaBase : 1);
+        else if (cat.caixa === 'vida') baseSemanal *= (taxas.taxaVida != null ? taxas.taxaVida : 1);
     }
     
     return baseSemanal;
 }
 
 /**
- * Limite TOTAL de uma caixa na semana (soma das categorias).
- * Fallback para N1 (sem categorias detalhadas): total / 4,33.
+ * Limite (plano) total de uma caixa na semana.
+ * Fallback N1: total mensal / 4,33.
+ * opcoes.aplicarProtecao → capacidade (após corte de proteção).
  */
-function calcularLimiteCaixaSemana(caixa, semana) {
+function calcularLimiteCaixaSemana(caixa, semana, opcoes) {
+    opcoes = opcoes || {};
     if (!semana) return 0;
     const categorias = (state.orcamento.categorias || []).filter(c => c.caixa === caixa);
 
     if (categorias.length === 0) {
-        if (caixa === 'base') return (state.orcamento.base?.fortalezaTotal || 0) / DIVISOR_SEMANAL;
-        if (caixa === 'vida') return (state.orcamento.vida?.total || 0) / DIVISOR_SEMANAL;
-        if (caixa === 'futuro') return (state.orcamento.futuro?.total || 0) / DIVISOR_SEMANAL;
-        return 0;
+        let base = 0;
+        if (caixa === 'base') base = (state.orcamento.base?.fortalezaTotal || 0) / DIVISOR_SEMANAL;
+        else if (caixa === 'vida') base = (state.orcamento.vida?.total || 0) / DIVISOR_SEMANAL;
+        else if (caixa === 'futuro') base = (state.orcamento.futuro?.total || 0) / DIVISOR_SEMANAL;
+        if (opcoes.aplicarProtecao && state.orcamento && (state.orcamento.nivel || 1) >= 3 && (caixa === 'base' || caixa === 'vida')) {
+            const taxas = calcularTaxaViabilidadeConsumo(state.orcamento);
+            const t = caixa === 'base' ? taxas.taxaBase : taxas.taxaVida;
+            base *= (t != null ? t : 1);
+        }
+        return base;
     }
 
-    return categorias.reduce((soma, c) => soma + calcularLimiteCategoriaSemana(c, semana), 0);
+    return categorias.reduce((soma, c) => soma + calcularLimiteCategoriaSemana(c, semana, opcoes), 0);
 }
 
 /**
- * Atualiza limites da semana aberta a partir dos totais mensais.
- * Futuro: se não há vencimentos na semana, usa futuro.total / DIVISOR_SEMANAL.
+ * Atualiza limites da semana aberta.
+ * limite = plano declarado; capacidade = o que o caixa aguenta com proteção (N3).
  */
 function sincronizarLimitesSemanaAtual() {
     const semana = state.orcamento && state.orcamento.semanaAtual;
@@ -3157,6 +3337,17 @@ function sincronizarLimitesSemanaAtual() {
     semana.base.limite = calcularLimiteCaixaSemana('base', semana);
     semana.vida.limite = calcularLimiteCaixaSemana('vida', semana);
     semana.futuro.limite = calcularLimiteCaixaSemana('futuro', semana);
+
+    // Capacidade: só Base/Vida em N3 com proteção; Futuro = plano (meta mínima)
+    if ((state.orcamento.nivel || 1) >= 3) {
+        semana.base.capacidade = calcularLimiteCaixaSemana('base', semana, { aplicarProtecao: true });
+        semana.vida.capacidade = calcularLimiteCaixaSemana('vida', semana, { aplicarProtecao: true });
+        semana.futuro.capacidade = semana.futuro.limite;
+    } else {
+        semana.base.capacidade = semana.base.limite;
+        semana.vida.capacidade = semana.vida.limite;
+        semana.futuro.capacidade = semana.futuro.limite;
+    }
 
     const rendaMensal = state.orcamento.base?.rendaBase || 0;
     if (typeof semana.rendaEstimada !== 'number' || semana.rendaEstimada <= 0) {
@@ -3167,23 +3358,18 @@ function sincronizarLimitesSemanaAtual() {
 function atualizarTotaisEnvelopes() {
     if (!state.orcamento) return;
     const cats = state.orcamento.categorias || [];
-    // P0.1: no N1 sem categorias, não zerar o plano manual das caixinhas
-    if (cats.length === 0 && (state.orcamento.nivel || 1) < 2) return;
+    // 2.1: só recalcula uma caixa quando ela TEM categorias; senão preserva o plano manual (N1)
 
     // Calcula a soma real de cada caixa
-    const baseTotal = cats.filter(c => c.caixa === 'base' && !_categoriaParcelasQuitada(c)).reduce((s, c) => s + (c.valor || 0), 0);
-    const vidaTotal = cats.filter(c => c.caixa === 'vida' && !_categoriaParcelasQuitada(c)).reduce((s, c) => s + (c.valor || 0), 0);
-    const futuroTotal = cats.filter(c => c.caixa === 'futuro' && !_categoriaParcelasQuitada(c)).reduce((s, c) => s + (c.valor || 0), 0);
+    const somaCaixa = (cx) => cats.filter(c => c.caixa === cx && !_categoriaParcelasQuitada(c)).reduce((s, c) => s + (c.valor || 0), 0);
+    const temCaixa = (cx) => cats.some(c => c.caixa === cx);
 
-    // Atualiza o estado global
     if (!state.orcamento.base) state.orcamento.base = {};
-    state.orcamento.base.fortalezaTotal = baseTotal;
-
     if (!state.orcamento.vida) state.orcamento.vida = {};
-    state.orcamento.vida.total = vidaTotal;
-
     if (!state.orcamento.futuro) state.orcamento.futuro = {};
-    state.orcamento.futuro.total = futuroTotal;
+    if (temCaixa('base'))   state.orcamento.base.fortalezaTotal = somaCaixa('base');
+    if (temCaixa('vida'))   state.orcamento.vida.total = somaCaixa('vida');
+    if (temCaixa('futuro')) state.orcamento.futuro.total = somaCaixa('futuro');
 
     // Atualiza os limites da semana atual
     if (state.orcamento.semanaAtual && !state.orcamento.semanaAtual.fechada) {
@@ -3287,18 +3473,11 @@ function calcularLiquidezProjetada(orc) {
     const temAlgumEvento = (fluxo.eventos || []).length > 0;
     if (!temAlgumEvento) return { temAlgumEvento: false, status: 'sem_dados', dataExibicao: null, saldoMinimo: 0 };
 
-    const categoriasSemVenc = (orc.categorias || []).filter(c => !c.vencimento && !_categoriaParcelasQuitada(c));
-    const totalMensalPlanejado = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
-    
-    let gastoRealizadoMes = 0;
-    (orc.historicoRegistros || []).forEach(r => {
-        if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data)) {
-            if (categoriasSemVenc.some(c => c.id === r.categoriaId)) {
-                gastoRealizadoMes += (Number(r.valor) || 0);
-            }
-        }
-    });
-    const totalMensalSemVenc = Math.max(0, totalMensalPlanejado - gastoRealizadoMes);
+    // Item 3: diluição única
+    const dilLiq = _calcularDiluicaoMensal(orc);
+    const totalMensalPlanejado = dilLiq.planejado;
+    const gastoRealizadoMes = dilLiq.realizado;
+    const totalMensalSemVenc = dilLiq.restante;
     
     // P0.3: saldo operacional unificado (exclui reserva; fatura já líquida — sem evento extra de fatura)
     let saldoInicialProj = 0;
@@ -3310,75 +3489,15 @@ function calcularLiquidezProjetada(orc) {
             .filter(c => !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura)
             .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
     }
-    let saldoCorrido = saldoInicialProj;
-    let distribuidoRestante = totalMensalSemVenc;
     const protegerSaldo = orc.configFluxo?.protegerSaldo !== false;
-    
-    let saldoMinimo = saldoCorrido;
-    let dataMinimo = null;
-    let primeiroDiaNegativo = null; // NOVO: Guarda a data do primeiro dia no vermelho
+    const simLiq = _simularDiluicaoDiaria(orc, fluxo, {
+        saldoInicial: saldoInicialProj, restante: totalMensalSemVenc, planejado: totalMensalPlanejado,
+        protegerSaldo: protegerSaldo
+    });
+    const saldoMinimo = simLiq.saldoMinimo;
+    const dataMinimo = simLiq.dataMinimo;
+    const primeiroDiaNegativo = simLiq.primeiroDiaNegativo;
 
-    const inicioDt = new Date(fluxo.inicio + 'T00:00:00');
-    
-    for (let i = 0; i < fluxo.dias; i++) {
-        const d = new Date(inicioDt);
-        d.setDate(inicioDt.getDate() + i);
-        const dataKey = d.toISOString().split('T')[0];
-        const diaData = fluxo.porDia[dataKey] || { entradas: 0, saidas: 0, eventos: [] };
-        
-        let eventosDia = diaData.eventos || [];
-        const entradas = eventosDia.filter(e => e.tipo === 'recebimento').reduce((s, e) => s + (e.valor || 0), 0);
-        const saidas = eventosDia.filter(e => e.tipo === 'vencimento').reduce((s, e) => s + (e.valor || 0), 0);
-        const netEventos = entradas - saidas;
-        const saldoAntes = saldoCorrido + netEventos;
-        
-        let quotaDia = 0;
-        if (saldoAntes > 0 || !protegerSaldo) {
-            let qBase = totalMensalSemVenc / fluxo.dias;
-            if (protegerSaldo) {
-                let minFuturo = 0;
-                let acumuladoFuturo = 0;
-                const diasParaOlhar = Math.min(20, fluxo.dias - i - 1);
-                for (let j = 1; j <= diasParaOlhar; j++) {
-                    const dataFutura = new Date(inicioDt);
-                    dataFutura.setDate(inicioDt.getDate() + i + j);
-                    const dataKeyFutura = dataFutura.toISOString().split('T')[0];
-                    const diaFuturo = fluxo.porDia[dataKeyFutura] || { entradas: 0, saidas: 0, eventos: [] };
-                    let evsFut = diaFuturo.eventos || [];
-                    const entFut = evsFut.filter(e => e.tipo === 'recebimento').reduce((s, e) => s + (e.valor || 0), 0);
-                    const saiFut = evsFut.filter(e => e.tipo === 'vencimento').reduce((s, e) => s + (e.valor || 0), 0);
-                    acumuladoFuturo += (entFut - saiFut);
-                    if (acumuladoFuturo < minFuturo) minFuturo = acumuladoFuturo;
-                }
-                let limiteHoje = saldoAntes + minFuturo - 10;
-                if (limiteHoje < 0) limiteHoje = 0;
-                if (distribuidoRestante > 0) {
-                    let qRestanteMedia = distribuidoRestante / (fluxo.dias - i);
-                    let alvoDia = Math.max(qBase, qRestanteMedia);
-                    if (saldoAntes > distribuidoRestante * 2) alvoDia *= 1.5; 
-                    else if (saldoAntes > distribuidoRestante) alvoDia *= 1.2;
-                    quotaDia = Math.min(alvoDia, limiteHoje, distribuidoRestante);
-                }
-            } else {
-                if (distribuidoRestante > 0) quotaDia = Math.min(qBase, distribuidoRestante);
-            }
-        }
-        
-        saldoCorrido = saldoAntes - quotaDia;
-        distribuidoRestante -= quotaDia;
-        
-        // Rastreia o pior saldo (para o status "Atenção")
-        if (saldoCorrido < saldoMinimo) {
-            saldoMinimo = saldoCorrido;
-            dataMinimo = dataKey;
-        }
-        
-        // NOVO: Registra o primeiro dia negativo
-        if (saldoCorrido < -0.01 && !primeiroDiaNegativo) {
-            primeiroDiaNegativo = dataKey;
-        }
-    }
-    
     let status = 'folga';
     let dataExibicao = dataMinimo; // Padrão: mostra o pior dia
     
@@ -3873,9 +3992,13 @@ function renderizarOrcamentoCompleto(container, orc) {
             recuperacaoAtiva = true;
             let subRecuperacao = '';
             if (sinal.s1 && sinal.s2) {
-                subRecuperacao = 'Saldo negativo e boletos vencidos';
+                subRecuperacao = (sinal.s1Origem === 'estoque')
+                    ? 'Estoque negativo e boletos vencidos'
+                    : 'Saldo negativo e boletos vencidos';
             } else if (sinal.s1) {
-                subRecuperacao = 'Saldo negativo essa semana';
+                subRecuperacao = (sinal.s1Origem === 'estoque')
+                    ? 'Estoque operacional negativo (carteiras − faturas)'
+                    : 'Saldo negativo essa semana';
             } else if (sinal.s2) {
                 subRecuperacao = `${sinal.contasVencidas.length} conta${sinal.contasVencidas.length > 1 ? 's' : ''} vencida${sinal.contasVencidas.length > 1 ? 's' : ''}`;
             }
@@ -4647,36 +4770,104 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         if (!opcoes.sobraAnterior && cx.sobraAnterior) sobraAnterior = Number(cx.sobraAnterior) || 0;
     }
 
-    const consumidoReal = gastoSeguro + carrego;
+    const isFuturo = (id === 'futuro');
+    // Futuro = meta mínima: carrego/passivo não se aplica; barra mede progresso até 100%
+    if (isFuturo) {
+        carrego = 0;
+        sobraAnterior = 0;
+    }
+
+    const consumidoReal = isFuturo ? gastoSeguro : (gastoSeguro + carrego);
     const disponivelReal = limiteSeguro - consumidoReal;
 
     const percentual = limiteSeguro > 0
         ? Math.min((consumidoReal / limiteSeguro) * 100, 100)
-        : (consumidoReal > 0 ? 100 : 0);
+        : (isFuturo ? 0 : (consumidoReal > 0 ? 100 : 0));
 
-        let cor = 'barra-verde';
+    let cor = 'barra-verde';
     let aviso = '';
+    const fmt = formatarNumero;
+    let linhaReal = '';
 
-    if (limiteSeguro === 0) {
+    if (isFuturo) {
+        // Meta mínima: acima do plano = progresso (barra 100%, verde);
+        // abaixo = "atrás do combinado" (sem vermelho de estouro; tom por streak)
+        const streak = (state.orcamento && Number(state.orcamento.futuroStreak)) || 0;
+        const protegeuBase = !!(state.orcamento && state.orcamento.futuroStreakProtegeuBase);
+        const atrasado = limiteSeguro > 0 && gastoSeguro < limiteSeguro - 0.05;
+        const excedente = limiteSeguro > 0 && gastoSeguro > limiteSeguro + 0.05;
+
+        if (limiteSeguro === 0) {
+            if (gastoSeguro > 0) {
+                cor = 'barra-verde';
+                linhaReal = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 6px;">Progresso no Futuro (sem meta semanal definida).</div>`;
+            }
+        } else if (!atrasado) {
+            cor = 'barra-verde';
+            if (excedente) {
+                linhaReal = `<div style="font-size: 0.9rem; color: var(--success); margin-top: 6px; line-height: 1.35;">
+                    <strong>Combinado cumprido</strong> · progresso além do plano R$ ${fmt(gastoSeguro - limiteSeguro)}
+                </div>`;
+            } else if (gastoSeguro >= limiteSeguro - 0.05) {
+                linhaReal = `<div style="font-size: 0.9rem; color: var(--success); margin-top: 6px;">Combinado cumprido.</div>`;
+            }
+        } else {
+            // Atrás do combinado — sem vermelho de alarme
+            const falta = limiteSeguro - gastoSeguro;
+            if (streak >= 4) {
+                cor = 'barra-amarela';
+                aviso = `<div style="font-size: 0.9rem; color: var(--warning); margin-top: 6px; line-height: 1.35;">
+                    Atrás do combinado há ${streak} semanas. Se a meta tá sempre fora de alcance, talvez ela esteja alta. Nada de culpa.
+                </div>`;
+            } else if (streak >= 3) {
+                cor = 'barra-amarela';
+                aviso = `<div style="font-size: 0.9rem; color: var(--warning); margin-top: 6px; line-height: 1.35;">
+                    Atrás do combinado há ${streak} semanas. A meta ainda faz sentido pro seu mês?
+                </div>`;
+            } else if (streak >= 2) {
+                cor = 'barra-amarela';
+                aviso = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 6px; line-height: 1.35;">
+                    Essa semana também ficou atrás do combinado. Quer olhar?
+                </div>`;
+            } else {
+                cor = 'barra-verde'; // neutro — só o número
+            }
+            linhaReal = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 6px; line-height: 1.35;">
+                <strong>Atrás do combinado</strong> em R$ ${fmt(falta)}${streak >= 1 ? ` · há ${streak} semana${streak > 1 ? 's' : ''}` : ''}
+            </div>`;
+            if (protegeuBase) {
+                aviso = `<div style="font-size: 0.9rem; color: var(--primary); margin-top: 6px; line-height: 1.35;">
+                    Você protegeu a Base — tá certo. O Futuro espera a próxima janela.
+                </div>` + (aviso || '');
+            }
+        }
+    } else if (limiteSeguro === 0) {
         if (gastoSeguro > 0 || carrego > 0) {
             cor = 'barra-vermelha';
             aviso = '<div style="font-size: 0.9rem; color: var(--danger); margin-top: 6px;">Sem orçamento definido. Todo gasto aqui é acima do planejado.</div>';
         }
     } else {
         if (consumidoReal > limiteSeguro + 0.05) {
-            cor = 'barra-vermelha'; // Estourou de verdade
+            cor = 'barra-vermelha';
         } else if (consumidoReal >= limiteSeguro - 0.05) {
-            cor = 'barra-verde'; // Bateu a meta exata (ficará com a cor principal do app)
+            cor = 'barra-verde';
         } else if (percentual >= 80) {
-            cor = 'barra-amarela'; // Zona de atenção (faltando pouco)
+            cor = 'barra-amarela';
         }
     }
 
-    
-        const fmt = formatarNumero;
-    let linhaReal = '';
-    
-    if (carrego > 0 || sobraAnterior > 0 || disponivelReal < -0.05) {
+    if (isFuturo) {
+        // Dívida com vencimento passado e sem pagamento = obrigação em atraso (não é "meta mínima")
+        const obrig = _obrigacoesFuturoVencidas(state.orcamento);
+        if (obrig.length > 0) {
+            cor = 'barra-vermelha';
+            const lista = obrig.map(o => `${o.nome} (venceu dia ${o.vencimento}, R$ ${fmt(o.valor)})`).join('; ');
+            aviso = `<div style="font-size: 0.9rem; color: var(--danger); margin-top: 6px; line-height: 1.35;">
+                <strong>Vencida e não paga:</strong> ${lista}. Isso é atraso de verdade, não só meta. Veja o Plano de recuperação.
+            </div>` + (aviso || '');
+        }
+    }
+    if (!isFuturo && (carrego > 0 || sobraAnterior > 0 || disponivelReal < -0.05)) {
         const bits = [];
         if (carrego > 0) {
             bits.push(`adiantamento na semana passada R$ ${fmt(carrego)}`);
@@ -4684,7 +4875,7 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         if (sobraAnterior > 0) {
             bits.push(`sobra da semana passada R$ ${fmt(sobraAnterior)} (não aumenta o combinado)`);
         }
-        
+
         let realTxt = '';
         if (disponivelReal > 0.05) {
             realTxt = `ainda cabe no combinado R$ ${fmt(disponivelReal)}`;
@@ -4712,6 +4903,20 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
     if (cor === 'barra-vermelha') barClass = 'bad';
     else if (cor === 'barra-amarela') barClass = 'warn';
 
+    // Item 5: plano (limite) × capacidade (proteção) — dois números, plano intacto
+    let linhaCapacidade = '';
+    if (!isFuturo && id && state.orcamento && state.orcamento.semanaAtual && state.orcamento.semanaAtual[id]) {
+        const cx = state.orcamento.semanaAtual[id];
+        const cap = (typeof cx.capacidade === 'number') ? cx.capacidade : null;
+        const proteger = state.orcamento.configFluxo && state.orcamento.configFluxo.protegerSaldo !== false;
+        if (proteger && cap != null && limiteSeguro > 0 && cap < limiteSeguro - 0.05) {
+            linhaCapacidade = `<div style="font-size: 0.85rem; color: var(--warning); margin-top: 6px; line-height: 1.35;">
+                <strong>Plano</strong> R$ ${fmt(limiteSeguro)} · <strong>Capacidade do caixa</strong> R$ ${fmt(cap)}
+                <span style="color: var(--secondary);"> — proteção ativa para não furar o estoque</span>
+            </div>`;
+        }
+    }
+
     // Layout novo (Fatia A): envelope-card compacto
     return `
         <div class="envelope-card" ${onclickAttr} role="button" tabindex="0">
@@ -4730,6 +4935,7 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
             </div>
             <div class="envelope-bar"><div class="${barClass}" style="width:${percentual}%"></div></div>
             ${linhaReal}
+            ${linhaCapacidade}
             ${sobraAnterior > 0 && id ? `<button type="button" class="btn-option" style="margin-top:8px;justify-content:center;border-color:var(--primary);color:var(--primary);font-size:0.9rem;" onclick="event.stopPropagation();abrirDestinoSobra('${id}')">Dar destino à sobra</button>` : ''}
             ${aviso}
         </div>
@@ -5182,38 +5388,60 @@ function renderizarCardSaldo(semana, orc, opcoes) {
  */
 /**
  * Fatia 7 / D3 — passivo de meta (envelope), distinto de saldoAnterior (caixa).
- * passivoEntrada = carrego/passivoMeta herdado no início da semana.
- * Novo passivo = max(0, gasto + passivoEntrada − limite).
- * Sobra da semana primeiro quita passivo; o que restar é só informativo (não infla meta).
- * Assim o passivo NÃO expira quando gasto ≈ limite sem quitar a dívida de meta.
+ * Base/Vida (teto): passivoEntrada herda; novo passivo = max(0, gasto + passivoEntrada − limite).
+ * Futuro (meta mínima, opcoes.metaMinima):
+ *   - pagar a mais = progresso (aceleracao); NÃO gera passivoMeta nem carrego
+ *   - pagar a menos = atrasado (sinal temporal); NÃO gera passivo
+ *   - excedente NÃO rola como crédito de meta na semana seguinte
  */
-function _resultadoCaixaNoFechamento(caixaObj) {
+function _resultadoCaixaNoFechamento(caixaObj, opcoes) {
+    opcoes = opcoes || {};
     const limite = (caixaObj && caixaObj.limite) || 0;
     const gasto = (caixaObj && caixaObj.gasto) || 0;
+
+    if (opcoes.metaMinima) {
+        const aceleracao = Math.max(0, gasto - limite);
+        const atrasado = Math.max(0, limite - gasto);
+        return {
+            estouro: 0,
+            estouroSemana: 0,
+            sobra: 0,
+            passivoMeta: 0,
+            passivoEntrada: 0,
+            aceleracao: aceleracao,
+            atrasado: atrasado,
+            limite: limite,
+            gasto: gasto
+        };
+    }
+
     const passivoEntrada = Number(
         (caixaObj && (caixaObj.passivoMeta != null ? caixaObj.passivoMeta : caixaObj.carrego)) || 0
     ) || 0;
-    const posicao = gasto + passivoEntrada - limite;
-    const passivoMeta = Math.max(0, posicao);
-    const sobraBruta = Math.max(0, limite - gasto);
-    const sobra = Math.max(0, sobraBruta - passivoEntrada); // após quitar passivo herdado
     const estouroSemana = Math.max(0, gasto - limite);
+    const sobraBruta = Math.max(0, limite - gasto);
+    // Sobra da semana primeiro quita passivo herdado
+    let passivoAposSobra = Math.max(0, passivoEntrada - sobraBruta);
+    const sobra = Math.max(0, sobraBruta - passivoEntrada);
+    // Passivo de meta só é quitado por sobra real (gasto < limite) — sem perdão automático.
+    // Gastar exatamente o limite mantém o passivo herdado; isso é intencional e visível no resumo.
+    // Novo estouro da semana soma ao passivo restante; residual centavos zera (quita de fato)
+    let passivoMeta = passivoAposSobra + estouroSemana;
+    if (passivoMeta > 0 && passivoMeta < 0.5) passivoMeta = 0;
     return {
-        estouro: passivoMeta, // compat: o que carrega = passivo de meta final
+        estouro: passivoMeta,
         estouroSemana: estouroSemana,
         sobra: sobra,
         passivoMeta: passivoMeta,
         passivoEntrada: passivoEntrada,
+        aceleracao: 0,
+        atrasado: 0,
         limite: limite,
         gasto: gasto
     };
 }
 
-/**
- * Calcula estouro/sobra por categoria na semana (só registros declarados).
- * Sem rateio: categoria sem meta (valor 0) não gera carrego de meta —
- * o efeito agregado permanece na caixinha.
- */
+
 function calcularCarregoCategoriasDaSemana(semana) {
     if (!semana || !semana.inicio || !semana.fim) return {};
     const cats = state.orcamento.categorias || [];
@@ -5242,11 +5470,15 @@ function calcularCarregoCategoriasDaSemana(semana) {
                 return false;
             })
             .reduce((s, r) => s + (Number(r.valor) || 0), 0);
-        const passivoEntrada = Number((abertos[cat.id] && abertos[cat.id].estouro) || 0) || 0;
+        // Futuro = meta mínima: não gera carrego/passivo por categoria
+        const isFuturoCat = cat.caixa === 'futuro';
+        const passivoEntrada = isFuturoCat ? 0 : (Number((abertos[cat.id] && abertos[cat.id].estouro) || 0) || 0);
         const posicao = gastoSem + passivoEntrada - metaSem;
-        const estouro = Math.max(0, posicao);
-        const sobra = Math.max(0, -posicao);
-        if (estouro > 0 || sobra > 0 || passivoEntrada > 0) {
+        const estouro = isFuturoCat ? 0 : Math.max(0, posicao);
+        const sobra = isFuturoCat ? 0 : Math.max(0, -posicao);
+        const aceleracao = isFuturoCat ? Math.max(0, gastoSem - metaSem) : 0;
+        const atrasado = isFuturoCat ? Math.max(0, metaSem - gastoSem) : 0;
+        if (estouro > 0 || sobra > 0 || passivoEntrada > 0 || aceleracao > 0 || atrasado > 0) {
             mapa[cat.id] = {
                 nome: cat.nome || '',
                 caixa: cat.caixa || null,
@@ -5254,7 +5486,9 @@ function calcularCarregoCategoriasDaSemana(semana) {
                 gastoSem,
                 passivoEntrada,
                 estouro,
-                sobra
+                sobra,
+                aceleracao,
+                atrasado
             };
         }
     });
@@ -5325,7 +5559,7 @@ function renderizarVerdadeDecisao(orc) {
     const nivel = (orc && orc.nivel) || 1;
     let frase;
     if (nivel >= 3) {
-        frase = 'O que manda no “posso gastar no débito” é o Dinheiro nas carteiras (custódia) junto com o movimento desta semana. As barras são o plano — ritmo, não saldo bancário.';
+        frase = 'O que manda no “posso gastar no débito” é o dinheiro nas carteiras junto com o movimento desta semana. As barras mostram o <strong>plano</strong> (combinado). Se a proteção de saldo estiver ligada, a <strong>capacidade</strong> do caixa pode ser menor — os dois números ficam visíveis, sem apagar o plano.';
     } else if (nivel >= 2) {
         frase = 'O que manda agora é a situação real da semana (o que veio da anterior + o que entrou − o que saiu). As barras são o plano por caixinha; o detalhe por categoria não se soma ao total da caixinha.';
     } else {
@@ -5787,14 +6021,15 @@ function iniciarNovaSemana() {
         const pm = (cx) => {
             if (!cx) return 0;
             if (typeof cx.passivoMeta === 'number') return Math.max(0, cx.passivoMeta);
-            return Math.max(0, cx.estouro || cx.aceleracao || 0);
+            return Math.max(0, cx.estouro || 0);
         };
         carregoBase = pm(ultimoResumo.base);
         carregoVida = pm(ultimoResumo.vida);
-        carregoFuturo = pm(ultimoResumo.futuro);
+        // Futuro = meta mínima: nunca herda passivo/carrego (excedente não vira crédito nem dívida de meta)
+        carregoFuturo = 0;
         sobraBase = (ultimoResumo.base && ultimoResumo.base.sobra) || 0;
         sobraVida = (ultimoResumo.vida && ultimoResumo.vida.sobra) || 0;
-        sobraFuturo = (ultimoResumo.futuro && ultimoResumo.futuro.sobra) || 0;
+        sobraFuturo = 0; // Futuro meta mínima: sem crédito de meta rolado
         // Por categoria: só estouro entra como carrego ativo; sobra fica no objeto para UI
         if (ultimoResumo.carregoCategorias && typeof ultimoResumo.carregoCategorias === 'object') {
             Object.keys(ultimoResumo.carregoCategorias).forEach(id => {
@@ -5815,9 +6050,9 @@ function iniciarNovaSemana() {
         rendaEstimada: rendaSemanal,
         rendaReal: 0,
         saldoAnterior: saldoAnterior,
-        base:   { limite: limiteBase,   gasto: 0, estouro: 0, carrego: carregoBase,   passivoMeta: carregoBase,   sobraAnterior: sobraBase },
-        vida:   { limite: limiteVida,   gasto: 0, estouro: 0, carrego: carregoVida,   passivoMeta: carregoVida,   sobraAnterior: sobraVida },
-        futuro: { limite: limiteFuturo, gasto: 0, estouro: 0, carrego: carregoFuturo, passivoMeta: carregoFuturo, sobraAnterior: sobraFuturo },
+        base:   { limite: limiteBase,   capacidade: limiteBase,   gasto: 0, estouro: 0, carrego: carregoBase,   passivoMeta: carregoBase,   sobraAnterior: sobraBase },
+        vida:   { limite: limiteVida,   capacidade: limiteVida,   gasto: 0, estouro: 0, carrego: carregoVida,   passivoMeta: carregoVida,   sobraAnterior: sobraVida },
+        futuro: { limite: limiteFuturo, capacidade: limiteFuturo, gasto: 0, estouro: 0, carrego: carregoFuturo, passivoMeta: carregoFuturo, sobraAnterior: sobraFuturo },
         carregoCategorias: carregoCategorias,
         fechada: false,
         resumoLido: false,
@@ -5887,6 +6122,7 @@ function _btnVoltarRegistro(acao) {
 }
 
 function registroVoltarAoTipo() {
+    if (registroTemporario && registroTemporario.origem === 'parcela') { fecharModalRegistro(); return; } // não vaza origem para o fluxo de gasto
     if (!registroTemporario) return abrirModalRegistro();
     registroTemporario.tipo = null;
     registroTemporario.valor = 0;
@@ -5901,6 +6137,7 @@ function registroVoltarAoTipo() {
 }
 
 function registroVoltarAoValor() {
+    if (registroTemporario && registroTemporario.origem === 'parcela') { fecharModalRegistro(); return; }
     if (!registroTemporario || !registroTemporario.tipo) {
         registroVoltarAoTipo();
         return;
@@ -7225,8 +7462,8 @@ function salvarFonteRenda(origem, temGenerica) { const nome = document.getElemen
             if (atualizar) {
                 state.orcamento.base.rendaBase = valor;
                 if (state.orcamento.semanaAtual) {
-                    const fortaleza = state.orcamento.base?.fortalezaTotal || 1800;
-                    const vida = state.orcamento.vida?.total || 700;
+                    const fortaleza = Number(state.orcamento.base?.fortalezaTotal) || 0;
+                    const vida = Number(state.orcamento.vida?.total) || 0;
                     const futuro = Math.max(valor - fortaleza - vida, 0);
                     state.orcamento.semanaAtual.futuro.limite = futuro / DIVISOR_SEMANAL;
                 }
@@ -8238,9 +8475,13 @@ function renderizarDetalheFuturo() {
             const rotuloParcelas = total > 0
                 ? `${pagas} / ${total} parcelas`
                 : (pagas > 0 ? `${pagas} pagas` : 'sem parcelamento');
-            const restante = total > 0
-                ? ` · faltam R$ ${(((cat.valor || 0) * (total - pagas))).toFixed(2).replace('.', ',')}`
-                : '';
+            const saldoDev = (typeof _saldoDevedorEfetivo === 'function') ? _saldoDevedorEfetivo(cat) : null;
+            let restante = '';
+            if (saldoDev != null && saldoDev > 0.005) {
+                restante = ` · faltam R$ ${saldoDev.toFixed(2).replace('.', ',')}`;
+            } else if (total > 0) {
+                restante = ` · faltam R$ ${(((cat.valor || 0) * (total - pagas))).toFixed(2).replace('.', ',')}`;
+            }
 
                         // No cálculo da barra:
             const gastoSemFut = gastoCategoriaNaSemana(cat.id, cat.nome);
@@ -8253,7 +8494,12 @@ function renderizarDetalheFuturo() {
                         <div>
                                       
                             <div class="nome-cat">${cat.nome}</div>
-                            <div class="meta-cat">${cat.tipo === 'conta' ? 'conta' : 'aporte'}${cat.vencimento ? ' · vence dia ' + cat.vencimento : ''}</div>
+                            <div class="meta-cat">${cat.tipo === 'conta' ? 'conta' : 'aporte'}${cat.vencimento ? ' · vence dia ' + cat.vencimento : ''}${
+                                (subtipo === 'divida' && cat.taxaJuros != null)
+                                    ? (cat.taxaJuros === 0 ? ' · sem juros' : ' · ' + Number(cat.taxaJuros).toFixed(2).replace('.', ',') + '% a.m.')
+                                    : (subtipo === 'divida' ? ' · juros: não sei' : '')
+                            }</div>
+                            ${subtipo === 'divida' && saldoDev != null ? `<div class="meta-cat" style="margin-top:2px;">Saldo devedor: ${_rotuloSaldoDevedor(cat)}</div>` : ''}
                         </div>
                         <div style="display: flex; align-items: center;" onclick="event.stopPropagation()">
                             <span class="valor-cat" style="margin-right: 6px;">R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')}</span> <button class="btn-remover" style="color: var(--primary); font-size: 0.9rem; margin-right: 4px;" onclick="abrirFormularioCategoriaFuturo('${cat.id}')" title="Editar plano">✏️</button>
@@ -8339,6 +8585,73 @@ container.innerHTML = `
         </button>
     `;
 }
+
+/** Rótulo do saldo devedor: marca como estimado quando veio das parcelas (sem juros). */
+function _rotuloSaldoDevedor(cat) {
+    const v = _saldoDevedorEfetivo(cat);
+    if (v == null) return '';
+    const estimado = cat.saldoDevedorEstimado === true || typeof cat.saldoDevedor !== 'number';
+    return 'R$ ' + v.toFixed(2).replace('.', ',') + (estimado ? ' (estimado pelas parcelas, sem juros)' : '');
+}
+
+/** Saldo devedor efetivo da dívida (não inventa se desconhecido). */
+function _saldoDevedorEfetivo(cat) {
+    if (!cat) return null;
+    if (cat.subtipo !== 'divida') return null;
+    if (typeof cat.saldoDevedor === 'number' && !isNaN(cat.saldoDevedor)) {
+        return Math.max(0, cat.saldoDevedor);
+    }
+    const tot = Number(cat.parcelasTotais) || 0;
+    const pagas = Number(cat.parcelasPagas) || 0;
+    const parcela = Number(cat.valor) || 0;
+    if (tot > 0 && parcela > 0) return Math.max(0, parcela * (tot - pagas));
+    return null;
+}
+
+/**
+ * Aplica pagamento a uma dívida/reserva.
+ * - Abate saldoDevedor pelo valor pago (parcial ok).
+ * - Só avança parcelasPagas quando o pagamento cobre ≥ 1 parcela (ou múltiplas).
+ * - Não inventa saldo se o campo for null.
+ */
+function _aplicarPagamentoPassivo(cat, valorPago) {
+    if (!cat || !(valorPago > 0)) return { parcelasAvancadas: 0 };
+    let parcelasAvancadas = 0;
+    const parcela = Number(cat.valor) || 0;
+
+    if (cat.subtipo === 'divida') {
+        if (typeof cat.saldoDevedor === 'number' && !isNaN(cat.saldoDevedor)) {
+            cat.saldoDevedor = Math.max(0, cat.saldoDevedor - valorPago);
+        }
+        // Avança parcelas só se há parcelamento e o valor cobre parcelas inteiras
+        if (parcela > 0 && (Number(cat.parcelasTotais) || 0) > 0) {
+            const cabem = Math.floor((valorPago + 0.001) / parcela);
+            if (cabem >= 1) {
+                const maxAvanco = Math.max(0, (Number(cat.parcelasTotais) || 0) - (Number(cat.parcelasPagas) || 0));
+                parcelasAvancadas = Math.min(cabem, maxAvanco);
+                cat.parcelasPagas = (Number(cat.parcelasPagas) || 0) + parcelasAvancadas;
+            }
+            // Pagamento parcial (< 1 parcela): abate saldo, não conta parcela
+        } else if (parcela > 0 && valorPago + 0.001 >= parcela) {
+            // Dívida contínua com valor de parcela: 1 "ciclo" se pagou o combinado
+            parcelasAvancadas = Math.floor((valorPago + 0.001) / parcela);
+            cat.parcelasPagas = (Number(cat.parcelasPagas) || 0) + parcelasAvancadas;
+        }
+        // Se saldo zera e há parcelas, considera quitada no contador
+        if (typeof cat.saldoDevedor === 'number' && cat.saldoDevedor <= 0.005
+            && (Number(cat.parcelasTotais) || 0) > 0) {
+            cat.parcelasPagas = Number(cat.parcelasTotais) || cat.parcelasPagas;
+        }
+    } else if (cat.subtipo === 'reserva') {
+        // Reserva: só progresso; parcelasPagas é contagem informativa se houver meta de aportes
+        if (parcela > 0 && valorPago + 0.001 >= parcela) {
+            parcelasAvancadas = Math.floor((valorPago + 0.001) / parcela);
+            cat.parcelasPagas = (Number(cat.parcelasPagas) || 0) + parcelasAvancadas;
+        }
+    }
+    return { parcelasAvancadas };
+}
+
 function pagarParcela(categoriaId) {
     const cat = (state.orcamento.categorias || []).find(c => c.id === categoriaId);
     if (!cat) return;
@@ -8350,8 +8663,11 @@ function pagarParcela(categoriaId) {
     const valorSugerido = (pendenteRegistroFuturo && pendenteRegistroFuturo.valor > 0)
         ? pendenteRegistroFuturo.valor
         : valorParcela;
+    const saldoHint = (typeof _saldoDevedorEfetivo === 'function' && _saldoDevedorEfetivo(cat) != null)
+        ? `\nSaldo devedor: ${_rotuloSaldoDevedor(cat)}`
+        : '';
     const valorStr = prompt(
-        `Registrar pagamento de "${cat.nome}"?`,
+        `Registrar pagamento de "${cat.nome}"?${saldoHint}\n\nPode ser parcial — o valor abate o saldo; parcela só avança se cobrir o valor da parcela.`,
         Number(valorSugerido).toFixed(2)
     );
     // P0.8: limpa pendente ao cancelar
@@ -8360,8 +8676,15 @@ function pagarParcela(categoriaId) {
         else pendenteRegistroFuturo = null;
         return;
     }
-    const valorPago = parseFloat(valorStr) || 0;
+    const valorPago = _parseValorRegistro(valorStr) || 0; // aceita "100,50"
     if (valorPago <= 0) { alert('Valor inválido.'); return; }
+    if (cat.subtipo === 'reserva') {
+        const avisoRes = _avisoReservaComDividaCara(state.orcamento, valorPago);
+        if (avisoRes && !confirm(avisoRes)) {
+            if (typeof limparPendenteRegistroFuturo === 'function') limparPendenteRegistroFuturo();
+            return;
+        }
+    }
 
     registroTemporario = {
         valor: valorPago,
@@ -8383,6 +8706,7 @@ function pagarParcela(categoriaId) {
         document.getElementById('modal-registro-passo-1').style.display = 'none';
         document.getElementById('modal-registro-passo-2-categoria').style.display = 'none';
         document.getElementById('modal-registro-passo-3').style.display = 'none';
+        resetDialogoTurno(); // sem mensagens de registros anteriores
         mostrarPassoCustodia();
         return;
     }
@@ -8435,7 +8759,8 @@ function confirmarPagamentoParcela() {
         }
     }
 
-    cat.parcelasPagas = (cat.parcelasPagas || 0) + 1;
+    // 2.5: abate saldo; avança parcela só se cobriu ≥ 1 parcela
+    const _pagInfo = _aplicarPagamentoPassivo(cat, valorPago);
 
     if (typeof recalcularTotalFuturo === 'function') {
         try { recalcularTotalFuturo({ somenteTotal: true }); } catch (_) {}
@@ -8493,12 +8818,31 @@ function confirmarPagamentoParcela() {
         const total = cat.parcelasTotais || 0;
         const pagas = cat.parcelasPagas || 0;
         const linhaCustodia = custodiaNome ? `Saiu de <strong>${custodiaNome}</strong>.` : '';
+        const saldoRest = (typeof _saldoDevedorEfetivo === 'function') ? _saldoDevedorEfetivo(cat) : null;
+        const avancou = (_pagInfo && _pagInfo.parcelasAvancadas) || 0;
+        const parcelaCheia = Number(cat.valor) || 0;
+        const foiParcial = cat.subtipo === 'divida' && parcelaCheia > 0 && valorPago + 0.005 < parcelaCheia;
 
         let falaFinal;
-        if (total > 0 && pagas >= total) {
+        if (cat.subtipo === 'divida' && saldoRest != null && saldoRest <= 0.005) {
             falaFinal = `🎉 <strong>${cat.nome}</strong> quitada! ${linhaCustodia}`;
+        } else if (total > 0 && pagas >= total) {
+            falaFinal = `🎉 <strong>${cat.nome}</strong> quitada! ${linhaCustodia}`;
+        } else if (foiParcial) {
+            falaFinal = `Pagamento parcial de R$ ${valorPago.toFixed(2).replace('.', ',')} abateu o saldo` +
+                (saldoRest != null ? ` (restam R$ ${saldoRest.toFixed(2).replace('.', ',')})` : '') +
+                `. Parcela ainda não avançou. ${linhaCustodia}`;
+        } else if (total > 0 && avancou > 0) {
+            falaFinal = (avancou > 1
+                ? `Registrado: ${avancou} parcelas. Agora ${pagas} de ${total}.`
+                : `Parcela registrada: ${pagas} de ${total}.`) + ` ${linhaCustodia}`;
+            if (saldoRest != null) falaFinal += ` Saldo: R$ ${saldoRest.toFixed(2).replace('.', ',')}.`;
         } else if (total > 0) {
-            falaFinal = `Parcela registrada: ${pagas} de ${total}. ${linhaCustodia}`;
+            falaFinal = `Pagamento registrado. ${pagas} de ${total}. ${linhaCustodia}`;
+            if (saldoRest != null) falaFinal += ` Saldo: R$ ${saldoRest.toFixed(2).replace('.', ',')}.`;
+        } else if (cat.subtipo === 'divida') {
+            falaFinal = `Pagamento registrado. ${linhaCustodia}`;
+            if (saldoRest != null) falaFinal += ` Saldo: R$ ${saldoRest.toFixed(2).replace('.', ',')}.`;
         } else {
             falaFinal = `Aporte registrado. ${linhaCustodia}`;
         }
@@ -8635,6 +8979,38 @@ container.innerHTML = `
             <input type="number" id="nova-cat-parcelas" class="input-padrao" placeholder="Ex: 12" min="1">
         </div>
 
+        ${subtipo === 'divida' ? `
+        <div id="bloco-passivo-divida">
+            <div class="fala-avatar">
+                <span class="icone">${avatar}</span>
+                <span class="texto">Quanto falta pagar no total? (saldo devedor)</span>
+            </div>
+            <div class="input-com-prefixo">
+                <span class="prefixo">R$</span>
+                <input type="number" id="nova-cat-saldo-devedor" class="input-padrao" placeholder="Deixe em branco se não souber">
+            </div>
+            <p style="font-size:0.85rem;color:var(--secondary);margin:6px 0 12px;line-height:1.35;">
+                Se você não sabe, pode deixar em branco: o app estima pelas parcelas (sem juros) e avisa que é estimativa.
+            </p>
+
+            <div class="fala-avatar">
+                <span class="icone">${avatar}</span>
+                <span class="texto">Tem taxa de juros ao mês?</span>
+            </div>
+            <div class="chip-container" id="chips-taxa-juros">
+                <div class="chip" data-taxa="nao_sei" onclick="selecionarTaxaJuros(this, 'nao_sei')">Não sei</div>
+                <div class="chip" data-taxa="sem" onclick="selecionarTaxaJuros(this, 'sem')">Sem juros</div>
+                <div class="chip" data-taxa="sei" onclick="selecionarTaxaJuros(this, 'sei')">Sei a taxa</div>
+            </div>
+            <div id="bloco-taxa-juros-valor" style="display:none;margin-top:8px;">
+                <div class="input-com-prefixo">
+                    <input type="number" id="nova-cat-taxa-juros" class="input-padrao" placeholder="% ao mês" min="0" step="0.01">
+                    <span class="prefixo" style="position:static;margin-left:8px;">% a.m.</span>
+                </div>
+            </div>
+        </div>
+        ` : ''}
+
         ${htmlCustodiaReserva}
         <button class="btn-primary" onclick="salvarCategoriaFuturo()">${btnSalvar}</button>
         <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="categoriaEditandoId=null; renderizarDetalheFuturo()">
@@ -8644,6 +9020,7 @@ container.innerHTML = `
 
     tipoCategoriaSelecionado = null;
     parcelamentoSelecionado = null;
+    taxaJurosSelecionada = null;
 
     // Prefill em edição
     if (catExistente) {
@@ -8665,11 +9042,33 @@ container.innerHTML = `
         if (parcelamentoSelecionado === 'sim') {
             document.getElementById('nova-cat-parcelas').value = catExistente.parcelasTotais;
         }
+
+        // Prefill passivo (dívida)
+        if (subtipo === 'divida') {
+            const elSaldo = document.getElementById('nova-cat-saldo-devedor');
+            if (elSaldo && catExistente.saldoDevedor != null && !isNaN(Number(catExistente.saldoDevedor))) {
+                elSaldo.value = catExistente.saldoDevedor;
+            }
+            const tj = catExistente.taxaJuros;
+            if (tj === 0) {
+                const chip = document.querySelector('#chips-taxa-juros .chip[data-taxa="sem"]');
+                if (chip) selecionarTaxaJuros(chip, 'sem');
+            } else if (typeof tj === 'number' && tj > 0) {
+                const chip = document.querySelector('#chips-taxa-juros .chip[data-taxa="sei"]');
+                if (chip) selecionarTaxaJuros(chip, 'sei');
+                const elTaxa = document.getElementById('nova-cat-taxa-juros');
+                if (elTaxa) elTaxa.value = tj;
+            } else {
+                const chip = document.querySelector('#chips-taxa-juros .chip[data-taxa="nao_sei"]');
+                if (chip) selecionarTaxaJuros(chip, 'nao_sei');
+            }
+        }
     }
 }
     
 	let parcelamentoSelecionado = null;
 let custodiaReservaFuturoSelecionada = null;
+let taxaJurosSelecionada = null; // 'nao_sei' | 'sem' | 'sei'
 
 function selecionarParcelamento(el, escolha) {
     document.querySelectorAll('#chips-parcelamento .chip').forEach(c => c.classList.remove('selecionado'));
@@ -8677,7 +9076,15 @@ function selecionarParcelamento(el, escolha) {
     parcelamentoSelecionado = escolha;
 
     const blocoParcelas = document.getElementById('bloco-parcelas');
-    blocoParcelas.style.display = escolha === 'sim' ? 'block' : 'none';
+    if (blocoParcelas) blocoParcelas.style.display = escolha === 'sim' ? 'block' : 'none';
+}
+
+function selecionarTaxaJuros(el, escolha) {
+    document.querySelectorAll('#chips-taxa-juros .chip').forEach(c => c.classList.remove('selecionado'));
+    if (el) el.classList.add('selecionado');
+    taxaJurosSelecionada = escolha;
+    const bloco = document.getElementById('bloco-taxa-juros-valor');
+    if (bloco) bloco.style.display = escolha === 'sei' ? 'block' : 'none';
 }
 
 function selecionarCustodiaReservaFuturo(el) {
@@ -8713,6 +9120,30 @@ function salvarCategoriaFuturo() {
         return;
     }
 
+    // Item 4: saldo devedor e taxa (só dívida)
+    let saldoDevedorForm = null;
+    let taxaJurosForm = null;
+    if (subtipo === 'divida') {
+        const elSaldo = document.getElementById('nova-cat-saldo-devedor');
+        if (elSaldo && String(elSaldo.value).trim() !== '') {
+            const s = parseFloat(elSaldo.value);
+            if (!isNaN(s) && s >= 0) saldoDevedorForm = s;
+        }
+        if (taxaJurosSelecionada === 'sem') {
+            taxaJurosForm = 0;
+        } else if (taxaJurosSelecionada === 'sei') {
+            const elTaxa = document.getElementById('nova-cat-taxa-juros');
+            const t = elTaxa ? parseFloat(elTaxa.value) : NaN;
+            if (isNaN(t) || t < 0) {
+                alert('Informe a taxa de juros ao mês, ou escolha "Não sei".');
+                return;
+            }
+            taxaJurosForm = t;
+        } else {
+            taxaJurosForm = null; // não sei
+        }
+    }
+
     // Confirmação de "já paguei" (apenas na criação, edição não pergunta de novo para não confundir)
     const diaHoje = new Date().getDate();
     const mesAtual = _mesAtualYYYYMM();
@@ -8746,6 +9177,21 @@ function salvarCategoriaFuturo() {
         cat.parcelasTotais = parcelasTotais; 
         cat.valorTotal = parcelasTotais ? (valor * parcelasTotais) : null;
         // NÃO alteramos cat.parcelasPagas (preservando o passado)
+        if (subtipo === 'divida') {
+            // Campo preenchido → usa o declarado; vazio → mantém ou deriva uma vez
+            if (saldoDevedorForm !== null) {
+                cat.saldoDevedor = saldoDevedorForm;
+                cat.saldoDevedorEstimado = false;
+            } else if (cat.saldoDevedor === undefined || cat.saldoDevedor === null) {
+                if (parcelasTotais && valor) {
+                    const pagas = Number(cat.parcelasPagas) || 0;
+                    cat.saldoDevedor = Math.max(0, valor * (parcelasTotais - pagas));
+                    cat.saldoDevedorEstimado = true;
+                }
+            }
+            // taxa: null = não sei; 0 = sem juros; número = % a.m.
+            if (taxaJurosSelecionada) cat.taxaJuros = taxaJurosForm;
+        }
 
         categoriaEditandoId = null;
         if (subtipo === 'reserva') {
@@ -8753,6 +9199,7 @@ function salvarCategoriaFuturo() {
         }
         tipoCategoriaSelecionado = null;
         parcelamentoSelecionado = null;
+        taxaJurosSelecionada = null;
         custodiaReservaFuturoSelecionada = null;
         
         recalcularTotalFuturo();
@@ -8762,6 +9209,13 @@ function salvarCategoriaFuturo() {
     }
 
     if (!state.orcamento.categorias) state.orcamento.categorias = [];
+    // Saldo: declarado > derivado de parcelas > null (não inventar)
+    let saldoInicial = null;
+    if (subtipo === 'divida') {
+        if (saldoDevedorForm !== null) saldoInicial = saldoDevedorForm;
+        else if (parcelasTotais && valor) saldoInicial = valor * parcelasTotais;
+        // contínuo sem saldo declarado → null
+    }
     state.orcamento.categorias.push({
         id: 'cat_' + Date.now(),
         nome: nome,
@@ -8773,10 +9227,13 @@ function salvarCategoriaFuturo() {
         parcelasPagas: 0,
         parcelasTotais: parcelasTotais,
         valorTotal: parcelasTotais ? (valor * parcelasTotais) : null,
-        pagamentoConfirmadoMes: pagamentoConfirmadoMes
-    ,
-            custodiaPadraoId: (subtipo === 'reserva') ? (custodiaReservaFuturoSelecionada || null) : null
-        });
+        saldoDevedor: saldoInicial,
+        saldoDevedorEstimado: (subtipo === 'divida' && saldoInicial !== null && saldoDevedorForm === null),
+        taxaJuros: subtipo === 'divida' ? taxaJurosForm : null,
+        pagamentoConfirmadoMes: pagamentoConfirmadoMes,
+        custodiaPadraoId: (subtipo === 'reserva') ? (custodiaReservaFuturoSelecionada || null) : null
+    });
+    taxaJurosSelecionada = null;
 
     recalcularTotalFuturo();
 
@@ -8818,12 +9275,34 @@ function verificarFechamentoSemana() {
     }
 }
 
+/**
+ * Streak do Futuro (meta mínima): semanas consecutivas "atrás do combinado".
+ * Chamada em fecharSemana(); grava na semana (vai para o resumo) e no estado
+ * (lido pela barra do Futuro). "Protegeu a Base" = Base cumpriu o plano inteiro.
+ */
+function _atualizarStreakFuturo(semana, resBase, resFuturo) {
+    const orc = state.orcamento;
+    if (!orc || !semana) return;
+    const atrasado = (resFuturo && resFuturo.atrasado) || 0;
+    if (atrasado > 0.05) {
+        semana.futuroStreak = (Number(orc.futuroStreak) || 0) + 1;
+        const limBase = (semana.base && semana.base.limite) || 0;
+        const gastoBase = (semana.base && semana.base.gasto) || 0;
+        semana.futuroStreakProtegeuBase = limBase > 0 && gastoBase >= limBase - 0.05;
+    } else {
+        semana.futuroStreak = 0;
+        semana.futuroStreakProtegeuBase = false;
+    }
+    orc.futuroStreak = semana.futuroStreak;
+    orc.futuroStreakProtegeuBase = semana.futuroStreakProtegeuBase;
+}
+
 function fecharSemana() {
     const semana = state.orcamento.semanaAtual;
 
     const resBase = _resultadoCaixaNoFechamento(semana.base);
     const resVida = _resultadoCaixaNoFechamento(semana.vida);
-    const resFuturo = _resultadoCaixaNoFechamento(semana.futuro);
+    const resFuturo = _resultadoCaixaNoFechamento(semana.futuro, { metaMinima: true });
 
     semana.base.estouro = resBase.estouro;
     semana.base.sobra = resBase.sobra;
@@ -8833,11 +9312,18 @@ function fecharSemana() {
     semana.vida.sobra = resVida.sobra;
     semana.vida.passivoMeta = resVida.passivoMeta;
     semana.vida.estouroSemana = resVida.estouroSemana;
-    semana.futuro.estouro = resFuturo.estouro;
-    semana.futuro.sobra = resFuturo.sobra;
-    semana.futuro.passivoMeta = resFuturo.passivoMeta;
-    semana.futuro.estouroSemana = resFuturo.estouroSemana;
-    semana.futuro.aceleracao = resFuturo.passivoMeta; // compat UI resumo
+
+    // Futuro = meta mínima: sem passivo, sem carrego, sem crédito rolado
+    semana.futuro.estouro = 0;
+    semana.futuro.sobra = 0;
+    semana.futuro.passivoMeta = 0;
+    semana.futuro.estouroSemana = 0;
+    semana.futuro.aceleracao = resFuturo.aceleracao || 0;
+    semana.futuro.atrasado = resFuturo.atrasado || 0;
+
+    _atualizarStreakFuturo(semana, resBase, resFuturo);
+    // Obrigações do Futuro (dívida com vencimento) em atraso no fechamento: ficam no resumo
+    semana.futuro.obrigacoesVencidas = _obrigacoesFuturoVencidas(state.orcamento);
 
     // Breakdown por categoria (só declarado; sem rateio)
     semana.carregoCategorias = calcularCarregoCategoriasDaSemana(semana);
@@ -8871,6 +9357,8 @@ function fecharSemana() {
         base: { ...semana.base },
         vida: { ...semana.vida },
         futuro: { ...semana.futuro },
+        futuroStreak: semana.futuroStreak || 0,
+        futuroStreakProtegeuBase: !!semana.futuroStreakProtegeuBase,
         carregoCategorias: { ...(semana.carregoCategorias || {}) }
     });
 
@@ -8954,11 +9442,31 @@ const totalReserva = categoriasFuturo
     .filter(c => c.subtipo === 'reserva')
     .reduce((s, c) => s + (c.valor || 0), 0);
 
-const falaZe = futuroAceleracao > 0
-    ? `Você botou ${fmt(futuroAceleracao)} a mais no Futuro. O caminho encurtou.`
-    : (totalDivida > 0 || totalReserva > 0)
-        ? `No Futuro: ${fmt(totalDivida)} para dívidas, ${fmt(totalReserva)} para reservas.`
-        : `O Futuro ficou no combinado. Um passo de cada vez.`;
+const futuroAtrasado = semana.futuro?.atrasado || 0;
+const futuroStreak = semana.futuroStreak != null ? semana.futuroStreak : (state.orcamento.futuroStreak || 0);
+const protegeuBase = !!(semana.futuroStreakProtegeuBase || state.orcamento.futuroStreakProtegeuBase);
+
+const futuroObrig = (semana.futuro && semana.futuro.obrigacoesVencidas) || [];
+let falaZe;
+if (futuroObrig.length > 0) {
+    falaZe = `${futuroObrig.map(o => o.nome).join(', ')} venceu e não foi paga. Aqui não é só meta: é atraso de verdade. Vale abrir o Plano de recuperação e ver o que cabe.`;
+} else if (protegeuBase && futuroAtrasado > 0) {
+    falaZe = `Você protegeu a Base — tá certo. O Futuro ficou atrás do combinado em ${fmt(futuroAtrasado)}; a gente retoma na próxima janela.`;
+} else if (futuroAceleracao > 0) {
+    falaZe = `Você botou ${fmt(futuroAceleracao)} a mais no Futuro. O caminho encurtou.`;
+} else if (futuroAtrasado > 0) {
+    if (futuroStreak >= 4) {
+        falaZe = `Futuro atrás do combinado há ${futuroStreak} semanas (${fmt(futuroAtrasado)}). Se a meta tá sempre fora de alcance, talvez ela esteja alta.`;
+    } else if (futuroStreak >= 3) {
+        falaZe = `Futuro atrás do combinado há ${futuroStreak} semanas (${fmt(futuroAtrasado)}). A meta ainda faz sentido pro seu mês?`;
+    } else {
+        falaZe = `Futuro ficou atrás do combinado em ${fmt(futuroAtrasado)}. Sem culpa — um passo de cada vez.`;
+    }
+} else if (totalDivida > 0 || totalReserva > 0) {
+    falaZe = `Futuro no combinado. ${fmt(totalDivida)} para dívidas, ${fmt(totalReserva)} para reservas.`;
+} else {
+    falaZe = `O Futuro ficou no combinado. Um passo de cada vez.`;
+}
 
     container.innerHTML = `
         ${cabecalhoTelaSecundaria('Resumo da semana', 'O que essa semana contou')}
@@ -9056,6 +9564,8 @@ function renderizarHistoricoResumos() {
         const baseEstouro = (r.base && r.base.estouro) || 0;
         const vidaEstouro = (r.vida && r.vida.estouro) || 0;
         const futuroAceleracao = (r.futuro && r.futuro.aceleracao) || 0;
+        const futuroAtrasado = (r.futuro && r.futuro.atrasado) || 0;
+        const futuroStreak = r.futuroStreak || 0;
 
         // Saldo do resumo arquivado
     const rendaEstimada = r.rendaEstimada || 0;
@@ -9079,8 +9589,11 @@ const saldo = (typeof r.saldo === 'number') ? r.saldo : (rendaReal - totalGasto)
         if (vidaEstouro > 0) resumoLinha.push(`Vida passou ${fmt(vidaEstouro)}`);
         else resumoLinha.push('Vida no ritmo');
 
-        if (futuroAceleracao > 0) resumoLinha.push(`Futuro acelerou ${fmt(futuroAceleracao)}`);
-        else resumoLinha.push('Futuro no combinado');
+        if (futuroAceleracao > 0) resumoLinha.push(`Futuro além do combinado ${fmt(futuroAceleracao)}`);
+        else if (futuroAtrasado > 0) {
+            const sfx = futuroStreak >= 2 ? ` · atrás há ${futuroStreak} sem.` : '';
+            resumoLinha.push(`Futuro atrás do combinado ${fmt(futuroAtrasado)}${sfx}`);
+        } else resumoLinha.push('Futuro no combinado');
 
         return `
             <div class="card" style="margin-bottom: 12px; padding: 16px;">
@@ -10450,6 +10963,18 @@ function confirmarPagamentoFatura(cartaoId) {
     const origem = state.orcamento.custodias.find(c => c.id === origemFaturaSelecionada);
     if (!origem) { alert('Conta não encontrada.'); return; }
 
+    // Aviso de rotativo: pagar menos que a fatura deixa saldo no cartão
+    const faturaAtual = cartao.faturaAcumulada || 0;
+    if (faturaAtual > 0.005 && valor + 0.005 < faturaAtual) {
+        const okRot = confirm(
+            'Você está pagando menos que a fatura (R$ ' + valor.toFixed(2).replace('.', ',') +
+            ' de R$ ' + faturaAtual.toFixed(2).replace('.', ',') + ').\n\n' +
+            'O que sobrar pode ir para o rotativo do cartão, com juros altos.\n\n' +
+            'Continuar mesmo assim?'
+        );
+        if (!okRot) return;
+    }
+
     // envelope: NÃO regasta (compra já debitou a meta)
     if ((TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
         alert('Escolha uma conta com saldo (não outro cartão de crédito) para pagar a fatura.');
@@ -10535,6 +11060,102 @@ function _rotuloMesAno(yyyymm) {
     return meses[parseInt(mes)-1] + '/' + ano.slice(2);
 }
  
+/**
+ * Dívida com juros altos — LIMIAR DE ALERTA, não taxa de mercado.
+ * Só usa a taxa que o usuário declarou; "não sei" nunca é tratado como alta nem baixa.
+ */
+const DIVIDA_CARA_TAXA_AM = 3; // % ao mês
+
+function _dividasFuturoAtivas(orc) {
+    return (orc.categorias || []).filter(c =>
+        c.caixa === 'futuro' && c.subtipo === 'divida' && !_categoriaParcelasQuitada(c)
+    );
+}
+function _taxaConhecida(c) {
+    return (typeof c.taxaJuros === 'number' && !isNaN(c.taxaJuros)) ? c.taxaJuros : null;
+}
+function _dividaCara(c) {
+    const t = _taxaConhecida(c);
+    return t !== null && t >= DIVIDA_CARA_TAXA_AM;
+}
+function _rotuloJuros(c) {
+    if (c.caixa !== 'futuro' || c.subtipo !== 'divida') return '';
+    const t = _taxaConhecida(c);
+    if (t === null) return 'juros: não sei';
+    return t === 0 ? 'sem juros' : 'juros ' + t.toFixed(2).replace('.', ',') + '% a.m.';
+}
+
+/**
+ * Ordem sugerida no Plano de Recuperação (explicável):
+ *  1) vencidas antes das a vencer;
+ *  2) dentro de cada grupo: contas essenciais (Base/Vida) por vencimento;
+ *  3) depois as dívidas do Futuro: maiores juros declarados primeiro (avalanche);
+ *     dívidas sem taxa declarada ficam por último, por vencimento.
+ */
+function _ordenarPriorizacaoRecuperacao(cats, diaHoje) {
+    const grupo = (c) => (c.caixa === 'futuro' && c.subtipo === 'divida') ? 1 : 0;
+    return [...cats].sort((a, b) => {
+        const va = a.vencimento < diaHoje ? 0 : 1, vb = b.vencimento < diaHoje ? 0 : 1;
+        if (va !== vb) return va - vb;
+        if (grupo(a) !== grupo(b)) return grupo(a) - grupo(b);
+        if (grupo(a) === 1) {
+            const ta = _taxaConhecida(a), tb = _taxaConhecida(b);
+            if ((ta === null) !== (tb === null)) return ta === null ? 1 : -1;
+            if (ta !== null && tb !== null && ta !== tb) return tb - ta;
+        }
+        return a.vencimento - b.vencimento;
+    });
+}
+
+/** Aviso suave (nunca bloqueia): reserva já grande enquanto há dívida cara declarada. */
+function _avisoReservaComDividaCara(orc, valorAporte) {
+    const caras = _dividasFuturoAtivas(orc).filter(_dividaCara).sort((a, b) => _taxaConhecida(b) - _taxaConhecida(a));
+    if (caras.length === 0) return null;
+    const baseMensal = Number(orc.base && orc.base.fortalezaTotal) || 0;
+    if (baseMensal <= 0) return null; // sem Base declarada não dá para medir "1 mês de reserva"
+    const custRes = (orc.custodias || []).filter(c => _custodiaEhReserva(c));
+    const reservaAtual = custRes.length > 0
+        ? custRes.reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0)
+        : (orc.historicoRegistros || []).filter(r => r.tipo === 'aporte_reserva' && !r.anulado)
+            .reduce((s, r) => s + (Number(r.valor) || 0), 0);
+    if (reservaAtual + (Number(valorAporte) || 0) < baseMensal) return null; // reserva pequena é ok
+    const d = caras[0];
+    return 'Você já tem cerca de 1 mês de Base guardado e uma dívida com juros de ' +
+        _taxaConhecida(d).toFixed(2).replace('.', ',') + '% ao mês ("' + d.nome + '").\n\n' +
+        'Uma reserva pequena ajuda a não voltar para a dívida, mas acima disso costuma valer mais a pena ' +
+        'pagar a dívida cara primeiro. Quem decide é você.\n\nGuardar mesmo assim?';
+}
+
+/** Obrigação (dívida com vencimento): só quita no mês com o valor da parcela (ou "já paguei"). */
+function _obrigacaoQuitadaNoMes(cat, orc) {
+    if (!cat || !orc) return false;
+    const mesAtual = _mesAtualYYYYMM();
+    if (cat.pagamentoConfirmadoMes && cat.pagamentoConfirmadoMes === mesAtual) return true;
+    const parcela = Number(cat.valor) || 0;
+    let pago = 0;
+    (orc.historicoRegistros || []).forEach(r => {
+        if (!r || r.anulado || !r.data) return;
+        if (['pagamento_divida', 'gasto_direto', 'gasto_cartao'].indexOf(r.tipo) < 0) return;
+        if (r.categoriaId !== cat.id) return;
+        const refAtual = r.mesReferencia ? r.mesReferencia === mesAtual : _pertenceMesAtual(r.data);
+        if (refAtual) pago += Number(r.valor) || 0;
+    });
+    return parcela > 0 ? pago >= parcela - 0.5 : pago > 0;
+}
+function _vencidaNaoQuitada(c, orc, diaHoje) {
+    if (!c.vencimento || c.vencimento >= diaHoje || _categoriaParcelasQuitada(c)) return false;
+    const obrigacao = c.caixa === 'futuro' && c.subtipo === 'divida';
+    return obrigacao ? !_obrigacaoQuitadaNoMes(c, orc) : !_contaEstaPagaNoMes(c, orc);
+}
+/** Dívidas do Futuro com vencimento já passado e não quitadas no mês: atraso REAL, não "meta". */
+function _obrigacoesFuturoVencidas(orc) {
+    if (!orc) return [];
+    const diaHoje = new Date().getDate();
+    return _dividasFuturoAtivas(orc)
+        .filter(c => _vencidaNaoQuitada(c, orc, diaHoje))
+        .map(c => ({ id: c.id, nome: c.nome, valor: Number(c.valor) || 0, vencimento: c.vencimento, diasAtraso: diaHoje - c.vencimento }));
+}
+
 function _temRegistroPagoNoMes(cat, orc) {
     if (!cat || !orc) return false;
     const hist = orc.historicoRegistros || [];
@@ -10576,15 +11197,24 @@ function detectarSinalRecuperacao(orc) {
 
     const fmt = formatarMoeda;
 
-    // S1 — Situação real negativa (mesma base do fechamento / conciliação)
+    // S1 — Aperto real no N3: âncora = estoque operacional (saldos − faturas).
+    // Movimento da semana fica como apoio/diagnóstico, não como alarme principal.
     const mov = calcularMovimentoSemana(semana, orc);
     const renda = mov.renda;
     const totalGasto = mov.totalGasto;
     const saldo = mov.movimento;
-    // Carrego de meta alimenta o mesmo sinal só quando a situação real já está no zero/negativo
-    // (evita alerta duplicado quando só há déficit de barra mas o pote ainda aguenta)
     const carregoMeta = ((semana.base?.carrego) || 0) + ((semana.vida?.carrego) || 0) + ((semana.futuro?.carrego) || 0);
-    const s1 = saldo < 0 || (carregoMeta > 0 && saldo <= 0);
+    const estoque = (typeof _estoqueOperacionalAtual === 'function') ? _estoqueOperacionalAtual(orc) : null;
+    let s1;
+    let s1Origem;
+    if (estoque !== null) {
+        s1 = estoque < -0.005;
+        s1Origem = 'estoque';
+    } else {
+        // Sem custódias ainda: fallback no movimento da semana
+        s1 = saldo < 0 || (carregoMeta > 0 && saldo <= 0);
+        s1Origem = 'movimento';
+    }
 
     // S2 — Contas vencidas (vencimento no passado, ainda no orçamento)
     const hoje = new Date();
@@ -10594,9 +11224,7 @@ function detectarSinalRecuperacao(orc) {
         const categoriasComVenc = (orc.categorias || []).filter(c =>
         c.vencimento && !_categoriaParcelasQuitada(c)
     );
-    const contasVencidas = categoriasComVenc.filter(c =>
-        c.vencimento < diaHoje && !_contaEstaPagaNoMes(c, orc)
-    );
+    const contasVencidas = categoriasComVenc.filter(c => _vencidaNaoQuitada(c, orc, diaHoje));
     const s2 = contasVencidas.length > 0;
 
     if (!s1 && !s2) return null;
@@ -10604,6 +11232,8 @@ function detectarSinalRecuperacao(orc) {
     return {
         s1: s1,
         s2: s2,
+        s1Origem: s1Origem,
+        estoque: estoque,
         saldo: saldo,
         totalGasto: totalGasto,
         renda: renda,
@@ -10641,7 +11271,19 @@ function renderizarPlanoRecuperacao() {
     // ===== ESTÁGIO 1: DIAGNÓSTICO =====
     let blocoS1 = '';
     if (sinal.s1) {
-        blocoS1 = `
+        if (sinal.s1Origem === 'estoque' && sinal.estoque != null) {
+            blocoS1 = `
+            <div class="card" style="border-left: 4px solid var(--danger); margin-bottom: 15px;">
+                <strong style="color: var(--danger); font-size: 0.9rem; display: block; margin-bottom: 8px;">
+                    💰 Estoque operacional negativo
+                </strong>
+                <div style="font-size: 0.9rem; color: var(--secondary); line-height: 1.5;">
+                    Carteiras − faturas = <strong style="color: var(--danger);">${sinal.fmt(sinal.estoque)}</strong>.
+                    Esse é o número que manda no “posso gastar no débito”. Movimento da semana: entrou ${sinal.fmt(sinal.renda)}, saiu ${sinal.fmt(sinal.totalGasto)}.
+                </div>
+            </div>`;
+        } else {
+            blocoS1 = `
             <div class="card" style="border-left: 4px solid var(--danger); margin-bottom: 15px;">
                 <strong style="color: var(--danger); font-size: 0.9rem; display: block; margin-bottom: 8px;">
                     💰 Saldo da semana negativo
@@ -10650,15 +11292,15 @@ function renderizarPlanoRecuperacao() {
                     Você gastou <strong style="color: var(--primary);">${sinal.fmt(Math.abs(sinal.saldo))}</strong> mais do que entrou.
                     Entrou ${sinal.fmt(sinal.renda)}, saiu ${sinal.fmt(sinal.totalGasto)}.
                 </div>
-            </div>
-        `;
+            </div>`;
+        }
     }
 
     let blocoS2 = '';
     if (sinal.s2) {
         let listaVencidas = '';
         sinal.contasVencidas.forEach(c => {
-            const icone = c.caixa === 'base' ? '🛡️' : '🌿';
+            const icone = c.caixa === 'base' ? '🛡️' : (c.caixa === 'futuro' ? '🔭' : '🌿');
             listaVencidas += `
                 <div style="display: flex; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--border);">
                     <span style="font-size: 0.9rem; color: var(--primary);">${icone} ${c.nome} <span style="color: var(--secondary); font-size: 0.9rem;">(venceu dia ${c.vencimento})</span></span>
@@ -10690,20 +11332,16 @@ function renderizarPlanoRecuperacao() {
 
     let htmlPriorizacao = '';
     if (categoriasComVenc.length > 0) {
-        // Ordena: vencidas primeiro, depois por dia de vencimento
-        const ordenadas = [...categoriasComVenc].sort((a, b) => {
-            const aVencida = a.vencimento < diaHoje ? 0 : 1;
-            const bVencida = b.vencimento < diaHoje ? 0 : 1;
-            if (aVencida !== bVencida) return aVencida - bVencida;
-            return a.vencimento - b.vencimento;
-        });
+        // Ordem explicável: vencidas > essenciais por data > dívidas por juros (avalanche)
+        const ordenadas = _ordenarPriorizacaoRecuperacao(categoriasComVenc, diaHoje);
 
         let listaPriorizacao = '';
         ordenadas.forEach((c, i) => {
-            const icone = c.caixa === 'base' ? '🛡️' : '🌿';
+            const icone = c.caixa === 'base' ? '🛡️' : (c.caixa === 'futuro' ? '🔭' : '🌿');
             const vencida = c.vencimento < diaHoje;
             const cor = vencida ? 'var(--danger)' : 'var(--secondary)';
-            const rotulo = vencida ? 'vencida' : `dia ${c.vencimento}`;
+            const jurosTxt = _rotuloJuros(c);
+            const rotulo = (vencida ? 'vencida' : `dia ${c.vencimento}`) + (jurosTxt ? ' · ' + jurosTxt : '') + (c.caixa === 'futuro' && c.subtipo === 'divida' ? ' · obrigação' : '');
 
             listaPriorizacao += `
                 <div class="categoria-item" style="border-left: 3px solid ${cor};">
@@ -10723,7 +11361,7 @@ function renderizarPlanoRecuperacao() {
             <div class="secao-titulo">🎯 Em que ordem pagar</div>
             <div class="fala-avatar">
                 <span class="icone">🛡️</span>
-                <span class="texto">Essa é a ordem que a gente sugere: primeiro o que já venceu, depois o que vence antes. Mas quem decide é você. Se quiser mudar, é só tocar.</span>
+                <span class="texto">Essa é a ordem que a gente sugere: 1º o que já venceu; dentro de cada grupo, as contas essenciais por data e depois as dívidas, da que tem mais juros para a que tem menos. Dívida sem taxa informada fica por último. Mas quem decide é você.</span>
             </div>
             ${listaPriorizacao}
         `;
@@ -10759,6 +11397,42 @@ function renderizarPlanoRecuperacao() {
             </div>
         `;
     }
+    // Avalanche: onde o dinheiro EXTRA rende mais (só taxas declaradas)
+    let blocoAvalanche = '';
+    {
+        const dividas = _dividasFuturoAtivas(orc);
+        const comTaxa = dividas.filter(c => _taxaConhecida(c) !== null && _taxaConhecida(c) > 0)
+            .sort((a, b) => _taxaConhecida(b) - _taxaConhecida(a));
+        const semTaxa = dividas.filter(c => _taxaConhecida(c) === null);
+        if (comTaxa.length > 0 || semTaxa.length > 0) {
+            let linhas = '';
+            comTaxa.forEach((c, i) => {
+                const sd = (typeof _saldoDevedorEfetivo === 'function') ? _saldoDevedorEfetivo(c) : null;
+                linhas += `<div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border);">
+                    <span style="font-size:0.9rem;color:var(--primary);">${i + 1}º 💳 ${c.nome} <span style="color:var(--secondary);">(${_rotuloJuros(c)}${_dividaCara(c) ? ' · cara' : ''})</span></span>
+                    <strong style="font-size:0.9rem;color:var(--primary);">${sd != null ? sinal.fmt(sd) : '—'}</strong></div>`;
+            });
+            const faltaTaxa = semTaxa.length > 0
+                ? `<div style="font-size:0.9rem;color:var(--secondary);line-height:1.4;margin-top:8px;">Sem taxa informada: ${semTaxa.map(c => c.nome).join(', ')}. Se você descobrir o juros, edite a dívida e a ordem fica mais certa.</div>` : '';
+            blocoAvalanche = `
+            <div class="card" style="margin-top:20px;">
+                <strong style="font-size:0.9rem;color:var(--primary);display:block;margin-bottom:8px;">⚡ Se sobrar dinheiro, vá para…</strong>
+                <div style="font-size:0.9rem;color:var(--secondary);line-height:1.4;margin-bottom:6px;">
+                    Depois de pagar o que venceu, o dinheiro extra rende mais na dívida com maior juros. Só usamos taxas que você informou.
+                </div>
+                ${linhas}${faltaTaxa}
+            </div>`;
+        }
+    }
+    const _cara = _dividasFuturoAtivas(orc).filter(_dividaCara);
+    const blocoReservaCara = _cara.length > 0 ? `
+        <div class="card" style="border-left:4px solid var(--warning);margin-top:15px;">
+            <div style="font-size:0.9rem;color:var(--secondary);line-height:1.4;">
+                ⚠️ Você tem dívida com juros altos (${_cara.map(c => c.nome + ' · ' + _rotuloJuros(c)).join(', ')}).
+                Uma reserva pequena de emergência ainda faz sentido, mas guardar muito enquanto essa dívida cresce costuma sair caro.
+            </div>
+        </div>` : '';
+
     container.innerHTML = `
         <div style="margin-bottom: 20px;">
             <span style="font-size: 0.9rem; font-weight: bold; color: var(--secondary); text-transform: uppercase;">Plano de recuperação</span>
@@ -10773,6 +11447,8 @@ function renderizarPlanoRecuperacao() {
         ${blocoS1}
         ${blocoS2}
         ${htmlPriorizacao}
+        ${blocoAvalanche}
+        ${blocoReservaCara}
         ${blocoPagas}
 
         <div class="card" style="background: var(--bg-color); border-color: var(--border); margin-top: 20px;">
@@ -11397,24 +12073,12 @@ function renderizarFluxoCaixa() {
         });
     }
 
-    const categoriasSemVenc = (orc.categorias || []).filter(c => 
-        !c.vencimento && 
-        !_categoriaParcelasQuitada(c) &&
-        (!fluxoCustodiaFiltro || c.custodiaPadraoId === fluxoCustodiaFiltro)
-    );
-    
-    const totalMensalPlanejado = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
-    
-    let gastoRealizadoMes = 0;
-    (orc.historicoRegistros || []).forEach(r => {
-        if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data)) {
-            if (categoriasSemVenc.some(c => c.id === r.categoriaId)) {
-                gastoRealizadoMes += (Number(r.valor) || 0);
-            }
-        }
-    });
-    
-    const totalMensalSemVenc = Math.max(0, totalMensalPlanejado - gastoRealizadoMes);
+    // Item 3: diluição única (respeita filtro de custódia da tela)
+    const dilFluxo = _calcularDiluicaoMensal(orc, { custodiaId: fluxoCustodiaFiltro || null });
+    const categoriasSemVenc = dilFluxo.categorias;
+    const totalMensalPlanejado = dilFluxo.planejado;
+    const gastoRealizadoMes = dilFluxo.realizado;
+    const totalMensalSemVenc = dilFluxo.restante;
     
     let totEntradas = fluxo.totais.entradas;
     let totSaidas = fluxo.totais.saidas;
@@ -11424,8 +12088,7 @@ function renderizarFluxoCaixa() {
     }
 
         // CORREÇÃO: Usa o orçamento cheio do mês para a média diária, ignorando o que sobrou.
-    const gastoDiarioPlanejado = totalMensalPlanejado / 30;
-    const distribuicaoTeorica = gastoDiarioPlanejado * fluxo.dias;
+    let distribuicaoTeorica = 0; // definido pela simulação única (restante do mês + plano dos meses seguintes)
     let totalDistribuidoReal = 0;
 
     let htmlDiaADia = '';
@@ -11437,31 +12100,15 @@ function renderizarFluxoCaixa() {
     const taxasInfo = calcularTaxaViabilidadeConsumo(orc);
     
     let totaisPorCaixa = {
-        base: { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 },
-        vida: { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 },
-        futuro: { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 }
+        base: { contas: 0, diluidosOriginal: dilFluxo.porCaixa.base.planejado, gastoRealizado: dilFluxo.porCaixa.base.realizado, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 },
+        vida: { contas: 0, diluidosOriginal: dilFluxo.porCaixa.vida.planejado, gastoRealizado: dilFluxo.porCaixa.vida.realizado, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 },
+        futuro: { contas: 0, diluidosOriginal: dilFluxo.porCaixa.futuro.planejado, gastoRealizado: dilFluxo.porCaixa.futuro.realizado, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 }
     };
 
     (fluxo.eventos || []).forEach(e => {
         if (e.tipo === 'vencimento' && e.caixa) {
             if (!totaisPorCaixa[e.caixa]) totaisPorCaixa[e.caixa] = { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 };
             totaisPorCaixa[e.caixa].contas += (e.valor || 0);
-        }
-    });
-
-    categoriasSemVenc.forEach(c => {
-        if (c.caixa) {
-            if (!totaisPorCaixa[c.caixa]) totaisPorCaixa[c.caixa] = { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 };
-            
-            let gastoCatMes = 0;
-            (orc.historicoRegistros || []).forEach(r => {
-                if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data) && r.categoriaId === c.id) {
-                    gastoCatMes += (Number(r.valor) || 0);
-                }
-            });
-            
-            totaisPorCaixa[c.caixa].diluidosOriginal += (Number(c.valor) || 0);
-            totaisPorCaixa[c.caixa].gastoRealizado += gastoCatMes;
         }
     });
 
@@ -11493,77 +12140,16 @@ function renderizarFluxoCaixa() {
                 .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
         }
 
-        const inicioDt = new Date(fluxo.inicio + 'T00:00:00');
         const diasSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
-        const diasCompletos = [];
-        let saldoCorrido = saldoInicialProj;
-                let distribuidoRestante = totalMensalPlanejado;
+        const simFluxo = _simularDiluicaoDiaria(orc, fluxo, {
+            saldoInicial: saldoInicialProj, restante: totalMensalSemVenc, planejado: totalMensalPlanejado,
+            protegerSaldo: protegerSaldo, custodiaId: fluxoCustodiaFiltro || null
+        });
+        const diasCompletos = simFluxo.dias;
+        totalDistribuidoReal = simFluxo.totalDistribuido;
+        distribuicaoTeorica = simFluxo.totalTeorico;
 
-        for (let i = 0; i < fluxo.dias; i++) {
-            const d = new Date(inicioDt);
-            d.setDate(inicioDt.getDate() + i);
-            const dataKey = d.toISOString().split('T')[0];
-            const diaData = fluxo.porDia[dataKey] || { entradas: 0, saidas: 0, eventos: [] };
-
-            let eventosDia = diaData.eventos || [];
-            if (fluxoCustodiaFiltro) eventosDia = eventosDia.filter(e => e.custodiaId === fluxoCustodiaFiltro);
-            
-            const entradas = eventosDia.filter(e => e.tipo === 'recebimento').reduce((s, e) => s + (e.valor || 0), 0);
-            const saidas = eventosDia.filter(e => e.tipo === 'vencimento').reduce((s, e) => s + (e.valor || 0), 0);
-            const netEventos = entradas - saidas;
-            const saldoAntes = saldoCorrido + netEventos;
-            
-                       let quotaDia = 0;
-            let isReduzido = false;
-
-            if (saldoAntes > 0 || !protegerSaldo) {
-                // O ritmo diário é a média cheia do mês (gastoDiarioPlanejado)
-                let alvoDia = gastoDiarioPlanejado;
-                
-                if (protegerSaldo) {
-                    let minFuturo = 0;
-                    let acumuladoFuturo = 0;
-                    const diasParaOlhar = Math.min(20, fluxo.dias - i - 1);
-                    
-                    for (let j = 1; j <= diasParaOlhar; j++) {
-                        const dataFutura = new Date(inicioDt);
-                        dataFutura.setDate(inicioDt.getDate() + i + j);
-                        const dataKeyFutura = dataFutura.toISOString().split('T')[0];
-                        const diaFuturo = fluxo.porDia[dataKeyFutura] || { entradas: 0, saidas: 0, eventos: [] };
-                        let evsFut = diaFuturo.eventos || [];
-                        if (fluxoCustodiaFiltro) evsFut = evsFut.filter(e => e.custodiaId === fluxoCustodiaFiltro);
-                        
-                        const entFut = evsFut.filter(e => e.tipo === 'recebimento').reduce((s, e) => s + (e.valor || 0), 0);
-                        const saiFut = evsFut.filter(e => e.tipo === 'vencimento').reduce((s, e) => s + (e.valor || 0), 0);
-                        
-                        acumuladoFuturo += (entFut - saiFut);
-                        if (acumuladoFuturo < minFuturo) minFuturo = acumuladoFuturo;
-                    }
-
-                    let limiteHoje = saldoAntes + minFuturo - 10;
-                    if (limiteHoje < 0) limiteHoje = 0;
-                    
-                    // Aplica a proteção
-                    quotaDia = Math.min(alvoDia, limiteHoje, distribuidoRestante);
-                    if (quotaDia < alvoDia - 0.01) isReduzido = true;
-                } else {
-                    // CORREÇÃO RESTAURADA: Quando Proteger Saldo está DESLIGADO, mantém o plano sem travar
-                    quotaDia = Math.min(alvoDia, distribuidoRestante);
-                }
-            }
-
-            saldoCorrido = saldoAntes - quotaDia;
-            distribuidoRestante -= quotaDia;
-            totalDistribuidoReal += quotaDia;
-
-            diasCompletos.push({
-                data: d, dataKey, entradas, saidas, eventos: eventosDia,
-                quotaDistribuida: quotaDia, isReduzido,
-                netEventos, saldoAntes, saldoCorrido, temEvento: eventosDia.length > 0
-            });
-        }
-
-        saldoFinalProj = saldoCorrido;
+        saldoFinalProj = simFluxo.saldoFinal;
         diasCompletosParaGargalos = diasCompletos; // Guarda a projeção exata
         htmlDiaADia = `<div class="secao-titulo">Saldo depois de cada dia</div>`;
 
@@ -11648,7 +12234,7 @@ function renderizarFluxoCaixa() {
                 </div>
             `;
             notaReducao = `<div style="font-size: 0.9rem; color: var(--warning); margin-top: 4px; line-height: 1.3;">
-                ⚠️ Reduzido em ${fmt(dados.corteProtecao)} para proteger o caixa.
+                ⚠️ Capacidade do caixa ${fmt(dados.diluidosAjustado)} (plano ${fmt(dados.diluidosRestante)}). Proteção ativa — o plano não foi apagado.
             </div>`;
         } else if (dados.gastoRealizado > 0.01) {
             notaReducao = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 4px; line-height: 1.3;">
@@ -12420,7 +13006,15 @@ function projetarFluxo(orc, opcoes) {
 const HORIZONTE_LIQUIDEZ_DIAS = 14;
 
 /**
+ * Regime único caixa × competência (item 6):
+ * - gasto_direto: caixa (sai da custódia) + competência (meta da semana)
+ * - gasto_cartao: competência na meta + fatura; caixa só no pagamento_fatura
+ * - pagamento_fatura: só caixa (origem −) e fatura (−); NÃO debita meta de novo
+ * - Estoque operacional = saldos (sem reserva) − faturas  → âncora dos alarmes N3
+ */
+/**
  * Estoque operacional atual (N3) ou null se indisponível.
+ * Este é o número que manda no alarme de aperto (não o fluxo projetado sozinho).
  */
 function _estoqueOperacionalAtual(orc) {
     if (!orc || (orc.nivel || 1) < 3) return null;
@@ -12583,96 +13177,22 @@ function projetarSaldoDiarioCompleto(orc, fluxo, protegerSaldoOverride = null) {
 
     const protegerSaldo = protegerSaldoOverride !== null ? protegerSaldoOverride : (orc.configFluxo?.protegerSaldo !== false);
 
-    const categoriasSemVenc = (orc.categorias || []).filter(c =>
-        !c.vencimento && !_categoriaParcelasQuitada(c)
-    );
-    const totalMensalPlanejado = categoriasSemVenc.reduce(
-        (s, c) => s + (Number(c.valor) || 0), 0
-    );
+    // Item 3: diluição única (abate gasto, dívida e reserva já realizados)
+    const dil = _calcularDiluicaoMensal(orc);
+    const totalMensalPlanejado = dil.planejado;
+    const gastoRealizadoMes = dil.realizado;
+    const totalMensalSemVenc = dil.restante;
 
-    let gastoRealizadoMes = 0;
-    (orc.historicoRegistros || []).forEach(r => {
-        if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data)) {
-            if (categoriasSemVenc.some(c => c.id === r.categoriaId)) {
-                gastoRealizadoMes += (Number(r.valor) || 0);
-            }
-        }
+    const sim = _simularDiluicaoDiaria(orc, fluxo, {
+        saldoInicial: estoque, restante: totalMensalSemVenc, planejado: totalMensalPlanejado,
+        protegerSaldo: protegerSaldo
     });
-        const totalMensalSemVenc = Math.max(0, totalMensalPlanejado - gastoRealizadoMes);
-
-    const inicioDt = new Date(fluxo.inicio + 'T00:00:00');
-    const diasCompletos = [];
-    let saldoCorrido = estoque;
-    let distribuidoRestante = totalMensalPlanejado;
-    let totalDistribuido = 0;
-
-    for (let i = 0; i < fluxo.dias; i++) {
-        const d = new Date(inicioDt);
-        d.setDate(inicioDt.getDate() + i);
-        const dataKey = d.toISOString().split('T')[0];
-        const diaData = fluxo.porDia[dataKey] || { entradas: 0, saidas: 0, eventos: [] };
-
-        const entradas = diaData.entradas || 0;
-        const saidas = diaData.saidas || 0;
-        const saldoAntes = saldoCorrido + (entradas - saidas);
-
-        let quotaDia = 0;
-        let isReduzido = false;
-
-                if (saldoAntes > 0 || !protegerSaldo) {
-            // FIX: usa o orçamento cheio do mês como ritmo diário (mesma
-            // regra de renderizarFluxoCaixa), não o restante já gasto.
-            // `distribuidoRestante` já começa em `totalMensalPlanejado`,
-            // então esta troca alinha os dois caminhos (tela Fluxo e gráfico
-            // do Simulador) ao mesmo ritmo.
-            const gastoDiarioBase = totalMensalPlanejado / 30;
-            const qBase = gastoDiarioBase;
-
-            if (protegerSaldo) {
-                let minFuturo = 0;
-                let acumuladoFuturo = 0;
-                const diasParaOlhar = Math.min(20, fluxo.dias - i - 1);
-
-                for (let j = 1; j <= diasParaOlhar; j++) {
-                    const dataFutura = new Date(inicioDt);
-                    dataFutura.setDate(inicioDt.getDate() + i + j);
-                    const df = fluxo.porDia[dataFutura.toISOString().split('T')[0]]
-                        || { entradas: 0, saidas: 0 };
-                    acumuladoFuturo += (df.entradas || 0) - (df.saidas || 0);
-                    if (acumuladoFuturo < minFuturo) minFuturo = acumuladoFuturo;
-                }
-
-                const limiteHoje = Math.max(0, saldoAntes + minFuturo - 10);
-
-                if (distribuidoRestante > 0) {
-                    const qRestanteMedia = distribuidoRestante / (fluxo.dias - i);
-                    let alvoDia = Math.max(qBase, qRestanteMedia);
-                    if (saldoAntes > distribuidoRestante * 2) alvoDia *= 1.5;
-                    else if (saldoAntes > distribuidoRestante) alvoDia *= 1.2;
-
-                    quotaDia = Math.min(alvoDia, limiteHoje, distribuidoRestante);
-                    if (quotaDia < alvoDia - 0.01) isReduzido = true;
-                }
-            } else {
-                if (distribuidoRestante > 0) quotaDia = Math.min(qBase, distribuidoRestante);
-            }
-        }
-
-        saldoCorrido = saldoAntes - quotaDia;
-        distribuidoRestante -= quotaDia;
-        totalDistribuido += quotaDia;
-
-        diasCompletos.push({
-            dataKey, entradas, saidas, eventos: diaData.eventos || [],
-            quotaDistribuida: quotaDia, isReduzido, saldoCorrido
-        });
-    }
 
     return {
-        diasCompletos,
+        diasCompletos: sim.dias,
         saldoInicial: estoque,
-        saldoFinal: saldoCorrido,
-        totalDistribuido
+        saldoFinal: sim.saldoFinal,
+        totalDistribuido: sim.totalDistribuido
     };
 }
 
@@ -13249,24 +13769,17 @@ function renderizarConexaoEnvelopes(orc, protegerSaldo) {
     const taxasInfo = calcularTaxaViabilidadeConsumo(orc, protegerSaldo ? true : false);
     const fmt = formatarMoeda;
 
-    const categoriasSemVenc = (orc.categorias || []).filter(c => !c.vencimento && !_categoriaParcelasQuitada(c));
-    const totalMensalPlanejado = categoriasSemVenc.reduce((s, c) => s + (Number(c.valor) || 0), 0);
-
-    let gastoRealizadoMes = 0;
-    (orc.historicoRegistros || []).forEach(r => {
-        if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data)) {
-            if (categoriasSemVenc.some(c => c.id === r.categoriaId)) {
-                gastoRealizadoMes += (Number(r.valor) || 0);
-            }
-        }
-    });
-
-    const totalMensalSemVenc = Math.max(0, totalMensalPlanejado - gastoRealizadoMes);
+    // Item 3: diluição única
+    const dil = _calcularDiluicaoMensal(orc);
+    const categoriasSemVenc = dil.categorias;
+    const totalMensalPlanejado = dil.planejado;
+    const gastoRealizadoMes = dil.realizado;
+    const totalMensalSemVenc = dil.restante;
 
     let totaisPorCaixa = {
-        base: { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 },
-        vida: { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 },
-        futuro: { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 }
+        base: { contas: 0, diluidosOriginal: dil.porCaixa.base.planejado, gastoRealizado: dil.porCaixa.base.realizado, diluidosRestante: dil.porCaixa.base.restante, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 },
+        vida: { contas: 0, diluidosOriginal: dil.porCaixa.vida.planejado, gastoRealizado: dil.porCaixa.vida.realizado, diluidosRestante: dil.porCaixa.vida.restante, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 },
+        futuro: { contas: 0, diluidosOriginal: dil.porCaixa.futuro.planejado, gastoRealizado: dil.porCaixa.futuro.realizado, diluidosRestante: dil.porCaixa.futuro.restante, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 }
     };
 
     const fluxo = projetarFluxo(orc, { dias: 30 });
@@ -13277,20 +13790,7 @@ function renderizarConexaoEnvelopes(orc, protegerSaldo) {
         }
     });
 
-    categoriasSemVenc.forEach(c => {
-        if (c.caixa) {
-            if (!totaisPorCaixa[c.caixa]) totaisPorCaixa[c.caixa] = { contas: 0, diluidosOriginal: 0, gastoRealizado: 0, diluidosRestante: 0, diluidosAjustado: 0, corteProtecao: 0, taxa: 1 };
-            let gastoCatMes = 0;
-            (orc.historicoRegistros || []).forEach(r => {
-                if ((r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') && !r.anulado && _pertenceMesAtual(r.data) && r.categoriaId === c.id) {
-                    gastoCatMes += (Number(r.valor) || 0);
-                }
-            });
-            totaisPorCaixa[c.caixa].diluidosOriginal += (Number(c.valor) || 0);
-            totaisPorCaixa[c.caixa].gastoRealizado += gastoCatMes;
-        }
-    });
-
+    // Diluídos já vieram de _calcularDiluicaoMensal (planejado/realizado/restante)
     if (protegerSaldo) {
         totaisPorCaixa.base.taxa = taxasInfo.taxaBase;
         totaisPorCaixa.vida.taxa = taxasInfo.taxaVida;
@@ -13350,7 +13850,7 @@ function renderizarConexaoEnvelopes(orc, protegerSaldo) {
                 </div>
             `;
             notaReducao = `<div style="font-size: 0.9rem; color: var(--warning); margin-top: 4px; line-height: 1.3;">
-                ⚠️ Reduzido em ${fmt(dados.corteProtecao)} para proteger o caixa.
+                ⚠️ Capacidade do caixa ${fmt(dados.diluidosAjustado)} (plano ${fmt(dados.diluidosRestante)}). Proteção ativa — o plano não foi apagado.
             </div>`;
         } else if (dados.gastoRealizado > 0.01) {
             notaReducao = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 4px; line-height: 1.3;">
@@ -13747,7 +14247,10 @@ function avaliarLiquidezHorizonte(orc, opcoes) {
     const proxVenc = (fluxo.eventos || []).find(e => e.tipo === 'vencimento');
 
     let status = 'sem_dados';
-    if (temAlgumEvento) {
+    // Item 6: se o estoque já está negativo, o alarme não depende de eventos futuros
+    if (origemPartida === 'estoque' && partida < -0.005) {
+        status = 'aperto';
+    } else if (temAlgumEvento) {
         if (minimo < 0) status = 'aperto';
         else if (minimo < partida * 0.15 && partida > 0) status = 'atencao';
         else status = 'folga';
@@ -13792,6 +14295,17 @@ function renderizarCardLiquidezHorizonte(orc) {
     };
 
     if (!liq.temAlgumEvento) {
+        if (liq.status === 'aperto' && liq.origemPartida === 'estoque') {
+            return `
+            <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--danger);background:var(--danger-soft);">
+                <div style="font-size:0.9rem;font-weight:700;color:var(--danger);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">⚠️ Liquidez · estoque</div>
+                <p style="font-size:0.9rem;color:var(--secondary);line-height:1.4;margin:0 0 8px;">
+                    Estoque operacional (carteiras − faturas) está em <strong style="color:var(--danger);">${fmt(liq.partida)}</strong>.
+                    Mesmo sem vencimentos declarados no horizonte, o caixa já está no vermelho.
+                </p>
+                <button class="btn-option" style="justify-content:center;border-color:var(--danger);color:var(--danger);margin-top:4px;" onclick="abrirPlanoRecuperacao()">Ver plano de recuperação</button>
+            </div>`;
+        }
         return `
             <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
                 <div style="font-size:0.9rem;font-weight:700;color:var(--secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Liquidez · 14 dias</div>
@@ -14024,9 +14538,13 @@ function detectarGargalos(fluxo, opcoes) {
             }
         });
     } else {
-        // Fallback: Caso a tela não envie os dias completos (ex: cards da Home)
+        // Fallback: parte do estoque operacional (não do zero) — alarme N3 ancorado em caixa real
         let acumulado = 0;
-        saldoMinimo = 0;
+        if (typeof _estoqueOperacionalAtual === 'function' && state.orcamento) {
+            const est = _estoqueOperacionalAtual(state.orcamento);
+            if (est !== null) acumulado = est;
+        }
+        saldoMinimo = acumulado;
         const datas = Object.keys(fluxo.porDia).sort();
         datas.forEach(data => {
             const dia = fluxo.porDia[data];
@@ -14303,7 +14821,8 @@ function renderizarModalListaRegistros() {
                 if (r.anulado) meta += (meta ? ' · ' : '') + 'histórico fechado preservado';
                 const corValor = r.anulado ? 'var(--secondary)' : (isReceb ? 'var(--success)' : 'var(--primary)');
                 const sinal = isReceb ? '+' : '−';
-                const valorMostrar = isAjuste ? (r.valor != null ? r.valor : Math.abs(r.delta || 0)) : r.valor;
+                const valorMostrar = isAjuste ? (r.valor != null ? r.valor : Math.abs(r.delta || 0)) : _valorEfetivoRegistro(r);
+                if (!isAjuste && Math.abs(_valorEfetivoRegistro(r) - (Number(r.valor) || 0)) >= 0.005) meta += (meta ? ' · ' : '') + 'corrigido (original ' + _fmtBRL(r.valor) + ')';
                 const podeEditar = !isAjuste && !r.anulado;
                 const acoes = isAjuste
                     ? '<span style="font-size:0.9rem;color:var(--secondary);">auditável</span>'
@@ -14436,6 +14955,15 @@ function _aplicarEfeitosAjusteCorrente(ajuste) {
     }
 }
 
+/** Valor efetivo de um registro de semana fechada = original + soma dos ajustes ligados a ele. */
+function _valorEfetivoRegistro(r) {
+    if (!r) return 0;
+    const ajustes = (state.orcamento.historicoRegistros || []).filter(a =>
+        a.tipo === 'ajuste_semana_anterior' && a.origemId === r.id
+    );
+    return (Number(r.valor) || 0) + ajustes.reduce((s, a) => s + (Number(a.delta) || 0), 0);
+}
+
 function _criarAjusteSemanaAnterior(origem, operacao, valorNovo) {
     if (!origem) return null;
     const semana = state.orcamento && state.orcamento.semanaAtual;
@@ -14550,11 +15078,24 @@ function _desfazerEfeitosRegistro(r) {
                 c.saldoAtual = (c.saldoAtual || 0) + (r.valor || 0);
             }
         }
-        // Reverter contagem de parcelas
+        // Reverter efeito no passivo (saldo + parcelas)
         if (r.categoriaId) {
             const cat = (state.orcamento.categorias || []).find(c => c.id === r.categoriaId);
-            if (cat && cat.parcelasPagas > 0) {
-                cat.parcelasPagas -= 1;
+            if (cat) {
+                const v = Number(r.valor) || 0;
+                if (typeof cat.saldoDevedor === 'number' && !isNaN(cat.saldoDevedor)) {
+                    cat.saldoDevedor = (cat.saldoDevedor || 0) + v;
+                }
+                const parcela = Number(cat.valor) || 0;
+                if (parcela > 0 && (Number(cat.parcelasTotais) || 0) > 0) {
+                    const cabem = Math.floor((v + 0.001) / parcela);
+                    if (cabem >= 1 && (cat.parcelasPagas || 0) >= cabem) {
+                        cat.parcelasPagas -= cabem;
+                    }
+                } else if (parcela > 0 && v + 0.001 >= parcela && (cat.parcelasPagas || 0) > 0) {
+                    const cabem = Math.floor((v + 0.001) / parcela);
+                    cat.parcelasPagas = Math.max(0, (cat.parcelasPagas || 0) - cabem);
+                }
             }
         }
         if (r.custodiaDestinoId) {
@@ -14648,11 +15189,11 @@ function _aplicarEfeitosRegistro(r) {
                 r.saldoAtualizado = true;
             }
         }
-        // Incrementar parcela
+        // Incrementar / abater passivo de forma coerente com pagamento parcial
         if (r.categoriaId) {
             const cat = (state.orcamento.categorias || []).find(c => c.id === r.categoriaId);
             if (cat) {
-                cat.parcelasPagas = (cat.parcelasPagas || 0) + 1;
+                _aplicarPagamentoPassivo(cat, Number(r.valor) || 0);
             }
         }
         if (r.custodiaDestinoId) {
@@ -14807,7 +15348,7 @@ function editarRegistro(id) {
         blocoErro.style.display = 'none';
         blocoErro.textContent = '';
     }
-    if (inputValor) inputValor.value = (r.valor != null ? Number(r.valor) : '');
+    if (inputValor) inputValor.value = (r.valor != null ? _valorEfetivoRegistro(r) : '');
     if (inputData) {
         const dataISO = (r.data || '').split('T')[0];
         inputData.value = /^\d{4}-\d{2}-\d{2}$/.test(dataISO) ? dataISO : '';
@@ -14918,7 +15459,7 @@ function salvarEdicaoRegistro() {
         const dataOriginalStr = (r.data || '').split('T')[0];
         const dataNovaStr = novaData.split('T')[0];
         
-        const valorMudou = Math.abs((Number(r.valor) || 0) - novoValor) >= 0.005;
+        const valorMudou = Math.abs(_valorEfetivoRegistro(r) - novoValor) >= 0.005;
         const dataMudou = dataOriginalStr !== dataNovaStr;
 
         // CASO 1: O usuário só mexeu na TAG de Competência (Data e Valor estão iguais)
