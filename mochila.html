@@ -2997,7 +2997,14 @@ function calcularTaxaViabilidadeConsumo(orc, forcarProtecao = null) {
     }
 
         let totalDistribuidoReal = 0;
-    let saldoCorrido = (orc.custodias || []).filter(c => !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura).reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
+    // P0.3: saldo operacional unificado
+    let saldoCorrido;
+    {
+        const _e = (typeof _estoqueOperacionalAtual === 'function') ? _estoqueOperacionalAtual(orc) : null;
+        saldoCorrido = (_e !== null) ? _e : (orc.custodias || [])
+            .filter(c => !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura)
+            .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
+    }
     const inicioDt = new Date(fluxo.inicio + 'T00:00:00');
     let distribuidoRestante = totalRestante;
     
@@ -3160,6 +3167,8 @@ function sincronizarLimitesSemanaAtual() {
 function atualizarTotaisEnvelopes() {
     if (!state.orcamento) return;
     const cats = state.orcamento.categorias || [];
+    // P0.1: no N1 sem categorias, não zerar o plano manual das caixinhas
+    if (cats.length === 0 && (state.orcamento.nivel || 1) < 2) return;
 
     // Calcula a soma real de cada caixa
     const baseTotal = cats.filter(c => c.caixa === 'base' && !_categoriaParcelasQuitada(c)).reduce((s, c) => s + (c.valor || 0), 0);
@@ -3291,7 +3300,16 @@ function calcularLiquidezProjetada(orc) {
     });
     const totalMensalSemVenc = Math.max(0, totalMensalPlanejado - gastoRealizadoMes);
     
-    let saldoInicialProj = (orc.custodias || []).filter(c => !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura).reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
+    // P0.3: saldo operacional unificado (exclui reserva; fatura já líquida — sem evento extra de fatura)
+    let saldoInicialProj = 0;
+    const estoqueOp = (typeof _estoqueOperacionalAtual === 'function') ? _estoqueOperacionalAtual(orc) : null;
+    if (estoqueOp !== null) {
+        saldoInicialProj = estoqueOp;
+    } else {
+        saldoInicialProj = (orc.custodias || [])
+            .filter(c => !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura)
+            .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
+    }
     let saldoCorrido = saldoInicialProj;
     let distribuidoRestante = totalMensalSemVenc;
     const protegerSaldo = orc.configFluxo?.protegerSaldo !== false;
@@ -6537,7 +6555,12 @@ function confirmarRecebimento(categoriaNome, custodiaId) {
 
 function verificarGatilhoNivel2() {
     const orc = state.orcamento;
-    if (orc.nivel >= 2) return;
+    if (!orc) return;
+    if ((orc.nivel || 1) >= 2) {
+        // N2 estável → avalia gatilho do N3
+        verificarGatilhoNivel3();
+        return;
+    }
     if (orc.transicaoNivelPendente === 2) return;
 
     const registros = (orc.historicoRegistros || []).length;
@@ -6545,6 +6568,27 @@ function verificarGatilhoNivel2() {
 
     if (registros >= REGISTROS_PARA_NIVEL2 && semanasFechadas >= SEMANAS_PARA_NIVEL2) {
         orc.transicaoNivelPendente = 2;
+        salvarEstado();
+    }
+}
+
+/** P0.2 — gatilho Nível 3: N2 + semanas no nível + categorias com vencimento + renda detalhada */
+const SEMANAS_PARA_NIVEL3 = 2;
+function verificarGatilhoNivel3() {
+    const orc = state.orcamento;
+    if (!orc) return;
+    if ((orc.nivel || 1) !== 2) return;
+    if (orc.transicaoNivelPendente === 3 || orc.transicaoNivelPendente === 2) return;
+
+    const semanasNoNivel = orc.semanasNoNivelAtual || 0;
+    const catsComVenc = (orc.categorias || []).filter(c =>
+        typeof c.vencimento === 'number' && c.vencimento >= 1 && c.vencimento <= 31
+    ).length;
+    const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
+    const temRenda = fontes.length > 0;
+
+    if (semanasNoNivel >= SEMANAS_PARA_NIVEL3 && catsComVenc >= 1 && temRenda) {
+        orc.transicaoNivelPendente = 3;
         salvarEstado();
     }
 }
@@ -7886,13 +7930,16 @@ function abrirFormularioCategoria(idExistente) {
         if (inputNome) inputNome.value = catExistente.nome || '';
         if (inputValor) inputValor.value = catExistente.valor != null ? catExistente.valor : '';
 
-        const tipo = catExistente.tipo || 'fixo';
+        // P0.7: 'fixo' migrou para 'conta'; prefill deve usar 'conta'
+        let tipo = catExistente.tipo || 'conta';
+        if (tipo === 'fixo') tipo = 'conta';
+        if (tipo === 'variavel') tipo = catExistente.vencimento ? 'conta' : 'consumo';
         const chipTipo = document.querySelector(`#chips-tipo-cat .chip[data-tipo="${tipo}"]`);
         if (chipTipo) {
             selecionarTipoCategoria(chipTipo, tipo);
         }
 
-        if (tipo === 'fixo' && catExistente.vencimento) {
+        if (tipo === 'conta' && catExistente.vencimento) {
             const inputVenc = document.getElementById('nova-cat-vencimento');
             if (inputVenc) inputVenc.value = catExistente.vencimento;
         }
@@ -8228,7 +8275,8 @@ function renderizarDetalheFuturo() {
                         </div>
                     ` : ''}
 
-                    ${total > 0 && pagas < total ? `
+                    ${/* P0.8: também mostra pagamento quando não há parcelamento (contínua) */
+                    (total === 0 || pagas < total) ? `
                         <button class="btn-sm" style="background: var(--accent); color: white; margin-top: 10px; width: 100%;"
                                 onclick="event.stopPropagation();pagarParcela('${cat.id}')">
                             + Registrar pagamento (R$ ${(cat.valor || 0).toFixed(2).replace('.', ',')})
@@ -8306,7 +8354,12 @@ function pagarParcela(categoriaId) {
         `Registrar pagamento de "${cat.nome}"?`,
         Number(valorSugerido).toFixed(2)
     );
-    if (valorStr === null) return;
+    // P0.8: limpa pendente ao cancelar
+    if (valorStr === null) {
+        if (typeof limparPendenteRegistroFuturo === 'function') limparPendenteRegistroFuturo();
+        else pendenteRegistroFuturo = null;
+        return;
+    }
     const valorPago = parseFloat(valorStr) || 0;
     if (valorPago <= 0) { alert('Valor inválido.'); return; }
 
@@ -11433,7 +11486,11 @@ function renderizarFluxoCaixa() {
             const c = orc.custodias.find(x => x.id === fluxoCustodiaFiltro);
             if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) saldoInicialProj = Number(c.saldoAtual) || 0;
         } else {
-            saldoInicialProj = (orc.custodias || []).filter(c => !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura).reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
+            // P0.3
+            const _e2 = (typeof _estoqueOperacionalAtual === 'function') ? _estoqueOperacionalAtual(orc) : null;
+            saldoInicialProj = (_e2 !== null) ? _e2 : (orc.custodias || [])
+                .filter(c => !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura)
+                .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
         }
 
         const inicioDt = new Date(fluxo.inicio + 'T00:00:00');
@@ -12180,12 +12237,31 @@ function _eventosRecebimentoDeclarados(orc, inicio, fim) {
             const dias = _diasRecebimento(f.diaRecebimento);
             
             if (dias.length > 0) {
-                // Lógica original: Fontes com dia fixo
-                if (jaRecebido === 0) {
-                    const valorPorOcorrencia = valorMes / dias.length;
+                // P0.6: projetar o restante (valorMes − jaRecebido) nos dias ainda futuros
+                // Cobre recebimento parcial e fontes quinzenais.
+                const restanteMes = valorMes - jaRecebido;
+                if (restanteMes > 0.01) {
+                    // Dias de recebimento ainda no horizonte (e no futuro relativo a "hoje" se mês corrente)
+                    const hoje = new Date();
+                    hoje.setHours(0, 0, 0, 0);
+                    const diasPendentes = [];
                     dias.forEach(dia => {
                         const data = _dataNoMes(ano, mes, dia);
-                        if (data >= inicio && data <= fim) {
+                        if (data >= inicio && data <= fim && data >= hoje) {
+                            diasPendentes.push(data);
+                        }
+                    });
+                    // Se nenhum dia futuro no horizonte, mas ainda há restante no mês dentro da janela,
+                    // coloca o restante no último dia do mês (ou no fim da janela).
+                    if (diasPendentes.length === 0) {
+                        const dataUltimo = _dataNoMes(ano, mes, ultimoDiaMes);
+                        if (dataUltimo >= inicio && dataUltimo <= fim && dataUltimo >= hoje) {
+                            diasPendentes.push(dataUltimo);
+                        }
+                    }
+                    if (diasPendentes.length > 0) {
+                        const valorPorOcorrencia = restanteMes / diasPendentes.length;
+                        diasPendentes.forEach(data => {
                             eventos.push({
                                 tipo: 'recebimento',
                                 data: data.toISOString().split('T')[0],
@@ -12197,8 +12273,8 @@ function _eventosRecebimentoDeclarados(orc, inicio, fim) {
                                 categoriaId: null,
                                 custodiaId: f.custodiaPadraoId || null
                             });
-                        }
-                    });
+                        });
+                    }
                 }
             } else {
                 // NOVA REGRA: Fontes sem dia fixo vão para o último dia do mês, pelo valor restante.
@@ -14322,9 +14398,11 @@ function _aplicarEfeitosAjusteCorrente(ajuste) {
     if (!delta) return;
     const tipo = ajuste.tipoOriginal;
 
+    // P0.4: não truncar com Math.max(0) no cálculo — crédito/ajuste negativo precisa fluir.
+    // Limite visual (não negativo) fica na formatação/exibição.
     if (tipo === 'recebimento') {
         if (semana && !semana.fechada) {
-            semana.rendaReal = Math.max(0, (semana.rendaReal || 0) + delta);
+            semana.rendaReal = (semana.rendaReal || 0) + delta;
             if (semana.rendaReal > (semana.rendaEstimada || 0)) {
                 semana.rendaEstimada = semana.rendaReal;
             }
@@ -14337,7 +14415,7 @@ function _aplicarEfeitosAjusteCorrente(ajuste) {
         }
     } else if (tipo === 'gasto_direto') {
         if (semana && !semana.fechada && ajuste.caixa && semana[ajuste.caixa]) {
-            semana[ajuste.caixa].gasto = Math.max(0, (semana[ajuste.caixa].gasto || 0) + delta);
+            semana[ajuste.caixa].gasto = (semana[ajuste.caixa].gasto || 0) + delta;
         }
         if (ajuste.custodiaId) {
             const c = (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaId);
@@ -14347,12 +14425,12 @@ function _aplicarEfeitosAjusteCorrente(ajuste) {
         }
     } else if (tipo === 'gasto_cartao') {
         if (semana && !semana.fechada && ajuste.caixa && semana[ajuste.caixa]) {
-            semana[ajuste.caixa].gasto = Math.max(0, (semana[ajuste.caixa].gasto || 0) + delta);
+            semana[ajuste.caixa].gasto = (semana[ajuste.caixa].gasto || 0) + delta;
         }
         if (ajuste.cartaoId) {
             const cartao = (state.orcamento.custodias || []).find(x => x.id === ajuste.cartaoId);
             if (cartao) {
-                cartao.faturaAcumulada = Math.max(0, (cartao.faturaAcumulada || 0) + delta);
+                cartao.faturaAcumulada = (cartao.faturaAcumulada || 0) + delta;
             }
         }
     }
@@ -14366,7 +14444,15 @@ function _criarAjusteSemanaAnterior(origem, operacao, valorNovo) {
         return null;
     }
 
-    const valorAntigo = Number(origem.valor) || 0;
+    // P0.5: valor efetivo = valor histórico + soma dos ajustes já ligados a este registro
+    // (evita acumular erro em edições/anulações repetidas de semana fechada)
+    const ajustesAnteriores = (state.orcamento.historicoRegistros || []).filter(a =>
+        a.tipo === 'ajuste_semana_anterior' && a.origemId === origem.id
+    );
+    const valorEfetivo = (Number(origem.valor) || 0) + ajustesAnteriores.reduce(
+        (s, a) => s + (Number(a.delta) || 0), 0
+    );
+    const valorAntigo = valorEfetivo;
     let delta;
     if (operacao === 'exclusao') {
         delta = -valorAntigo;
