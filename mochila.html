@@ -3255,287 +3255,6 @@ function calcularTaxaViabilidadeConsumo(orc, forcarProtecao = null) {
     return resultado;
 }
 
-
-// COMPROMISSO RESERVADO — conta com vencimento (Base/Vida)
-// A conta com vencimento tem a reserva garantida na semana do vencimento.
-// Pagar antes puxa a reserva para a semana do pagamento (limite sobe) e
-// libera a da semana do vencimento (limite cai). A soma das semanas não muda.
-// Tudo é DERIVADO dos registros: excluir/editar o pagamento recalcula sozinho.
-
-/** Data local (YYYY-MM-DD) de um registro; evita o deslocamento do ISO em UTC. */
-function _isoLocalDe(dataStr) {
-    const s = String(dataStr || '');
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-    const d = new Date(s);
-    if (isNaN(d.getTime())) return s.split('T')[0];
-    return _chaveDataLocal(d);
-}
-
-function _addDiasIso(iso, n) {
-    const d = new Date(iso + 'T12:00:00');
-    d.setDate(d.getDate() + n);
-    return _chaveDataLocal(d);
-}
-
-function _semanaDaData(iso) {
-    const b = calcularInicioFimSemana(new Date(iso + 'T12:00:00'), state.orcamento);
-    return { inicio: _chaveDataLocal(b.inicio), fim: _chaveDataLocal(b.fim) };
-}
-
-function _ehContaComVencimento(cat) {
-    return !!(cat && cat.tipo === 'conta' && cat.vencimento && (cat.caixa === 'base' || cat.caixa === 'vida'));
-}
-
-/** Datas de vencimento (YYYY-MM-DD) da categoria dentro de [deIso, ateIso]. Dia 31 cai no último dia do mês. */
-function _ocorrenciasVencimento(cat, deIso, ateIso) {
-    const out = [];
-    if (!cat || !cat.vencimento || !deIso || !ateIso) return out;
-    const d0 = new Date(deIso + 'T12:00:00');
-    for (let i = -1; i <= 16; i++) {
-        const dt = _dataNoMes(d0.getFullYear(), d0.getMonth() + i, Number(cat.vencimento));
-        const iso = _chaveDataLocal(dt);
-        if (iso > ateIso) break;
-        if (iso >= deIso) out.push(iso);
-    }
-    return out;
-}
-
-/** Primeira semana conhecida do app (resumos fechados ou semana atual). */
-function _inicioUsoApp() {
-    let m = null;
-    ((state.orcamento && state.orcamento.resumos) || []).forEach(r => { if (r && r.inicio && (!m || r.inicio < m)) m = r.inicio; });
-    const sa = state.orcamento && state.orcamento.semanaAtual;
-    if (sa && sa.inicio && (!m || sa.inicio < m)) m = sa.inicio;
-    return m;
-}
-
-/**
- * Distribui os pagamentos da conta pelas ocorrências (mais antiga em aberto primeiro).
- * Devolve só as ANTECIPAÇÕES: pagamento numa semana anterior à semana do vencimento.
- * Atraso não entra aqui: a reserva não paga rola pela regra geral de folga.
- */
-function _alocacoesAntecipadasConta(cat, semana) {
-    if (!_ehContaComVencimento(cat) || !semana || !semana.inicio || !semana.fim) return [];
-    const valor = Number(cat.valor) || 0;
-    if (valor <= 0) return [];
-    const deIso = _addDiasIso(semana.inicio, -75);
-    // Vencimentos anteriores ao início do uso do app não contam como "em aberto"
-    const inicioUso = _inicioUsoApp();
-    const ocs = _ocorrenciasVencimento(cat, _addDiasIso(deIso, -45), _addDiasIso(semana.fim, 60))
-        .filter(v => !inicioUso || v >= inicioUso)
-        .map(v => ({ venc: v, restante: valor }));
-    const pagamentos = (state.orcamento.historicoRegistros || [])
-        .filter(r => !r.anulado && (r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') &&
-            ((r.categoriaId && r.categoriaId === cat.id) || (!r.categoriaId && r.categoria && r.categoria === cat.nome)))
-        .map(r => ({ iso: _isoLocalDe(r.data), valor: Number(_valorEfetivoRegistro(r)) || 0, mes: r.mesReferencia || null }))
-        .filter(p => p.valor > 0 && p.iso >= deIso && p.iso <= semana.fim)
-        .sort((a, b) => (a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0));
-
-    const resultado = [];
-    pagamentos.forEach(p => {
-        let v = p.valor;
-        const limiteAntigo = _addDiasIso(p.iso, -45);
-        let cands = ocs.filter(o => o.restante > 0.05 && o.venc >= limiteAntigo);
-        if (p.mes) {
-            const pref = cands.filter(o => o.venc.slice(0, 7) === p.mes);
-            if (pref.length) cands = pref.concat(cands.filter(o => pref.indexOf(o) < 0));
-        }
-        for (let k = 0; k < cands.length && v > 0.05; k++) {
-            const o = cands[k];
-            const a = Math.min(v, o.restante);
-            o.restante -= a;
-            v -= a;
-            resultado.push({ pago: p.iso, venc: o.venc, valor: a });
-        }
-    });
-    return resultado.filter(a => a.venc > _semanaDaData(a.pago).fim);
-}
-
-/** Efeito das antecipações no limite da categoria nesta semana (+ puxado / − já pago). */
-function _ajusteAntecipacaoCategoria(cat, semana) {
-    const res = { delta: 0, notas: [] };
-    _alocacoesAntecipadasConta(cat, semana).forEach(a => {
-        const pagoNaSemana = a.pago >= semana.inicio && a.pago <= semana.fim;
-        const vencNaSemana = a.venc >= semana.inicio && a.venc <= semana.fim;
-        const dia = Number(a.venc.slice(8, 10));
-        if (pagoNaSemana && !vencNaSemana) {
-            res.delta += a.valor;
-            res.notas.push({ tipo: 'puxado', valor: a.valor, dia: dia, cat: cat.nome });
-        } else if (vencNaSemana && !pagoNaSemana) {
-            res.delta -= a.valor;
-            res.notas.push({ tipo: 'ja_pago', valor: a.valor, dia: dia, cat: cat.nome });
-        }
-    });
-    return res;
-}
-
-/** Linha discreta (Base/Vida) sobre boletos pagos antes do vencimento. */
-function _notaAntecipacaoCaixa(caixa, semana) {
-    if (!semana || (caixa !== 'base' && caixa !== 'vida')) return '';
-    const fmt = formatarNumero;
-    const linhas = [];
-    (state.orcamento.categorias || []).filter(c => c.caixa === caixa && _ehContaComVencimento(c)).forEach(c => {
-        _ajusteAntecipacaoCategoria(c, semana).notas.forEach(n => {
-            linhas.push(n.tipo === 'puxado'
-                ? `inclui R$ ${fmt(n.valor)} pagos antes do vencimento (dia ${n.dia}) · ${n.cat}`
-                : `${n.cat}: R$ ${fmt(n.valor)} já pagos antes (vencimento dia ${n.dia})`);
-        });
-    });
-    if (!linhas.length) return '';
-    return `<div style="font-size:0.8rem;color:var(--secondary);margin-top:6px;line-height:1.35;">${linhas.join('<br>')}</div>`;
-}
-
-function _notaAntecipacaoCategoria(cat, semana) {
-    if (!cat || !semana || !_ehContaComVencimento(cat)) return '';
-    const fmt = formatarNumero;
-    const notas = _ajusteAntecipacaoCategoria(cat, semana).notas;
-    if (!notas.length) return '';
-    return `<div style="font-size:0.8rem;color:var(--secondary);margin-top:4px;line-height:1.35;">` +
-        notas.map(n => n.tipo === 'puxado'
-            ? `inclui R$ ${fmt(n.valor)} pagos antes do vencimento (dia ${n.dia})`
-            : `R$ ${fmt(n.valor)} já pagos antes (vencimento dia ${n.dia})`).join('<br>') + `</div>`;
-}
-
-// TRANSFERÊNCIA DE META — só dentro do mesmo envelope (registro de plano, sem caixa)
-
-function _ajusteTransferenciaMeta(cat, semana) {
-    if (!cat || !semana || !semana.inicio || !semana.fim) return 0;
-    let delta = 0;
-    (state.orcamento.historicoRegistros || []).forEach(r => {
-        if (r.tipo !== 'transferencia_meta' || r.anulado) return;
-        const d = _isoLocalDe(r.data);
-        if (d < semana.inicio || d > semana.fim) return;
-        const v = Number(r.valor) || 0;
-        if (r.categoriaOrigemId === cat.id) delta -= v;
-        if (r.categoriaDestinoId === cat.id) delta += v;
-    });
-    return delta;
-}
-
-function _gastoCategoriaNaSemana(cat, semana) {
-    const regs = state.orcamento.historicoRegistros || [];
-    const dela = (r) => (r.categoriaId && r.categoriaId === cat.id) ||
-        (!r.categoriaId && r.categoria && cat.nome && r.categoria === cat.nome);
-    const diretos = regs
-        .filter(r => {
-            if (r.tipo !== 'gasto_direto' && r.tipo !== 'gasto_cartao') return false;
-            if (r.anulado) return false;
-            const d = _isoLocalDe(r.data);
-            if (!d || d < semana.inicio || d > semana.fim) return false;
-            return dela(r);
-        })
-        .reduce((s, r) => s + (Number(_valorEfetivoRegistro(r)) || 0), 0);
-    // Ajuste de semana fechada (edição/anulação) entra no gasto da semana em que foi feito
-    const ajustes = regs
-        .filter(a => {
-            if (a.tipo !== 'ajuste_semana_anterior') return false;
-            if (a.tipoOriginal !== 'gasto_direto' && a.tipoOriginal !== 'gasto_cartao') return false;
-            const d = _isoLocalDe(a.data);
-            if (!d || d < semana.inicio || d > semana.fim) return false;
-            return dela(a);
-        })
-        .reduce((s, a) => s + (Number(a.delta) || 0), 0);
-    return diretos + ajustes;
-}
-
-/** Quanto ainda cabe na categoria (limite da semana + folga herdada − passivo herdado − gasto). */
-function _disponivelCategoriaSemana(cat, semana) {
-    const lim = calcularLimiteCategoriaSemana(cat, semana);
-    const c = (semana.carregoCategorias && semana.carregoCategorias[cat.id]) || {};
-    return lim + (Number(c.sobra) || 0) - (Number(c.estouro) || 0) - _gastoCategoriaNaSemana(cat, semana);
-}
-
-/**
- * Folga que vale × folga bruta: folga de uma categoria só vale até onde o envelope
- * (soma das categorias) está no azul. Passivo em outra categoria compensa primeiro.
- */
-function _compensacaoEnvelope(caixa, semana) {
-    const mapa = (semana && semana.carregoCategorias) || {};
-    let sobra = 0, passivo = 0;
-    Object.keys(mapa).forEach(id => {
-        const c = mapa[id];
-        if (!c || c.caixa !== caixa) return;
-        sobra += Number(c.sobra) || 0;
-        passivo += Number(c.estouro) || 0;
-    });
-    return { sobra: sobra, passivo: passivo, liquido: sobra - passivo };
-}
-
-function abrirTransferenciaMeta(categoriaId) {
-    const semana = state.orcamento && state.orcamento.semanaAtual;
-    if (!semana || semana.fechada) { alert('Não há semana aberta para mover meta.'); return; }
-    const cats = state.orcamento.categorias || [];
-    const origem = cats.find(c => c.id === categoriaId);
-    if (!origem || (origem.caixa !== 'base' && origem.caixa !== 'vida')) return;
-    const fmt = formatarMoeda;
-    const disp = _disponivelCategoriaSemana(origem, semana);
-    if (disp <= 0.05) { alert('Não há meta sobrando em "' + origem.nome + '" para mover.'); return; }
-    const outras = cats.filter(c => c.id !== origem.id && c.caixa === origem.caixa && !_categoriaParcelasQuitada(c));
-    if (!outras.length) { alert('Não há outra categoria neste envelope para receber.'); return; }
-
-    const lista = outras.map((c, i) => (i + 1) + ' — ' + c.nome).join('\n');
-    const esc = prompt('Mover meta de "' + origem.nome + '" (cabe até ' + fmt(disp) + ').\nSó dentro do mesmo envelope.\n\nPara qual categoria?\n\n' + lista + '\n\nDigite o número:');
-    if (esc == null) return;
-    const destino = outras[parseInt(String(esc).trim(), 10) - 1];
-    if (!destino) { alert('Opção inválida.'); return; }
-
-    const dispDestino = _disponivelCategoriaSemana(destino, semana);
-    const sugerido = Math.max(0, Math.min(disp, dispDestino < 0 ? -dispDestino : disp));
-    const vStr = prompt('Quanto mover para "' + destino.nome + '"?', sugerido.toFixed(2).replace('.', ','));
-    if (vStr == null) return;
-    const valor = _parseValorRegistro(vStr);
-    if (!(valor > 0)) { alert('Valor inválido.'); return; }
-    if (valor > disp + 0.005) { alert('Só cabe mover até ' + fmt(disp) + '.'); return; }
-
-    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
-    state.orcamento.historicoRegistros.unshift({
-        id: 'reg_tm_' + Date.now(),
-        tipo: 'transferencia_meta',
-        data: new Date().toISOString(),
-        valor: valor,
-        caixa: origem.caixa,
-        categoriaOrigemId: origem.id,
-        categoriaDestinoId: destino.id,
-        categoria: 'Transferência de meta',
-        descricao: origem.nome + ' → ' + destino.nome
-    });
-    sincronizarLimitesSemanaAtual();
-    salvarEstado();
-    _atualizarTelasAposRegistro();
-}
-
-function desfazerTransferenciaMeta(id) {
-    const lista = state.orcamento.historicoRegistros || [];
-    const idx = lista.findIndex(r => r.id === id && r.tipo === 'transferencia_meta');
-    if (idx < 0) return;
-    if (!confirm('Desfazer esta transferência de meta?')) return;
-    lista.splice(idx, 1);
-    sincronizarLimitesSemanaAtual();
-    salvarEstado();
-    _atualizarTelasAposRegistro();
-}
-
-/** Linhas "meta movida" da categoria na semana, com opção de desfazer. */
-function _linhasTransferenciaCategoria(cat, semana) {
-    if (!cat || !semana) return '';
-    const nomeDe = (id) => ((state.orcamento.categorias || []).find(c => c.id === id) || {}).nome || 'outra categoria';
-    const fmt = formatarNumero;
-    const itens = (state.orcamento.historicoRegistros || []).filter(r => {
-        if (r.tipo !== 'transferencia_meta' || r.anulado) return false;
-        const d = _isoLocalDe(r.data);
-        if (d < semana.inicio || d > semana.fim) return false;
-        return r.categoriaOrigemId === cat.id || r.categoriaDestinoId === cat.id;
-    });
-    if (!itens.length) return '';
-    return itens.map(r => {
-        const saiu = r.categoriaOrigemId === cat.id;
-        const txt = saiu
-            ? `meta movida: R$ ${fmt(r.valor)} para ${nomeDe(r.categoriaDestinoId)}`
-            : `meta recebida: R$ ${fmt(r.valor)} de ${nomeDe(r.categoriaOrigemId)}`;
-        return `<div style="font-size:0.8rem;color:var(--secondary);margin-top:4px;">${txt} · <a href="#" onclick="event.stopPropagation();desfazerTransferenciaMeta('${r.id}');return false;" style="color:var(--primary);">desfazer</a></div>`;
-    }).join('');
-}
-
 /**
  * Limite semanal de uma categoria.
  * opcoes.aplicarProtecao = true → multiplica pela taxa de viabilidade (capacidade).
@@ -3561,13 +3280,13 @@ function calcularLimiteCategoriaSemana(cat, semana, opcoes) {
     if (valor <= 0) return 0;
 
     if (cat.tipo === 'conta' && cat.vencimento) {
-        // Compromisso reservado: valor cheio na semana do vencimento; pagamento antecipado move a reserva
-        const vencNaSemana = _ocorrenciasVencimento(cat, semana.inicio, semana.fim).length > 0;
-        let planoConta = vencNaSemana ? valor : 0;
-        if (_ehContaComVencimento(cat)) {
-            planoConta = Math.max(0, planoConta + _ajusteAntecipacaoCategoria(cat, semana).delta);
-        }
-        return planoConta + _ajusteTransferenciaMeta(cat, semana);
+        const ini = new Date(semana.inicio + 'T00:00:00');
+        const fim = new Date(semana.fim + 'T23:59:59');
+        const ano = ini.getFullYear();
+        const mes = ini.getMonth();
+        let venc = new Date(ano, mes, cat.vencimento);
+        if (venc < ini) venc = new Date(ano, mes + 1, cat.vencimento);
+        return (venc >= ini && venc <= fim) ? valor : 0;
     }
 
     let baseSemanal = valor / DIVISOR_SEMANAL;
@@ -3578,7 +3297,7 @@ function calcularLimiteCategoriaSemana(cat, semana, opcoes) {
         else if (cat.caixa === 'vida') baseSemanal *= (taxas.taxaVida != null ? taxas.taxaVida : 1);
     }
     
-    return baseSemanal + _ajusteTransferenciaMeta(cat, semana);
+    return baseSemanal;
 }
 
 /**
@@ -4399,7 +4118,6 @@ function renderizarOrcamentoCompleto(container, orc) {
         ${renderizarAtalhosHome(orc)}
 
         ${renderizarAvisoCarregoVirada(semana)}
-        ${renderizarAvisoViradaMes(semana)}
 
         <div class="home-section-title">Seus envelopes</div>
         <div class="home-section-sub">Organize seu dinheiro com propósito</div>
@@ -5040,8 +4758,7 @@ function renderizarNotaHierarquiaCarrego(semana, orc) {
 }
 
 function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
-    const limitePlano = (limite && limite > 0) ? limite : 0;
-    let limiteSeguro = limitePlano;
+    const limiteSeguro = (limite && limite > 0) ? limite : 0;
     const gastoSeguro = Number(gasto) || 0;
     
     // Carrego = déficit herdado
@@ -5059,8 +4776,6 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         carrego = 0;
         sobraAnterior = 0;
     }
-    // Folga herdada soma ao que ainda cabe (Base/Vida)
-    if (!isFuturo && sobraAnterior > 0) limiteSeguro = limitePlano + sobraAnterior;
 
     const consumidoReal = isFuturo ? gastoSeguro : (gastoSeguro + carrego);
     const disponivelReal = limiteSeguro - consumidoReal;
@@ -5158,7 +4873,7 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
             bits.push(`adiantamento na semana passada R$ ${fmt(carrego)}`);
         }
         if (sobraAnterior > 0) {
-            bits.push(`inclui folga herdada R$ ${fmt(sobraAnterior)}`);
+            bits.push(`sobra da semana passada R$ ${fmt(sobraAnterior)} (não aumenta o combinado)`);
         }
 
         let realTxt = '';
@@ -5194,9 +4909,9 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         const cx = state.orcamento.semanaAtual[id];
         const cap = (typeof cx.capacidade === 'number') ? cx.capacidade : null;
         const proteger = state.orcamento.configFluxo && state.orcamento.configFluxo.protegerSaldo !== false;
-        if (proteger && cap != null && limitePlano > 0 && cap < limitePlano - 0.05) {
+        if (proteger && cap != null && limiteSeguro > 0 && cap < limiteSeguro - 0.05) {
             linhaCapacidade = `<div style="font-size: 0.85rem; color: var(--warning); margin-top: 6px; line-height: 1.35;">
-                <strong>Plano</strong> R$ ${fmt(limitePlano)} · <strong>Capacidade do caixa</strong> R$ ${fmt(cap)}
+                <strong>Plano</strong> R$ ${fmt(limiteSeguro)} · <strong>Capacidade do caixa</strong> R$ ${fmt(cap)}
                 <span style="color: var(--secondary);"> — proteção ativa para não furar o estoque</span>
             </div>`;
         }
@@ -5221,8 +4936,7 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
             <div class="envelope-bar"><div class="${barClass}" style="width:${percentual}%"></div></div>
             ${linhaReal}
             ${linhaCapacidade}
-            ${(!isFuturo && id) ? _notaAntecipacaoCaixa(id, state.orcamento && state.orcamento.semanaAtual) : ''}
-            ${sobraAnterior > 0 && id ? `<button type="button" class="btn-option" style="margin-top:8px;justify-content:center;border-color:var(--primary);color:var(--primary);font-size:0.9rem;" onclick="event.stopPropagation();abrirDestinoSobra('${id}')">Dar destino à folga</button>` : ''}
+            ${sobraAnterior > 0 && id ? `<button type="button" class="btn-option" style="margin-top:8px;justify-content:center;border-color:var(--primary);color:var(--primary);font-size:0.9rem;" onclick="event.stopPropagation();abrirDestinoSobra('${id}')">Dar destino à sobra</button>` : ''}
             ${aviso}
         </div>
     `;
@@ -5669,8 +5383,8 @@ function renderizarCardSaldo(semana, orc, opcoes) {
 
 /**
  * Estouro/sobra de uma caixinha no fechamento.
- * Falta (passivo) e sobra (folga) rolam para a semana seguinte, no envelope e na categoria.
- * A folga quita primeiro o passivo herdado; o que sobrar soma ao "ainda cabe" (decisão C invertida).
+ * carrego (próxima semana) = só o déficit (estouro).
+ * sobra fica visível, mas NÃO aumenta o "ainda cabe" (decisão C).
  */
 /**
  * Fatia 7 / D3 — passivo de meta (envelope), distinto de saldoAnterior (caixa).
@@ -5704,23 +5418,22 @@ function _resultadoCaixaNoFechamento(caixaObj, opcoes) {
     const passivoEntrada = Number(
         (caixaObj && (caixaObj.passivoMeta != null ? caixaObj.passivoMeta : caixaObj.carrego)) || 0
     ) || 0;
-    const folgaEntrada = Number((caixaObj && caixaObj.sobraAnterior) || 0) || 0;
     const estouroSemana = Math.max(0, gasto - limite);
-    // Saldo rolante único: gasto + passivo herdado − folga herdada − limite.
-    // Positivo = passivo (rola como falta). Negativo = folga (rola como crédito).
-    // A folga quita o passivo herdado primeiro, porque os dois entram no mesmo saldo.
-    const saldo = gasto + passivoEntrada - folgaEntrada - limite;
-    let passivoMeta = Math.max(0, saldo);
-    let sobra = Math.max(0, -saldo);
-    if (passivoMeta < 0.5) passivoMeta = 0;
-    if (sobra < 0.5) sobra = 0;
+    const sobraBruta = Math.max(0, limite - gasto);
+    // Sobra da semana primeiro quita passivo herdado
+    let passivoAposSobra = Math.max(0, passivoEntrada - sobraBruta);
+    const sobra = Math.max(0, sobraBruta - passivoEntrada);
+    // Passivo de meta só é quitado por sobra real (gasto < limite) — sem perdão automático.
+    // Gastar exatamente o limite mantém o passivo herdado; isso é intencional e visível no resumo.
+    // Novo estouro da semana soma ao passivo restante; residual centavos zera (quita de fato)
+    let passivoMeta = passivoAposSobra + estouroSemana;
+    if (passivoMeta > 0 && passivoMeta < 0.5) passivoMeta = 0;
     return {
         estouro: passivoMeta,
         estouroSemana: estouroSemana,
         sobra: sobra,
         passivoMeta: passivoMeta,
         passivoEntrada: passivoEntrada,
-        folgaEntrada: folgaEntrada,
         aceleracao: 0,
         atrasado: 0,
         limite: limite,
@@ -5744,31 +5457,33 @@ function calcularCarregoCategoriasDaSemana(semana) {
     cats.forEach(cat => {
         if (!cat || !cat.id) return;
         if (_categoriaParcelasQuitada(cat)) return; // quitada não gera carrego/meta
-        // Futuro = meta mínima: não gera carrego/passivo/folga por categoria
+        const metaSem = (Number(cat.valor) || 0) / DIVISOR_SEMANAL;
+        if (metaSem <= 0) return; // sem meta declarada → sem carrego de categoria
+        const gastoSem = regs
+            .filter(r => {
+                if (r.tipo !== 'gasto_direto' && r.tipo !== 'gasto_cartao') return false;
+                if (r.anulado) return false;
+                const d = (r.data || '').split('T')[0];
+                if (!d || d < inicio || d > fim) return false;
+                if (r.categoriaId && r.categoriaId === cat.id) return true;
+                if (!r.categoriaId && r.categoria && cat.nome && r.categoria === cat.nome) return true;
+                return false;
+            })
+            .reduce((s, r) => s + (Number(r.valor) || 0), 0);
+        // Futuro = meta mínima: não gera carrego/passivo por categoria
         const isFuturoCat = cat.caixa === 'futuro';
-        // Plano da semana desta categoria (conta com vencimento = valor cheio na semana do vencimento,
-        // com antecipação e transferência de meta já aplicadas)
-        const metaSem = isFuturoCat
-            ? (Number(cat.valor) || 0) / DIVISOR_SEMANAL
-            : calcularLimiteCategoriaSemana(cat, semana);
         const passivoEntrada = isFuturoCat ? 0 : (Number((abertos[cat.id] && abertos[cat.id].estouro) || 0) || 0);
-        const folgaEntrada = isFuturoCat ? 0 : (Number((abertos[cat.id] && abertos[cat.id].sobra) || 0) || 0);
-        if (metaSem <= 0 && passivoEntrada <= 0 && folgaEntrada <= 0) return; // sem meta nem saldo herdado
-        const gastoSem = _gastoCategoriaNaSemana(cat, { inicio: inicio, fim: fim });
-        const posicao = gastoSem + passivoEntrada - folgaEntrada - metaSem;
-        let estouro = isFuturoCat ? 0 : Math.max(0, posicao);
-        let sobra = isFuturoCat ? 0 : Math.max(0, -posicao);
-        if (estouro < 0.5) estouro = 0;
-        if (sobra < 0.5) sobra = 0;
+        const posicao = gastoSem + passivoEntrada - metaSem;
+        const estouro = isFuturoCat ? 0 : Math.max(0, posicao);
+        const sobra = isFuturoCat ? 0 : Math.max(0, -posicao);
         const aceleracao = isFuturoCat ? Math.max(0, gastoSem - metaSem) : 0;
         const atrasado = isFuturoCat ? Math.max(0, metaSem - gastoSem) : 0;
-        if (estouro > 0 || sobra > 0 || passivoEntrada > 0 || folgaEntrada > 0 || aceleracao > 0 || atrasado > 0) {
+        if (estouro > 0 || sobra > 0 || passivoEntrada > 0 || aceleracao > 0 || atrasado > 0) {
             mapa[cat.id] = {
                 nome: cat.nome || '',
                 caixa: cat.caixa || null,
                 metaSem,
                 gastoSem,
-                folgaEntrada,
                 passivoEntrada,
                 estouro,
                 sobra,
@@ -5888,7 +5603,7 @@ function renderizarConciliacaoHome(semana, orc) {
             custodias.forEach(c => {
                 const tipo = (typeof TIPOS_CUSTODIA !== 'undefined' && TIPOS_CUSTODIA[c.tipo]) ? TIPOS_CUSTODIA[c.tipo] : {};
                 if (tipo.temFatura) somaFatura += (c.faturaAcumulada || 0);
-                else if (!_custodiaEhReserva(c)) somaSaldo += (c.saldoAtual || 0); // reserva não é operacional
+                else somaSaldo += (c.saldoAtual || 0);
             });
             estoqueValor = somaSaldo - somaFatura;
             const algumaRecente = custodias.some(c => c.ultimaReconciliacao);
@@ -6141,72 +5856,77 @@ function definirAncoraRecebimento(ligado) {
 }
 
 /**
- * Destino da folga herdada (Base/Vida).
- * A folga já soma ao "ainda cabe" sozinha. Este fluxo é opcional:
- * mandar para o Futuro (pagar dívida ou guardar na reserva) ou zerar
- * porque o dinheiro já foi usado fora do app.
+ * E2 — destino explícito da sobra (não realoca sozinho).
+ * destino: 'quitar' | 'base' | 'vida' | 'futuro' | 'descartar'
  */
 function abrirDestinoSobra(caixaId) {
     const semana = state.orcamento && state.orcamento.semanaAtual;
-    if (!semana || !semana[caixaId] || caixaId === 'futuro') return;
-    const folga = Number(semana[caixaId].sobraAnterior) || 0;
-    if (folga <= 0) {
-        alert('Não há folga herdada nesta caixinha.');
+    if (!semana || !semana[caixaId]) return;
+    const sobra = Number(semana[caixaId].sobraAnterior) || 0;
+    if (sobra <= 0) {
+        alert('Não há sobra informativa nesta caixinha.');
         return;
     }
     const fmt = formatarMoeda;
-    const nomes = { base: 'Base', vida: 'Vida' };
-    const comp = _compensacaoEnvelope(caixaId, semana);
-    const aviso = comp.passivo > 0.5
-        ? '\n\nAtenção: há passivo em outra categoria deste envelope (' + fmt(comp.passivo) + '). A folga das categorias vale menos que o total mostrado.'
-        : '';
+    const nomes = { base: 'Base', vida: 'Vida', futuro: 'Futuro' };
+    const passivo = Number(semana[caixaId].passivoMeta || semana[caixaId].carrego) || 0;
 
     const msg =
-        'Folga herdada em ' + nomes[caixaId] + ': ' + fmt(folga) + '\n' +
-        'Ela já soma ao que ainda cabe. Se quiser, dê outro destino:\n\n' +
-        '1 — Mandar para o Futuro: pagar dívida\n' +
-        '2 — Mandar para o Futuro: guardar na reserva\n' +
-        '3 — Zerar (já usei esse dinheiro fora do app)\n' + aviso + '\n\n' +
-        'Digite 1, 2 ou 3. Cancelar mantém a folga.';
+        'Sobra informativa em ' + nomes[caixaId] + ': ' + fmt(sobra) + '\\n\\n' +
+        'Escolha o destino (nada muda sem esta confirmação):\\n\\n' +
+        '1 — Quitar passivo de meta desta caixinha' + (passivo > 0 ? ' (passivo ' + fmt(passivo) + ')' : ' (sem passivo)') + '\\n' +
+        '2 — Mover a sobra informativa para Base\\n' +
+        '3 — Mover para Vida\\n' +
+        '4 — Mover para Futuro\\n' +
+        '5 — Só limpar o aviso (já dei outro uso fora do app)\\n\\n' +
+        'Digite 1, 2, 3, 4 ou 5:';
 
     const escolha = prompt(msg);
     if (escolha == null) return;
     const n = String(escolha).trim();
-    if (n === '3') {
-        if (!confirm('Zerar a folga de ' + fmt(folga) + ' em ' + nomes[caixaId] + '? Isso reduz o que ainda cabe.')) return;
-        _consumirFolgaEnvelope(caixaId, folga, 'descartar');
-        salvarEstado();
-        renderizarOrcamentoInicio();
-    } else if (n === '1' || n === '2') {
-        const vStr = prompt('Quanto da folga vai para o Futuro?', folga.toFixed(2).replace('.', ','));
-        if (vStr == null) return;
-        let valor = _parseValorRegistro(vStr);
-        if (!(valor > 0)) { alert('Valor inválido.'); return; }
-        valor = Math.min(valor, folga);
-        const subtipo = n === '1' ? 'divida' : 'reserva';
-        // A folga só sai do envelope quando o registro no Futuro for concluído
-        pendenteRegistroFuturo = { valor: valor, subtipo: subtipo, origemFolga: { caixa: caixaId, valor: valor } };
-        abrirDetalheFuturo(subtipo);
-    } else {
-        alert('Opção inválida.');
-    }
+    if (n === '1') aplicarDestinoSobra(caixaId, 'quitar');
+    else if (n === '2') aplicarDestinoSobra(caixaId, 'base');
+    else if (n === '3') aplicarDestinoSobra(caixaId, 'vida');
+    else if (n === '4') aplicarDestinoSobra(caixaId, 'futuro');
+    else if (n === '5') aplicarDestinoSobra(caixaId, 'descartar');
+    else alert('Opção inválida.');
 }
 
-/** Tira folga herdada do envelope (e, proporcionalmente, das categorias) e registra o destino. */
-function _consumirFolgaEnvelope(caixaId, valor, destino) {
+function aplicarDestinoSobra(caixaOrigem, destino) {
     const semana = state.orcamento && state.orcamento.semanaAtual;
-    if (!semana || !semana[caixaId]) return 0;
-    const atual = Number(semana[caixaId].sobraAnterior) || 0;
-    const usa = Math.min(atual, Math.max(0, Number(valor) || 0));
-    if (usa <= 0) return 0;
-    semana[caixaId].sobraAnterior = Math.max(0, atual - usa);
+    if (!semana || !semana[caixaOrigem]) return;
+    if (semana.fechada) {
+        alert('Semana fechada: espere a semana aberta para dar destino à sobra.');
+        return;
+    }
 
-    const mapa = semana.carregoCategorias || {};
-    const ids = Object.keys(mapa).filter(id => mapa[id] && mapa[id].caixa === caixaId && (Number(mapa[id].sobra) || 0) > 0);
-    const S = ids.reduce((s, id) => s + (Number(mapa[id].sobra) || 0), 0);
-    if (S > 0) {
-        const f = Math.max(0, 1 - usa / S);
-        ids.forEach(id => { mapa[id].sobra = (Number(mapa[id].sobra) || 0) * f; });
+    let sobra = Number(semana[caixaOrigem].sobraAnterior) || 0;
+    if (sobra <= 0) return;
+
+    if (destino === 'quitar') {
+        let passivo = Number(semana[caixaOrigem].passivoMeta || semana[caixaOrigem].carrego) || 0;
+        const usa = Math.min(sobra, passivo);
+        passivo = Math.max(0, passivo - usa);
+        sobra = Math.max(0, sobra - usa);
+        semana[caixaOrigem].passivoMeta = passivo;
+        semana[caixaOrigem].carrego = passivo;
+        semana[caixaOrigem].sobraAnterior = sobra;
+        if (usa <= 0) {
+            // sem passivo: limpa sobra como decisão explícita de “já usei”
+            semana[caixaOrigem].sobraAnterior = 0;
+            alert('Não havia passivo de meta. Sobra informativa limpa por sua decisão.');
+        } else {
+            alert('Passivo de meta reduzido. Sobra restante informativa: R$ ' + sobra.toFixed(2).replace('.', ','));
+        }
+    } else if (destino === 'base' || destino === 'vida' || destino === 'futuro') {
+        if (!semana[destino]) return;
+        semana[destino].sobraAnterior = (Number(semana[destino].sobraAnterior) || 0) + sobra;
+        semana[caixaOrigem].sobraAnterior = 0;
+        // decisão C: não infla limite
+        alert('Sobra informativa movida para ' + destino + '. Continua sem aumentar a meta sozinha.');
+    } else if (destino === 'descartar') {
+        semana[caixaOrigem].sobraAnterior = 0;
+        alert('Aviso de sobra limpo. O combinado da semana não mudou.');
     }
 
     if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
@@ -6214,12 +5934,14 @@ function _consumirFolgaEnvelope(caixaId, valor, destino) {
         id: 'reg_sobra_' + Date.now(),
         tipo: 'destino_sobra',
         data: new Date().toISOString(),
-        valor: usa,
-        caixa: caixaId,
+        valor: sobra,
+        caixa: caixaOrigem,
         destino: destino,
-        categoria: 'Destino de folga'
+        categoria: 'Destino de sobra'
     });
-    return usa;
+
+    salvarEstado();
+    renderizarOrcamentoInicio();
 }
 
 /**
@@ -6232,11 +5954,9 @@ function renderizarMiniBalancoOperacional(orc) {
 
     let somaSaldo = 0;
     let somaFatura = 0;
-    let somaReservas = 0;
     custodias.forEach(c => {
         const tipo = TIPOS_CUSTODIA[c.tipo] || {};
         if (tipo.temFatura) somaFatura += (c.faturaAcumulada || 0);
-        else if (_custodiaEhReserva(c)) somaReservas += (c.saldoAtual || 0);
         else somaSaldo += (c.saldoAtual || 0);
     });
     const foto = somaSaldo - somaFatura;
@@ -6255,7 +5975,6 @@ function renderizarMiniBalancoOperacional(orc) {
                 <span style="color:var(--secondary);">Faturas de cartão</span>
                 <span>${fmt(somaFatura)}</span>
             </div>
-            ${somaReservas > 0 ? `<div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-top:4px;color:var(--secondary);"><span>Reservas (fora do operacional)</span><span>${fmt(somaReservas)}</span></div>` : ''}
             <div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
                 <strong>Operacional</strong>
                 <strong style="color:${foto >= 0 ? 'var(--success)' : 'var(--danger)'};">${fmt(foto)}</strong>
@@ -6265,61 +5984,6 @@ function renderizarMiniBalancoOperacional(orc) {
             </div>
         </div>
     `;
-}
-
-/**
- * Compensação genérica da virada do mês (transferência de saldo entre categorias do envelope):
- * a folga bruta de categorias cobre o passivo de outras. Não altera o total do envelope.
- * Devolve o valor compensado.
- */
-function _compensarFolgaPassivoCategorias(mapa, caixa) {
-    const ids = Object.keys(mapa || {}).filter(id => mapa[id] && mapa[id].caixa === caixa);
-    const S = ids.reduce((s, id) => s + (Number(mapa[id].sobra) || 0), 0);
-    const P = ids.reduce((s, id) => s + (Number(mapa[id].estouro) || 0), 0);
-    const comp = Math.min(S, P);
-    if (comp <= 0.005) return 0;
-    ids.forEach(id => {
-        if (S > 0) mapa[id].sobra = (Number(mapa[id].sobra) || 0) * (1 - comp / S);
-        if (P > 0) mapa[id].estouro = (Number(mapa[id].estouro) || 0) * (1 - comp / P);
-    });
-    return comp;
-}
-
-function renderizarAvisoViradaMes(semana) {
-    if (!semana || !semana.viradaMes || semana.avisoMesLido) return '';
-    const fmt = formatarMoeda;
-    const nomes = { base: 'Base', vida: 'Vida' };
-    const partes = [];
-    const botoes = [];
-    (semana.compensacoesMes || []).forEach(c => {
-        partes.push(`${fmt(c.valor)} de folga em categorias cobriu passivo de outras categorias de ${nomes[c.caixa]}.`);
-    });
-    ['base', 'vida'].forEach(cx => {
-        const f = Number(semana[cx] && semana[cx].sobraAnterior) || 0;
-        if (f > 0.5) {
-            partes.push(`Sobrou folga real de ${fmt(f)} em ${nomes[cx]}; ela já soma ao que ainda cabe.`);
-            botoes.push(`<button type="button" class="btn-option" style="justify-content:center;border-color:var(--primary);color:var(--primary);font-size:0.9rem;margin-top:8px;" onclick="abrirDestinoSobra('${cx}')">Mandar a folga de ${nomes[cx]} para o Futuro</button>`);
-        }
-    });
-    if (!partes.length) return '';
-    return `
-        <div class="card" style="border-left: 4px solid var(--primary); background: var(--info-soft); margin-bottom: 16px; padding: 14px 16px;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-                <div style="font-size: 0.9rem; color: var(--primary); line-height: 1.45; flex: 1;">
-                    <strong>Virou o mês.</strong> ${partes.join(' ')}
-                </div>
-                <button type="button" onclick="fecharAvisoViradaMes()" style="background: none; border: 1px solid var(--primary); color: var(--primary); padding: 6px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer; flex-shrink: 0;">Entendi</button>
-            </div>
-            ${botoes.join('')}
-        </div>
-    `;
-}
-
-function fecharAvisoViradaMes() {
-    if (!state.orcamento || !state.orcamento.semanaAtual) return;
-    state.orcamento.semanaAtual.avisoMesLido = true;
-    salvarEstado();
-    renderizarOrcamentoInicio();
 }
 
 function iniciarNovaSemana() {
@@ -6340,8 +6004,8 @@ function iniciarNovaSemana() {
     // Futuro: envelope mensal (N1) é a base. Se houver vencimentos declarados nesta semana (N2+), usa esses.
     const limiteEnvelopeFuturo = futuroMensal / DIVISOR_SEMANAL;
     const limiteVencimentosFuturo = calcularLimiteFuturoSemana({
-        inicio: _chaveDataLocal(inicio),
-        fim: _chaveDataLocal(fim)
+        inicio: inicio.toISOString().split('T')[0],
+        fim: fim.toISOString().split('T')[0]
     });
     const limiteFuturo = limiteVencimentosFuturo > 0 ? limiteVencimentosFuturo : limiteEnvelopeFuturo;
     const rendaSemanal = rendaMensal / DIVISOR_SEMANAL;
@@ -6380,26 +6044,9 @@ function iniciarNovaSemana() {
         }
     }
 
-    // Virada do mês: folga de uma categoria compensa passivo de outra do mesmo envelope
-    let viradaMes = false;
-    const compensacoesMes = [];
-    if (state.orcamento.resumos && state.orcamento.resumos.length > 0) {
-        const mesAnterior = String(state.orcamento.resumos[0].inicio || '').slice(0, 7);
-        if (mesAnterior && mesAnterior !== _chaveDataLocal(inicio).slice(0, 7)) {
-            viradaMes = true;
-            ['base', 'vida'].forEach(cx => {
-                const comp = _compensarFolgaPassivoCategorias(carregoCategorias, cx);
-                if (comp > 0.005) compensacoesMes.push({ caixa: cx, valor: comp });
-            });
-        }
-    }
-
     state.orcamento.semanaAtual = {
-        inicio: _chaveDataLocal(inicio),
-        fim: _chaveDataLocal(fim),
-        viradaMes: viradaMes,
-        compensacoesMes: compensacoesMes,
-        avisoMesLido: false,
+        inicio: inicio.toISOString().split('T')[0],
+        fim: fim.toISOString().split('T')[0],
         rendaEstimada: rendaSemanal,
         rendaReal: 0,
         saldoAnterior: saldoAnterior,
@@ -6533,10 +6180,10 @@ function _registroPintarPassoValor(tipo, erroMsg) {
     }
 
     const hoje = new Date();
-    const max = _chaveDataLocal(hoje);
+    const max = hoje.toISOString().split('T')[0];
     const minD = new Date(hoje);
     minD.setDate(minD.getDate() - 90);
-    const min = _chaveDataLocal(minD);
+    const min = minD.toISOString().split('T')[0];
 
     let composer = (erroMsg ? _composerErro(erroMsg) : '') + `
         <div class="input-com-prefixo">
@@ -6941,12 +6588,12 @@ function obterDataRegistroISO() {
     if (isNaN(escolhida.getTime())) return new Date().toISOString();
     if (escolhida > hoje) {
         // futuro não permitido
-        ymd = _chaveDataLocal(hoje);
+        ymd = hoje.toISOString().split('T')[0];
     }
     const minD = new Date(hoje);
     minD.setDate(minD.getDate() - 90);
     if (escolhida < minD) {
-        ymd = _chaveDataLocal(minD);
+        ymd = minD.toISOString().split('T')[0];
     }
     return new Date(ymd + 'T12:00:00').toISOString();
 }
@@ -9158,11 +8805,6 @@ function confirmarPagamentoParcela() {
     });
 
     if (typeof _tickOnboardingAposRegistro === "function") _tickOnboardingAposRegistro();
-    if (pendenteRegistroFuturo && pendenteRegistroFuturo.origemFolga) {
-        // A folga mandada para o Futuro sai do envelope de origem pelo valor efetivamente registrado
-        _consumirFolgaEnvelope(pendenteRegistroFuturo.origemFolga.caixa,
-            Math.min(valorPago, Number(pendenteRegistroFuturo.origemFolga.valor) || valorPago), 'futuro');
-    }
     salvarEstado();
     limparPendenteRegistroFuturo();
 
@@ -9626,7 +9268,7 @@ function verificarFechamentoSemana() {
 
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    const fim = new Date(semana.fim + 'T23:59:59');
+    const fim = new Date(semana.fim + 'T23:59:59-03:00');
 
     if (hoje > fim) {
         fecharSemana();
@@ -12203,10 +11845,21 @@ function renderizarBlocoProvisao(orc) {
     let contasSemana = [];
     
     if (semana) {
+        const ini = new Date(semana.inicio + 'T00:00:00');
+        const fim = new Date(semana.fim + 'T23:59:59');
+        const ano = ini.getFullYear();
+        const mes = ini.getMonth();
+
         contasSemana = (orc.categorias || []).filter(c => {
             if (!c.vencimento || _categoriaParcelasQuitada(c)) return false;
-            // Retorna true apenas se o vencimento estiver DENTRO da semana atual (dia 31 cai no último dia do mês)
-            return _ocorrenciasVencimento(c, semana.inicio, semana.fim).length > 0;
+
+            let venc = new Date(ano, mes, c.vencimento);
+            if (venc < ini) {
+                venc = new Date(ano, mes + 1, c.vencimento);
+            }
+
+            // Retorna true apenas se o vencimento estiver DENTRO da semana atual
+            return venc >= ini && venc <= fim;
         });
     }
 
@@ -12253,10 +11906,23 @@ function categoriasFuturoNaSemana(semana) {
 
     if (!semana) return [];
 
+    const ini = new Date(semana.inicio + 'T00:00:00');
+    const fim = new Date(semana.fim + 'T23:59:59');
+
     return categorias.filter(c => {
         if (!c.vencimento) return false;
         if (_categoriaParcelasQuitada(c)) return false;
-        return _ocorrenciasVencimento(c, semana.inicio, semana.fim).length > 0;
+
+        // Constrói a data de vencimento no mês da semana
+        const ano = ini.getFullYear();
+        const mes = ini.getMonth();
+
+        let venc = new Date(ano, mes, c.vencimento);
+        if (venc < ini) {
+            venc = new Date(ano, mes + 1, c.vencimento);
+        }
+
+        return venc >= ini && venc <= fim;
     });
 }
 
@@ -13184,7 +12850,7 @@ function _eventosRecebimentoDeclarados(orc, inicio, fim) {
                         diasPendentes.forEach(data => {
                             eventos.push({
                                 tipo: 'recebimento',
-                                data: _chaveDataLocal(data),
+                                data: data.toISOString().split('T')[0],
                                 dia: data.getDate(),
                                 nome: f.nome || 'Recebimento',
                                 fonteId: f.id || null,
@@ -13204,7 +12870,7 @@ function _eventosRecebimentoDeclarados(orc, inicio, fim) {
                     if (data >= inicio && data <= fim) {
                         eventos.push({
                             tipo: 'recebimento',
-                            data: _chaveDataLocal(data),
+                            data: data.toISOString().split('T')[0],
                             dia: data.getDate(),
                             nome: `${f.nome || 'Recebimento'} (restante do mês)`,
                             fonteId: f.id || null,
@@ -13260,7 +12926,7 @@ function _eventosVencimentoDeclarados(orc, inicio, fim) {
                     if (!jaPago) {
                         eventos.push({
                             tipo: 'vencimento',
-                            data: _chaveDataLocal(data),
+                            data: data.toISOString().split('T')[0],
                             dia: data.getDate(),
                             nome: c.nome || 'Conta',
                             fonteId: null,
@@ -13319,8 +12985,8 @@ function projetarFluxo(orc, opcoes) {
     ).length;
 
     return {
-        inicio: _chaveDataLocal(inicio),
-        fim: _chaveDataLocal(fim),
+        inicio: inicio.toISOString().split('T')[0],
+        fim: fim.toISOString().split('T')[0],
         dias: diasJanela,
         eventos: eventos,
         porDia: porDia,
@@ -13461,7 +13127,7 @@ function reconstruirSaldoHistorico(orc, opcoes) {
     const dataAncoras = new Set(ancoras.map(a => String(a.data || '').split('T')[0]));
 
     const pontos = [];
-    const dataHojeStr = _chaveDataLocal(hoje);
+    const dataHojeStr = hoje.toISOString().split('T')[0];
 
     let saldoCorrente = estoque;
     pontos.push({
@@ -13473,7 +13139,7 @@ function reconstruirSaldoHistorico(orc, opcoes) {
     for (let i = 1; i <= diasAtras; i++) {
         const dia = new Date(hoje);
         dia.setDate(hoje.getDate() - i);
-        const diaStr = _chaveDataLocal(dia);
+        const diaStr = dia.toISOString().split('T')[0];
 
         let net = 0;
         registros.forEach(r => {
@@ -13539,11 +13205,11 @@ function construirProjecaoDiaria(orc, fluxo, opcoes) {
         const estoque = _estoqueOperacionalAtual(orc);
         if (estoque === null) return [];
         const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-        const pontos = [{ data: _chaveDataLocal(hoje), saldo: estoque, eventos: [] }];
+        const pontos = [{ data: hoje.toISOString().split('T')[0], saldo: estoque, eventos: [] }];
         let saldo = estoque;
         for (let i = 1; i <= fluxo.dias; i++) {
             const d = new Date(hoje); d.setDate(hoje.getDate() + i);
-            const ds = _chaveDataLocal(d);
+            const ds = d.toISOString().split('T')[0];
             const dd = fluxo.porDia[ds] || { entradas: 0, saidas: 0, eventos: [] };
             saldo += (dd.entradas || 0) - (dd.saidas || 0);
             pontos.push({ data: ds, saldo, eventos: dd.eventos || [],
@@ -13557,7 +13223,7 @@ function construirProjecaoDiaria(orc, fluxo, opcoes) {
 
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     return [
-        { data: _chaveDataLocal(hoje), saldo: proj.saldoInicial, eventos: [] },
+        { data: hoje.toISOString().split('T')[0], saldo: proj.saldoInicial, eventos: [] },
         ...proj.diasCompletos.map(d => ({
             data: d.dataKey,
             saldo: d.saldoCorrido,
@@ -13624,7 +13290,7 @@ function montarSVGAlisamento(dados) {
 
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
-    const xHoje = xDe(_chaveDataLocal(hoje));
+    const xHoje = xDe(hoje.toISOString().split('T')[0]);
 
     const pathHist = historico.pontos.length >= 2
         ? 'M ' + historico.pontos.map(p => `${xDe(p.data).toFixed(1)} ${yDe(p.saldo).toFixed(1)}`).join(' L ') : '';
@@ -15286,39 +14952,6 @@ function _aplicarEfeitosAjusteCorrente(ajuste) {
                 cartao.faturaAcumulada = (cartao.faturaAcumulada || 0) + delta;
             }
         }
-    } else if (tipo === 'pagamento_fatura') {
-        // Pagar mais da fatura: sai mais da carteira e a fatura cai mais; envelope intacto
-        const c = ajuste.custodiaId && ajuste.saldoAtualizado !== false
-            ? (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaId) : null;
-        if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) c.saldoAtual = (c.saldoAtual || 0) - delta;
-        if (ajuste.cartaoId) {
-            const cartao = (state.orcamento.custodias || []).find(x => x.id === ajuste.cartaoId);
-            if (cartao) cartao.faturaAcumulada = (cartao.faturaAcumulada || 0) - delta;
-        }
-    } else if (tipo === 'transferencia') {
-        const o = ajuste.custodiaId ? (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaId) : null;
-        const d = ajuste.custodiaDestinoId ? (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaDestinoId) : null;
-        if (o && !(TIPOS_CUSTODIA[o.tipo] || {}).temFatura) o.saldoAtual = (o.saldoAtual || 0) - delta;
-        if (d && !(TIPOS_CUSTODIA[d.tipo] || {}).temFatura) d.saldoAtual = (d.saldoAtual || 0) + delta;
-    } else if (tipo === 'pagamento_divida' || tipo === 'aporte_reserva') {
-        if (semana && !semana.fechada && semana.futuro) {
-            semana.futuro.gasto = (semana.futuro.gasto || 0) + delta;
-        }
-        const c = ajuste.custodiaId && ajuste.saldoAtualizado !== false
-            ? (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaId) : null;
-        if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) c.saldoAtual = (c.saldoAtual || 0) - delta;
-        const dest = ajuste.custodiaDestinoId ? (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaDestinoId) : null;
-        if (dest && _custodiaEhReserva(dest)) dest.saldoAtual = (dest.saldoAtual || 0) + delta;
-        if (tipo === 'pagamento_divida' && ajuste.categoriaId) {
-            const cat = (state.orcamento.categorias || []).find(x => x.id === ajuste.categoriaId);
-            // Pagou a mais (delta>0) baixa o saldo devedor; pagou a menos (delta<0) devolve. Parcelas não são recontadas.
-            if (cat && typeof cat.saldoDevedor === 'number' && !isNaN(cat.saldoDevedor)) {
-                cat.saldoDevedor = Math.max(0, cat.saldoDevedor - delta);
-            }
-        }
-        if (typeof recalcularTotalFuturo === 'function') {
-            try { recalcularTotalFuturo({ somenteTotal: true }); } catch (_) {}
-        }
     }
 }
 
@@ -15372,9 +15005,7 @@ function _criarAjusteSemanaAnterior(origem, operacao, valorNovo) {
         categoria: origem.categoria || null,
         categoriaId: origem.categoriaId || null,
         custodiaId: origem.custodiaId || null,
-        custodiaDestinoId: origem.custodiaDestinoId || null,
         cartaoId: origem.cartaoId || null,
-        saldoAtualizado: origem.saldoAtualizado !== false,
         rotulo: 'Ajuste de semana anterior'
     };
 
@@ -15723,11 +15354,11 @@ function editarRegistro(id) {
         inputData.value = /^\d{4}-\d{2}-\d{2}$/.test(dataISO) ? dataISO : '';
         // Limites razoáveis: 2 anos atrás até hoje
         const hoje = new Date();
-        const max = _chaveDataLocal(hoje);
+        const max = hoje.toISOString().split('T')[0];
         const minD = new Date(hoje);
         minD.setFullYear(minD.getFullYear() - 2);
         inputData.max = max;
-        inputData.min = _chaveDataLocal(minD);
+        inputData.min = minD.toISOString().split('T')[0];
         atualizarChipsCompetencia(inputData.value)
     }
 
@@ -15957,13 +15588,10 @@ function gastoCategoriaNoMes(categoriaId, categoriaNome) {
 }
 
 function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
-    const limitePlano = (limite && limite > 0) ? limite : 0;
+    const limiteSeguro = (limite && limite > 0) ? limite : 0;
     const gastoSeguro = Number(gasto) || 0;
     
     const carrego = categoriaId ? obterCarregoCategoria(categoriaId) : 0;
-    const sobraHerdada = categoriaId ? obterSobraAnteriorCategoria(categoriaId) : 0;
-    // Folga herdada soma ao que ainda cabe nesta categoria
-    const limiteSeguro = limitePlano + sobraHerdada;
     const consumidoReal = gastoSeguro + carrego;
 
     // A barra agora reflete a realidade consumida (gasto + passivo)
@@ -15976,7 +15604,7 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
     else if (percentual >= 100) cor = 'barra-vermelha';
     else if (percentual >= 80) cor = 'barra-amarela';
 
-    const sobraAnt = sobraHerdada;
+    const sobraAnt = categoriaId ? obterSobraAnteriorCategoria(categoriaId) : 0;
     // O disponível real usa o consumidoReal que já inclui o carrego
     const disponivelReal = limiteSeguro - consumidoReal;
     
@@ -15987,7 +15615,7 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
             : `passou do combinado em ${_fmtBRL(Math.abs(disponivelReal))}`;
         const bits = [];
         if (carrego > 0) bits.push(`acima do combinado anterior ${_fmtBRL(carrego)}`);
-        if (sobraAnt > 0) bits.push(`inclui folga herdada ${_fmtBRL(sobraAnt)}`);
+        if (sobraAnt > 0) bits.push(`sobra anterior ${_fmtBRL(sobraAnt)}`);
         linhaReal = `<div style="font-size: 0.9rem; color: ${disponivelReal < 0 ? 'var(--danger)' : 'var(--secondary)'}; margin-top: 4px; line-height: 1.35;">
             <strong>Nesta categoria:</strong> ${realTxt}${bits.length ? ' · ' + bits.join(' · ') : ''}
         </div>`;
@@ -15999,35 +15627,12 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
         const cat = (state.orcamento.categorias || []).find(c => c.id === categoriaId);
         if (cat && cat.tipo === 'consumo' && cat.valor > 0) {
             const limiteOriginal = cat.valor / DIVISOR_SEMANAL;
-            if (limitePlano < limiteOriginal - 0.01) {
-                const diferenca = limiteOriginal - limitePlano;
+            if (limiteSeguro < limiteOriginal - 0.01) {
+                const diferenca = limiteOriginal - limiteSeguro;
                 const isBase = cat.caixa === 'base';
                 avisoProtecao = `<div style="font-size: 0.9rem; color: ${isBase ? 'var(--warning)' : 'var(--danger)'}; margin-top: 4px; background: ${isBase ? 'var(--warning-soft)' : 'var(--danger-soft)'}; padding: 6px; border-radius: 6px; line-height: 1.3;">
                     🛡️ <strong>Protegido:</strong> Limite reduzido em ${_fmtBRL(diferenca)}/sem (original ${_fmtBRL(limiteOriginal)}). ${isBase ? 'Corte menor para manter sua base.' : 'Corte maior para proteger sua base.'}
                 </div>`;
-            }
-        }
-    }
-
-    // Notas: boleto antecipado, compensação de folga por passivo no envelope, meta movida
-    let notasExtra = '';
-    let botaoMover = '';
-    if (categoriaId) {
-        const sem = state.orcamento && state.orcamento.semanaAtual;
-        const cat = (state.orcamento.categorias || []).find(c => c.id === categoriaId);
-        if (sem && cat) {
-            notasExtra += _notaAntecipacaoCategoria(cat, sem);
-            notasExtra += _linhasTransferenciaCategoria(cat, sem);
-            if (sobraHerdada > 0 && (cat.caixa === 'base' || cat.caixa === 'vida')) {
-                const comp = _compensacaoEnvelope(cat.caixa, sem);
-                if (comp.passivo > 0.5) {
-                    const vale = Math.max(0, comp.liquido);
-                    notasExtra += `<div style="font-size:0.8rem;color:var(--warning);margin-top:4px;line-height:1.35;">folga bruta; no envelope só vale ${_fmtBRL(vale)}, porque há passivo em outra categoria (${_fmtBRL(comp.passivo)}).</div>`;
-                }
-            }
-            if ((cat.caixa === 'base' || cat.caixa === 'vida') && !sem.fechada && _disponivelCategoriaSemana(cat, sem) > 0.05) {
-                const temOutra = (state.orcamento.categorias || []).some(c => c.id !== cat.id && c.caixa === cat.caixa && !_categoriaParcelasQuitada(c));
-                if (temOutra) botaoMover = `<div style="margin-top:6px;"><a href="#" onclick="event.stopPropagation();abrirTransferenciaMeta('${cat.id}');return false;" style="font-size:0.85rem;color:var(--primary);">Mover meta para outra categoria</a></div>`;
             }
         }
     }
@@ -16042,9 +15647,7 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
                 <div class="barra-preenchida ${cor}" style="width: ${percentual}%;"></div>
             </div>
             ${linhaReal}
-            ${notasExtra}
             ${avisoProtecao}
-            ${botaoMover}
         </div>
     `;
 }
