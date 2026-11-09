@@ -1723,6 +1723,13 @@ function migrarEstado() {
         state.orcamento.nivel = 1;
     }
 
+    // N1 opção A: zera saldoAnterior fantasma na semana aberta (renda estimada não é caixa)
+    if ((state.orcamento.nivel || 1) < 2 && state.orcamento.semanaAtual && !state.orcamento.semanaAtual.fechada) {
+        if ((state.orcamento.semanaAtual.saldoAnterior || 0) !== 0) {
+            state.orcamento.semanaAtual.saldoAnterior = 0;
+        }
+    }
+
     if (state.orcamento.rendaDetalhe === undefined) {
         state.orcamento.rendaDetalhe = null;
     }
@@ -4981,6 +4988,153 @@ function abrirTelaAjustes() {
     goToScreen('screen-ajustes');
 }
 
+
+// === CÓPIA DE SEGURANÇA (export / import do estado completo) ===
+
+function exportarEstadoCompleto() {
+    try {
+        const snapshot = JSON.parse(JSON.stringify(state));
+        const payload = {
+            app: 'Mochila',
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            state: snapshot
+        };
+        const raw = JSON.stringify(payload, null, 2);
+        let body = raw;
+        let filename = 'mochila-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+        // Comprime se LZString estiver disponível (arquivo menor)
+        if (typeof LZString !== 'undefined' && LZString.compressToBase64) {
+            try {
+                const compressed = LZString.compressToBase64(raw);
+                if (compressed && compressed.length < raw.length) {
+                    body = JSON.stringify({
+                        app: 'Mochila',
+                        version: 1,
+                        compressed: true,
+                        exportedAt: payload.exportedAt,
+                        data: compressed
+                    }, null, 2);
+                    filename = 'mochila-backup-' + new Date().toISOString().slice(0, 10) + '.mochila.json';
+                }
+            } catch (_) {}
+        }
+        const blob = new Blob([body], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            try { URL.revokeObjectURL(url); } catch (_) {}
+            try { a.remove(); } catch (_) {}
+        }, 500);
+    } catch (e) {
+        console.error('[BACKUP] Falha ao exportar', e);
+        alert('Não foi possível gerar a cópia de segurança. Tente de novo.');
+    }
+}
+
+function _lerArquivoComoTexto(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('Falha ao ler arquivo'));
+        reader.readAsText(file, 'utf-8');
+    });
+}
+
+async function importarEstadoCompletoDeArquivo(file) {
+    if (!file) return;
+    try {
+        const texto = await _lerArquivoComoTexto(file);
+        let parsed;
+        try {
+            parsed = JSON.parse(texto);
+        } catch (e) {
+            alert('Arquivo inválido: não é um JSON legível.');
+            return;
+        }
+
+        let loadedState = null;
+        if (parsed && parsed.compressed && parsed.data && typeof LZString !== 'undefined') {
+            try {
+                const raw = LZString.decompressFromBase64(parsed.data);
+                const inner = JSON.parse(raw);
+                loadedState = inner.state || inner;
+            } catch (e) {
+                alert('Não foi possível descomprimir o backup.');
+                return;
+            }
+        } else if (parsed && parsed.state) {
+            loadedState = parsed.state;
+        } else if (parsed && (parsed.orcamento !== undefined || parsed.theme !== undefined)) {
+            // Snapshot direto do state
+            loadedState = parsed;
+        } else {
+            alert('Este arquivo não parece ser uma cópia de segurança do Mochila.');
+            return;
+        }
+
+        if (!loadedState || typeof loadedState !== 'object') {
+            alert('Backup sem dados utilizáveis.');
+            return;
+        }
+
+        const ok = confirm(
+            'Isso substitui tudo o que está neste aparelho pelo conteúdo do arquivo.\n\n' +
+            'Continuar? (não dá para desfazer depois)'
+        );
+        if (!ok) return;
+
+        state = loadedState;
+        try { migrarEstado(); } catch (e) { console.warn('[BACKUP] migrarEstado', e); }
+        try { salvarEstado(); } catch (e) { console.warn('[BACKUP] salvarEstado', e); }
+
+        // Reaplica tema/fonte
+        try {
+            document.documentElement.setAttribute('data-theme', state.theme || 'light');
+            const sizes = { normal: '16px', grande: '18px', maior: '20px' };
+            document.documentElement.style.fontSize = sizes[state.fontSize] || '16px';
+        } catch (_) {}
+
+        alert('Cópia restaurada. O app vai recarregar a tela inicial.');
+        try {
+            if (state.orcamento) {
+                renderizarOrcamentoInicio();
+                goToScreen('screen-orcamento-inicio');
+            } else {
+                goToScreen('screen-welcome');
+                if (typeof atualizarBotaoRetomada === 'function') atualizarBotaoRetomada();
+            }
+        } catch (_) {
+            location.reload();
+        }
+    } catch (e) {
+        console.error('[BACKUP] Falha ao importar', e);
+        alert('Não foi possível importar o arquivo. Verifique se é um backup do Mochila.');
+    }
+}
+
+function acionarImportarEstado() {
+    let input = document.getElementById('input-importar-estado');
+    if (!input) {
+        input = document.createElement('input');
+        input.type = 'file';
+        input.id = 'input-importar-estado';
+        input.accept = 'application/json,.json,.mochila.json,text/plain';
+        input.style.display = 'none';
+        input.addEventListener('change', function () {
+            const f = input.files && input.files[0];
+            input.value = '';
+            if (f) importarEstadoCompletoDeArquivo(f);
+        });
+        document.body.appendChild(input);
+    }
+    input.click();
+}
+
 function renderizarTelaAjustes() {
     const el = document.getElementById('ajustes-conteudo');
     if (!el) return;
@@ -5010,6 +5164,19 @@ function renderizarTelaAjustes() {
         <div class="ajustes-grid" style="gap: 8px; margin-bottom: 24px;">
             ${chipFonte}
         </div>
+
+        <div class="secao-titulo">Cópia de segurança</div>
+        <p style="font-size: 0.9rem; color: var(--secondary); line-height: 1.45; margin-bottom: 12px;">
+            Baixe uma cópia completa do que está neste aparelho ou restaure a partir de um arquivo. Tudo fica só no seu celular — nada é enviado para servidores.
+        </p>
+        <button type="button" class="btn-option" style="justify-content: flex-start;" onclick="exportarEstadoCompleto()">
+            <span style="font-size: 1.3rem;">💾</span>
+            <span>Baixar cópia de segurança</span>
+        </button>
+        <button type="button" class="btn-option" style="justify-content: flex-start;" onclick="acionarImportarEstado()">
+            <span style="font-size: 1.3rem;">📥</span>
+            <span>Restaurar a partir de arquivo</span>
+        </button>
     `;
 }
 
@@ -5925,7 +6092,7 @@ function renderizarVerdadeDecisao(orc) {
     } else if (nivel >= 2) {
         frase = 'O que manda agora é a situação real da semana (o que veio da anterior + o que entrou − o que saiu). As barras são o plano por caixinha; o detalhe por categoria não se soma ao total da caixinha.';
     } else {
-        frase = 'No Nível 1 o previsto guia o ritmo da semana. Ainda não há recebimento lançado — o número é plano + o que você anotou de gasto, não extrato de banco.';
+        frase = 'No Nível 1 o previsto guia o ritmo da semana. O número é plano + o que você anotou de gasto — não é extrato de conta, e o saldo residual do plano não carrega para a próxima semana.';
     }
     const regime = 'Gasto no cartão entra na meta e na fatura; o dinheiro sai da conta quando a fatura é paga.';
     return `
@@ -6433,7 +6600,14 @@ function iniciarNovaSemana() {
     let carregoCategorias = {};
     if (state.orcamento.resumos && state.orcamento.resumos.length > 0) {
         const ultimoResumo = state.orcamento.resumos[0];
-        saldoAnterior = (typeof ultimoResumo.saldo === 'number') ? ultimoResumo.saldo : 0;
+        // N1 (opção A): não herda saldo residual baseado em renda estimada (evita caixa fantasma).
+        // Passivo/sobra de envelopes e carregoCategorias continuam sendo herdados abaixo.
+        const nivelAtual = (state.orcamento.nivel || 1);
+        if (nivelAtual < 2) {
+            saldoAnterior = 0;
+        } else {
+            saldoAnterior = (typeof ultimoResumo.saldo === 'number') ? ultimoResumo.saldo : 0;
+        }
         const pm = (cx) => {
             if (!cx) return 0;
             if (typeof cx.passivoMeta === 'number') return Math.max(0, cx.passivoMeta);
@@ -13448,6 +13622,87 @@ function _eventosVencimentoDeclarados(orc, inicio, fim) {
     return eventos;
 }
 
+
+/**
+ * Eventos de pagamento de fatura de cartão (saída de caixa).
+ * Usa faturaAcumulada − pagamentos já lançados no mês, no diaVencimento
+ * (fallback: diaFechamento + 7). Não debita competência de envelope.
+ */
+function _eventosPagamentoFaturaDeclarados(orc, inicio, fim) {
+    const eventos = [];
+    const custodias = (orc && orc.custodias) || [];
+    const iniIso = _chaveDataLocal(inicio);
+    const fimIso = _chaveDataLocal(fim);
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const hojeIso = _chaveDataLocal(hoje);
+
+    custodias.forEach(c => {
+        const tipo = (typeof TIPOS_CUSTODIA !== 'undefined' && TIPOS_CUSTODIA[c.tipo]) ? TIPOS_CUSTODIA[c.tipo] : {};
+        if (!tipo.temFatura) return;
+        const fatura = Number(c.faturaAcumulada) || 0;
+        if (fatura <= 0.05) return;
+
+        let diaVenc = (typeof c.diaVencimento === 'number' && c.diaVencimento >= 1 && c.diaVencimento <= 31)
+            ? Math.floor(c.diaVencimento)
+            : null;
+        let estimado = false;
+        if (diaVenc === null) {
+            const fech = (typeof c.diaFechamento === 'number' && c.diaFechamento >= 1 && c.diaFechamento <= 31)
+                ? Math.floor(c.diaFechamento)
+                : null;
+            if (fech === null) return;
+            diaVenc = fech + 7;
+            if (diaVenc > 31) diaVenc = diaVenc - 31;
+            estimado = true;
+        }
+
+        // Próxima ocorrência de diaVenc a partir de "hoje" (ou início da janela, o que for mais cedo)
+        // Emite o saldo aberto atual UMA vez — faturaAcumulada já reflete pagamentos feitos.
+        const ancora = new Date(Math.min(hoje.getTime(), inicio.getTime()));
+        ancora.setHours(0, 0, 0, 0);
+        let dataVenc = _dataNoMes(ancora.getFullYear(), ancora.getMonth(), diaVenc);
+        if (dataVenc < ancora) {
+            // já passou neste mês → próxima no mês seguinte
+            const nm = ancora.getMonth() + 1;
+            const ny = ancora.getFullYear() + Math.floor(nm / 12);
+            dataVenc = _dataNoMes(ny, nm % 12, diaVenc);
+        }
+        const dataIso = _chaveDataLocal(dataVenc);
+
+        let dataEv = null;
+        let atraso = false;
+        if (dataIso >= iniIso && dataIso <= fimIso) {
+            dataEv = dataIso;
+            atraso = dataIso < hojeIso;
+        } else if (dataIso < iniIso && iniIso <= hojeIso && hojeIso <= fimIso) {
+            // Vencimento já passou antes da janela e ainda há fatura aberta → alarme em "hoje"
+            dataEv = hojeIso;
+            atraso = true;
+        }
+
+        if (!dataEv) return;
+
+        eventos.push({
+            tipo: 'vencimento',
+            data: dataEv,
+            dia: Number(dataEv.slice(8, 10)),
+            nome: 'Fatura ' + (c.nome || 'Cartão') + (atraso ? ' (em atraso)' : '') + (estimado ? ' (data estimada)' : ''),
+            fonteId: null,
+            valor: fatura,
+            caixa: null,
+            categoriaId: null,
+            custodiaId: null,
+            cartaoId: c.id || null,
+            subtipo: 'fatura',
+            atraso: atraso,
+            estimado: estimado
+        });
+    });
+    return eventos;
+}
+
+
 function projetarFluxo(orc, opcoes) {
     opcoes = opcoes || {};
     const diasJanela = (typeof opcoes.dias === 'number' && opcoes.dias > 0) ? opcoes.dias : 30;
@@ -13462,7 +13717,8 @@ function projetarFluxo(orc, opcoes) {
 
     const recebimentos = _eventosRecebimentoDeclarados(orc, inicio, fim);
     const vencimentos = _eventosVencimentoDeclarados(orc, inicio, fim);
-    const eventos = recebimentos.concat(vencimentos).sort((a, b) => {
+    const faturas = _eventosPagamentoFaturaDeclarados(orc, inicio, fim);
+    const eventos = recebimentos.concat(vencimentos).concat(faturas).sort((a, b) => {
         if (a.data < b.data) return -1;
         if (a.data > b.data) return 1;
         if (a.tipo === 'recebimento' && b.tipo !== 'recebimento') return -1;
@@ -13479,13 +13735,21 @@ function projetarFluxo(orc, opcoes) {
     });
 
     const entradas = recebimentos.reduce((s, e) => s + e.valor, 0);
-    const saidas = vencimentos.reduce((s, e) => s + e.valor, 0);
+    const saidas = vencimentos.reduce((s, e) => s + e.valor, 0) + faturas.reduce((s, e) => s + e.valor, 0);
     const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
     const fontesSemDia = fontes.filter(f => _diasRecebimento(f.diaRecebimento).length === 0).length;
     const fontesSemCustodia = fontes.filter(f => !f.custodiaPadraoId).length;
     const categoriasSemVencimento = (orc.categorias || []).filter(
         c => c.vencimento === null || c.vencimento === undefined
     ).length;
+    const faturasSemDia = ((orc.custodias || []).filter(c => {
+        const t = (typeof TIPOS_CUSTODIA !== 'undefined' && TIPOS_CUSTODIA[c.tipo]) ? TIPOS_CUSTODIA[c.tipo] : {};
+        if (!t.temFatura) return false;
+        if ((Number(c.faturaAcumulada) || 0) <= 0.05) return false;
+        const temVenc = typeof c.diaVencimento === 'number' && c.diaVencimento >= 1 && c.diaVencimento <= 31;
+        const temFech = typeof c.diaFechamento === 'number' && c.diaFechamento >= 1 && c.diaFechamento <= 31;
+        return !temVenc && !temFech;
+    }).length);
 
     return {
         inicio: _chaveDataLocal(inicio),
@@ -13497,7 +13761,8 @@ function projetarFluxo(orc, opcoes) {
         lacunas: {
             fontesSemDia: fontesSemDia,
             fontesSemCustodia: fontesSemCustodia,
-            categoriasSemVencimento: categoriasSemVencimento
+            categoriasSemVencimento: categoriasSemVencimento,
+            faturasSemDia: faturasSemDia
         }
     };
 }
