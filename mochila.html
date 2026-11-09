@@ -3445,6 +3445,27 @@ function _disponivelCategoriaSemana(cat, semana) {
     return lim + (Number(c.sobra) || 0) - (Number(c.estouro) || 0) - _gastoCategoriaNaSemana(cat, semana);
 }
 
+/** Compromisso de boleto em aberto no envelope (reserva não paga que rolou) e seus nomes. */
+function _compromissoEmAbertoEnvelope(caixa, semana) {
+    const mapa = (semana && semana.carregoCategorias) || {};
+    let total = 0;
+    const itens = [];
+    Object.keys(mapa).forEach(id => {
+        const c = mapa[id];
+        if (!c || c.caixa !== caixa || !c.reservada) return;
+        const v = Number(c.sobra) || 0;
+        if (v > 0.5) { total += v; itens.push({ nome: c.nome || 'boleto', valor: v }); }
+    });
+    return { total: total, itens: itens };
+}
+
+/** Folga livre do envelope = folga herdada − compromisso de boleto em aberto. */
+function _folgaLivreEnvelope(caixa, semana) {
+    if (!semana || !semana[caixa]) return 0;
+    const total = Number(semana[caixa].sobraAnterior) || 0;
+    return Math.max(0, total - _compromissoEmAbertoEnvelope(caixa, semana).total);
+}
+
 /**
  * Folga que vale × folga bruta: folga de uma categoria só vale até onde o envelope
  * (soma das categorias) está no azul. Passivo em outra categoria compensa primeiro.
@@ -3454,7 +3475,7 @@ function _compensacaoEnvelope(caixa, semana) {
     let sobra = 0, passivo = 0;
     Object.keys(mapa).forEach(id => {
         const c = mapa[id];
-        if (!c || c.caixa !== caixa) return;
+        if (!c || c.caixa !== caixa || c.reservada) return;
         sobra += Number(c.sobra) || 0;
         passivo += Number(c.estouro) || 0;
     });
@@ -3474,8 +3495,8 @@ function abrirTransferenciaMeta(categoriaId) {
     const fmt = formatarMoeda;
     const disp = _disponivelCategoriaSemana(origem, semana);
     if (disp <= 0.05) { alert('Não há meta sobrando em "' + origem.nome + '" para mover.'); return; }
-    const outras = cats.filter(c => c.id !== origem.id && c.caixa === origem.caixa && !_categoriaParcelasQuitada(c));
-    if (!outras.length) { alert('Não há outra categoria neste envelope para receber.'); return; }
+    const outras = cats.filter(c => c.id !== origem.id && c.caixa === origem.caixa && c.tipo !== 'conta' && !_categoriaParcelasQuitada(c));
+    if (!outras.length) { alert('Não há outra categoria neste envelope para receber (boleto não recebe meta).'); return; }
 
     const lista = outras.map((c, i) => (i + 1) + ' — ' + c.nome).join('\n');
     const esc = prompt('Mover meta de "' + origem.nome + '" (cabe até ' + fmt(disp) + ').\nSó dentro do mesmo envelope.\n\nPara qual categoria?\n\n' + lista + '\n\nDigite o número:');
@@ -5063,8 +5084,11 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         carrego = 0;
         sobraAnterior = 0;
     }
-    // Folga herdada soma ao que ainda cabe (Base/Vida)
+    // Folga herdada soma ao que ainda cabe (Base/Vida); o total é mostrado, com a parte de boleto em aberto explicada abaixo
     if (!isFuturo && sobraAnterior > 0) limiteSeguro = limitePlano + sobraAnterior;
+    const semAtual = state.orcamento && state.orcamento.semanaAtual;
+    const aberto = (!isFuturo && id && semAtual) ? _compromissoEmAbertoEnvelope(id, semAtual) : { total: 0, itens: [] };
+    const folgaLivre = Math.max(0, sobraAnterior - aberto.total);
 
     const consumidoReal = isFuturo ? gastoSeguro : (gastoSeguro + carrego);
     const disponivelReal = limiteSeguro - consumidoReal;
@@ -5161,8 +5185,11 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         if (carrego > 0) {
             bits.push(`adiantamento na semana passada R$ ${fmt(carrego)}`);
         }
-        if (sobraAnterior > 0) {
-            bits.push(`inclui folga herdada R$ ${fmt(sobraAnterior)}`);
+        if (folgaLivre > 0.5) {
+            bits.push(`inclui folga herdada R$ ${fmt(folgaLivre)}`);
+        }
+        if (aberto.total > 0.5) {
+            bits.push(`inclui boleto em aberto R$ ${fmt(aberto.total)}`);
         }
 
         let realTxt = '';
@@ -5226,7 +5253,8 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
             ${linhaReal}
             ${linhaCapacidade}
             ${(!isFuturo && id) ? _notaAntecipacaoCaixa(id, state.orcamento && state.orcamento.semanaAtual) : ''}
-            ${sobraAnterior > 0 && id ? `<button type="button" class="btn-option" style="margin-top:8px;justify-content:center;border-color:var(--primary);color:var(--primary);font-size:0.9rem;" onclick="event.stopPropagation();abrirDestinoSobra('${id}')">Dar destino à folga</button>` : ''}
+            ${aberto.total > 0.5 ? `<div style="font-size:0.8rem;color:var(--secondary);margin-top:6px;line-height:1.35;">R$ ${fmt(aberto.total)} deste total estão reservados para boleto em aberto (${aberto.itens.map(i => i.nome + ' R$ ' + fmt(i.valor)).join('; ')}). Livre: R$ ${fmt(Math.max(0, disponivelReal - aberto.total))}.</div>` : ''}
+            ${folgaLivre > 0.5 && id ? `<button type="button" class="btn-option" style="margin-top:8px;justify-content:center;border-color:var(--primary);color:var(--primary);font-size:0.9rem;" onclick="event.stopPropagation();abrirDestinoSobra('${id}')">Dar destino à folga</button>` : ''}
             ${aviso}
         </div>
     `;
@@ -5749,7 +5777,8 @@ function calcularCarregoCategoriasDaSemana(semana) {
         if (_categoriaParcelasQuitada(cat)) return; 
         
         const isFuturoCat = cat.caixa === 'futuro';
-        const isContaFixa = cat.tipo === 'conta' && cat.vencimento;
+        // Boleto (conta com vencimento): a reserva não paga rola como COMPROMISSO EM ABERTO, não como folga livre
+        const isBoleto = !isFuturoCat && _ehContaComVencimento(cat);
 
         const metaSem = isFuturoCat
             ? (Number(cat.valor) || 0) / DIVISOR_SEMANAL
@@ -5765,23 +5794,13 @@ function calcularCarregoCategoriasDaSemana(semana) {
         let estouro = 0;
         let sobra = 0;
 
-        if (isFuturoCat) {
-            estouro = 0;
-            sobra = 0;
-        } else if (isContaFixa) {
-            // Se a conta já foi paga neste mês, zera o passivo (limpa o bug histórico)
-            const pagoNoMes = _temRegistroPagoNoMes(cat, state.orcamento);
-            if (pagoNoMes) {
-                estouro = 0;
-            } else {
-                // Se não foi paga, o que faltou pagar vira passivo, nunca sobra
-                estouro = Math.max(0, passivoEntrada + metaSem - gastoSem - folgaEntrada);
-            }
-            sobra = 0;
-        } else {
+        if (!isFuturoCat) {
+            // Mesma regra geral para todos: saldo rolante da categoria
             const posicao = gastoSem + passivoEntrada - folgaEntrada - metaSem;
             estouro = Math.max(0, posicao);
             sobra = Math.max(0, -posicao);
+            if (estouro < 0.5) estouro = 0;
+            if (sobra < 0.5) sobra = 0;
         }
 
         const aceleracao = isFuturoCat ? Math.max(0, gastoSem - metaSem) : 0;
@@ -5797,6 +5816,7 @@ function calcularCarregoCategoriasDaSemana(semana) {
                 passivoEntrada,
                 estouro,
                 sobra,
+                reservada: isBoleto,
                 aceleracao,
                 atrasado
             };
@@ -6174,9 +6194,12 @@ function definirAncoraRecebimento(ligado) {
 function abrirDestinoSobra(caixaId) {
     const semana = state.orcamento && state.orcamento.semanaAtual;
     if (!semana || !semana[caixaId] || caixaId === 'futuro') return;
-    const folga = Number(semana[caixaId].sobraAnterior) || 0;
-    if (folga <= 0) {
-        alert('Não há folga herdada nesta caixinha.');
+    const folga = _folgaLivreEnvelope(caixaId, semana);
+    if (folga <= 0.5) {
+        const aberto = _compromissoEmAbertoEnvelope(caixaId, semana);
+        alert(aberto.total > 0.5
+            ? 'O valor herdado aqui está reservado para boleto em aberto. Pague o boleto para liberar.'
+            : 'Não há folga herdada nesta caixinha.');
         return;
     }
     const fmt = formatarMoeda;
@@ -6222,12 +6245,12 @@ function _consumirFolgaEnvelope(caixaId, valor, destino) {
     const semana = state.orcamento && state.orcamento.semanaAtual;
     if (!semana || !semana[caixaId]) return 0;
     const atual = Number(semana[caixaId].sobraAnterior) || 0;
-    const usa = Math.min(atual, Math.max(0, Number(valor) || 0));
+    const usa = Math.min(_folgaLivreEnvelope(caixaId, semana), Math.max(0, Number(valor) || 0));
     if (usa <= 0) return 0;
     semana[caixaId].sobraAnterior = Math.max(0, atual - usa);
 
     const mapa = semana.carregoCategorias || {};
-    const ids = Object.keys(mapa).filter(id => mapa[id] && mapa[id].caixa === caixaId && (Number(mapa[id].sobra) || 0) > 0);
+    const ids = Object.keys(mapa).filter(id => mapa[id] && mapa[id].caixa === caixaId && !mapa[id].reservada && (Number(mapa[id].sobra) || 0) > 0);
     const S = ids.reduce((s, id) => s + (Number(mapa[id].sobra) || 0), 0);
     if (S > 0) {
         const f = Math.max(0, 1 - usa / S);
@@ -6298,7 +6321,7 @@ function renderizarMiniBalancoOperacional(orc) {
  * Devolve o valor compensado.
  */
 function _compensarFolgaPassivoCategorias(mapa, caixa) {
-    const ids = Object.keys(mapa || {}).filter(id => mapa[id] && mapa[id].caixa === caixa);
+    const ids = Object.keys(mapa || {}).filter(id => mapa[id] && mapa[id].caixa === caixa && !mapa[id].reservada);
     const S = ids.reduce((s, id) => s + (Number(mapa[id].sobra) || 0), 0);
     const P = ids.reduce((s, id) => s + (Number(mapa[id].estouro) || 0), 0);
     const comp = Math.min(S, P);
@@ -6320,7 +6343,7 @@ function renderizarAvisoViradaMes(semana) {
         partes.push(`${fmt(c.valor)} de folga em categorias cobriu passivo de outras categorias de ${nomes[c.caixa]}.`);
     });
     ['base', 'vida'].forEach(cx => {
-        const f = Number(semana[cx] && semana[cx].sobraAnterior) || 0;
+        const f = _folgaLivreEnvelope(cx, semana);
         if (f > 0.5) {
             partes.push(`Sobrou folga real de ${fmt(f)} em ${nomes[cx]}; ela já soma ao que ainda cabe.`);
             botoes.push(`<button type="button" class="btn-option" style="justify-content:center;border-color:var(--primary);color:var(--primary);font-size:0.9rem;margin-top:8px;" onclick="abrirDestinoSobra('${cx}')">Mandar a folga de ${nomes[cx]} para o Futuro</button>`);
@@ -6399,7 +6422,8 @@ function iniciarNovaSemana() {
                     nome: c.nome || '',
                     caixa: c.caixa || null,
                     estouro: Number(c.estouro) || 0,
-                    sobra: Number(c.sobra) || 0
+                    sobra: Number(c.sobra) || 0,
+                    reservada: !!c.reservada
                 };
             });
         }
@@ -15993,6 +16017,8 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
     
     const carrego = categoriaId ? obterCarregoCategoria(categoriaId) : 0;
     const sobraHerdada = categoriaId ? obterSobraAnteriorCategoria(categoriaId) : 0;
+    const _catBarra = categoriaId ? (state.orcamento.categorias || []).find(c => c.id === categoriaId) : null;
+    const ehBoletoBarra = !!(_catBarra && _ehContaComVencimento(_catBarra));
     // Folga herdada soma ao que ainda cabe nesta categoria
     const limiteSeguro = limitePlano + sobraHerdada;
     const consumidoReal = gastoSeguro + carrego;
@@ -16018,7 +16044,7 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
             : `passou do combinado em ${_fmtBRL(Math.abs(disponivelReal))}`;
         const bits = [];
         if (carrego > 0) bits.push(`acima do combinado anterior ${_fmtBRL(carrego)}`);
-        if (sobraAnt > 0) bits.push(`inclui folga herdada ${_fmtBRL(sobraAnt)}`);
+        if (sobraAnt > 0) bits.push(ehBoletoBarra ? `inclui boleto em aberto ${_fmtBRL(sobraAnt)}` : `inclui folga herdada ${_fmtBRL(sobraAnt)}`);
         linhaReal = `<div style="font-size: 0.9rem; color: ${disponivelReal < 0 ? 'var(--danger)' : 'var(--secondary)'}; margin-top: 4px; line-height: 1.35;">
             <strong>Nesta categoria:</strong> ${realTxt}${bits.length ? ' · ' + bits.join(' · ') : ''}
         </div>`;
@@ -16049,7 +16075,7 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
         if (sem && cat) {
             notasExtra += _notaAntecipacaoCategoria(cat, sem);
             notasExtra += _linhasTransferenciaCategoria(cat, sem);
-            if (sobraHerdada > 0 && (cat.caixa === 'base' || cat.caixa === 'vida')) {
+            if (sobraHerdada > 0 && !ehBoletoBarra && (cat.caixa === 'base' || cat.caixa === 'vida')) {
                 const comp = _compensacaoEnvelope(cat.caixa, sem);
                 if (comp.passivo > 0.5) {
                     const vale = Math.max(0, comp.liquido);
@@ -16058,7 +16084,7 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
             }
                       // NOVO: cat.tipo !== 'conta' impede que boletos tenham a opção de mover meta
             if ((cat.caixa === 'base' || cat.caixa === 'vida') && cat.tipo !== 'conta' && !sem.fechada && _disponivelCategoriaSemana(cat, sem) > 0.05) {
-                const temOutra = (state.orcamento.categorias || []).some(c => c.id !== cat.id && c.caixa === cat.caixa && !_categoriaParcelasQuitada(c));
+                const temOutra = (state.orcamento.categorias || []).some(c => c.id !== cat.id && c.caixa === cat.caixa && c.tipo !== 'conta' && !_categoriaParcelasQuitada(c));
                 if (temOutra) botaoMover = `<div style="margin-top:6px;"><a href="#" onclick="event.stopPropagation();abrirTransferenciaMeta('${cat.id}');return false;" style="font-size:0.85rem;color:var(--primary);">Mover meta para outra categoria</a></div>`;
             }
         }
