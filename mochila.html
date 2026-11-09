@@ -3316,22 +3316,33 @@ function _inicioUsoApp() {
  */
 function _alocacoesAntecipadasConta(cat, semana) {
     if (!_ehContaComVencimento(cat) || !semana || !semana.inicio || !semana.fim) return [];
-    const valor = Number(cat.valor) || 0;
-    if (valor <= 0) return [];
     const deIso = _addDiasIso(semana.inicio, -75);
+    const d = _distribuirPagamentosConta(cat, state.orcamento.historicoRegistros,
+        _addDiasIso(deIso, -45), _addDiasIso(semana.fim, 60), deIso, semana.fim);
+    return d.alocs.filter(a => a.venc > _semanaDaData(a.pago).fim);
+}
+
+/**
+ * Núcleo: distribui os pagamentos (gasto direto/cartão da categoria) pelas ocorrências do vencimento,
+ * a mais antiga em aberto primeiro. Devolve as ocorrências com o que ainda falta pagar (restante)
+ * e cada alocação (pagamento → ocorrência).
+ */
+function _distribuirPagamentosConta(cat, registros, deOcIso, ateOcIso, dePagIso, atePagIso) {
+    const valor = Number(cat && cat.valor) || 0;
+    if (!cat || valor <= 0) return { ocs: [], alocs: [] };
     // Vencimentos anteriores ao início do uso do app não contam como "em aberto"
     const inicioUso = _inicioUsoApp();
-    const ocs = _ocorrenciasVencimento(cat, _addDiasIso(deIso, -45), _addDiasIso(semana.fim, 60))
+    const ocs = _ocorrenciasVencimento(cat, deOcIso, ateOcIso)
         .filter(v => !inicioUso || v >= inicioUso)
         .map(v => ({ venc: v, restante: valor }));
-    const pagamentos = (state.orcamento.historicoRegistros || [])
+    const pagamentos = (registros || [])
         .filter(r => !r.anulado && (r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') &&
             ((r.categoriaId && r.categoriaId === cat.id) || (!r.categoriaId && r.categoria && r.categoria === cat.nome)))
         .map(r => ({ iso: _isoLocalDe(r.data), valor: Number(_valorEfetivoRegistro(r)) || 0, mes: r.mesReferencia || null }))
-        .filter(p => p.valor > 0 && p.iso >= deIso && p.iso <= semana.fim)
+        .filter(p => p.valor > 0 && p.iso >= dePagIso && p.iso <= atePagIso)
         .sort((a, b) => (a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0));
 
-    const resultado = [];
+    const alocs = [];
     pagamentos.forEach(p => {
         let v = p.valor;
         const limiteAntigo = _addDiasIso(p.iso, -45);
@@ -3345,10 +3356,31 @@ function _alocacoesAntecipadasConta(cat, semana) {
             const a = Math.min(v, o.restante);
             o.restante -= a;
             v -= a;
-            resultado.push({ pago: p.iso, venc: o.venc, valor: a });
+            alocs.push({ pago: p.iso, venc: o.venc, valor: a });
         }
     });
-    return resultado.filter(a => a.venc > _semanaDaData(a.pago).fim);
+    return { ocs: ocs, alocs: alocs };
+}
+
+/** Ocorrências do boleto com o que falta pagar, vistas de hoje (usadas por Fluxo, Simulador e Plano). */
+function _ocorrenciasBoletoHoje(orc, cat) {
+    const hoje = _chaveDataLocal(new Date());
+    return _distribuirPagamentosConta(cat, orc.historicoRegistros,
+        _addDiasIso(hoje, -75), _addDiasIso(hoje, 400), _addDiasIso(hoje, -120), hoje).ocs;
+}
+
+/** Boleto em aberto: total que falta pagar (até o fim do mês corrente) e quanto disso já venceu. */
+function _boletoAbertoInfo(orc, cat) {
+    const hoje = _chaveDataLocal(new Date());
+    const h = new Date();
+    const fimMes = _chaveDataLocal(new Date(h.getFullYear(), h.getMonth() + 1, 0));
+    let total = 0, totalVencido = 0;
+    _ocorrenciasBoletoHoje(orc, cat).forEach(o => {
+        if (o.restante <= 0.05 || o.venc > fimMes) return;
+        total += o.restante;
+        if (o.venc < hoje) totalVencido += o.restante;
+    });
+    return { total: total, totalVencido: totalVencido, vencido: totalVencido > 0.05 };
 }
 
 /** Efeito das antecipações no limite da categoria nesta semana (+ puxado / − já pago). */
@@ -11507,8 +11539,9 @@ function _rotuloJuros(c) {
  */
 function _ordenarPriorizacaoRecuperacao(cats, diaHoje) {
     const grupo = (c) => (c.caixa === 'futuro' && c.subtipo === 'divida') ? 1 : 0;
+    const vencida = (c) => (typeof c._vencida === 'boolean') ? c._vencida : c.vencimento < diaHoje;
     return [...cats].sort((a, b) => {
-        const va = a.vencimento < diaHoje ? 0 : 1, vb = b.vencimento < diaHoje ? 0 : 1;
+        const va = vencida(a) ? 0 : 1, vb = vencida(b) ? 0 : 1;
         if (va !== vb) return va - vb;
         if (grupo(a) !== grupo(b)) return grupo(a) - grupo(b);
         if (grupo(a) === 1) {
@@ -11555,8 +11588,24 @@ function _obrigacaoQuitadaNoMes(cat, orc) {
     });
     return parcela > 0 ? pago >= parcela - 0.5 : pago > 0;
 }
+/** Quanto já foi pago da obrigação neste mês (parcial conta). */
+function _pagoDaObrigacaoNoMes(cat, orc) {
+    const mesAtual = _mesAtualYYYYMM();
+    let pago = 0;
+    ((orc && orc.historicoRegistros) || []).forEach(r => {
+        if (!r || r.anulado || !r.data) return;
+        if (['pagamento_divida', 'gasto_direto', 'gasto_cartao'].indexOf(r.tipo) < 0) return;
+        if (r.categoriaId !== cat.id) return;
+        const refAtual = r.mesReferencia ? r.mesReferencia === mesAtual : _pertenceMesAtual(r.data);
+        if (refAtual) pago += Number(r.valor) || 0;
+    });
+    return pago;
+}
 function _vencidaNaoQuitada(c, orc, diaHoje) {
-    if (!c.vencimento || c.vencimento >= diaHoje || _categoriaParcelasQuitada(c)) return false;
+    if (!c.vencimento || _categoriaParcelasQuitada(c)) return false;
+    // Boleto: vencido = alguma ocorrência já vencida com valor ainda por pagar (inclusive de meses anteriores)
+    if (_ehContaComVencimento(c)) return _boletoAbertoInfo(orc, c).vencido;
+    if (c.vencimento >= diaHoje) return false;
     const obrigacao = c.caixa === 'futuro' && c.subtipo === 'divida';
     return obrigacao ? !_obrigacaoQuitadaNoMes(c, orc) : !_contaEstaPagaNoMes(c, orc);
 }
@@ -11651,7 +11700,7 @@ function detectarSinalRecuperacao(orc) {
         totalGasto: totalGasto,
         renda: renda,
         contasVencidas: contasVencidas,
-        totalVencido: contasVencidas.reduce((s, c) => s + (c.valor || 0), 0),
+        totalVencido: contasVencidas.reduce((s, c) => s + (_ehContaComVencimento(c) ? _boletoAbertoInfo(orc, c).totalVencido : (c.valor || 0)), 0),
         fmt: fmt
     };
 }
@@ -11738,9 +11787,16 @@ function renderizarPlanoRecuperacao() {
     // ===== ESTÁGIO 2: PRIORIZAÇÃO =====
     // Lista todas as contas com vencimento (vencidas + futuras) para o usuário ordenar
         // Lista só as contas ainda em aberto (vencidas + futuras), não pagas neste mês
-    const categoriasComVenc = (orc.categorias || []).filter(c =>
-        c.vencimento && !_contaEstaPagaNoMes(c, orc)
-    );
+    const infoBoleto = {};
+    const categoriasComVenc = (orc.categorias || []).filter(c => {
+        if (!c.vencimento) return false;
+        if (_ehContaComVencimento(c)) {
+            const info = _boletoAbertoInfo(orc, c);
+            infoBoleto[c.id] = info;
+            return info.total > 0.05;
+        }
+        return !_contaEstaPagaNoMes(c, orc);
+    }).map(c => infoBoleto[c.id] ? Object.assign({}, c, { _vencida: infoBoleto[c.id].vencido, _emAberto: infoBoleto[c.id].total }) : c);
     const diaHoje = new Date().getDate();
 
     let htmlPriorizacao = '';
@@ -11751,7 +11807,7 @@ function renderizarPlanoRecuperacao() {
         let listaPriorizacao = '';
         ordenadas.forEach((c, i) => {
             const icone = c.caixa === 'base' ? '🛡️' : (c.caixa === 'futuro' ? '🔭' : '🌿');
-            const vencida = c.vencimento < diaHoje;
+            const vencida = (typeof c._vencida === 'boolean') ? c._vencida : c.vencimento < diaHoje;
             const cor = vencida ? 'var(--danger)' : 'var(--secondary)';
             const jurosTxt = _rotuloJuros(c);
             const rotulo = (vencida ? 'vencida' : `dia ${c.vencimento}`) + (jurosTxt ? ' · ' + jurosTxt : '') + (c.caixa === 'futuro' && c.subtipo === 'divida' ? ' · obrigação' : '');
@@ -11765,7 +11821,7 @@ function renderizarPlanoRecuperacao() {
                             <div class="meta-cat">${rotulo}</div>
                         </div>
                     </div>
-                    <strong class="valor-cat">${sinal.fmt(c.valor || 0)}</strong>
+                    <strong class="valor-cat">${sinal.fmt((typeof c._emAberto === 'number') ? c._emAberto : (c.valor || 0))}</strong>
                 </div>
             `;
         });
@@ -13292,6 +13348,7 @@ function _eventosVencimentoDeclarados(orc, inicio, fim) {
         const mesRefStr = `${ano}-${String(mes + 1).padStart(2, '0')}`;
         
         categorias.forEach(c => {
+            if (_ehContaComVencimento(c)) return; // boletos: eventos por ocorrência, abaixo
             const data = _dataNoMes(ano, mes, c.vencimento);
             if (data >= inicio && data <= fim) {
                 
@@ -13330,6 +13387,63 @@ function _eventosVencimentoDeclarados(orc, inicio, fim) {
             }
         });
         cursor = new Date(ano, mes + 1, 1);
+    }
+
+    const iniIso = _chaveDataLocal(inicio), fimIso = _chaveDataLocal(fim), hojeIso = _chaveDataLocal(new Date());
+    const janelaAlcancaHoje = iniIso <= hojeIso && hojeIso <= fimIso;
+
+    // Boletos por ocorrência: o que falta pagar de cada vencimento. Vencido e não pago sai no
+    // primeiro dia da janela (não some como se estivesse pago); pagamento parcial deixa o restante.
+    categorias.filter(_ehContaComVencimento).forEach(c => {
+        _ocorrenciasBoletoHoje(orc, c).forEach(o => {
+            if (o.restante <= 0.05) return;
+            let dataEv = null;
+            let atraso = false;
+            if (o.venc >= iniIso && o.venc <= fimIso) {
+                dataEv = o.venc;
+                atraso = o.venc < hojeIso;
+            } else if (o.venc < iniIso && o.venc < hojeIso && janelaAlcancaHoje) {
+                dataEv = hojeIso;
+                atraso = true;
+            }
+            if (!dataEv) return;
+            eventos.push({
+                tipo: 'vencimento',
+                data: dataEv,
+                dia: Number(dataEv.slice(8, 10)),
+                nome: (c.nome || 'Conta') + (atraso ? ' (em atraso)' : ''),
+                fonteId: null,
+                valor: o.restante,
+                caixa: c.caixa || null,
+                categoriaId: c.id || null,
+                custodiaId: c.custodiaPadraoId || null,
+                subtipo: c.subtipo || null,
+                atraso: atraso
+            });
+        });
+    });
+
+    // Dívida do Futuro (obrigação) vencida e não quitada no mês: também é saída pendente
+    if (janelaAlcancaHoje) {
+        _obrigacoesFuturoVencidas(orc).forEach(o => {
+            const c = categorias.find(x => x.id === o.id);
+            if (!c) return;
+            const aberto = Math.max(0, (Number(c.valor) || 0) - _pagoDaObrigacaoNoMes(c, orc));
+            if (aberto <= 0.05) return;
+            eventos.push({
+                tipo: 'vencimento',
+                data: hojeIso,
+                dia: Number(hojeIso.slice(8, 10)),
+                nome: (c.nome || 'Dívida') + ' (em atraso)',
+                fonteId: null,
+                valor: aberto,
+                caixa: c.caixa || null,
+                categoriaId: c.id || null,
+                custodiaId: c.custodiaPadraoId || null,
+                subtipo: c.subtipo || null,
+                atraso: true
+            });
+        });
     }
     return eventos;
 }
