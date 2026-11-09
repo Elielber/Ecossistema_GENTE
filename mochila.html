@@ -10275,6 +10275,43 @@ function removerInventarioItem(id) {
     renderizarInventario();
 }
 
+function limparHistoricoBugContasFixas() {
+    if (!state || !state.orcamento || !state.orcamento.semanaAtual) return;
+    const semana = state.orcamento.semanaAtual;
+    const mapa = semana.carregoCategorias || {};
+    let modificou = false;
+
+    const cats = state.orcamento.categorias || [];
+    
+    cats.forEach(cat => {
+        // Só age em contas fixas (boletos)
+        if (cat.tipo === 'conta' && cat.vencimento) {
+            const pagoNoMes = typeof _temRegistroPagoNoMes === 'function' ? _temRegistroPagoNoMes(cat, state.orcamento) : false;
+            
+            if (mapa[cat.id]) {
+                // 1. Boleto nunca tem sobra (folga)
+                if (mapa[cat.id].sobra > 0) {
+                    mapa[cat.id].sobra = 0;
+                    modificou = true;
+                }
+                
+                // 2. Se já foi pago neste mês, zera o passivo falso
+                if (pagoNoMes && mapa[cat.id].estouro > 0) {
+                    mapa[cat.id].estouro = 0;
+                    modificou = true;
+                }
+            }
+        }
+    });
+
+    // Se alterou algo, salva e manda a tela desenhar de novo
+    if (modificou) {
+        console.log('[FIX] Limpando histórico de sobras e passivos falsos de contas fixas.');
+        salvarEstado();
+    }
+}
+
+
 window.addEventListener('DOMContentLoaded', async () => {
     await carregarEstado();
     if (typeof aplicarTemaSalvo === 'function') aplicarTemaSalvo();
@@ -10285,6 +10322,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     atualizarBotaoRetomada();
     renderizarPreviaSemana();
     verificarFechamentoSemana();
+    limparHistoricoBugContasFixas(); 
 
     if (state.orcamento && state.orcamento.etapasConcluidas && state.orcamento.etapasConcluidas.length > 0) {
         iniciarJornada();
