@@ -1030,7 +1030,19 @@
         <div id="mapa-mes-conteudo"></div>
     </div>
     
-        <!-- TELA 11: Pagamento de Fatura (Nível 3) -->
+        <!-- TELA 10b: Cartões N3.5 -->
+    <div id="screen-cartao" class="screen">
+        <div id="cartao-conteudo"></div>
+    </div>
+    <div id="screen-cartoes-lista" class="screen">
+        <div id="cartoes-lista-conteudo"></div>
+    </div>
+        <!-- TELA: Caixa de exceções (§11.3) -->
+    <div id="screen-excecoes" class="screen">
+        <div id="excecoes-conteudo"></div>
+    </div>
+
+    <!-- TELA 11: Pagamento de Fatura (Nível 3) -->
     <div id="screen-pagar-fatura" class="screen">
         
         <div id="pagar-fatura-conteudo"></div>
@@ -1324,6 +1336,8 @@ const TITULOS_TELAS = {
     'screen-inventario': 'Caderno',
     'screen-custodias': 'Carteiras',
     'screen-mapa-mes': 'Agenda do Mês',
+    'screen-cartoes-lista': 'Cartões',
+    'screen-cartao': 'Cartão',
     'screen-pagar-fatura': 'Pagar Fatura',
     'screen-plano-recuperacao': 'Plano de Recuperação',
     'screen-transferencia': 'Transferir',
@@ -1336,7 +1350,8 @@ const TITULOS_TELAS = {
     'screen-ajuda': 'Ajuda',
     'screen-editar-plano': 'Editar Plano',
     'screen-projeto': 'Projeto',
-    'screen-tutorial': 'Tutorial'
+    'screen-tutorial': 'Tutorial',
+        'screen-excecoes': 'A confirmar',
 };
 // Funções globais para formatar valores (respeitando a privacidade)
 function formatarMoeda(v) {
@@ -1366,6 +1381,8 @@ function toggleOcultarValores() {
     else if (tela === 'screen-renda-detalhe') renderizarDetalheRenda();
     else if (tela === 'screen-gastos-detalhe') renderizarDetalheGastos();
     else if (tela === 'screen-divida-detalhe') renderizarDetalheFuturo();
+    else if (tela === 'screen-cartao') renderizarTelaCartao();
+    else if (tela === 'screen-cartoes-lista') renderizarListaCartoes();
     else if (tela === 'screen-custodias') renderizarCustodias();
     else if (tela === 'screen-mapa-mes') renderizarMapaMes();
     else if (tela === 'screen-plano-recuperacao') renderizarPlanoRecuperacao();
@@ -1811,6 +1828,56 @@ if (Array.isArray(state.orcamento.resumos)) {
         if (c.finalidade !== 'reserva' && c.finalidade !== 'operacional') {
             c.finalidade = 'operacional';
         }
+        // N3.5 — regra de fechamento por cartão (default perguntar)
+        if (c.tipo === 'cartao_credito' && c.regraCompraNoFechamento === undefined) {
+            c.regraCompraNoFechamento = 'perguntar';
+        }
+        if (c.tipo === 'cartao_credito' && c.diaFechamento === undefined) c.diaFechamento = null;
+        if (c.tipo === 'cartao_credito' && c.diaVencimento === undefined) c.diaVencimento = null;
+        if (c.tipo === 'cartao_credito' && c.limiteInformado === undefined) c.limiteInformado = null;
+    });
+
+    // === N3.5 — CARTÕES: faturas[], compromissos[], obrigacoesCartao[] ===
+    if (!Array.isArray(state.orcamento.faturas)) state.orcamento.faturas = [];
+        if (!Array.isArray(state.orcamento.excecoes)) state.orcamento.excecoes = [];
+    if (!Array.isArray(state.orcamento.compromissos)) state.orcamento.compromissos = [];
+    if (!Array.isArray(state.orcamento.obrigacoesCartao)) state.orcamento.obrigacoesCartao = [];
+
+    // Bootstrap: faturaAcumulada legado → fatura aberta sintética (preserva valor; sem produção ainda)
+    (state.orcamento.custodias || []).forEach(c => {
+        const tipo = (typeof TIPOS_CUSTODIA !== 'undefined' && TIPOS_CUSTODIA[c.tipo]) ? TIPOS_CUSTODIA[c.tipo] : {};
+        if (!tipo.temFatura) return;
+        const acum = Number(c.faturaAcumulada) || 0;
+        const temFatura = (state.orcamento.faturas || []).some(f => f.cartaoId === c.id && (Number(f.saldoAberto) || 0) > 0.005);
+        if (acum > 0.005 && !temFatura) {
+            const hoje = new Date();
+            const iso = hoje.toISOString().slice(0, 10);
+            state.orcamento.faturas.push({
+                faturaId: 'fat_mig_' + c.id + '_' + Date.now(),
+                cartaoId: c.id,
+                dataFechamento: iso,
+                dataVencimento: iso,
+                valorTotal: acum,
+                valorPago: 0,
+                saldoAberto: acum,
+                estado: 'aberta',
+                origemMigracao: 'faturaAcumulada'
+            });
+        }
+        if (typeof _sincronizarFaturaAcumulada === 'function') {
+            try { _sincronizarFaturaAcumulada(c.id); } catch (_) {}
+        }
+    });
+
+    // Normaliza campos de registros de cartão (N3.5)
+    (state.orcamento.historicoRegistros || []).forEach(r => {
+        if (r.faturaId === undefined) r.faturaId = null;
+        if (r.compromissoId === undefined) r.compromissoId = null;
+        if (r.numeroParcela === undefined) r.numeroParcela = null;
+        if (r.obrigacaoId === undefined) r.obrigacaoId = null;
+        if (r.origem === undefined) {
+            r.origem = (r.tipo === 'gasto_cartao' || r.tipo === 'pagamento_fatura' || r.tipo === 'pagamento_obrigacao') ? 'manual' : null;
+        }
     });
         // === NÍVEL 3 — MIGRAÇÃO DE REGISTROS ===
     if (!Array.isArray(state.orcamento.historicoRegistros)) {
@@ -2085,7 +2152,10 @@ function iniciarJornada() {
             semanasFechadas: 0,
             custodiaPadrao: null,
             nivel3LinhaDeBase: null,
-            custodias: []
+            custodias: [],
+            faturas: [],
+            compromissos: [],
+            obrigacoesCartao: []
         };
         salvarEstado();
     }
@@ -3209,13 +3279,16 @@ function calcularTaxaViabilidadeConsumo(orc, forcarProtecao = null) {
         return { taxaBase: 1, taxaVida: 1, totalAlocado: null, totalOriginal: 0, corteTotal: 0, totalBaseOriginal: 0, totalVidaOriginal: 0 };
     }
 
-    // P0.3: saldo operacional unificado
+        // D1 — ponto de partida da simulação é o SALDO BRUTO.
+    // A fatura entra como evento de saída em _eventosPagamentoFaturaDeclarados();
+    // partir do líquido aqui duplicaria a fatura (T0.7).
     let saldoCorrido;
     {
-        const _e = (typeof _estoqueOperacionalAtual === 'function') ? _estoqueOperacionalAtual(orc) : null;
-        saldoCorrido = (_e !== null) ? _e : (orc.custodias || [])
-            .filter(c => !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura)
-            .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
+        saldoCorrido = (typeof _saldoBrutoOperacional === 'function')
+            ? _saldoBrutoOperacional(orc)
+            : (orc.custodias || [])
+                .filter(c => !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura)
+                .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
     }
     // Ritmo único: só o que resta de Base/Vida neste mês, com proteção
     const simTaxa = _simularDiluicaoDiaria(orc, fluxo, {
@@ -3824,16 +3897,13 @@ function calcularLiquidezProjetada(orc) {
     const gastoRealizadoMes = dilLiq.realizado;
     const totalMensalSemVenc = dilLiq.restante;
     
-    // P0.3: saldo operacional unificado (exclui reserva; fatura já líquida — sem evento extra de fatura)
+       // D1 — projeção parte do saldo BRUTO; a fatura é evento de saída do fluxo.
     let saldoInicialProj = 0;
-    const estoqueOp = (typeof _estoqueOperacionalAtual === 'function') ? _estoqueOperacionalAtual(orc) : null;
-    if (estoqueOp !== null) {
-        saldoInicialProj = estoqueOp;
-    } else {
-        saldoInicialProj = (orc.custodias || [])
+    saldoInicialProj = (typeof _saldoBrutoOperacional === 'function')
+        ? _saldoBrutoOperacional(orc)
+        : (orc.custodias || [])
             .filter(c => !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura)
             .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
-    }
     const protegerSaldo = orc.configFluxo?.protegerSaldo !== false;
     const simLiq = _simularDiluicaoDiaria(orc, fluxo, {
         saldoInicial: saldoInicialProj, restante: totalMensalSemVenc, planejado: totalMensalPlanejado,
@@ -3924,14 +3994,12 @@ function _contarAvisosAndaime(orc) {
 function _temAvisoUnificado(orc) {
     if (!orc) return false;
 
-    if (orc.semanaAtual && orc.semanaAtual.fechada && !orc.semanaAtual.resumoLido) {
-        return true;
-    }
+    // Exceções pendentes (§11.3)
+    if ((orc.excecoes || []).some(e => e.estado === 'pendente')) return true;
 
-    // 2. Conciliação pendente / stale / andaime (já coberto)
-    if (typeof _contarAvisosAndaime === 'function' && _contarAvisosAndaime(orc) > 0) {
-        return true;
-    }
+    if (orc.semanaAtual && orc.semanaAtual.fechada && !orc.semanaAtual.resumoLido) return true;
+
+    if (typeof _contarAvisosAndaime === 'function' && _contarAvisosAndaime(orc) > 0) return true;
 
     return false;
 }
@@ -4571,6 +4639,12 @@ function montarDrawerHTML() {
     itens += `<button type="button" class="drawer-item" onclick="fecharDrawer(); abrirTelaAjuda()">
         <span class="ico">🆘</span><span>Ajuda</span>
     </button>`;
+        const excecoesPendentes = (state.orcamento && (state.orcamento.excecoes || []).filter(e => e.estado === 'pendente').length) || 0;
+    if (excecoesPendentes > 0) {
+        itens += `<button type="button" class="drawer-item" onclick="fecharDrawer(); abrirCaixaExcecoes()">
+            <span class="ico">⚠️</span><span>A confirmar (${excecoesPendentes})</span>
+        </button>`;
+    }
     // Editar plano — só N2+
     if (nivel >= 2) {
         itens += `<button type="button" class="drawer-item" onclick="fecharDrawer(); abrirTelaEditarPlano()">
@@ -6668,13 +6742,133 @@ function iniciarNovaSemana() {
     };
 
     salvarEstado();
+    try { _executarAgendador(); } catch (e) { console.warn('[agendador]', e); }
 }
 
 function formatarData(dataStr) {
     const [ano, mes, dia] = dataStr.split('-');
     return `${dia}/${mes}`;
 }
+function abrirCaixaExcecoes() {
+    renderizarCaixaExcecoes();
+    goToScreen('screen-excecoes');
+}
 
+function renderizarCaixaExcecoes() {
+    const container = document.getElementById('excecoes-conteudo');
+    if (!container) return;
+    const lista = (state.orcamento.excecoes || []).filter(e => e.estado === 'pendente');
+    const fmt = formatarMoeda;
+    let html = (typeof cabecalhoTelaSecundaria === 'function')
+        ? cabecalhoTelaSecundaria('A confirmar', 'Cobranças que precisam da sua atenção')
+        : '<h2 class="title">A confirmar</h2>';
+    html += `<div class="fala-avatar"><span class="icone">🛡️</span>
+        <span class="texto">Precisamos confirmar algumas cobranças antes de atualizar seu orçamento. O que acontece no banco é diferente do que acontece aqui.</span>
+    </div>`;
+
+    if (lista.length === 0) {
+        html += `<div class="card" style="text-align:center;padding:28px 16px;">
+            <div style="font-size:1.5rem;margin-bottom:8px;">✨</div>
+            <div style="color:var(--secondary);font-size:0.9rem;">Nada pendente. Tudo em dia.</div>
+        </div>`;
+        container.innerHTML = html;
+        return;
+    }
+
+    lista.forEach(e => {
+        const comp = (state.orcamento.compromissos || []).find(c => c.id === e.compromissoId);
+        const cartao = (state.orcamento.custodias || []).find(c => c.id === e.cartaoId);
+        const motivoLabel = e.motivo === 'semana_fechada' ? 'Cobrança em semana fechada'
+                         : e.motivo === 'possivel_duplicidade' ? 'Possível duplicidade'
+                         : 'Precisa confirmar';
+        const dataFmt = (e.dataPrevista || '').split('-').reverse().join('/');
+        html += `
+        <div class="card" style="border-left:4px solid var(--warning);">
+            <div style="font-weight:700;color:var(--warning);margin-bottom:4px;">${motivoLabel}</div>
+            <div style="font-size:0.9rem;color:var(--text-main);margin-bottom:8px;">
+                ${comp ? _escSvg(comp.descricao) : '(compromisso removido)'}
+                ${comp ? ' · ' + fmt(comp.valorParcela) : ''}
+            </div>
+            <div style="font-size:0.85rem;color:var(--secondary);margin-bottom:12px;">
+                ${cartao ? '💳 ' + _escSvg(cartao.nome) + ' · ' : ''}parcela ${e.k} · prevista ${dataFmt}
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn-sm" style="background:var(--primary);color:#fff;padding:8px 12px;"
+                    onclick="resolverExcecao('${e.id}','confirmar')">Confirmar e lançar</button>
+                <button class="btn-sm" style="background:var(--secondary);color:#fff;padding:8px 12px;"
+                    onclick="resolverExcecao('${e.id}','descartar')">Descartar no app</button>
+                <button class="btn-sm" style="background:var(--danger);color:#fff;padding:8px 12px;"
+                    onclick="resolverExcecao('${e.id}','nao_reconhecida')">Marcar como não reconhecida</button>
+            </div>
+        </div>`;
+    });
+
+    html += `<button type="button" class="btn-option" style="justify-content:center;margin-top:12px;" onclick="voltarTela()">Voltar</button>`;
+    container.innerHTML = html;
+}
+
+function resolverExcecao(excecaoId, acao) {
+    const excecao = (state.orcamento.excecoes || []).find(e => e.id === excecaoId && e.estado === 'pendente');
+    if (!excecao) return;
+    const comp = (state.orcamento.compromissos || []).find(c => c.id === excecao.compromissoId);
+    if (!comp) { excecao.estado = 'resolvida'; salvarEstado(); renderizarCaixaExcecoes(); return; }
+
+    if (acao === 'confirmar') {
+        // Emite a ocorrência pendente
+        const r = _emitirParcelaParcelada(comp, excecao.k);
+        if (!r) {
+            // Se for recorrente, tenta recorrência
+            if (comp.tipo === 'recorrente' && comp.estado === 'ativa') {
+                _emitirOcorrenciaRecorrente(comp);
+            }
+        }
+        excecao.estado = 'resolvida';
+        excecao.resolucao = 'confirmada';
+        excecao.resolvidaEm = new Date().toISOString();
+       } else if (acao === 'descartar') {
+        // Não cria gasto_cartao. Cria/atualiza ocorrência com estado 'descartada'
+        // mesmo em recorrente — senão _proximaOcorrenciaPendente reabre o mesmo k (Bug 3).
+        if (!Array.isArray(comp.ocorrencias)) comp.ocorrencias = [];
+        const oc = comp.ocorrencias[excecao.k - 1] || { k: excecao.k };
+        oc.estado = 'descartada';
+        oc.faturaId = null;
+        oc.registroId = null;
+        comp.ocorrencias[excecao.k - 1] = oc;
+        comp.ultimaOcorrenciaProcessada = Math.max(Number(comp.ultimaOcorrenciaProcessada) || 0, excecao.k);
+        excecao.estado = 'resolvida';
+        excecao.resolucao = 'descartada';
+        excecao.resolvidaEm = new Date().toISOString();
+        alert('Descartada no Mochila. O banco pode continuar cobrando.');
+    } else if (acao === 'nao_reconhecida') {
+        if (!Array.isArray(comp.ocorrencias)) comp.ocorrencias = [];
+        const oc = comp.ocorrencias[excecao.k - 1] || { k: excecao.k };
+        oc.estado = 'nao_reconhecida';
+        comp.ocorrencias[excecao.k - 1] = oc;
+        comp.ultimaOcorrenciaProcessada = Math.max(Number(comp.ultimaOcorrenciaProcessada) || 0, excecao.k);
+        excecao.estado = 'resolvida';
+        excecao.resolucao = 'nao_reconhecida';
+        excecao.resolvidaEm = new Date().toISOString();
+        alert('Marcada como não reconhecida. A obrigação com o banco pode continuar existindo.');
+    }
+
+    salvarEstado();
+    renderizarCaixaExcecoes();
+}
+
+/** §11.2 — Corrigir / marcar não reconhecido a partir da lista de registros */
+function marcarNaoReconhecido(registroId) {
+    const lista = state.orcamento.historicoRegistros || [];
+    const r = lista.find(x => x.id === registroId);
+    if (!r) return;
+    if (!confirm('Marcar como não reconhecido?\n\nIsso retira do orçamento, mas mantém a pendência. O banco pode continuar cobrando.')) return;
+    // Retira do envelope e da fatura
+    _desfazerEfeitosRegistro(r);
+    r.naoReconhecido = true;
+    r.anulado = true;
+    r.anuladoMotivo = 'nao_reconhecido';
+    salvarEstado();
+    _atualizarTelasAposRegistro();
+}
 // MODAL DE REGISTRO (com passo de categoria no Nível 2)
 
 let registroTemporario = null;
@@ -9040,8 +9234,9 @@ function renderizarDetalheFuturo() {
     const totalGeral = (state.orcamento.futuro && state.orcamento.futuro.total) || 0;
     const totalGasto = (state.orcamento.semanaAtual?.futuro?.gasto) || 0;
 
-    // Cabeçalho com seletor Dívida / Reserva (4.2-C)
-    const header = cabecalhoTelaSecundaria(
+        // Cabeçalho com seletor Dívida / Reserva (4.2-C)
+    // let (não const): o bloco N3.5 de Cartões faz header += mais abaixo.
+    let header = cabecalhoTelaSecundaria(
             subtipo === 'divida' ? 'Futuro · Dívidas' : 'Futuro · Reservas',
             subtipo === 'divida' ? 'Cada dívida é um alvo' : 'O colchão que você constrói'
         ) + `
@@ -9054,6 +9249,24 @@ function renderizarDetalheFuturo() {
             </div>
         </div>
     `;
+    // N3.5 — entrada Cartões (Futuro → Cartões)
+    if (subtipo === 'divida') {
+        const nCart = (state.orcamento.custodias || []).filter(c => (TIPOS_CUSTODIA[c.tipo] || {}).temFatura).length;
+        const medAll = _medidasComprometidoCartao(state.orcamento, null);
+        header += `
+        <div class="card" style="cursor:pointer;border-color:var(--primary);" onclick="abrirListaCartoes()">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div style="font-weight:700;color:var(--primary);">💳 Cartões</div>
+                    <div style="font-size:0.85rem;color:var(--secondary);margin-top:4px;">
+                        ${nCart} cartão(ões) · aberto ${formatarMoeda(medAll.aberto)} · contratual ${formatarMoeda(medAll.contratual)}
+                    </div>
+                </div>
+                <span style="color:var(--primary);font-weight:700;">›</span>
+            </div>
+        </div>`;
+    }
+
 
     const avatar = subtipo === 'divida'
         ? { icone: '🔭', fala: 'Cada dívida é um alvo. Vamos nomear e dimensionar.', cor: 'var(--warning)' }
@@ -9884,7 +10097,7 @@ function verificarFechamentoSemana() {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
     const fim = new Date(semana.fim + 'T23:59:59');
-
+try { _executarAgendador(); } catch (e) { console.warn('[agendador]', e); }
     if (hoje > fim) {
         fecharSemana();
     }
@@ -10574,7 +10787,47 @@ function confirmarReconciliacaoCustodia(custodiaId) {
     if (tipo.temFatura) {
         anterior = Number(c.faturaAcumulada) || 0;
         campo = 'fatura';
-        c.faturaAcumulada = novo;
+        // N3.5: conciliação ajusta faturas[] e sincroniza cache
+        if (!Array.isArray(state.orcamento.faturas)) state.orcamento.faturas = [];
+        const delta = novo - anterior;
+        if (Math.abs(delta) > 0.005) {
+            let fatura = (state.orcamento.faturas || []).find(f => f.cartaoId === c.id && f.estado !== 'quitada');
+            if (!fatura && novo > 0.005) {
+                fatura = _obterOuCriarFaturaCorrente(c.id);
+            }
+            if (fatura) {
+                if (delta > 0) {
+                    fatura.valorTotal = (Number(fatura.valorTotal) || 0) + delta;
+                } else {
+                    // reduz saldo: aumenta valorPago até o total, sem inventar negativo
+                    const paga = Math.min(Number(fatura.saldoAberto) || 0, -delta);
+                    fatura.valorPago = (Number(fatura.valorPago) || 0) + paga;
+                    let resto = -delta - paga;
+                    if (resto > 0.005) {
+                        // ainda sobra redução: corta valorTotal
+                        fatura.valorTotal = Math.max(Number(fatura.valorPago) || 0, (Number(fatura.valorTotal) || 0) - resto);
+                    }
+                }
+                _recalcularFatura(fatura);
+            }
+        }
+               _sincronizarFaturaAcumulada(c.id);
+        // Após fix do Bug 1, cache = sum(faturas[]). Se ainda diverge do valor
+        // declarado, é sinal de que a reconciliação mexeu além de faturas[]
+        // (ex.: obrigação sem origem). Ajusta a fatura corrente para absorver
+        // a diferença, preservando a invariante cache = sum(faturas).
+        const somaFaturas = (state.orcamento.faturas || [])
+            .filter(f => f.cartaoId === c.id)
+            .reduce((s, f) => s + (Number(f.saldoAberto) || 0), 0);
+        if (Math.abs(somaFaturas - novo) > 0.02) {
+            const ajuste = novo - somaFaturas;
+            const faturaAlvo = _obterOuCriarFaturaCorrente(c.id);
+            if (faturaAlvo) {
+                faturaAlvo.valorTotal = Math.max(0, (Number(faturaAlvo.valorTotal) || 0) + ajuste);
+                _recalcularFatura(faturaAlvo);
+                _sincronizarFaturaAcumulada(c.id);
+            }
+        }
     } else {
         anterior = Number(c.saldoAtual != null ? c.saldoAtual : c.saldoInicial) || 0;
         campo = 'saldo';
@@ -11005,7 +11258,7 @@ function renderizarCustodias() {
         const ultimaRec = c.ultimaReconciliacao
             ? `<div class="meta-cat" style="color: var(--primary);">Reconciliado ${(c.ultimaReconciliacao || '').split('T')[0]}</div>`
             : `<div class="meta-cat" style="color: var(--secondary);">Ainda não reconciliado</div>`;
-        return `
+                return `
             <div class="categoria-item" style="cursor: default; flex-wrap: wrap;">
                 <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; cursor: pointer;" onclick="abrirFormularioCustodia('${c.id}')">
                     <span style="font-size: 1.5rem;">${tipo.icone}</span>
@@ -11017,6 +11270,9 @@ function renderizarCustodias() {
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                     ${linhaValor}
+                    ${tipo.temFatura
+                        ? `<button type="button" class="btn-reg editar" style="border-color:var(--primary);color:var(--primary);" onclick="event.stopPropagation(); abrirTelaCartao('${c.id}')" title="Ver detalhes do cartão">Ver ›</button>`
+                        : ''}
                     <button type="button" class="btn-reg editar" onclick="event.stopPropagation(); abrirReconciliacaoCustodia('${c.id}')" title="Atualizar saldo real">🎯</button>
                     <button class="btn-remover" onclick="event.stopPropagation(); removerCustodia('${c.id}')">&times;</button>
                 </div>
@@ -11154,11 +11410,30 @@ function abrirFormularioCustodia(id, opcoes) {
             </div>
             <input type="number" id="cust-fechamento" class="input-padrao" placeholder="Ex: 15" min="1" max="31" value="${fechamentoAtual}">
 
-            <div class="fala-avatar">
+                       <div class="fala-avatar">
                 <span class="icone">🛡️</span>
                 <span class="texto">E em que dia vence? (a gente chuta 7 dias depois, mas você pode mudar)</span>
             </div>
             <input type="number" id="cust-vencimento" class="input-padrao" placeholder="Ex: 22" min="1" max="31" value="${vencimentoAtual}">
+
+            <div class="fala-avatar">
+                <span class="icone">🛡️</span>
+                <span class="texto">Se uma compra cair <strong>exatamente no dia do fechamento</strong>, em qual fatura ela entra?</span>
+            </div>
+            <div class="chip-container" id="chips-regra-fechamento">
+                <div class="chip ${(!custodia || (custodia.regraCompraNoFechamento || 'perguntar') === 'perguntar') ? 'selecionado' : ''}" data-regra="perguntar" onclick="selecionarRegraFechamento(this)">Perguntar na hora</div>
+                <div class="chip ${(custodia && custodia.regraCompraNoFechamento === 'faturaAtual') ? 'selecionado' : ''}" data-regra="faturaAtual" onclick="selecionarRegraFechamento(this)">Fatura atual</div>
+                <div class="chip ${(custodia && custodia.regraCompraNoFechamento === 'faturaProxima') ? 'selecionado' : ''}" data-regra="faturaProxima" onclick="selecionarRegraFechamento(this)">Próxima fatura</div>
+            </div>
+                        <div class="fala-avatar">
+                <span class="icone">🛡️</span>
+                <span class="texto">Qual o limite do cartão? (opcional — fica só como referência, sem barra de uso)</span>
+            </div>
+            <div class="input-com-prefixo">
+                <span class="prefixo">R$</span>
+                <input type="number" id="cust-limite" class="input-padrao" placeholder="0.00" step="0.01"
+                    value="${custodia && custodia.limiteInformado != null ? custodia.limiteInformado : ''}">
+            </div>
 
             ${editando ? `
                 <div class="card" style="background: var(--warning-soft); border-color: var(--warning); margin-top: 15px; margin-bottom: 15px;">
@@ -11189,6 +11464,11 @@ function abrirFormularioCustodia(id, opcoes) {
 }
 
 let tipoCustodiaSelecionado = null;
+
+function selecionarRegraFechamento(el) {
+    document.querySelectorAll('#chips-regra-fechamento .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+}
 
 function selecionarTipoCustodia(el) {
     document.querySelectorAll('#chips-tipo-custodia .chip').forEach(c => c.classList.remove('selecionado'));
@@ -11259,9 +11539,13 @@ function salvarCustodia(id) {
         custodia.finalidade = finalidadeCustodiaForm;
         custodia.saldoInicial = saldoInicial;
         custodia.saldoAtual = saldoInicial; // re-baseline
-        if (info.temFatura) {
+              if (info.temFatura) {
             custodia.diaFechamento = diaFechamento;
             custodia.diaVencimento = diaVencimento;
+            const chipRegra = document.querySelector('#chips-regra-fechamento .chip.selecionado');
+            custodia.regraCompraNoFechamento = chipRegra
+                ? chipRegra.getAttribute('data-regra')
+                : (custodia.regraCompraNoFechamento || 'perguntar');
         }
     } else {
         const nova = {
@@ -11274,9 +11558,13 @@ function salvarCustodia(id) {
             criadaEm: new Date().toISOString(),
             faturaAcumulada: 0
         };
-        if (info.temFatura) {
+              if (info.temFatura) {
             nova.diaFechamento = diaFechamento;
             nova.diaVencimento = diaVencimento;
+            const chipRegra = document.querySelector('#chips-regra-fechamento .chip.selecionado');
+            nova.regraCompraNoFechamento = chipRegra
+                ? chipRegra.getAttribute('data-regra')
+                : 'perguntar';
         }
         const eraPrimeiraOperacional = _custodiasOperacionais(state.orcamento).length === 0;
         state.orcamento.custodias.push(nova);
@@ -11472,6 +11760,382 @@ function confirmarTransferencia() {
 }
 // NÍVEL 3 — PAGAMENTO DE FATURA
 
+
+// =============================================================================
+// N3.5 — Telas Cartões (Fatia A)
+// =============================================================================
+
+let cartaoTelaId = null;
+
+function abrirListaCartoes() {
+    goToScreen('screen-cartoes-lista');
+    renderizarListaCartoes();
+}
+
+function renderizarListaCartoes() {
+    const container = document.getElementById('cartoes-lista-conteudo');
+    if (!container) return;
+    const cartoes = (state.orcamento.custodias || []).filter(c => (TIPOS_CUSTODIA[c.tipo] || {}).temFatura);
+    const fmt = formatarMoeda;
+    let html = (typeof cabecalhoTelaSecundaria === 'function')
+        ? cabecalhoTelaSecundaria('Cartões', 'Faturas, parcelamentos e obrigações')
+        : '<h2 class="title">Cartões</h2>';
+
+    html += `<div class="fala-avatar"><span class="icone">💳</span>
+        <span class="texto">Aqui você vê o que já foi assumido no cartão — sem estímulo a gastar o limite.</span></div>`;
+
+    if (cartoes.length === 0) {
+        html += `<div class="card"><p style="color:var(--secondary);font-size:0.9rem;margin:0;">
+            Nenhum cartão cadastrado. Cadastre em <strong>Carteiras</strong> (tipo cartão de crédito).</p></div>
+            <button class="btn-option" style="justify-content:center;" onclick="abrirTelaCustodias()">Ir para Carteiras</button>`;
+        container.innerHTML = html;
+        return;
+    }
+
+    cartoes.forEach(c => {
+        const med = _medidasComprometidoCartao(state.orcamento, c.id);
+        const fatura = Number(c.faturaAcumulada) || 0;
+        html += `
+        <div class="card" style="cursor:pointer;" onclick="abrirTelaCartao('${c.id}')">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+                <div>
+                    <div style="font-weight:700;color:var(--primary);">💳 ${c.nome}</div>
+                    <div style="font-size:0.85rem;color:var(--secondary);margin-top:4px;">
+                        Fatura em aberto ${fmt(fatura)}
+                        ${med.contratual > 0.005 ? ' · Contratual ' + fmt(med.contratual) : ''}
+                    </div>
+                </div>
+                <span style="color:var(--secondary);">›</span>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function abrirTelaCartao(cartaoId) {
+    cartaoTelaId = cartaoId;
+    goToScreen('screen-cartao');
+    renderizarTelaCartao();
+}
+
+function renderizarTelaCartao() {
+    const container = document.getElementById('cartao-conteudo');
+    if (!container) return;
+    const cartaoId = cartaoTelaId;
+    const cartao = (state.orcamento.custodias || []).find(c => c.id === cartaoId);
+    if (!cartao) {
+        container.innerHTML = '<p>Cartão não encontrado.</p>';
+        return;
+    }
+    const fmt = formatarMoeda;
+    const med = _medidasComprometidoCartao(state.orcamento, cartaoId);
+    const faturas = (state.orcamento.faturas || [])
+        .filter(f => f.cartaoId === cartaoId)
+        .sort((a, b) => String(a.dataVencimento || '').localeCompare(String(b.dataVencimento || '')));
+    const abertas = faturas.filter(f => f.estado !== 'quitada');
+    const comps = (state.orcamento.compromissos || []).filter(c =>
+        c.cartaoId === cartaoId && c.tipo === 'parcelado' && c.estado !== 'concluida' && c.estado !== 'cancelada'
+    );
+
+    let html = (typeof cabecalhoTelaSecundaria === 'function')
+        ? cabecalhoTelaSecundaria('💳 ' + cartao.nome, 'Fatura, compromissos e cronograma')
+        : '<h2 class="title">💳 ' + cartao.nome + '</h2>';
+            // D6 — dívida existente: card discreto no topo, sempre visível.
+    html += `
+    <button type="button"
+        class="btn-option"
+        style="justify-content:center;border-color:var(--primary);color:var(--primary);margin-bottom:12px;"
+        onclick="abrirCadastroDividaExistente('${cartaoId}')">
+        📌 Registrar dívida existente
+    </button>`;
+
+    // Duas medidas (Fatia A — sem recorrente)
+    html += `
+    <div class="card" style="background:var(--purple-light);border-color:var(--border);">
+        <div style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--secondary);margin-bottom:8px;">Comprometido (duas medidas)</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:0.9rem;">Dívida financeira em aberto</span>
+            <strong>${fmt(med.aberto)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+            <span style="font-size:0.9rem;">Comprometido contratual</span>
+            <strong>${fmt(med.contratual)}</strong>
+        </div>
+        <p style="font-size:0.8rem;color:var(--secondary);margin:10px 0 0;line-height:1.4;">
+            Aberto = faturas e saldos já constituídos. Contratual = parcelas assumidas ainda não lançadas na fatura. Não somamos os dois num “total” genérico.
+        </p>
+    </div>`;
+
+    // Faturas
+    html += `<div class="secao-titulo">Faturas</div>`;
+    if (abertas.length === 0) {
+        html += `<div class="card"><p style="margin:0;color:var(--secondary);font-size:0.9rem;">Nenhuma fatura em aberto.</p></div>`;
+    } else {
+        abertas.forEach(f => {
+            const venc = (f.dataVencimento || '').split('-').reverse().join('/');
+            const fecha = (f.dataFechamento || '').split('-').reverse().join('/');
+            html += `
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div style="font-weight:700;">Saldo ${fmt(f.saldoAberto)}</div>
+                        <div style="font-size:0.85rem;color:var(--secondary);">
+                            ${f.estado.replace('_', ' ')} · vence ${venc || '—'} · fecha ${fecha || '—'}
+                        </div>
+                        <div style="font-size:0.8rem;color:var(--secondary);margin-top:2px;">
+                            Total ${fmt(f.valorTotal)} · pago ${fmt(f.valorPago)}
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn-option" style="justify-content:center;margin-top:10px;margin-bottom:0;"
+                    onclick="abrirPagamentoFatura('${cartaoId}')">Pagar fatura</button>
+            </div>`;
+        });
+    }
+
+    // Compromissos parcelados
+    html += `<div class="secao-titulo">Parcelamentos</div>`;
+    if (comps.length === 0) {
+        html += `<div class="card"><p style="margin:0;color:var(--secondary);font-size:0.9rem;">Nenhum parcelamento ativo. Use o + e escolha “Parcelado” ao registrar no cartão.</p></div>`;
+    } else {
+        comps.forEach(c => {
+            const lanc = Number(c.parcelasLancadas) || 0;
+            const tot = Number(c.parcelasTotais) || 0;
+            const rest = Math.max(0, tot - lanc);
+            html += `
+            <div class="card">
+                <div style="font-weight:700;">${c.descricao || 'Parcelamento'}</div>
+                <div style="font-size:0.85rem;color:var(--secondary);margin-top:4px;">
+                    ${fmt(c.valorParcela)} × ${tot} · lançadas ${lanc} · a lançar ${rest}
+                </div>
+                <div style="font-size:0.85rem;margin-top:6px;">Total contratado ${fmt(c.valorTotal)}</div>
+                ${_htmlCronogramaCompromisso(c)}
+            </div>`;
+        });
+    }
+    // Assinaturas (recorrentes)
+const assinaturas = (state.orcamento.compromissos || []).filter(c =>
+    c.cartaoId === cartaoId && c.tipo === 'recorrente' && c.estado !== 'cancelada'
+);
+html += `<div class="secao-titulo">Assinaturas</div>`;
+if (assinaturas.length === 0) {
+    html += `<div class="card"><p style="margin:0;color:var(--secondary);font-size:0.9rem;">Nenhuma assinatura ativa. Toque abaixo para cadastrar.</p></div>`;
+} else {
+    assinaturas.forEach(c => {
+        const proxData = c.ocorrencias.length > 0 ? _calcularDataOcorrencia(c, c.ocorrencias.length + 1) : _calcularDataOcorrencia(c, 1);
+        const proxFmt = proxData.split('-').reverse().join('/');
+        const badge = c.estado === 'pausada' ? '<span style="background:var(--warning-soft);color:var(--warning);padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:700;">PAUSADA</span>' : '';
+        html += `
+        <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+                <div>
+                    <div style="font-weight:700;">${_escSvg(c.descricao)} ${badge}</div>
+                    <div style="font-size:0.85rem;color:var(--secondary);margin-top:4px;">
+                        ${fmt(c.valorParcela)}/mês · próxima ${proxFmt}
+                    </div>
+                    <div style="font-size:0.78rem;color:var(--secondary);margin-top:2px;">
+                        ${c.ocorrencias.length} cobrança(s) lançada(s)
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                    ${c.estado === 'ativa'
+                        ? `<button class="btn-sm" style="background:var(--secondary);color:#fff;padding:6px 10px;" onclick="event.stopPropagation();pausarAssinatura('${c.id}')">Pausar</button>`
+                        : `<button class="btn-sm" style="background:var(--primary);color:#fff;padding:6px 10px;" onclick="event.stopPropagation();retomarAssinatura('${c.id}')">Retomar</button>`}
+                    <button class="btn-sm" style="background:var(--danger);color:#fff;padding:6px 10px;" onclick="event.stopPropagation();cancelarAssinatura('${c.id}')">Cancelar</button>
+                </div>
+            </div>
+        </div>`;
+    });
+}
+html += `<button type="button" class="btn-option" style="justify-content:center;margin-top:8px;" onclick="abrirCadastroAssinatura('${cartaoId}')">
+    ➕ Nova assinatura
+</button>`;
+
+    // Obrigações em aberto (§12.3) — rotativo, atraso, dívida sem fatura id
+    const obrigacoes = (state.orcamento.obrigacoesCartao || [])
+        .filter(o => o.cartaoId === cartaoId && o.estado !== 'quitada');
+
+    html += `<div class="secao-titulo">Obrigações em aberto</div>`;
+    if (obrigacoes.length === 0) {
+        html += `<div class="card"><p style="margin:0;color:var(--secondary);font-size:0.9rem;">Nenhuma obrigação declarada. Use "Registrar dívida existente" acima quando precisar.</p></div>`;
+    } else {
+        obrigacoes.forEach(o => {
+            const exig = o.dataExigibilidade
+                ? ' · exigível ' + o.dataExigibilidade.split('-').reverse().join('/')
+                : ' · sem vencimento confirmado';
+            const enc = o.incluiEncargosDeclarados === true
+                ? ' · encargos inclusos'
+                : (o.incluiEncargosDeclarados === false ? ' · encargos somados à parte' : '');
+            html += `
+            <div class="card">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:700;">${_escSvg(o.descricao || 'Dívida declarada')}</div>
+                        <div style="font-size:0.85rem;color:var(--secondary);margin-top:4px;">
+                            Saldo ${fmt(o.saldoAberto)}${exig}${enc}
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+                    <button type="button" class="btn-sm" style="background:var(--primary);color:#fff;padding:8px 12px;"
+                        onclick="pagarObrigacaoUI('${o.id}')">Pagar obrigação</button>
+                    <button type="button" class="btn-sm" style="background:var(--secondary);color:#fff;padding:8px 12px;"
+                        onclick="atualizarSaldoObrigacao('${o.id}')">Atualizar saldo</button>
+                </div>
+            </div>`;
+        });
+    }
+
+    // §13.1 Diagnósticos (insuficiência de caixa, orçamentária, sobrecarga informativa)
+    html += renderizarDiagnosticosCartao(state.orcamento);
+
+    // Atalhos
+    html += `
+    <button type="button" class="btn-option" style="justify-content:center;margin-top:8px;" onclick="abrirCadastroParcelamentoAndamento('${cartaoId}')">
+        📅 Parcelamento já em andamento
+    </button>
+    <button type="button" class="btn-option" style="justify-content:center;" onclick="abrirPagamentoFatura('${cartaoId}')">
+        💳 Pagar fatura
+    </button>
+    <button type="button" class="btn-option" style="justify-content:center;" onclick="abrirListaCartoes()">
+        Todos os cartões
+    </button>`;
+
+    container.innerHTML = html;
+}
+
+function _htmlCronogramaCompromisso(c) {
+    if (!c || !Array.isArray(c.ocorrencias)) return '';
+    const fmt = formatarMoeda;
+    let rows = '';
+    c.ocorrencias.forEach(o => {
+        const st = o.estado || 'nao_processada';
+        const label = st === 'emitida' ? 'na fatura' : (st === 'descartada' ? 'descartada' : 'a lançar');
+        const cor = st === 'emitida' ? 'var(--success)' : 'var(--secondary)';
+        rows += `<div style="display:flex;justify-content:space-between;font-size:0.82rem;padding:4px 0;border-top:1px solid var(--border);">
+            <span>Parcela ${o.k}</span>
+            <span>${fmt(o.valor)} · <span style="color:${cor}">${label}</span></span>
+        </div>`;
+    });
+    return `<div style="margin-top:8px;">${rows}</div>`;
+}
+
+/** Cadastro de parcelamento já em andamento (sem compras fictícias retroativas) */
+function abrirCadastroParcelamentoAndamento(cartaoId) {
+    cartaoTelaId = cartaoId || cartaoTelaId;
+    const cartao = (state.orcamento.custodias || []).find(c => c.id === cartaoTelaId);
+    if (!cartao) { alert('Cartão não encontrado.'); return; }
+    const desc = prompt('Descrição do parcelamento (ex.: Notebook):');
+    if (desc == null || !String(desc).trim()) return;
+    const totalStr = prompt('Valor total contratado (R$):');
+    const total = _parseValorRegistro(totalStr);
+    if (total == null) { alert('Valor inválido.'); return; }
+    const nStr = prompt('Quantidade total de parcelas:');
+    const n = parseInt(nStr, 10);
+    if (!(n >= 2)) { alert('Informe pelo menos 2 parcelas.'); return; }
+    const lancStr = prompt('Quantas parcelas JÁ foram lançadas em fatura? (0 se nenhuma)');
+    const lanc = Math.max(0, Math.min(n, parseInt(lancStr, 10) || 0));
+    const pagasBancoStr = prompt('Quantas parcelas JÁ foram pagas ao banco? (pode ser menos que as lançadas)');
+    const pagasBanco = Math.max(0, Math.min(n, parseInt(pagasBancoStr, 10) || 0));
+    const valorParcela = Math.round((total / n) * 100) / 100;
+    const comp = _criarCompromissoParcelado({
+        cartaoId: cartao.id,
+        descricao: String(desc).trim(),
+        valorTotal: total,
+        valorParcela: valorParcela,
+        parcelasTotais: n,
+        origemCadastro: 'em_andamento',
+        parcelasLiquidadasBanco: pagasBanco
+    });
+        if (!comp) { alert('Não foi possível criar.'); return; }
+    // Marca as já lançadas como emitidas SEM criar gasto_cartao retroativo
+    comp.parcelasLancadas = lanc;
+    let valorJaLancado = 0;
+    for (let i = 0; i < lanc && i < comp.ocorrencias.length; i++) {
+        comp.ocorrencias[i].estado = 'emitida';
+        valorJaLancado += Number(comp.ocorrencias[i].valor) || 0;
+    }
+    comp.ultimaOcorrenciaProcessada = lanc;
+
+    // §7.2 — sem gasto_cartao retroativo, mas a fatura em aberto precisa refletir
+    // essas parcelas já lançadas; caso contrário "dívida em aberto" aparece zerada (Bug 6).
+    if (valorJaLancado > 0.005) {
+        const incluirFatura = confirm(
+            'Estas ' + lanc + ' parcela(s) já lançadas (R$ ' +
+            valorJaLancado.toFixed(2).replace('.', ',') +
+            ') já estão na fatura em aberto do cartão?\n\n' +
+            'OK = Sim, somar ao saldo da fatura agora\n' +
+            'Cancelar = Não, controlo separado'
+        );
+        if (incluirFatura) {
+            const fatura = _obterOuCriarFaturaCorrente(cartao.id);
+            if (fatura) {
+                fatura.valorTotal = (Number(fatura.valorTotal) || 0) + valorJaLancado;
+                _recalcularFatura(fatura);
+                _sincronizarFaturaAcumulada(cartao.id);
+            }
+        }
+    }
+
+    salvarEstado();
+    alert('Parcelamento registrado. Parcelas futuras entrarão quando forem lançadas — sem compras fictícias no passado.');
+    renderizarTelaCartao();
+}
+/**
+ * D6 — Registro de dívida existente no cartão (rotativo, saldo anterior,
+ * parcelado antigo que ainda não está no app).
+ * Cria obrigação SEM faturaOrigemId → NÃO duplica com faturas[] em
+ * `_obrigacoesFinanceirasEmAberto()`. Sincroniza cache via _sincronizarFaturaAcumulada.
+ */
+function abrirCadastroDividaExistente(cartaoId) {
+    cartaoTelaId = cartaoId || cartaoTelaId;
+    const cartao = (state.orcamento.custodias || []).find(c => c.id === cartaoTelaId);
+    if (!cartao) { alert('Cartão não encontrado.'); return; }
+
+    const valorStr = prompt(
+        'Quanto está em aberto no cartão hoje?\n\n' +
+        '(Saldo anterior, rotativo, parcelamento antigo que já vinha de antes — ' +
+        'o que ainda vai pesar na fatura.)'
+    );
+    const valor = _parseValorRegistro(valorStr);
+    if (valor == null) { alert('Valor inválido.'); return; }
+
+    const descStr = prompt('Descrição curta (ex.: Saldo anterior, Rotativo, Notebook antigo):');
+    const descricao = (descStr && String(descStr).trim()) || 'Saldo de dívida existente';
+
+    const vencStr = prompt('Vencimento? AAAA-MM-DD (deixe em branco se não souber)');
+    let dataExigibilidade = null;
+    if (vencStr && /^\d{4}-\d{2}-\d{2}$/.test(String(vencStr).trim())) {
+        dataExigibilidade = String(vencStr).trim();
+    }
+
+    if (!Array.isArray(state.orcamento.obrigacoesCartao)) state.orcamento.obrigacoesCartao = [];
+
+    const obrigacao = {
+        id: _novoIdN35('obr'),
+        cartaoId: cartao.id,
+        descricao: descricao,
+        valorTotal: valor,
+        valorPago: 0,
+        saldoAberto: valor,
+        dataExigibilidade: dataExigibilidade,
+        faturaOrigemId: null,   // T0.5: sem faturaOrigemId → conta UMA vez no "aberto"
+        estado: 'em_aberto',
+        origemCadastro: 'divida_existente',
+        criadoEm: new Date().toISOString(),
+        ultimaAtualizacao: new Date().toISOString()
+    };
+    state.orcamento.obrigacoesCartao.push(obrigacao);
+
+    _sincronizarFaturaAcumulada(cartao.id);
+    salvarEstado();
+    alert(
+        'Dívida registrada.\n\n' +
+        'Ela entra no "comprometido" do cartão e NÃO duplica em fatura. ' +
+        'Para pagá-la, use "Pagar obrigação" dentro do cartão.'
+    );
+    renderizarTelaCartao();
+}
 function abrirPagamentoFatura(cartaoId) {
     origemFaturaSelecionada = null;
     goToScreen('screen-pagar-fatura');
@@ -11610,21 +12274,17 @@ function confirmarPagamentoFatura(cartaoId) {
         if (!ok) return;
     }
 
-    cartao.faturaAcumulada = Math.max(0, (cartao.faturaAcumulada || 0) - valor);
-    origem.saldoAtual = (origem.saldoAtual || 0) - valor;
-
-    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
-    state.orcamento.historicoRegistros.push({
-        id: 'reg_' + Date.now(),
-        data: new Date().toISOString(),
-        tipo: 'pagamento_fatura',
-        caixa: null, // não debita envelope
-        categoria: 'Pagamento de fatura',
+    // N3.5 Fatia 0: pagamento via faturas[] + sync cache
+    const regPag = _aplicarPagamentoFaturaN35({
         valor: valor,
-        custodiaId: origem.id,
         cartaoId: cartaoId,
-        saldoAtualizado: true
+        custodiaId: origem.id,
+        origem: 'manual'
     });
+    if (!regPag) {
+        alert('Não foi possível registrar o pagamento da fatura.');
+        return;
+    }
 
     origemFaturaSelecionada = null;
     salvarEstado();
@@ -12183,7 +12843,8 @@ function escolherCustodia(custodiaId) {
     if (tipo.temFatura) {
         registroTemporario.custodiaId = custodiaId;
         registroTemporario.cartaoId = custodiaId;
-        confirmarRegistroCartao();
+        // Fatia A: perguntar à vista / parcelado antes de emitir
+        _iniciarFluxoCartaoRegistro();
         return;
     }
 
@@ -12239,8 +12900,538 @@ function pularCustodia() {
  * Bloco 11 — gasto no cartão com data da compra (opcional, via campo do Bloco 10).
  * dataCompra = dia da compra; se houver diaFechamento, informa se cai na fatura atual ou na próxima.
  */
+// =============================================================================
+// N3.5 — Fatia A: parcelado no +, compromissos, tela Cartão
+// =============================================================================
+
+/**
+ * Medidas de comprometido (sem recorrente na Fatia A).
+ * A) contratual: parcelas de compromissos parcelados ainda não lançadas
+ * B) dívida em aberto: faturas + obrigações sem faturaOrigemId
+ */
+function _medidasComprometidoCartao(orc, cartaoId) {
+    orc = orc || state.orcamento;
+    let contratual = 0;
+    const detalheContrato = [];
+    (orc.compromissos || []).forEach(c => {
+        if (cartaoId && c.cartaoId !== cartaoId) return;
+        if (c.estado === 'concluida' || c.estado === 'cancelada') return;
+
+                if (c.tipo === 'parcelado') {
+            const totais = Number(c.parcelasTotais) || 0;
+            // Resolvida = emitida | descartada | nao_reconhecida (§6.3).
+            // Descartada NÃO é compromisso futuro; logo, não deve entrar no "contratual".
+            // Antes usava parcelasLancadas, que não avança em descartada → cobrava eterno.
+            const resolvidos = new Set(['emitida', 'descartada', 'nao_reconhecida']);
+            const ocs = Array.isArray(c.ocorrencias) ? c.ocorrencias : [];
+            let rest = 0;
+            let valorRestante = 0;
+            for (let i = 0; i < totais; i++) {
+                const oc = ocs[i];
+                if (oc && resolvidos.has(oc.estado)) continue;
+                rest += 1;
+                if (Array.isArray(c.cronogramaParcelas) && c.cronogramaParcelas[i] != null) {
+                    valorRestante += Number(c.cronogramaParcelas[i]) || 0;
+                } else {
+                    valorRestante += Number(c.valorParcela) || 0;
+                }
+            }
+            if (rest > 0 && valorRestante > 0.005) {
+                contratual += valorRestante;
+                detalheContrato.push({
+                    id: c.id, descricao: c.descricao, valor: valorRestante,
+                    parcelasRestantes: rest, tipo: 'parcelado'
+                });
+            }
+        } else if (c.tipo === 'recorrente' && c.estado === 'ativa') {
+            const valor = Number(c.valorParcela) || 0;
+            if (valor > 0.005) {
+                detalheContrato.push({
+                    id: c.id, descricao: c.descricao, valor: valor,
+                    tipo: 'recorrente', estado: c.estado
+                });
+            }
+        }
+    });
+
+    const obr = _obrigacoesFinanceirasEmAberto(orc);
+    let aberto = 0;
+    const detalheAberto = [];
+    obr.detalhe.forEach(d => {
+        if (cartaoId && d.cartaoId !== cartaoId) return;
+        aberto += d.valor;
+        detalheAberto.push(d);
+    });
+    return { contratual: contratual, aberto: aberto, detalheContrato: detalheContrato, detalheAberto: detalheAberto };
+}
+
+function _criarCompromissoParcelado(params) {
+    if (!state.orcamento) return null;
+    if (!Array.isArray(state.orcamento.compromissos)) state.orcamento.compromissos = [];
+    const n = Number(params.parcelasTotais) || 0;
+    const valorTotal = Number(params.valorTotal) || 0;
+    if (n < 2 || !(valorTotal > 0)) return null;
+    let valorParcela = Number(params.valorParcela);
+    if (!(valorParcela > 0)) valorParcela = Math.round((valorTotal / n) * 100) / 100;
+    const cronograma = Array.isArray(params.cronogramaParcelas) ? params.cronogramaParcelas.slice() : null;
+    // ocorrências: 1..n ainda não processadas
+    const ocorrencias = [];
+    for (let k = 1; k <= n; k++) {
+        ocorrencias.push({
+            k: k,
+            estado: 'nao_processada',
+            valor: cronograma && cronograma[k - 1] != null ? Number(cronograma[k - 1]) : valorParcela,
+            faturaId: null,
+            registroId: null
+        });
+    }
+    const dataCompra = (params.dataCompra || new Date().toISOString()).slice(0, 10);
+    const compromisso = {
+        id: _novoIdN35('cmp'),
+        tipo: 'parcelado',
+        cartaoId: params.cartaoId,
+        categoriaId: params.categoriaId || null,
+        caixa: params.caixa || 'vida',
+        descricao: params.descricao || 'Compra parcelada',
+        valorParcela: valorParcela,
+        cronogramaParcelas: cronograma,
+        parcelasTotais: n,
+        ocorrencias: ocorrencias,
+        ultimaOcorrenciaProcessada: 0,
+        parcelasLancadas: 0,
+        parcelasLiquidadasBanco: Number(params.parcelasLiquidadasBanco) || 0,
+        valorTotal: valorTotal,
+        juros: params.juros != null ? Number(params.juros) : null,
+        dataCompra: dataCompra,
+        diaAncora: params.diaAncora || (new Date(dataCompra + 'T12:00:00').getDate()),
+        primeiraCobranca: params.primeiraCobranca || dataCompra,
+        estado: 'ativa',
+        ultimaConfirmacaoAtiva: null,
+        origemCadastro: params.origemCadastro || 'compra_nova'
+    };
+    state.orcamento.compromissos.push(compromisso);
+    return compromisso;
+}
+
+// =============================================================================
+// FATIA B — RECORRÊNCIAS (§7.3, §17.3)
+// =============================================================================
+
+function _criarCompromissoRecorrente(params) {
+    if (!state.orcamento) return null;
+    if (!Array.isArray(state.orcamento.compromissos)) state.orcamento.compromissos = [];
+    const valor = Number(params.valorParcela) || 0;
+    if (!(valor > 0)) return null;
+    const diaAncora = Number(params.diaAncora) || (new Date().getDate());
+    const primeiraCobranca = params.primeiraCobranca || new Date().toISOString().slice(0, 10);
+    const comp = {
+        id: _novoIdN35('cmp'),
+        tipo: 'recorrente',
+        cartaoId: params.cartaoId,
+        categoriaId: params.categoriaId || null,
+        caixa: params.caixa || 'vida',
+        descricao: params.descricao || 'Assinatura',
+        valorParcela: valor,
+        cronogramaParcelas: null,
+        parcelasTotais: null,
+        ocorrencias: [],           // cresce conforme o agendador avança
+        ultimaOcorrenciaProcessada: 0,
+        parcelasLancadas: 0,
+        parcelasLiquidadasBanco: 0,
+        valorTotal: null,
+        juros: null,
+        dataCompra: null,
+        diaAncora: diaAncora,
+        primeiraCobranca: primeiraCobranca,
+        estado: 'ativa',           // ativa | pausada | cancelada
+        ultimaConfirmacaoAtiva: new Date().toISOString(),
+        origemCadastro: 'assinatura'
+    };
+    state.orcamento.compromissos.push(comp);
+    return comp;
+}
+
+function abrirCadastroAssinatura(cartaoId) {
+    cartaoTelaId = cartaoId || cartaoTelaId;
+    const cartao = (state.orcamento.custodias || []).find(c => c.id === cartaoTelaId);
+    if (!cartao) { alert('Cartão não encontrado.'); return; }
+    const desc = prompt('Descrição da assinatura (ex.: Netflix, Spotify):');
+    if (desc == null || !String(desc).trim()) return;
+    const valorStr = prompt('Valor mensal (R$):');
+    const valor = _parseValorRegistro(valorStr);
+    if (valor == null) { alert('Valor inválido.'); return; }
+    const diaStr = prompt('Dia da cobrança no cartão (1–31):', String(new Date().getDate()));
+    const dia = parseInt(diaStr, 10);
+    if (!(dia >= 1 && dia <= 31)) { alert('Dia inválido.'); return; }
+    const jaCobrada = confirm(
+        'Essa assinatura já foi cobrada no ciclo atual do cartão?\n\n' +
+        'OK = Sim, lançar agora\n' +
+        'Cancelar = Ainda não, deixar o agendador emitir no dia'
+    );
+    const comp = _criarCompromissoRecorrente({
+        cartaoId: cartao.id,
+        descricao: String(desc).trim(),
+        valorParcela: valor,
+        diaAncora: dia,
+        primeiraCobranca: new Date().toISOString().slice(0, 10)
+    });
+    if (!comp) { alert('Não foi possível criar.'); return; }
+    if (jaCobrada) {
+        comp.ultimaConfirmacaoAtiva = new Date().toISOString();
+        _emitirOcorrenciaRecorrente(comp);
+    }
+    salvarEstado();
+    alert('Assinatura cadastrada. Você pode pausar ou cancelar a qualquer momento na tela do cartão.');
+    renderizarTelaCartao();
+}
+
+function _emitirOcorrenciaRecorrente(comp) {
+    const valor = Number(comp.valorParcela) || 0;
+    if (!(valor > 0)) return null;
+    const k = comp.ocorrencias.length + 1;
+    const ocorrencia = {
+        k: k,
+        estado: 'emitida',
+        valor: valor,
+        faturaId: null,
+        registroId: null,
+        dataPrevista: _calcularDataOcorrencia(comp, k)
+    };
+    const registro = emitirGastoCartao({
+        valor: valor,
+        cartaoId: comp.cartaoId,
+        caixa: comp.caixa,
+        categoriaNome: comp.descricao,
+        categoriaId: comp.categoriaId || null,
+        data: new Date().toISOString(),
+        dataCompra: new Date().toISOString().slice(0, 10),
+        origem: 'agendador',
+        numeroParcela: k,
+        compromissoId: comp.id
+    });
+    if (!registro) return null;
+    ocorrencia.faturaId = registro.faturaId;
+    ocorrencia.registroId = registro.id;
+    comp.ocorrencias.push(ocorrencia);
+    comp.parcelasLancadas = k;
+    comp.ultimaOcorrenciaProcessada = k;
+    return registro;
+}
+
+function _calcularDataOcorrencia(comp, k) {
+    // Primeira ocorrência = primeiraCobranca (YYYY-MM-DD).
+    // As seguintes avançam k-1 meses, respeitando diaAncora.
+    const base = new Date((comp.primeiraCobranca || new Date().toISOString().slice(0, 10)) + 'T12:00:00');
+    if (k <= 1) return _chaveDataLocal(base);
+    const d = new Date(base.getFullYear(), base.getMonth() + (k - 1), 1);
+    const ultimoDia = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(comp.diaAncora || 1, ultimoDia));
+    return _chaveDataLocal(d);
+}
+
+/**
+ * §6.3 — próxima ocorrência ainda não resolvida.
+ * 'emitida', 'descartada' e 'nao_reconhecida' contam como resolvidas.
+ * Substitui o uso de parcelasLancadas como cursor — que travava após descartar.
+ */
+function _proximaOcorrenciaPendente(comp) {
+    if (!comp) return 1;
+    const totais = Number(comp.parcelasTotais) || 0;
+    const ocs = Array.isArray(comp.ocorrencias) ? comp.ocorrencias : [];
+    const resolvidos = new Set(['emitida', 'descartada', 'nao_reconhecida']);
+    if (comp.tipo === 'recorrente' || totais === 0) {
+        for (let k = 1; k <= ocs.length + 1; k++) {
+            const oc = ocs[k - 1];
+            if (!oc || !resolvidos.has(oc.estado)) return k;
+        }
+        return ocs.length + 1;
+    }
+    for (let k = 1; k <= totais; k++) {
+        const oc = ocs[k - 1];
+        if (!oc || !resolvidos.has(oc.estado)) return k;
+    }
+    return totais + 1;
+}
+
+// =============================================================================
+// AGENDADOR (§9)
+// =============================================================================
+
+function _executarAgendador() {
+    if (!state.orcamento) return { processadas: 0, excecoes: 0 };
+    if (!Array.isArray(state.orcamento.excecoes)) state.orcamento.excecoes = [];
+    const semana = state.orcamento.semanaAtual;
+    if (!semana) return { processadas: 0, excecoes: 0 };
+
+    let processadas = 0;
+    let excecoesCriadas = 0;
+    const hoje = _chaveDataLocal(new Date());
+
+    (state.orcamento.compromissos || []).forEach(comp => {
+        if (comp.estado === 'cancelada' || comp.estado === 'concluida') return;
+        if (comp.tipo === 'recorrente' && comp.estado !== 'ativa') return;
+
+             // Próxima ocorrência a processar — resolvida por estado individual (§6.3)
+        const proximaK = _proximaOcorrenciaPendente(comp);
+        if (proximaK > (Number(comp.parcelasTotais) || Infinity)) return; // parcelado esgotado
+        const dataAlvo = _calcularDataOcorrencia(comp, proximaK);
+
+        // Só avança quando a data da ocorrência chegou (<= hoje)
+        if (dataAlvo > hoje) return;
+
+        if (dataAlvo < semana.inicio) {
+            // Ocorrência muito antiga → caixa de exceções
+            _registrarExcecao(comp, proximaK, dataAlvo, 'semana_fechada');
+            excecoesCriadas++;
+            return;
+        }
+
+        // Deduplicação: mesma categoria + mesmo valor ±1% e ±3 dias
+        const suspeita = (state.orcamento.historicoRegistros || []).some(r =>
+            r.tipo === 'gasto_cartao' &&
+            r.compromissoId === comp.id &&
+            r.numeroParcela === proximaK &&
+            !r.anulado
+        );
+        if (suspeita) {
+            _registrarExcecao(comp, proximaK, dataAlvo, 'possivel_duplicidade');
+            excecoesCriadas++;
+            return;
+        }
+
+        if (comp.tipo === 'recorrente') {
+            const r = _emitirOcorrenciaRecorrente(comp);
+            if (r) processadas++;
+        } else if (comp.tipo === 'parcelado') {
+            const r = _emitirParcelaParcelada(comp, proximaK);
+            if (r) processadas++;
+        }
+    });
+
+    if (processadas > 0) salvarEstado();
+    return { processadas: processadas, excecoes: excecoesCriadas };
+}
+
+function _emitirParcelaParcelada(comp, k) {
+    if (k > (Number(comp.parcelasTotais) || 0)) return null;
+    if (!Array.isArray(comp.ocorrencias)) comp.ocorrencias = [];
+        // Já existe ocorrência com esse k? 'emitida' = já lançada; 'descartada' e
+    // 'nao_reconhecida' também bloqueiam reemissão (usuário já decidiu sobre ela).
+    if (comp.ocorrencias.some(o => o.k === k &&
+        (o.estado === 'emitida' || o.estado === 'descartada' || o.estado === 'nao_reconhecida'))) return null;
+    const valor = comp.ocorrencias[k - 1] && comp.ocorrencias[k - 1].valor != null
+        ? Number(comp.ocorrencias[k - 1].valor)
+        : (Array.isArray(comp.cronogramaParcelas) && comp.cronogramaParcelas[k - 1] != null
+            ? Number(comp.cronogramaParcelas[k - 1])
+            : Number(comp.valorParcela) || 0);
+    if (!(valor > 0)) return null;
+    const dataOc = _calcularDataOcorrencia(comp, k);
+    const registro = emitirGastoCartao({
+        valor: valor,
+        cartaoId: comp.cartaoId,
+        caixa: comp.caixa,
+        categoriaNome: comp.descricao,
+        categoriaId: comp.categoriaId || null,
+        data: dataOc + 'T12:00:00.000Z',
+        dataCompra: dataOc,
+        origem: 'agendador',
+        numeroParcela: k,
+        compromissoId: comp.id
+    });
+    if (!registro) return null;
+    const oc = comp.ocorrencias[k - 1] || { k: k };
+    oc.estado = 'emitida';
+    oc.faturaId = registro.faturaId;
+    oc.registroId = registro.id;
+    oc.dataPrevista = dataOc;
+    comp.ocorrencias[k - 1] = oc;
+    comp.parcelasLancadas = Math.max(comp.parcelasLancadas || 0, k);
+    comp.ultimaOcorrenciaProcessada = k;
+    if (k >= (Number(comp.parcelasTotais) || 0)) comp.estado = 'concluida';
+    return registro;
+}
+
+function _registrarExcecao(comp, k, dataAlvo, motivo) {
+    if (!Array.isArray(state.orcamento.excecoes)) state.orcamento.excecoes = [];
+    const existe = state.orcamento.excecoes.some(e =>
+        e.compromissoId === comp.id && e.k === k && e.estado === 'pendente'
+    );
+    if (existe) return;
+    state.orcamento.excecoes.push({
+        id: _novoIdN35('exc'),
+        compromissoId: comp.id,
+        cartaoId: comp.cartaoId,
+        k: k,
+        dataPrevista: dataAlvo,
+        motivo: motivo,  // 'semana_fechada' | 'possivel_duplicidade'
+        estado: 'pendente',
+        criadaEm: new Date().toISOString()
+    });
+}
+function pausarAssinatura(id) {
+    const comp = (state.orcamento.compromissos || []).find(c => c.id === id && c.tipo === 'recorrente');
+    if (!comp) return;
+    if (!confirm('Pausar esta assinatura?\n\nNão apaga lançamentos já feitos. Só interrompe novas cobranças projetadas.')) return;
+    comp.estado = 'pausada';
+    comp.ultimaConfirmacaoAtiva = new Date().toISOString();
+    salvarEstado();
+    renderizarTelaCartao();
+}
+
+function retomarAssinatura(id) {
+    const comp = (state.orcamento.compromissos || []).find(c => c.id === id && c.tipo === 'recorrente');
+    if (!comp) return;
+    comp.estado = 'ativa';
+    comp.ultimaConfirmacaoAtiva = new Date().toISOString();
+    salvarEstado();
+    renderizarTelaCartao();
+}
+
+function cancelarAssinatura(id) {
+    const comp = (state.orcamento.compromissos || []).find(c => c.id === id && c.tipo === 'recorrente');
+    if (!comp) return;
+    if (!confirm('Cancelar esta assinatura no Mochila?\n\nO banco pode continuar cobrando — o cancelamento aqui é só de projeção.')) return;
+    comp.estado = 'cancelada';
+    comp.ultimaConfirmacaoAtiva = new Date().toISOString();
+    salvarEstado();
+    renderizarTelaCartao();
+}
+
+/** Após escolher cartão no +: pergunta à vista ou parcelado */
+function _iniciarFluxoCartaoRegistro() {
+    const cartao = (state.orcamento.custodias || []).find(c => c.id === registroTemporario.cartaoId);
+    const nome = cartao ? cartao.nome : 'cartão';
+    const fmt = (registroTemporario.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    try { dialogoPushUsuario(nome); } catch (_) {}
+    dialogoPushPersonagem('torres',
+        `Compra de ${fmt} em <strong>${nome}</strong>. Foi à vista (1x na fatura) ou parcelado?`);
+    _pintarModalRegistroDialogo(`
+        <button type="button" class="btn-option" onclick="registroCartaoEscolherModalidade('avista')">
+            <span style="font-size:1.3rem;">1️⃣</span>
+            <span><strong>À vista</strong><br><span style="font-weight:500;color:var(--secondary);font-size:0.85rem;">Entra inteiro na fatura deste ciclo</span></span>
+        </button>
+        <button type="button" class="btn-option" onclick="registroCartaoEscolherModalidade('parcelado')">
+            <span style="font-size:1.3rem;">📅</span>
+            <span><strong>Parcelado</strong><br><span style="font-weight:500;color:var(--secondary);font-size:0.85rem;">Cria o compromisso e lança só a 1ª parcela</span></span>
+        </button>
+        ${_btnVoltarRegistro('registroVoltarDaCustodiaCartao()')}
+    `, 'Como foi a compra?');
+}
+
+function registroVoltarDaCustodiaCartao() {
+    registroTemporario.cartaoId = null;
+    registroTemporario.custodiaId = null;
+    registroTemporario.parcelasTotais = null;
+    registroTemporario.compromissoId = null;
+    registroTemporario.numeroParcela = null;
+    // volta ao passo de custódia se existir
+    if (typeof _registroPintarPassoCustodia === 'function') {
+        try { _registroPintarPassoCustodia(); return; } catch (_) {}
+    }
+    if (typeof mostrarPassoCustodia === 'function') {
+        try { mostrarPassoCustodia(); return; } catch (_) {}
+    }
+    fecharModalRegistro();
+}
+
+function registroCartaoEscolherModalidade(mod) {
+    if (mod === 'avista') {
+        dialogoPushUsuario('À vista');
+        registroTemporario.parcelasTotais = 1;
+        registroTemporario.numeroParcela = 1;
+        registroTemporario.compromissoId = null;
+        _registroCartaoResolverCicloEConfirmar();
+        return;
+    }
+    dialogoPushUsuario('Parcelado');
+    _registroCartaoPintarParcelas();
+}
+
+function _registroCartaoPintarParcelas(erro) {
+    const valor = registroTemporario.valor || 0;
+    const fmt = valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const nSug = registroTemporario.parcelasTotais || 2;
+    let chips = '';
+    [2, 3, 6, 10, 12].forEach(n => {
+        const vp = Math.round((valor / n) * 100) / 100;
+        const sel = n === nSug ? ' selecionado' : '';
+        chips += `<div class="chip${sel}" onclick="registroCartaoSetParcelas(${n})">${n}x de ${vp.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>`;
+    });
+    dialogoPushPersonagem('torres',
+        `Em quantas vezes? Total ${fmt}. Você pode ajustar o número e o valor da parcela.`);
+    _pintarModalRegistroDialogo(`
+        ${erro ? _composerErro(erro) : ''}
+        <div class="chip-container" style="margin-bottom:12px;">${chips}</div>
+        <label style="font-size:0.85rem;color:var(--secondary);">Número de parcelas</label>
+        <input type="number" id="registro-parcelas-n" class="input-padrao" min="2" max="48" step="1" value="${nSug}" inputmode="numeric">
+        <label style="font-size:0.85rem;color:var(--secondary);">Valor de cada parcela (R$)</label>
+        <div class="input-com-prefixo">
+            <span class="prefixo">R$</span>
+            <input type="text" id="registro-parcelas-valor" class="input-padrao" inputmode="decimal"
+                value="${(Math.round((valor / nSug) * 100) / 100).toFixed(2).replace('.', ',')}">
+        </div>
+        <p style="font-size:0.8rem;color:var(--secondary);margin-bottom:10px;">Só a 1ª parcela entra na fatura agora. As demais ficam no comprometido contratual.</p>
+        <button type="button" class="btn-primary" onclick="registroCartaoConfirmarParcelado()">Continuar</button>
+        ${_btnVoltarRegistro('_iniciarFluxoCartaoRegistro()')}
+    `, 'Parcelamento');
+}
+
+function registroCartaoSetParcelas(n) {
+    registroTemporario.parcelasTotais = n;
+    _registroCartaoPintarParcelas();
+}
+
+function registroCartaoConfirmarParcelado() {
+    const valorTotal = Number(registroTemporario.valor) || 0;
+    const nInp = document.getElementById('registro-parcelas-n');
+    const vInp = document.getElementById('registro-parcelas-valor');
+    const n = parseInt(nInp && nInp.value, 10);
+    const valorParcela = _parseValorRegistro(vInp && vInp.value);
+    if (!(n >= 2) || n > 48) {
+        _registroCartaoPintarParcelas('Informe entre 2 e 48 parcelas.');
+        return;
+    }
+    if (valorParcela == null || !(valorParcela > 0)) {
+        _registroCartaoPintarParcelas('Informe o valor de cada parcela.');
+        return;
+    }
+    registroTemporario.parcelasTotais = n;
+    registroTemporario.valorParcela = valorParcela;
+    // Se N × parcela ≠ total, ainda aceitamos (cronograma pode ter juros/arredondamento)
+    dialogoPushUsuario(n + 'x de ' + valorParcela.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+    _registroCartaoResolverCicloEConfirmar();
+}
+
+/** Se regra do cartão é "perguntar" no dia de fechamento, pergunta; senão confirma */
+function _registroCartaoResolverCicloEConfirmar() {
+    const cartao = (state.orcamento.custodias || []).find(c => c.id === registroTemporario.cartaoId);
+    if (!cartao) { confirmarRegistroCartao(); return; }
+    const dataISO = registroTemporario.data || new Date().toISOString();
+    const ciclo = _resolverCicloFaturaCartao(cartao, dataISO);
+    if (ciclo.alvo === 'perguntar') {
+        dialogoPushPersonagem('torres',
+            'Essa compra caiu exatamente no dia de fechamento do cartão. Em qual fatura ela entra?');
+        _pintarModalRegistroDialogo(`
+            <button type="button" class="btn-option" onclick="registroCartaoRespostaCiclo('atual')">
+                <span><strong>Fatura atual</strong><br><span style="font-weight:500;color:var(--secondary);font-size:0.85rem;">Fecha em ${_fmtDataBolha(ciclo.dataFechamentoAtual)}</span></span>
+            </button>
+            <button type="button" class="btn-option" onclick="registroCartaoRespostaCiclo('proxima')">
+                <span><strong>Próxima fatura</strong><br><span style="font-weight:500;color:var(--secondary);font-size:0.85rem;">Fecha em ${_fmtDataBolha(ciclo.dataFechamentoProxima)}</span></span>
+            </button>
+        `, 'Ciclo da fatura');
+        return;
+    }
+    registroTemporario.respostaCiclo = ciclo.alvo;
+    confirmarRegistroCartao();
+}
+
+function registroCartaoRespostaCiclo(alvo) {
+    dialogoPushUsuario(alvo === 'proxima' ? 'Próxima fatura' : 'Fatura atual');
+    registroTemporario.respostaCiclo = alvo;
+    confirmarRegistroCartao();
+}
+
 function confirmarRegistroCartao() {
-    const valor = registroTemporario.valor;
     const cartaoId = registroTemporario.cartaoId;
     const cartao = state.orcamento.custodias.find(c => c.id === cartaoId);
 
@@ -12250,12 +13441,11 @@ function confirmarRegistroCartao() {
         return;
     }
 
-    cartao.faturaAcumulada = (cartao.faturaAcumulada || 0) + valor;
-
     const dataISO = registroTemporario.data || new Date().toISOString();
     const dataCompra = dataISO;
     const caixa = registroTemporario.caixa || null;
-    const semana = state.orcamento.semanaAtual;
+    const nParcelas = Number(registroTemporario.parcelasTotais) || 1;
+    const isParcelado = nParcelas >= 2;
 
     let mesReferencia = null;
     if (registroTemporario.categoriaId) {
@@ -12267,63 +13457,106 @@ function confirmarRegistroCartao() {
                 const proxMes = new Date(dataRef.getFullYear(), dataRef.getMonth() + 1, 1);
                 const proxMesStr = proxMes.getFullYear() + '-' + String(proxMes.getMonth() + 1).padStart(2, '0');
                 const rotuloProxMes = _rotuloMesAno(proxMesStr);
-
                 const ehAdiantamento = confirm(
-                    `Você já registrou um pagamento para "${cat.nome}" neste mês.\n\n` +
-                    `Esta compra no cartão é um ADIANTAMENTO para o mês de ${rotuloProxMes}?`
+                    'Você já registrou um pagamento para "' + cat.nome + '" neste mês.\n\n' +
+                    'Esta compra no cartão é um ADIANTAMENTO para o mês de ' + rotuloProxMes + '?'
                 );
                 if (ehAdiantamento) mesReferencia = proxMesStr;
             }
         }
     }
 
-    if (semana && !semana.fechada && caixa && semana[caixa] && dataNaSemanaAtual(dataISO)) {
-        semana[caixa].gasto = (semana[caixa].gasto || 0) + valor;
+    let compromissoId = registroTemporario.compromissoId || null;
+    let valorEmitir = Number(registroTemporario.valor) || 0;
+    let numeroParcela = 1;
+    let valorTotalContrato = valorEmitir;
+
+    if (isParcelado) {
+        valorTotalContrato = Number(registroTemporario.valor) || 0;
+        const valorParcela = Number(registroTemporario.valorParcela) || Math.round((valorTotalContrato / nParcelas) * 100) / 100;
+        const comp = _criarCompromissoParcelado({
+            cartaoId: cartaoId,
+            categoriaId: registroTemporario.categoriaId || null,
+            caixa: caixa || 'vida',
+            descricao: registroTemporario.categoriaNome || ('Compra ' + nParcelas + 'x'),
+            valorTotal: valorTotalContrato,
+            valorParcela: valorParcela,
+            parcelasTotais: nParcelas,
+            dataCompra: dataCompra,
+            origemCadastro: 'compra_nova'
+        });
+        if (!comp) {
+            alert('Não foi possível criar o parcelamento.');
+            return;
+        }
+        compromissoId = comp.id;
+        valorEmitir = Number(comp.ocorrencias[0] && comp.ocorrencias[0].valor) || valorParcela;
+        numeroParcela = 1;
+        registroTemporario.compromissoId = compromissoId;
     }
 
-    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
-    state.orcamento.historicoRegistros.push({
-        id: 'reg_' + Date.now(),
+    // Ciclo da fatura (atual / próxima)
+    const optsFatura = { dataRef: dataCompra };
+    if (registroTemporario.respostaCiclo === 'proxima') optsFatura.forcarProxima = true;
+    if (registroTemporario.respostaCiclo === 'atual') optsFatura.forcarAtual = true;
+    const fatura = _obterOuCriarFaturaCorrente(cartaoId, optsFatura);
+
+    const registro = emitirGastoCartao({
+        valor: valorEmitir,
+        cartaoId: cartaoId,
+        caixa: caixa,
+        categoriaNome: registroTemporario.categoriaNome || null,
+        categoriaId: registroTemporario.categoriaId || null,
         data: dataISO,
         dataCompra: dataCompra,
-        tipo: 'gasto_cartao',
-        caixa: caixa,
-        categoria: registroTemporario.categoriaNome || null,
-        categoriaId: registroTemporario.categoriaId || null,
-        valor: valor,
-        custodiaId: null,
-        cartaoId: cartaoId,
-        saldoAtualizado: false,
-        mesReferencia: mesReferencia // <-- TAG AQUI
+        origem: 'manual',
+        mesReferencia: mesReferencia,
+        numeroParcela: numeroParcela,
+        compromissoId: compromissoId,
+        faturaId: fatura ? fatura.faturaId : null
     });
+    if (!registro) {
+        alert('Não foi possível registrar a compra no cartão.');
+        return;
+    }
+
+    // Atualiza ocorrência 1 do compromisso
+    if (compromissoId) {
+        const comp = (state.orcamento.compromissos || []).find(c => c.id === compromissoId);
+        if (comp && Array.isArray(comp.ocorrencias) && comp.ocorrencias[0]) {
+            comp.ocorrencias[0].estado = 'emitida';
+            comp.ocorrencias[0].faturaId = registro.faturaId;
+            comp.ocorrencias[0].registroId = registro.id;
+        }
+    }
 
     if (typeof _tickOnboardingAposRegistro === "function") _tickOnboardingAposRegistro();
     salvarEstado();
 
     let notaCiclo = '';
-    const fechamento = cartao.diaFechamento;
-    if (typeof fechamento === 'number' && fechamento >= 1 && fechamento <= 31) {
-        const compra = new Date(dataCompra);
-        const diaCompra = compra.getDate();
-        const dCompraStr = dataCompra.split('T')[0].split('-').reverse().join('/');
-        if (diaCompra > fechamento) {
-            notaCiclo = ` Compra em ${dCompraStr} (depois do fechamento dia ${fechamento}) — tende a cair na <strong>próxima</strong> fatura.`;
-        } else {
-            notaCiclo = ` Compra em ${dCompraStr} (fechamento dia ${fechamento}) — tende a cair na fatura <strong>atual</strong>.`;
-        }
+    const faturaReg = (state.orcamento.faturas || []).find(f => f.faturaId === registro.faturaId);
+    if (faturaReg) {
+        const dFecha = (faturaReg.dataFechamento || '').split('-').reverse().join('/');
+        const dVenc = (faturaReg.dataVencimento || '').split('-').reverse().join('/');
+        notaCiclo = ' Fatura com fechamento ' + dFecha + ' e vencimento ' + dVenc + '.';
+    }
+
+    const faturaFmt = (cartao.faturaAcumulada || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    let falaCartao;
+    if (isParcelado) {
+        const rest = nParcelas - 1;
+        falaCartao = 'Parcelamento de ' + nParcelas + 'x criado. A 1ª parcela (' +
+            valorEmitir.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) +
+            ') entrou na fatura de ' + cartao.nome + ' (agora ' + faturaFmt + ').' + notaCiclo +
+            ' As outras ' + rest + ' ficam no comprometido contratual até serem lançadas. O dinheiro só sai da conta quando pagar a fatura.';
     } else {
-        const dCompraStr = dataCompra.split('T')[0].split('-').reverse().join('/');
-        notaCiclo = ` Data da compra: ${dCompraStr}.`;
+        falaCartao = 'Entrou na fatura de ' + cartao.nome + ' (agora ' + faturaFmt + ').' + notaCiclo +
+            ' Isso já entrou na meta da semana. O dinheiro só sai da conta quando pagar a fatura.';
     }
-
-    const faturaFmt = cartao.faturaAcumulada.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    let falaCartao = `Entrou na fatura de ${cartao.nome} (agora ${faturaFmt}).${notaCiclo.replace(/<[^>]+>/g, '')} Isso já entrou na meta da semana. O dinheiro só sai da conta quando pagar a fatura.`;
-    
     if (mesReferencia) {
-        falaCartao += ` Anotado como adiantamento para <strong>${_rotuloMesAno(mesReferencia)}</strong>.`;
+        falaCartao += ' Anotado como adiantamento para ' + _rotuloMesAno(mesReferencia) + '.';
     }
 
-    try { dialogoPushUsuario(cartao.nome); } catch (_) {}
     dialogoPushPersonagem('torres', falaCartao);
     _pintarModalRegistroDialogo(
         `<button class="btn-primary" onclick="fecharModalRegistro()">Pronto</button>`,
@@ -12332,6 +13565,7 @@ function confirmarRegistroCartao() {
 
     renderizarOrcamentoInicio();
 }
+
 function renderizarMapaMes() {
     const container = document.getElementById('mapa-mes-conteudo');
     const orc = state.orcamento;
@@ -12748,15 +13982,16 @@ function renderizarFluxoCaixa() {
     // MUDANÇA: Calcula a projeção dia a dia ANTES de chamar os alertas
     // ============================================================
     if ((orc.nivel || 1) >= 3 && (orc.custodias || []).length > 0) {
-        if (fluxoCustodiaFiltro) {
+                if (fluxoCustodiaFiltro) {
             const c = orc.custodias.find(x => x.id === fluxoCustodiaFiltro);
             if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) saldoInicialProj = Number(c.saldoAtual) || 0;
         } else {
-            // P0.3
-            const _e2 = (typeof _estoqueOperacionalAtual === 'function') ? _estoqueOperacionalAtual(orc) : null;
-            saldoInicialProj = (_e2 !== null) ? _e2 : (orc.custodias || [])
-                .filter(c => !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura)
-                .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
+            // D1 — projeção parte do saldo BRUTO (fatura entra como evento de saída).
+            saldoInicialProj = (typeof _saldoBrutoOperacional === 'function')
+                ? _saldoBrutoOperacional(orc)
+                : (orc.custodias || [])
+                    .filter(c => !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura)
+                    .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
         }
 
         const diasSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
@@ -13640,6 +14875,8 @@ function _eventosPagamentoFaturaDeclarados(orc, inicio, fim) {
     custodias.forEach(c => {
         const tipo = (typeof TIPOS_CUSTODIA !== 'undefined' && TIPOS_CUSTODIA[c.tipo]) ? TIPOS_CUSTODIA[c.tipo] : {};
         if (!tipo.temFatura) return;
+                // LEGACY_FATURA_ACUMULADA — remover na Fatia G
+        // (hoje: leitura do cache; na G passa a somar faturas[].saldoAberto em aberto)
         const fatura = Number(c.faturaAcumulada) || 0;
         if (fatura <= 0.05) return;
 
@@ -13699,6 +14936,31 @@ function _eventosPagamentoFaturaDeclarados(orc, inicio, fim) {
             estimado: estimado
         });
     });
+    // Obrigações declaradas com dataExigibilidade (§13.1 — regra de exclusão temporal)
+if (Array.isArray(orc.obrigacoesCartao)) {
+    orc.obrigacoesCartao.forEach(o => {
+        if (o.estado === 'quitada') return;
+        if (o.faturaOrigemId) return; // já está na fatura correspondente — §6.4, não duplicar
+        if (!o.dataExigibilidade) return; // sem data = fora do caixa (§13.1)
+        if (Number(o.saldoAberto) <= 0.005) return;
+        const iso = String(o.dataExigibilidade).slice(0, 10);
+        if (iso < iniIso || iso > fimIso) return;
+        eventos.push({
+            tipo: 'vencimento',
+            data: iso,
+            dia: Number(iso.slice(8, 10)),
+            nome: 'Obrigação ' + (o.descricao || 'cartão') + (iso < hojeIso ? ' (em atraso)' : ''),
+            fonteId: null,
+            valor: Number(o.saldoAberto),
+            caixa: null,
+            categoriaId: null,
+            custodiaId: null,
+            cartaoId: o.cartaoId,
+            subtipo: 'obrigacao',
+            atraso: iso < hojeIso
+        });
+    });
+}
     return eventos;
 }
 
@@ -13768,6 +15030,741 @@ function projetarFluxo(orc, opcoes) {
 }
 
 
+// =============================================================================
+// N3.5 — CARTÕES (Design v3.5 · Fatia 0)
+// Decisões D1/D2: saldo bruto × posição líquida; faturaAcumulada = cache escrito
+// =============================================================================
+
+/**
+ * Gera id único com prefixo (evita colisão simples por timestamp).
+ */
+function _novoIdN35(prefixo) {
+    return String(prefixo || 'id') + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+/**
+ * D1 — Saldo financeiro bruto operacional: soma dos saldos das custódias
+ * operacionais (não-reserva, não-cartão). Ponto de partida da projeção de fluxo.
+ * Não abate faturas nem obrigações.
+ */
+function _saldoBrutoOperacional(orc) {
+    if (!orc) return 0;
+    const custodias = orc.custodias || [];
+    let soma = 0;
+    custodias.forEach(c => {
+        if (_custodiaEhReserva(c)) return;
+        const tipo = (typeof TIPOS_CUSTODIA !== 'undefined' && TIPOS_CUSTODIA[c.tipo]) ? TIPOS_CUSTODIA[c.tipo] : {};
+        if (tipo.temFatura) return; // cartão não tem saldo de caixa
+        soma += Number(c.saldoAtual) || 0;
+    });
+    return soma;
+}
+
+/**
+ * Obrigações financeiras em aberto (cada item uma vez):
+ * - faturas[] com saldoAberto > 0
+ * - obrigacoesCartao[] ativas SEM faturaOrigemId (ou com origem nula), para não duplicar
+ */
+function _obrigacoesFinanceirasEmAberto(orc) {
+    if (!orc) return { total: 0, faturas: 0, obrigacoes: 0, detalhe: [] };
+    let faturas = 0;
+    let obrigacoes = 0;
+    const detalhe = [];
+    (orc.faturas || []).forEach(f => {
+        const s = Number(f.saldoAberto);
+        if (!(s > 0.005)) return;
+        faturas += s;
+        detalhe.push({ tipo: 'fatura', id: f.faturaId, cartaoId: f.cartaoId, valor: s, dataExigibilidade: f.dataVencimento || null });
+    });
+    (orc.obrigacoesCartao || []).forEach(o => {
+        if (o.estado === 'quitada') return;
+        if (o.faturaOrigemId) return; // já contada via fatura
+        const s = Number(o.saldoAberto);
+        if (!(s > 0.005)) return;
+        obrigacoes += s;
+        detalhe.push({
+            tipo: 'obrigacao',
+            id: o.id,
+            cartaoId: o.cartaoId,
+            valor: s,
+            dataExigibilidade: o.dataExigibilidade || null
+        });
+    });
+    return { total: faturas + obrigacoes, faturas: faturas, obrigacoes: obrigacoes, detalhe: detalhe };
+}
+
+/**
+ * D1 — Posição financeira líquida operacional (somente leitura patrimonial).
+ * NÃO é ponto de partida da projeção. NÃO considera reserva da Base até o próximo recebimento.
+ */
+function _posicaoLiquidaOperacional(orc) {
+    return _saldoBrutoOperacional(orc) - _obrigacoesFinanceirasEmAberto(orc).total;
+}
+
+/**
+ * D2 — Cache escrito: faturaAcumulada espelha sum(faturas[].saldoAberto) do cartão.
+ * LEGACY_FATURA_ACUMULADA — remover na Fatia G
+ *
+ * Regra: após QUALQUER mutação em faturas[]/obrigacoesCartao[] do cartão,
+ * chamar esta função. Testes: T0.6 em `_testesFatia0N35`.
+ */
+function _sincronizarFaturaAcumulada(cartaoId) {
+    if (!state.orcamento || !cartaoId) return;
+    const cartao = (state.orcamento.custodias || []).find(c => c.id === cartaoId);
+    if (!cartao) return;
+    const tipo = (typeof TIPOS_CUSTODIA !== 'undefined' && TIPOS_CUSTODIA[cartao.tipo]) ? TIPOS_CUSTODIA[cartao.tipo] : {};
+    if (!tipo.temFatura) return;
+        let soma = 0;
+    (state.orcamento.faturas || []).forEach(f => {
+        if (f.cartaoId === cartaoId) soma += Number(f.saldoAberto) || 0;
+    });
+    // Obrigações SEM faturaOrigemId NÃO entram no cache: viram linha própria em
+    // _eventosPagamentoFaturaDeclarados (se tiverem dataExigibilidade) e são
+    // contadas em _obrigacoesFinanceirasEmAberto(). Somá-las aqui duplicaria
+    // a dívida na projeção de fluxo (Bug 1 da revisão v3.5, §6.4).
+    cartao.faturaAcumulada = Math.max(0, soma);
+}
+
+function _sincronizarTodasFaturasAcumuladas() {
+    (state.orcamento && state.orcamento.custodias || []).forEach(c => {
+        const tipo = (typeof TIPOS_CUSTODIA !== 'undefined' && TIPOS_CUSTODIA[c.tipo]) ? TIPOS_CUSTODIA[c.tipo] : {};
+        if (tipo.temFatura) _sincronizarFaturaAcumulada(c.id);
+    });
+}
+
+/**
+ * Recalcula saldoAberto e estado de uma fatura a partir de valorTotal/valorPago.
+ */
+function _recalcularFatura(fatura) {
+    if (!fatura) return;
+    const total = Number(fatura.valorTotal) || 0;
+    const pago = Number(fatura.valorPago) || 0;
+    fatura.saldoAberto = Math.max(0, total - pago);
+    if (fatura.saldoAberto <= 0.005) {
+        fatura.estado = 'quitada';
+        fatura.saldoAberto = 0;
+    } else if (pago > 0.005) {
+        fatura.estado = (fatura.estado === 'atrasada') ? 'atrasada' : 'parcialmente_paga';
+    } else if (fatura.estado !== 'atrasada' && fatura.estado !== 'fechada') {
+        fatura.estado = fatura.estado === 'fechada' ? 'fechada' : 'aberta';
+    }
+}
+
+/**
+ * Ajusta valorTotal (gasto) ou valorPago (pagamento) de uma fatura e sincroniza cache.
+ * deltaValorTotal > 0 aumenta a fatura; deltaValorPago > 0 registra pagamento.
+ */
+function _ajustarFaturaPorDelta(cartaoId, faturaId, deltaValorTotal, deltaValorPago) {
+    if (!state.orcamento || !cartaoId) return;
+    let fatura = null;
+    if (faturaId) fatura = (state.orcamento.faturas || []).find(f => f.faturaId === faturaId) || null;
+    if (!fatura) {
+        // fallback: fatura corrente não quitada
+        fatura = (state.orcamento.faturas || []).find(f => f.cartaoId === cartaoId && f.estado !== 'quitada') || null;
+    }
+    if (!fatura && (deltaValorTotal || 0) > 0) {
+        fatura = _obterOuCriarFaturaCorrente(cartaoId);
+    }
+      if (!fatura) {
+        // LEGACY_FATURA_ACUMULADA — remover na Fatia G
+        // último recurso: só cache legado (não há fatura estruturada)
+        const cartao = (state.orcamento.custodias || []).find(c => c.id === cartaoId);
+        if (cartao) {
+            const d = (Number(deltaValorTotal) || 0) - (Number(deltaValorPago) || 0);
+            cartao.faturaAcumulada = Math.max(0, (cartao.faturaAcumulada || 0) + d);
+        }
+        return;
+    }
+    if (deltaValorTotal) fatura.valorTotal = Math.max(0, (Number(fatura.valorTotal) || 0) + deltaValorTotal);
+    if (deltaValorPago) fatura.valorPago = Math.max(0, (Number(fatura.valorPago) || 0) + deltaValorPago);
+    _recalcularFatura(fatura);
+    _sincronizarFaturaAcumulada(cartaoId);
+}
+
+
+/**
+ * Obtém fatura aberta/fechada do ciclo corrente do cartão ou cria uma.
+ * Fatia 0: ciclo simplificado (uma fatura "corrente" por cartão com saldo ou a mais recente não quitada).
+ * Fatias A/D refinam dataFechamento/dataVencimento por regra do cartão.
+ */
+/**
+ * Decide se a compra cai na fatura atual ou na próxima (ciclo por cartão).
+ * Retorna { alvo: 'atual'|'proxima'|'perguntar', dataFechamento, dataVencimento }
+ */
+function _resolverCicloFaturaCartao(cartao, dataCompraISO) {
+    const d = new Date((dataCompraISO || '').slice(0, 10) + 'T12:00:00');
+    const hoje = isNaN(d.getTime()) ? new Date() : d;
+    const diaCompra = hoje.getDate();
+    const y = hoje.getFullYear();
+    const m = hoje.getMonth();
+    const regra = cartao.regraCompraNoFechamento || 'perguntar';
+    const diaF = (cartao.diaFechamento >= 1 && cartao.diaFechamento <= 31) ? cartao.diaFechamento : null;
+    const diaV = (cartao.diaVencimento >= 1 && cartao.diaVencimento <= 31) ? cartao.diaVencimento : null;
+
+    function _dataNoMes(ano, mes0, dia) {
+        const last = new Date(ano, mes0 + 1, 0).getDate();
+        return new Date(ano, mes0, Math.min(dia, last));
+    }
+    function _iso(dt) { return dt.toISOString().slice(0, 10); }
+
+       // Fechamento/vencimento do ciclo "atual" relativo à data da compra
+    let fechAtual, vencAtual, fechProx, vencProx;
+    if (diaF) {
+        fechAtual = _dataNoMes(y, m, diaF);
+        // NÃO reassinalar fechAtual para m+1 quando diaCompra > diaF.
+        // 'alvo=proxima' já resolve esse caso usando fechProx=m+1.
+        // O deslocamento anterior levava fechProx para m+2 → dataFechamento errada (Bug 2).
+        fechProx = _dataNoMes(y, m + 1, diaF);
+    } else {
+        // sem dia de fechamento: ciclo mensal simplificado (mês da compra = atual)
+        fechAtual = _dataNoMes(y, m + 1, 0); // fim do mês
+        fechProx = _dataNoMes(y, m + 2, 0);
+    }
+    if (diaV) {
+        // vencimento tipicamente após o fechamento
+        vencAtual = _dataNoMes(fechAtual.getFullYear(), fechAtual.getMonth(), diaV);
+        if (vencAtual <= fechAtual) vencAtual = _dataNoMes(fechAtual.getFullYear(), fechAtual.getMonth() + 1, diaV);
+        vencProx = _dataNoMes(fechProx.getFullYear(), fechProx.getMonth(), diaV);
+        if (vencProx <= fechProx) vencProx = _dataNoMes(fechProx.getFullYear(), fechProx.getMonth() + 1, diaV);
+    } else {
+        vencAtual = new Date(fechAtual.getTime() + 10 * 86400000);
+        vencProx = new Date(fechProx.getTime() + 10 * 86400000);
+    }
+
+    let alvo = 'atual';
+    if (diaF && diaCompra > diaF) alvo = 'proxima';
+    // compra exatamente no dia de fechamento
+    if (diaF && diaCompra === diaF) {
+        if (regra === 'faturaProxima') alvo = 'proxima';
+        else if (regra === 'faturaAtual') alvo = 'atual';
+        else alvo = 'perguntar';
+    }
+
+    return {
+        alvo: alvo,
+        dataFechamentoAtual: _iso(fechAtual),
+        dataVencimentoAtual: _iso(vencAtual),
+        dataFechamentoProxima: _iso(fechProx),
+        dataVencimentoProxima: _iso(vencProx)
+    };
+}
+
+function _obterOuCriarFaturaCorrente(cartaoId, opts) {
+    opts = opts || {};
+    if (!state.orcamento) return null;
+    if (!Array.isArray(state.orcamento.faturas)) state.orcamento.faturas = [];
+    const cartao = (state.orcamento.custodias || []).find(c => c.id === cartaoId);
+    if (!cartao) return null;
+
+    const dataRef = (opts.dataRef && String(opts.dataRef).slice(0, 10)) || new Date().toISOString().slice(0, 10);
+    const ciclo = _resolverCicloFaturaCartao(cartao, dataRef);
+    let alvo = opts.forcarProxima ? 'proxima' : (opts.forcarAtual ? 'atual' : ciclo.alvo);
+    if (alvo === 'perguntar' && opts.respostaCiclo) alvo = opts.respostaCiclo;
+    if (alvo === 'perguntar') alvo = 'atual'; // default seguro se não perguntou
+
+    const dataFecha = alvo === 'proxima' ? ciclo.dataFechamentoProxima : ciclo.dataFechamentoAtual;
+    const dataVenc = alvo === 'proxima' ? ciclo.dataVencimentoProxima : ciclo.dataVencimentoAtual;
+
+    // Reutilizar fatura do mesmo cartão + mesmo dataFechamento
+    const existente = (state.orcamento.faturas || []).find(f =>
+        f.cartaoId === cartaoId && f.dataFechamento === dataFecha && f.estado !== 'quitada'
+    );
+    if (existente && !opts.forcarNova) return existente;
+
+    if (!opts.forcarNova) {
+        // fallback legado: qualquer não quitada do cartão com mesmo vencimento
+        const candidatas = (state.orcamento.faturas || [])
+            .filter(f => f.cartaoId === cartaoId && f.estado !== 'quitada' && f.dataVencimento === dataVenc);
+        if (candidatas.length > 0) return candidatas[0];
+    }
+
+    const fatura = {
+        faturaId: _novoIdN35('fat'),
+        cartaoId: cartaoId,
+        dataFechamento: dataFecha,
+        dataVencimento: dataVenc,
+        valorTotal: 0,
+        valorPago: 0,
+        saldoAberto: 0,
+        estado: 'aberta'
+    };
+    state.orcamento.faturas.push(fatura);
+    return fatura;
+}
+
+/**
+ * Emissão pura de gasto_cartao (Fatia 0/A).
+ * Debita envelope (Base/Vida) se na semana aberta; NÃO debita caixa;
+ * compõe fatura; registra histórico; sincroniza cache.
+ *
+ * params: {
+ *   valor, cartaoId, caixa?, categoriaNome?, categoriaId?, data?, dataCompra?,
+ *   compromissoId?, numeroParcela?, origem?: 'manual'|'agendador'|'caixa_excecoes',
+ *   mesReferencia?, faturaId?
+ * }
+ * Retorna o registro criado ou null.
+ */
+function emitirGastoCartao(params) {
+    if (!params || !state.orcamento) return null;
+    const valor = Number(params.valor) || 0;
+    if (!(valor > 0)) return null;
+    const cartaoId = params.cartaoId;
+    const cartao = (state.orcamento.custodias || []).find(c => c.id === cartaoId);
+    if (!cartao) return null;
+
+    const dataISO = params.data || new Date().toISOString();
+    const dataCompra = params.dataCompra || dataISO;
+    const caixa = params.caixa || null;
+    const origem = params.origem || 'manual';
+
+    // Fatura: usar informada ou corrente
+    let fatura = null;
+    if (params.faturaId) {
+        fatura = (state.orcamento.faturas || []).find(f => f.faturaId === params.faturaId) || null;
+    }
+    if (!fatura) {
+        fatura = _obterOuCriarFaturaCorrente(cartaoId, { dataRef: dataCompra });
+    }
+    if (!fatura) return null;
+
+    fatura.valorTotal = (Number(fatura.valorTotal) || 0) + valor;
+    _recalcularFatura(fatura);
+
+    // Envelope (competência) — só semana aberta e data na semana
+    const semana = state.orcamento.semanaAtual;
+    if (semana && !semana.fechada && caixa && semana[caixa] && typeof dataNaSemanaAtual === 'function' && dataNaSemanaAtual(dataISO)) {
+        semana[caixa].gasto = (semana[caixa].gasto || 0) + valor;
+    }
+
+    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+    const registro = {
+        id: _novoIdN35('reg'),
+        data: dataISO,
+        dataCompra: dataCompra,
+        tipo: 'gasto_cartao',
+        caixa: caixa,
+        categoria: params.categoriaNome || null,
+        categoriaId: params.categoriaId || null,
+        valor: valor,
+        custodiaId: null,
+        cartaoId: cartaoId,
+        faturaId: fatura.faturaId,
+        compromissoId: params.compromissoId || null,
+        numeroParcela: params.numeroParcela != null ? params.numeroParcela : null,
+        origem: origem,
+        saldoAtualizado: false,
+        mesReferencia: params.mesReferencia || null
+    };
+    state.orcamento.historicoRegistros.push(registro);
+
+    // Atualiza contadores do compromisso se houver
+    if (params.compromissoId) {
+        const comp = (state.orcamento.compromissos || []).find(x => x.id === params.compromissoId);
+        if (comp) {
+            comp.parcelasLancadas = (Number(comp.parcelasLancadas) || 0) + 1;
+        }
+    }
+
+    _sincronizarFaturaAcumulada(cartaoId);
+    return registro;
+}
+
+/**
+ * Aplica pagamento em fatura identificada (parcial ou total).
+ * Debita custódia de origem; NÃO debita envelope; atualiza fatura; sync cache.
+ */
+function _aplicarPagamentoFaturaN35(opts) {
+    if (!opts || !state.orcamento) return null;
+    const valor = Number(opts.valor) || 0;
+    if (!(valor > 0)) return null;
+    const cartaoId = opts.cartaoId;
+    const origemId = opts.custodiaId;
+    const origem = (state.orcamento.custodias || []).find(c => c.id === origemId);
+    if (!origem) return null;
+    if ((TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) return null;
+
+    let fatura = null;
+    if (opts.faturaId) {
+        fatura = (state.orcamento.faturas || []).find(f => f.faturaId === opts.faturaId) || null;
+    }
+    if (!fatura) {
+        fatura = _obterOuCriarFaturaCorrente(cartaoId);
+    }
+    if (!fatura) return null;
+
+    origem.saldoAtual = (Number(origem.saldoAtual) || 0) - valor;
+    fatura.valorPago = (Number(fatura.valorPago) || 0) + valor;
+    _recalcularFatura(fatura);
+
+    // Quitação integral: pode marcar parcelas liquidadas (Fatia D/F refinará)
+    if (fatura.estado === 'quitada' && (typeof opts.marcarParcelasLiquidadas === 'boolean' ? opts.marcarParcelasLiquidadas : true)) {
+    (state.orcamento.historicoRegistros || []).forEach(r => {
+        if (r.tipo !== 'gasto_cartao' || r.faturaId !== fatura.faturaId || !r.compromissoId) return;
+        if (r.numeroParcela == null) return;
+        const comp = (state.orcamento.compromissos || []).find(c => c.id === r.compromissoId);
+        if (!comp) return;
+        // Cada parcela emitida nesta fatura e agora paga passa a contar como liquidada no banco.
+        // Idempotente: só incrementa se não foi contada nesta quitação.
+        if (comp.ocorrencias && comp.ocorrencias[r.numeroParcela - 1]) {
+            const oc = comp.ocorrencias[r.numeroParcela - 1];
+            if (oc.estado === 'emitida' && !oc.liquidadaBanco) {
+                oc.liquidadaBanco = true;
+                comp.parcelasLiquidadasBanco = (Number(comp.parcelasLiquidadasBanco) || 0) + 1;
+            }
+        }
+    });
+}
+
+    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+    const registro = {
+        id: _novoIdN35('reg'),
+        data: opts.data || new Date().toISOString(),
+        tipo: 'pagamento_fatura',
+        caixa: null,
+        categoria: 'Pagamento de fatura',
+        valor: valor,
+        custodiaId: origemId,
+        cartaoId: cartaoId,
+        faturaId: fatura.faturaId,
+        origem: opts.origem || 'manual',
+        saldoAtualizado: true
+    };
+    state.orcamento.historicoRegistros.push(registro);
+    _sincronizarFaturaAcumulada(cartaoId);
+    return registro;
+}
+
+// =============================================================================
+// FATIA E — ENCARGOS (§7.5) + DIAGNÓSTICOS (§13.1)
+// =============================================================================
+
+/**
+ * §7.5 — Pergunta se saldo informado já inclui encargos.
+ * Retorna { saldo, incluiEncargosDeclarados, encargosDeclarados } ou null.
+ */
+function _perguntarEncargosSaldo(saldoAtual) {
+    const inclui = confirm(
+        'O valor informado (' + formatarMoeda(saldoAtual) + ') já inclui juros, multas e outros encargos cobrados pelo banco até agora?\n\n' +
+        'OK = Sim, já está incluso\n' +
+        'Cancelar = Não / Não sei'
+    );
+    let encargos = null;
+    if (!inclui) {
+        const encStr = prompt('Quanto é encargo (juros/multa) até agora? Deixe em branco se não souber:');
+        if (encStr != null && String(encStr).trim() !== '') {
+            encargos = _parseValorRegistro(encStr) || null;
+        }
+    }
+    return {
+        saldo: saldoAtual,
+        incluiEncargosDeclarados: inclui,
+        encargosDeclarados: encargos,
+        dataReferenciaSaldo: new Date().toISOString().slice(0, 10)
+    };
+}
+
+function atualizarSaldoObrigacao(obrigacaoId) {
+    const obr = (state.orcamento.obrigacoesCartao || []).find(o => o.id === obrigacaoId);
+    if (!obr || obr.estado === 'quitada') return;
+    const atual = Number(obr.saldoAberto) || 0;
+    const str = prompt('Saldo atual em aberto (R$):', atual.toFixed(2));
+    if (str == null) return;
+    const novo = _parseValorRegistro(str);
+    if (novo == null) { alert('Valor inválido.'); return; }
+    const info = _perguntarEncargosSaldo(novo);
+    obr.saldoAberto = novo;
+    obr.ultimaAtualizacao = info.dataReferenciaSaldo;
+    obr.dataReferenciaSaldo = info.dataReferenciaSaldo;
+    obr.incluiEncargosDeclarados = info.incluiEncargosDeclarados;
+    if (info.encargosDeclarados != null && info.incluiEncargosDeclarados === false) {
+        // Registra encargo declarado como despesa informativa (não mexe em envelope)
+        obr.encargosDeclarados = (Number(obr.encargosDeclarados) || 0) + info.encargosDeclarados;
+        if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+        state.orcamento.historicoRegistros.unshift({
+            id: _novoIdN35('reg'),
+            data: new Date().toISOString(),
+            tipo: 'encargo_cartao',
+            caixa: null,
+            categoria: 'Encargos de cartão',
+            valor: info.encargosDeclarados,
+            custodiaId: null,
+            cartaoId: obr.cartaoId,
+            obrigacaoId: obr.id,
+            origem: 'manual',
+            saldoAtualizado: false
+        });
+    }
+    if (novo <= 0.005) {
+        obr.saldoAberto = 0;
+        obr.estado = 'quitada';
+    }
+    _sincronizarFaturaAcumulada(obr.cartaoId);
+    salvarEstado();
+    alert('Saldo atualizado.');
+    renderizarTelaCartao();
+}
+
+/**
+ * §13.1 — Insuficiência de caixa até a data escolhida (padrão: 14 dias).
+ * Compara posição operacional (bruto − obrigações em aberto) com pagamentos exigíveis no horizonte.
+ */
+function diagnosticarInsuficienciaCaixa(orc, opcoes) {
+    opcoes = opcoes || {};
+    const dias = opcoes.dias || 14;
+    const posicao = _posicaoLiquidaOperacional(orc);
+    const fluxo = projetarFluxo(orc, { dias: dias });
+    const pagamentos = (fluxo.eventos || []).filter(e => e.tipo === 'vencimento')
+        .reduce((s, e) => s + (e.valor || 0), 0);
+    // Reserva da Base até o próximo recebimento
+    const proximoReceb = (fluxo.eventos || []).find(e => e.tipo === 'recebimento');
+    const hoje = new Date();
+    const proxRec = proximoReceb ? new Date(proximoReceb.data + 'T12:00:00') : null;
+    const diasAteRec = proxRec ? Math.max(1, Math.round((proxRec - hoje) / 86400000)) : null;
+    const baseSemanal = (orc.base && orc.base.fortalezaTotal) ? (orc.base.fortalezaTotal / DIVISOR_SEMANAL) : 0;
+    const reservaBase = diasAteRec ? baseSemanal * (diasAteRec / 7) : 0;
+
+    const disponivel = posicao - reservaBase;
+    const insuficiente = disponivel < pagamentos;
+    return {
+        dias: dias,
+        posicao: posicao,
+        reservaBase: reservaBase,
+        disponivel: disponivel,
+        pagamentos: pagamentos,
+        insuficiente: insuficiente,
+        falta: insuficiente ? (pagamentos - disponivel) : 0
+    };
+}
+
+/**
+ * §13.1 — Insuficiência orçamentária (mês corrente).
+ */
+function diagnosticarInsuficienciaOrcamentaria(orc) {
+    const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
+    const rendaRecorrente = fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0);
+    const baseMensal = (orc.base && orc.base.fortalezaTotal) || 0;
+    const vidaMensal = (orc.vida && orc.vida.total) || 0;
+    // Compromissos contratuais do mês (só contratual, não projetado)
+    let contratualMensal = 0;
+    (orc.compromissos || []).forEach(c => {
+        if (c.estado === 'cancelada' || c.estado === 'concluida') return;
+        if (c.tipo === 'parcelado' && c.estado !== 'concluida') {
+            const lanc = Number(c.parcelasLancadas) || 0;
+            const tot = Number(c.parcelasTotais) || 0;
+            if (tot > lanc) contratualMensal += Number(c.valorParcela) || 0;
+        }
+    });
+    const totalDespesas = baseMensal + vidaMensal + contratualMensal;
+    const insuficiente = rendaRecorrente > 0 && totalDespesas > rendaRecorrente;
+    return {
+        rendaRecorrente: rendaRecorrente,
+        baseMensal: baseMensal,
+        vidaMensal: vidaMensal,
+        contratualMensal: contratualMensal,
+        totalDespesas: totalDespesas,
+        insuficiente: insuficiente,
+        excedente: insuficiente ? (totalDespesas - rendaRecorrente) : 0
+    };
+}
+
+/**
+ * §13.1 — Sobrecarga financeira (série mensal, informativa).
+ * NÃO gera alerta (§13.3).
+ */
+function diagnosticarSobrecargaMensal(orc, meses) {
+    meses = meses || 6;
+    const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
+    const rendaRecorrente = fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0);
+    const hoje = new Date();
+    const serie = [];
+    for (let i = 0; i < meses; i++) {
+        const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
+        const mesRef = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        let total = 0;
+        (orc.compromissos || []).forEach(c => {
+            if (c.estado === 'cancelada') return;
+            if (c.tipo === 'parcelado') {
+                const tot = Number(c.parcelasTotais) || 0;
+                const lanc = Number(c.parcelasLancadas) || 0;
+                for (let k = lanc + 1; k <= tot; k++) {
+                    const dataOc = _calcularDataOcorrencia(c, k);
+                    if (dataOc.slice(0, 7) === mesRef) total += Number(c.valorParcela) || 0;
+                }
+            } else if (c.tipo === 'recorrente' && c.estado === 'ativa') {
+                total += Number(c.valorParcela) || 0;
+            }
+        });
+        (orc.obrigacoesCartao || []).forEach(o => {
+            if (o.estado === 'quitada') return;
+            if (!o.dataExigibilidade) return;
+            if (o.dataExigibilidade.slice(0, 7) === mesRef) total += Number(o.saldoAberto) || 0;
+        });
+        serie.push({ mes: mesRef, total: total, renda: rendaRecorrente });
+    }
+    return serie;
+}
+
+function renderizarDiagnosticosCartao(orc) {
+    const fmt = formatarMoeda;
+    const caixa = diagnosticarInsuficienciaCaixa(orc, { dias: 14 });
+    const orcamentaria = diagnosticarInsuficienciaOrcamentaria(orc);
+    const serie = diagnosticarSobrecargaMensal(orc, 6);
+
+    let html = `<div class="secao-titulo">Diagnósticos</div>`;
+
+    if (caixa.insuficiente) {
+        html += `<div class="card" style="border-left:4px solid var(--danger);background:var(--danger-soft);">
+            <div style="font-weight:700;color:var(--danger);">⚠️ Insuficiência de caixa (próximos ${caixa.dias} dias)</div>
+            <p style="font-size:0.9rem;color:var(--secondary);line-height:1.45;margin:6px 0;">
+                Seu dinheiro já tem compromissos importantes. Você tem ${fmt(caixa.disponivel)} disponível (já protegida a Base de ${fmt(caixa.reservaBase)}) e ${fmt(caixa.pagamentos)} em pagamentos exigíveis.
+                Faltam ${fmt(caixa.falta)}.
+            </p>
+            <p style="font-size:0.85rem;color:var(--secondary);line-height:1.4;margin:0;">
+                Não vamos reduzir o essencial nem presumir uma solução. Quem decide é você.
+            </p>
+        </div>`;
+    }
+    if (orcamentaria.insuficiente) {
+        html += `<div class="card" style="border-left:4px solid var(--warning);background:var(--warning-soft);">
+            <div style="font-weight:700;color:var(--warning);">🟡 Insuficiência orçamentária (mês)</div>
+            <p style="font-size:0.9rem;color:var(--secondary);line-height:1.45;margin:6px 0;">
+                Renda mensal ${fmt(orcamentaria.rendaRecorrente)} · despesas ${fmt(orcamentaria.totalDespesas)}.
+                Excede em ${fmt(orcamentaria.excedente)}.
+            </p>
+        </div>`;
+    }
+    // Série de sobrecarga — sempre informativa (§13.3)
+    if (serie.some(s => s.total > 0)) {
+        let linhas = '';
+        serie.forEach(s => {
+            const [ano, mes] = s.mes.split('-');
+            const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+            const label = meses[parseInt(mes, 10) - 1] + '/' + ano.slice(2);
+            const pct = s.renda > 0 ? Math.min(100, (s.total / s.renda) * 100) : 0;
+            linhas += `<div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0;border-top:1px solid var(--border);">
+                <span style="color:var(--secondary);">${label}</span>
+                <span>${fmt(s.total)} ${s.renda > 0 ? `<span style="color:var(--secondary);">(${pct.toFixed(0)}% da renda)</span>` : ''}</span>
+            </div>`;
+        });
+        html += `<div class="card" style="border-left:4px solid var(--primary);">
+            <div style="font-weight:700;color:var(--primary);">📊 Sobrecarga — próximos 6 meses</div>
+            <p style="font-size:0.85rem;color:var(--secondary);line-height:1.4;margin:6px 0 10px;">
+                Compare com sua renda mensal declarada. O app não define um limite porque cada família tem margens diferentes. Esta série é informativa.
+            </p>
+            ${linhas}
+        </div>`;
+    }
+    return html;
+}
+
+/**
+ * Pagamento de obrigação declarada (rotativo/atraso sem fatura id).
+ * Envelope intocado; reduz saldoAberto; debita custódia.
+ */
+function _aplicarPagamentoObrigacaoN35(opts) {
+    if (!opts || !state.orcamento) return null;
+    const valor = Number(opts.valor) || 0;
+    if (!(valor > 0)) return null;
+    const obrigacao = (state.orcamento.obrigacoesCartao || []).find(o => o.id === opts.obrigacaoId);
+    if (!obrigacao || obrigacao.estado === 'quitada') return null;
+    const origem = (state.orcamento.custodias || []).find(c => c.id === opts.custodiaId);
+    if (!origem) return null;
+    if ((TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) return null;
+
+    origem.saldoAtual = (Number(origem.saldoAtual) || 0) - valor;
+    obrigacao.valorPago = (Number(obrigacao.valorPago) || 0) + valor;
+    obrigacao.saldoAberto = Math.max(0, (Number(obrigacao.saldoAberto) || 0) - valor);
+    obrigacao.dataPagamento = (opts.data || new Date().toISOString()).slice(0, 10);
+    obrigacao.ultimaAtualizacao = obrigacao.dataPagamento;
+    if (obrigacao.saldoAberto <= 0.005) {
+        obrigacao.saldoAberto = 0;
+        obrigacao.estado = 'quitada';
+    }
+
+    if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
+    const registro = {
+        id: _novoIdN35('reg'),
+        data: opts.data || new Date().toISOString(),
+        tipo: 'pagamento_obrigacao',
+        caixa: null,
+        categoria: 'Pagamento de obrigação de cartão',
+        valor: valor,
+        custodiaId: opts.custodiaId,
+        cartaoId: obrigacao.cartaoId,
+        obrigacaoId: obrigacao.id,
+        origem: opts.origem || 'manual',
+        saldoAtualizado: true
+    };
+    state.orcamento.historicoRegistros.push(registro);
+    _sincronizarFaturaAcumulada(obrigacao.cartaoId);
+    return registro;
+}
+
+function pagarObrigacaoUI(obrigacaoId) {
+    const obr = (state.orcamento.obrigacoesCartao || []).find(o => o.id === obrigacaoId);
+    if (!obr || obr.estado === 'quitada') return;
+    const valStr = prompt('Quanto pagar de "' + (obr.descricao || 'obrigação') + '"?\nSaldo: ' + formatarMoeda(obr.saldoAberto), Number(obr.saldoAberto).toFixed(2));
+    if (valStr == null) return;
+    const valor = _parseValorRegistro(valStr);
+    if (!valor) { alert('Valor inválido.'); return; }
+
+    const custOrigem = (state.orcamento.custodias || []).filter(c =>
+        !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura
+    );
+    if (custOrigem.length === 0) { alert('Cadastre uma conta com saldo para pagar.'); return; }
+    let origemId = custOrigem[0].id;
+    if (custOrigem.length > 1) {
+        const lista = custOrigem.map((c, i) => (i + 1) + ' — ' + c.nome).join('\n');
+        const esc = prompt('De onde sai o pagamento?\n\n' + lista + '\n\nNúmero:', '1');
+        if (esc == null) return;
+        const idx = parseInt(esc, 10) - 1;
+        if (!custOrigem[idx]) { alert('Opção inválida.'); return; }
+        origemId = custOrigem[idx].id;
+    }
+
+    const reg = _aplicarPagamentoObrigacaoN35({
+        valor: valor, obrigacaoId: obrigacaoId, custodiaId: origemId, origem: 'manual'
+    });
+    if (!reg) { alert('Não foi possível registrar o pagamento.'); return; }
+    salvarEstado();
+    alert('Pagamento registrado. Envelope não foi debitado de novo — a compra já entrou antes.');
+    renderizarTelaCartao();
+}
+
+/**
+ * Testes de sanidade Fatia 0 (dev). Retorna lista de falhas (vazia = ok).
+ */
+function _testesFatia0N35() {
+    const falhas = [];
+    const orc = state.orcamento;
+    if (!orc) return ['sem orcamento'];
+    if (!Array.isArray(orc.faturas)) falhas.push('faturas[] ausente');
+    if (!Array.isArray(orc.compromissos)) falhas.push('compromissos[] ausente');
+    if (!Array.isArray(orc.obrigacoesCartao)) falhas.push('obrigacoesCartao[] ausente');
+
+    (orc.custodias || []).forEach(c => {
+        const tipo = (TIPOS_CUSTODIA[c.tipo] || {});
+        if (!tipo.temFatura) return;
+        let soma = 0;
+        // Após fix do Bug 1: cache = somente sum(faturas[]). Obrigações sem
+        // faturaOrigemId vivem em _eventosPagamentoFaturaDeclarados /
+        // _obrigacoesFinanceirasEmAberto e NÃO entram no cache.
+        (orc.faturas || []).forEach(f => { if (f.cartaoId === c.id) soma += Number(f.saldoAberto) || 0; });
+        const cache = Number(c.faturaAcumulada) || 0;
+        if (Math.abs(cache - soma) > 0.02) {
+            falhas.push('T0.6 falhou em ' + c.id + ': cache=' + cache + ' soma=' + soma);
+        }
+    });
+
+    const bruto = _saldoBrutoOperacional(orc);
+    const obr = _obrigacoesFinanceirasEmAberto(orc).total;
+    const liq = _posicaoLiquidaOperacional(orc);
+    if (Math.abs(liq - (bruto - obr)) > 0.02) {
+        falhas.push('T0.7 identidade: liq=' + liq + ' bruto-obr=' + (bruto - obr));
+    }
+    return falhas;
+}
+
 // FATIA 6 — C1 LIQUIDEZ 7–14 DIAS
 // Só o declarado. 4,33 continua ritmo de plano, não juiz único.
 
@@ -13778,20 +15775,32 @@ const HORIZONTE_LIQUIDEZ_DIAS = 14;
  * - gasto_direto: caixa (sai da custódia) + competência (meta da semana)
  * - gasto_cartao: competência na meta + fatura; caixa só no pagamento_fatura
  * - pagamento_fatura: só caixa (origem −) e fatura (−); NÃO debita meta de novo
- * - Estoque operacional = saldos (sem reserva) − faturas  → âncora dos alarmes N3
+ * - Estoque operacional = posição líquida (saldos − obrigações em aberto) → âncora dos alarmes N3
+ * - Projeção de fluxo parte do saldo BRUTO (_saldoBrutoOperacional), não desta função.
  */
 /**
  * Estoque operacional atual (N3) ou null se indisponível.
- * Este é o número que manda no alarme de aperto (não o fluxo projetado sozinho).
+ * Leitura = POSIÇÃO LÍQUIDA operacional (saldo bruto − obrigações em aberto).
+ *
+ * ⚠️ DIAGNÓSTICO ONLY. NÃO usar como `saldoInicial` de projeção de fluxo:
+ * a fatura entra como evento de saída em `_eventosPagamentoFaturaDeclarados()`,
+ * e projetar a partir do líquido duplica a fatura (viola D1 / T0.7).
+ * Ponto de partida de projeção → `_saldoBrutoOperacional(orc)`.
  */
 function _estoqueOperacionalAtual(orc) {
     if (!orc || (orc.nivel || 1) < 3) return null;
     const custodias = orc.custodias || [];
     if (custodias.length === 0) return null;
+    // Preferir modelo N3.5 quando houver faturas/obrigações estruturadas
+    const temN35 = (orc.faturas && orc.faturas.length > 0) || (orc.obrigacoesCartao && orc.obrigacoesCartao.length > 0);
+    if (temN35 && typeof _posicaoLiquidaOperacional === 'function') {
+        return _posicaoLiquidaOperacional(orc);
+    }
+    // Fallback legado: saldos − faturaAcumulada
     let somaSaldo = 0;
     let somaFatura = 0;
     custodias.forEach(c => {
-        if (_custodiaEhReserva(c)) return; // reserva fica fora do operacional
+        if (_custodiaEhReserva(c)) return;
         const tipo = (typeof TIPOS_CUSTODIA !== 'undefined' && TIPOS_CUSTODIA[c.tipo]) ? TIPOS_CUSTODIA[c.tipo] : {};
         if (tipo.temFatura) somaFatura += (c.faturaAcumulada || 0);
         else somaSaldo += (c.saldoAtual || 0);
@@ -13940,25 +15949,37 @@ function reconstruirSaldoHistorico(orc, opcoes) {
 // Projeta saldo diário COM gastos diluídos e proteção.
 // Reutilizável em Fluxo de Caixa e Simulador.
 function projetarSaldoDiarioCompleto(orc, fluxo, protegerSaldoOverride = null) {
-    const estoque = _estoqueOperacionalAtual(orc);
-    if (estoque === null) return null;
+    // D1 — mantemos o gate de "há custódias operacionais?" (para callers que checam null),
+    // mas o ponto de partida é o SALDO BRUTO, não a posição líquida.
+    if (!orc || !Array.isArray(orc.custodias) || orc.custodias.length === 0) return null;
+    const temOperacional = orc.custodias.some(c => !_custodiaEhReserva(c));
+    if (!temOperacional) return null;
 
-    const protegerSaldo = protegerSaldoOverride !== null ? protegerSaldoOverride : (orc.configFluxo?.protegerSaldo !== false);
+    const estoqueBruto = (typeof _saldoBrutoOperacional === 'function')
+        ? _saldoBrutoOperacional(orc)
+        : orc.custodias
+            .filter(c => !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura)
+            .reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
 
-    // Item 3: diluição única (abate gasto, dívida e reserva já realizados)
+    const protegerSaldo = protegerSaldoOverride !== null
+        ? protegerSaldoOverride
+        : (orc.configFluxo?.protegerSaldo !== false);
+
     const dil = _calcularDiluicaoMensal(orc);
     const totalMensalPlanejado = dil.planejado;
     const gastoRealizadoMes = dil.realizado;
     const totalMensalSemVenc = dil.restante;
 
     const sim = _simularDiluicaoDiaria(orc, fluxo, {
-        saldoInicial: estoque, restante: totalMensalSemVenc, planejado: totalMensalPlanejado,
+        saldoInicial: estoqueBruto,
+        restante: totalMensalSemVenc,
+        planejado: totalMensalPlanejado,
         protegerSaldo: protegerSaldo
     });
 
     return {
         diasCompletos: sim.dias,
-        saldoInicial: estoque,
+        saldoInicial: estoqueBruto,
         saldoFinal: sim.saldoFinal,
         totalDistribuido: sim.totalDistribuido
     };
@@ -14992,10 +17013,17 @@ function avaliarLiquidezHorizonte(orc, opcoes) {
     const temVenc = (fluxo.eventos || []).some(e => e.tipo === 'vencimento');
     const temAlgumEvento = temReceb || temVenc;
 
-    const estoque = _estoqueOperacionalAtual(orc);
+        // D1 — partida da PROJEÇÃO = saldo BRUTO. Posição líquida fica só como
+    // flag de diagnóstico ("caixa já negativo") — não como ponto de partida.
+    const posicaoLiquida = (typeof _estoqueOperacionalAtual === 'function')
+        ? _estoqueOperacionalAtual(orc) : null;
+    const saldoBruto = (typeof _saldoBrutoOperacional === 'function')
+        ? _saldoBrutoOperacional(orc) : null;
+    const temOperacional = Array.isArray(orc.custodias) && orc.custodias.some(c => !_custodiaEhReserva(c));
+
     const mov = calcularMovimentoSemana(orc.semanaAtual, orc);
-    const partida = (estoque !== null) ? estoque : mov.movimento;
-    const origemPartida = (estoque !== null) ? 'estoque' : 'movimento_semana';
+    const partida = (temOperacional && saldoBruto !== null) ? saldoBruto : mov.movimento;
+    const origemPartida = temOperacional ? 'estoque' : 'movimento_semana';
 
     // Caminha o horizonte dia a dia (só eventos declarados)
     let saldo = partida;
@@ -15014,9 +17042,10 @@ function avaliarLiquidezHorizonte(orc, opcoes) {
     const proxReceb = (fluxo.eventos || []).find(e => e.tipo === 'recebimento');
     const proxVenc = (fluxo.eventos || []).find(e => e.tipo === 'vencimento');
 
-    let status = 'sem_dados';
-    // Item 6: se o estoque já está negativo, o alarme não depende de eventos futuros
-    if (origemPartida === 'estoque' && partida < -0.005) {
+        let status = 'sem_dados';
+    // D1 — alarme de "caixa já negativo" usa a POSIÇÃO LÍQUIDA (diagnóstico),
+    // nunca a partida bruta usada para a projeção.
+    if (posicaoLiquida !== null && posicaoLiquida < -0.005) {
         status = 'aperto';
     } else if (temAlgumEvento) {
         if (minimo < 0) status = 'aperto';
@@ -15024,12 +17053,13 @@ function avaliarLiquidezHorizonte(orc, opcoes) {
         else status = 'folga';
     }
 
-    return {
+        return {
         dias: dias,
         inicio: fluxo.inicio,
         fim: fluxo.fim,
-        partida: partida,
+        partida: partida,                 // agora = saldo bruto (ou movimento)
         origemPartida: origemPartida,
+        posicaoLiquida: posicaoLiquida,   // diagnóstico; pode ser null
         saldoFinal: saldo,
         minimo: minimo,
         dataMinimo: dataMinimo,
@@ -15062,13 +17092,14 @@ function renderizarCardLiquidezHorizonte(orc) {
         return p.length === 3 ? p[2] + '/' + p[1] : iso;
     };
 
-    if (!liq.temAlgumEvento) {
-        if (liq.status === 'aperto' && liq.origemPartida === 'estoque') {
+       if (!liq.temAlgumEvento) {
+        if (liq.status === 'aperto' && liq.posicaoLiquida !== null) {
             return `
             <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--danger);background:var(--danger-soft);">
                 <div style="font-size:0.9rem;font-weight:700;color:var(--danger);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">⚠️ Liquidez · estoque</div>
                 <p style="font-size:0.9rem;color:var(--secondary);line-height:1.4;margin:0 0 8px;">
-                    Estoque operacional (carteiras − faturas) está em <strong style="color:var(--danger);">${fmt(liq.partida)}</strong>.
+                    Posição líquida (carteiras − faturas em aberto) está em
+                    <strong style="color:var(--danger);">${fmt(liq.posicaoLiquida)}</strong>.
                     Mesmo sem vencimentos declarados no horizonte, o caixa já está no vermelho.
                 </p>
                 <button class="btn-option" style="justify-content:center;border-color:var(--danger);color:var(--danger);margin-top:4px;" onclick="abrirPlanoRecuperacao()">Ver plano de recuperação</button>
@@ -15092,8 +17123,8 @@ function renderizarCardLiquidezHorizonte(orc) {
         corBorda = 'var(--warning)'; corBg = 'var(--warning-soft)'; corTit = 'var(--warning)'; icone = '🟡'; titulo = 'Atenção no horizonte';
     }
 
-    const origemTxt = liq.origemPartida === 'estoque'
-        ? 'partida = contas − faturas (estoque)'
+        const origemTxt = liq.origemPartida === 'estoque'
+        ? 'partida = saldo bruto das carteiras (fatura entra como saída no fluxo)'
         : 'partida = movimento da semana';
 
     let detalheProx = '';
@@ -15305,12 +17336,11 @@ function detectarGargalos(fluxo, opcoes) {
                 });
             }
         });
-    } else {
-        // Fallback: parte do estoque operacional (não do zero) — alarme N3 ancorado em caixa real
+       } else {
+        // D1 — fallback parte do SALDO BRUTO (não do líquido — T0.7).
         let acumulado = 0;
-        if (typeof _estoqueOperacionalAtual === 'function' && state.orcamento) {
-            const est = _estoqueOperacionalAtual(state.orcamento);
-            if (est !== null) acumulado = est;
+        if (typeof _saldoBrutoOperacional === 'function' && state.orcamento) {
+            acumulado = _saldoBrutoOperacional(state.orcamento) || 0;
         }
         saldoMinimo = acumulado;
         const datas = Object.keys(fluxo.porDia).sort();
@@ -15502,11 +17532,7 @@ function abrirListaRegistrosCategoria(categoriaId, categoriaNome) {
  * - Modo 'categoria' → vazio (edição já existe no form da categoria).
  */
  
-function _montarRodapeEdicaoListaRegistros(ctx) {
-    if (!ctx) return '';
-    if (ctx.modo === 'renda') {
-        return `<button type="button" class="btn-option" style="justify-content:center;border-color:var(--primary);color:var(--primary);margin-top:14px;" onclick="fecharModalListaRegistros(); abrirDetalheRenda();">Detalhe da renda</button>`;
-    }
+let listaRegistrosContexto = null; function _montarRodapeEdicaoListaRegistros(ctx) { if (!ctx) return ''; if (ctx.modo === 'renda') { return `<button type="button" class="btn-option" style="justify-content:center;border-color:var(--primary);color:var(--primary);margin-top:14px;" onclick="fecharModalListaRegistros(); abrirDetalheRenda();">Detalhe da renda</button>`; }
 
     if (ctx.modo !== 'caixa') return '';
 
@@ -15592,16 +17618,24 @@ function renderizarModalListaRegistros() {
                 const valorMostrar = isAjuste ? (r.valor != null ? r.valor : Math.abs(r.delta || 0)) : _valorEfetivoRegistro(r);
                 if (!isAjuste && Math.abs(_valorEfetivoRegistro(r) - (Number(r.valor) || 0)) >= 0.005) meta += (meta ? ' · ' : '') + 'corrigido (original ' + _fmtBRL(r.valor) + ')';
                 const podeEditar = !isAjuste && !r.anulado;
-                const acoes = isAjuste
-                    ? '<span style="font-size:0.9rem;color:var(--secondary);">auditável</span>'
-                    : (r.anulado
-                        ? '<span style="font-size:0.9rem;color:var(--secondary);">anulado</span>'
-                        : `<button class="btn-reg editar" onclick="editarRegistro('${r.id}')">${_registroEmPeriodoFechado(r) ? 'Ajustar' : 'Editar'}</button>
-                                <button class="btn-reg excluir" onclick="excluirRegistro('${r.id}')">${_registroEmPeriodoFechado(r) ? 'Anular' : 'Excluir'}</button>`);
+                                const ehAutoAgendador = r.origem === 'agendador';
+                let acoes;
+                if (isAjuste) {
+                    acoes = '<span style="font-size:0.9rem;color:var(--secondary);">auditável</span>';
+                } else if (r.anulado) {
+                    acoes = '<span style="font-size:0.9rem;color:var(--secondary);">anulado</span>';
+                } else {
+                    acoes =
+                        `<button class="btn-reg editar" onclick="editarRegistro('${r.id}')">${_registroEmPeriodoFechado(r) ? 'Ajustar' : 'Editar'}</button>` +
+                        `<button class="btn-reg excluir" onclick="excluirRegistro('${r.id}')">${_registroEmPeriodoFechado(r) ? 'Anular' : 'Excluir'}</button>` +
+                        (ehAutoAgendador
+                            ? `<button class="btn-reg" style="color:var(--warning);border-color:var(--warning);" onclick="marcarNaoReconhecido('${r.id}')" title="Retira do orçamento e mantém pendência">Não reconhecida</button>`
+                            : '');
+                }
                 return `
                     <div class="item-registro" style="${r.anulado ? 'opacity:0.65;' : ''}">
                         <div class="info">
-                            <div class="nome-reg">${nome}</div>
+                                                    <div class="nome-reg">${nome}${r.origem === 'agendador' ? ' <span style="font-size:0.75rem;color:var(--primary);font-weight:600;">[automático]</span>' : ''}</div>
                             <div class="meta-reg">${meta || '—'}</div>
                         </div>
                         <div style="text-align: right;">
@@ -15715,10 +17749,7 @@ function _aplicarEfeitosAjusteCorrente(ajuste) {
             semana[ajuste.caixa].gasto = (semana[ajuste.caixa].gasto || 0) + delta;
         }
         if (ajuste.cartaoId) {
-            const cartao = (state.orcamento.custodias || []).find(x => x.id === ajuste.cartaoId);
-            if (cartao) {
-                cartao.faturaAcumulada = (cartao.faturaAcumulada || 0) + delta;
-            }
+            _ajustarFaturaPorDelta(ajuste.cartaoId, ajuste.faturaId || null, delta, 0);
         }
     } else if (tipo === 'pagamento_fatura') {
         // Pagar mais da fatura: sai mais da carteira e a fatura cai mais; envelope intacto
@@ -15726,8 +17757,7 @@ function _aplicarEfeitosAjusteCorrente(ajuste) {
             ? (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaId) : null;
         if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) c.saldoAtual = (c.saldoAtual || 0) - delta;
         if (ajuste.cartaoId) {
-            const cartao = (state.orcamento.custodias || []).find(x => x.id === ajuste.cartaoId);
-            if (cartao) cartao.faturaAcumulada = (cartao.faturaAcumulada || 0) - delta;
+            _ajustarFaturaPorDelta(ajuste.cartaoId, ajuste.faturaId || null, 0, delta);
         }
     } else if (tipo === 'transferencia') {
         const o = ajuste.custodiaId ? (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaId) : null;
@@ -15848,10 +17878,7 @@ function _desfazerEfeitosRegistro(r) {
             semana[r.caixa].gasto = Math.max(0, (semana[r.caixa].gasto || 0) - (r.valor || 0));
         }
         if (r.cartaoId) {
-            const cartao = (state.orcamento.custodias || []).find(x => x.id === r.cartaoId);
-            if (cartao) {
-                cartao.faturaAcumulada = Math.max(0, (cartao.faturaAcumulada || 0) - (r.valor || 0));
-            }
+            _ajustarFaturaPorDelta(r.cartaoId, r.faturaId || null, -(Number(r.valor) || 0), 0);
         }
     } else if (r.tipo === 'pagamento_fatura') {
         // Inverso do pagamento: devolve à origem, recoloca na fatura; envelope intacto
@@ -15862,13 +17889,26 @@ function _desfazerEfeitosRegistro(r) {
             }
         }
         if (r.cartaoId) {
-            const cartao = (state.orcamento.custodias || []).find(x => x.id === r.cartaoId);
-            if (cartao) {
-                cartao.faturaAcumulada = (cartao.faturaAcumulada || 0) + (r.valor || 0);
+            _ajustarFaturaPorDelta(r.cartaoId, r.faturaId || null, 0, -(Number(r.valor) || 0));
+        }
+
+        } else if (r.tipo === 'pagamento_obrigacao') {
+        if (r.custodiaId && r.saldoAtualizado !== false) {
+            const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
+            if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
+                origem.saldoAtual = (origem.saldoAtual || 0) + (Number(r.valor) || 0);
             }
         }
-    
-    
+        if (r.obrigacaoId) {
+            const obr = (state.orcamento.obrigacoesCartao || []).find(o => o.id === r.obrigacaoId);
+            if (obr) {
+                obr.saldoAberto = (Number(obr.saldoAberto) || 0) + (Number(r.valor) || 0);
+                obr.valorPago = Math.max(0, (Number(obr.valorPago) || 0) - (Number(r.valor) || 0));
+                if (obr.estado === 'quitada' && obr.saldoAberto > 0.005) obr.estado = 'em_aberto';
+                _sincronizarFaturaAcumulada(obr.cartaoId);
+            }
+       
+    }
        } else if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
         // Reverter gasto da caixa Futuro
         if (naSemana && semana && semana.futuro) {
@@ -15959,10 +17999,7 @@ function _aplicarEfeitosRegistro(r) {
             semana[r.caixa].gasto = (semana[r.caixa].gasto || 0) + (r.valor || 0);
         }
         if (r.cartaoId) {
-            const cartao = (state.orcamento.custodias || []).find(x => x.id === r.cartaoId);
-            if (cartao) {
-                cartao.faturaAcumulada = (cartao.faturaAcumulada || 0) + (r.valor || 0);
-            }
+            _ajustarFaturaPorDelta(r.cartaoId, r.faturaId || null, Number(r.valor) || 0, 0);
         }
     } else if (r.tipo === 'pagamento_fatura') {
         // Pagamento: só caixa + fatura (nunca envelope)
@@ -15974,9 +18011,23 @@ function _aplicarEfeitosRegistro(r) {
             }
         }
         if (r.cartaoId) {
-            const cartao = (state.orcamento.custodias || []).find(x => x.id === r.cartaoId);
-            if (cartao) {
-                cartao.faturaAcumulada = Math.max(0, (cartao.faturaAcumulada || 0) - (r.valor || 0));
+            _ajustarFaturaPorDelta(r.cartaoId, r.faturaId || null, 0, Number(r.valor) || 0);
+        }
+       } else if (r.tipo === 'pagamento_obrigacao') {
+        if (r.custodiaId) {
+            const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
+            if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
+                origem.saldoAtual = (origem.saldoAtual || 0) - (r.valor || 0);
+                r.saldoAtualizado = true;
+            }
+        }
+        if (r.obrigacaoId) {
+            const obr = (state.orcamento.obrigacoesCartao || []).find(o => o.id === r.obrigacaoId);
+            if (obr) {
+                obr.saldoAberto = Math.max(0, (Number(obr.saldoAberto) || 0) - (Number(r.valor) || 0));
+                obr.valorPago = (Number(obr.valorPago) || 0) + (Number(r.valor) || 0);
+                if (obr.saldoAberto <= 0.005) { obr.saldoAberto = 0; obr.estado = 'quitada'; }
+                _sincronizarFaturaAcumulada(obr.cartaoId);
             }
         }
        } else if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
@@ -16050,12 +18101,32 @@ function excluirRegistro(id) {
         return;
     }
 
-    if (!confirm('Excluir este registro de ' + _fmtBRL(r.valor) + '?')) return;
+        if (!confirm('Excluir este registro de ' + _fmtBRL(r.valor) + '?')) return;
 
     _desfazerEfeitosRegistro(r);
+
+    // TA.4 — sincroniza contador de parcelas lançadas ao excluir gasto_cartao.
+    // Exclusão REAL: decrementa parcelasLancadas e devolve a ocorrência a 'nao_processada'.
+    // Edição (via _desfazer + _aplicar em salvarEdicaoRegistro) NÃO passa por aqui —
+    // o contador só é reajustado quando o registro sai de fato da lista.
+    if (r.tipo === 'gasto_cartao' && r.compromissoId) {
+        const comp = (state.orcamento.compromissos || []).find(c => c.id === r.compromissoId);
+        if (comp) {
+            comp.parcelasLancadas = Math.max(0, (Number(comp.parcelasLancadas) || 0) - 1);
+            if (Array.isArray(comp.ocorrencias) && r.numeroParcela != null) {
+                const oc = comp.ocorrencias[r.numeroParcela - 1];
+                if (oc) {
+                    oc.estado = 'nao_processada';
+                    oc.faturaId = null;
+                    oc.registroId = null;
+                }
+            }
+        }
+    }
+
     if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
-    if (typeof recalcularTotalFuturo === 'function') recalcularTotalFuturo();
-}
+        if (typeof recalcularTotalFuturo === 'function') recalcularTotalFuturo();
+    }
     lista.splice(idx, 1);
     salvarEstado();
     _atualizarTelasAposRegistro();
@@ -16073,6 +18144,8 @@ function _atualizarTelasAposRegistro() {
     }
     else if (tela === 'screen-renda-detalhe') renderizarDetalheRenda();
     else if (tela === 'screen-divida-detalhe') renderizarDetalheFuturo();
+    else if (tela === 'screen-cartao') renderizarTelaCartao();
+    else if (tela === 'screen-cartoes-lista') renderizarListaCartoes();
     else if (tela === 'screen-plano-recuperacao') renderizarPlanoRecuperacao();
     else if (tela === 'screen-custodias') {
         if (custodiaEditandoId) abrirFormularioCustodia(custodiaEditandoId);
