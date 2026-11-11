@@ -1070,6 +1070,16 @@
     <div id="screen-simulador" class="screen">
         <div id="simulador-conteudo"></div>
     </div>
+    
+        <!-- TELA 16 DIAGNÓSTICO -->
+    <div id="screen-diagnostico" class="screen">
+        <div id="diagnostico-conteudo"></div>
+    </div>
+    
+        <!-- TELA 17: ESTUDO DOS INDICADORES -->
+    <div id="screen-estudo-indicadores" class="screen">
+        <div id="estudo-indicadores-conteudo"></div>
+    </div>
 
     <!-- ============================================================
          FATIA D — Slots reservados N0 e N4 (Ciclo 4.1)
@@ -1228,6 +1238,14 @@
     </div>
 </div>
 
+<!-- MODAL: Detalhamento de Indicador -->
+<div id="modal-indicador" class="modal-registro">
+    <div class="modal-registro-conteudo" style="max-height: 88vh; overflow-y: auto; padding-top: 28px;">
+        <button type="button" onclick="fecharModalIndicador()" style="position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer; z-index: 2;">&times;</button>
+        <div id="modal-indicador-conteudo"></div>
+    </div>
+</div>
+
 <div id="modal-feedback" class="modal-registro">
     <div class="modal-registro-conteudo" style="padding-top: 28px;">
 
@@ -1351,7 +1369,11 @@ const TITULOS_TELAS = {
     'screen-editar-plano': 'Editar Plano',
     'screen-projeto': 'Projeto',
     'screen-tutorial': 'Tutorial',
-        'screen-excecoes': 'A confirmar',
+    'screen-excecoes': 'A confirmar',
+    'screen-fluxo-caixa': 'Fluxo de Caixa',
+    'screen-simulador': 'Simulador',
+    'screen-diagnostico': 'Diagnóstico Financeiro',
+    'screen-diagnostico': 'Diagnóstico Financeiro', 'screen-estudo-indicadores': 'Estudo dos Indicadores',
 };
 // Funções globais para formatar valores (respeitando a privacidade)
 function formatarMoeda(v) {
@@ -1929,12 +1951,18 @@ state.orcamento.categorias.forEach(c => {
         if (c.subtipo === 'reserva' && c.saldoDevedor === undefined) c.saldoDevedor = null;
     }
     if (c.pagamentoConfirmadoMes === undefined) c.pagamentoConfirmadoMes = null;
-});
 
+if (c.dataVencimentoReal === undefined) c.dataVencimentoReal = null;
+
+if (c.tipoCredito === undefined) c.tipoCredito = null;
+});
     // === CICLO 3.9 — MIGRAÇÃO DE BASE ===
 
     // 1. diaRecebimento em fontes de renda (N2)
-    if (state.orcamento.rendaDetalhe && Array.isArray(state.orcamento.rendaDetalhe.fontes)) {
+        if (state.orcamento.rendaDetalhe && Array.isArray(state.orcamento.rendaDetalhe.fontes)) {
+        if (typeof state.orcamento.rendaDetalhe.dependentes !== 'number') {
+            state.orcamento.rendaDetalhe.dependentes = 0;
+        }
         state.orcamento.rendaDetalhe.fontes.forEach(f => {
             if (f.diaRecebimento === undefined) f.diaRecebimento = null;
             if (f.natureza === undefined) f.natureza = null;
@@ -3929,7 +3957,9 @@ function calcularLiquidezProjetada(orc) {
 /** Pílula de status + ícone de notificações/andaime */
 function renderizarPilulaStatusHome(orc) {
     if (!orc || (orc.nivel || 1) < 2) return '';
-    let pill = `<button type="button" class="home-pill" onclick="abrirTelaFluxoCaixa()">✨ Ver horizonte ›</button>`;
+    
+    // ALTERAÇÃO AQUI: abrirTelaDiagnostico em vez de abrirTelaFluxoCaixa
+    let pill = `<button type="button" class="home-pill" onclick="abrirTelaDiagnostico()">✨ Diagnóstico ›</button>`;
     try {
         const liq = calcularLiquidezProjetada(orc);
         if (liq && liq.temAlgumEvento) {
@@ -3952,11 +3982,11 @@ function renderizarPilulaStatusHome(orc) {
             
             let textoFinal = txt;
             if (dataFmt) {
-                // Muda a preposição para ficar claro que é o dia em que o saldo fica negativo
                 textoFinal += (liq.status === 'aperto' ? ' em ' : ' · ') + dataFmt;
             }
             
-            pill = `<button type="button" class="${cls}" onclick="abrirTelaFluxoCaixa()">${textoFinal} ›</button>`;
+            // ALTERAÇÃO AQUI TAMBÉM
+            pill = `<button type="button" class="${cls}" onclick="abrirTelaDiagnostico()">${textoFinal} ›</button>`;
         }
     } catch (_) {}
     return `<div class="home-pill-row">${pill}</div>`;
@@ -7955,11 +7985,24 @@ const nivel = (state.orcamento && state.orcamento.nivel) || 1;
 const linkContas = nivel >= 3
     ? `<button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--text-main);margin-top:16px;" onclick="abrirTelaCustodias()">🏦 Carteiras — Onde o dinheiro mora</button>`
     : '';
+        const dependentes = state.orcamento.rendaDetalhe?.dependentes || 0;
+
     container.innerHTML = `
     ${cabecalhoTelaSecundaria('Sua renda', 'De onde o dinheiro entra')}
     <div class="fala-avatar">
         <span class="icone">🌿</span>
         <span class="texto">Suas fontes de renda. Se mudar algo, é só avisar.</span>
+    </div>
+
+    <div class="card" style="border-left: 4px solid var(--primary); background: var(--purple-light); margin-bottom: 16px;">
+        <div style="font-size: 0.9rem; font-weight: 700; color: var(--primary); margin-bottom: 4px;">Sobre a sua família</div>
+        <p style="font-size: 0.85rem; color: var(--primary-press); margin-bottom: 12px; line-height: 1.4;">
+            Quantas pessoas dependem dessa renda? (Além de você). A lei do superendividamento prevê um piso de R$ 600 por pessoa.
+        </p>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="number" id="input-dependentes" class="input-padrao" min="0" max="20" value="${dependentes}" style="margin-bottom: 0; flex: 1; text-align: center;">
+            <button type="button" class="btn-sm" style="background: var(--primary); color: white; height: 48px; padding: 0 20px; border-radius: 12px;" onclick="salvarDependentesRenda()">Salvar</button>
+        </div>
     </div>
 
     ${avisoDiferenca}
@@ -7979,6 +8022,18 @@ const linkContas = nivel >= 3
         Refazer do zero
     </button>
 `;
+}
+
+function salvarDependentesRenda() {
+    const val = parseInt(document.getElementById('input-dependentes').value, 10);
+    if (isNaN(val) || val < 0) {
+        alert('Informe um número válido de dependentes (0 ou mais).');
+        return;
+    }
+    if (!state.orcamento.rendaDetalhe) state.orcamento.rendaDetalhe = { fontes: [] };
+    state.orcamento.rendaDetalhe.dependentes = val;
+    salvarEstado();
+    renderizarDetalheRenda();
 }
 
 function traduzirOrigem(origem) {
@@ -9836,6 +9891,32 @@ container.innerHTML = `
                     <span class="prefixo" style="position:static;margin-left:8px;">% a.m.</span>
                 </div>
             </div>
+            <!-- Nova: tipo de crédito explícito (Opção C — elimina dependência de keyword) -->
+<div class="fala-avatar">
+    <span class="icone">${avatar}</span>
+    <span class="texto">Essa dívida veio de qual tipo de crédito?</span>
+</div>
+<div class="chip-container" id="chips-tipo-credito">
+    <div class="chip" data-credito="cartao_credito" onclick="selecionarTipoCredito(this, 'cartao_credito')">💳 Cartão de crédito</div>
+    <div class="chip" data-credito="cheque_especial" onclick="selecionarTipoCredito(this, 'cheque_especial')">📝 Cheque especial</div>
+    <div class="chip" data-credito="consignado" onclick="selecionarTipoCredito(this, 'consignado')">🏛️ Consignado</div>
+    <div class="chip" data-credito="financiamento" onclick="selecionarTipoCredito(this, 'financiamento')">🏠 Financiamento</div>
+    <div class="chip" data-credito="emprestimo" onclick="selecionarTipoCredito(this, 'emprestimo')">🏦 Empréstimo</div>
+    <div class="chip" data-credito="outro" onclick="selecionarTipoCredito(this, 'outro')">📦 Outro / não sei</div>
+</div>
+<p style="font-size:0.85rem;color:var(--secondary);margin:6px 0 12px;line-height:1.35;">
+    Isso ajuda o diagnóstico a contar quantas <strong>modalidades diferentes</strong> de crédito você usa. O Banco Central considera risco a partir de 3 modalidades simultâneas.
+</p>
+
+<!-- Nova: data real de vencimento (permite atraso > 31 dias) -->
+<div class="fala-avatar">
+    <span class="icone">${avatar}</span>
+    <span class="texto">Se essa dívida está atrasada, qual foi a data real do vencimento? (opcional)</span>
+</div>
+<input type="date" id="nova-cat-venc-real" class="input-padrao">
+<p style="font-size:0.85rem;color:var(--secondary);margin:6px 0 12px;line-height:1.35;">
+    Deixe em branco se a dívida ainda está no ciclo normal do mês. Preencha quando a cobrança já passou do mês — é isso que permite o app mostrar atrasos longos (60, 90, 120 dias) de forma correta.
+</p>
         </div>
         ` : ''}
 
@@ -9849,6 +9930,7 @@ container.innerHTML = `
     tipoCategoriaSelecionado = null;
     parcelamentoSelecionado = null;
     taxaJurosSelecionada = null;
+    tipoCreditoSelecionado = null;
 
     // Prefill em edição
     if (catExistente) {
@@ -9890,13 +9972,32 @@ container.innerHTML = `
                 const chip = document.querySelector('#chips-taxa-juros .chip[data-taxa="nao_sei"]');
                 if (chip) selecionarTaxaJuros(chip, 'nao_sei');
             }
+        
+        // Prefill data real de vencimento
+if (catExistente.dataVencimentoReal) {
+    const elVencReal = document.getElementById('nova-cat-venc-real');
+    if (elVencReal) elVencReal.value = catExistente.dataVencimentoReal;
+}
+// Prefill tipo de crédito
+if (catExistente.tipoCredito) {
+    tipoCreditoSelecionado = catExistente.tipoCredito;
+    const chipCred = document.querySelector(`#chips-tipo-credito .chip[data-credito="${catExistente.tipoCredito}"]`);
+    if (chipCred) chipCred.classList.add('selecionado');
+}
         }
     }
 }
     
 	let parcelamentoSelecionado = null;
 let custodiaReservaFuturoSelecionada = null;
-let taxaJurosSelecionada = null; // 'nao_sei' | 'sem' | 'sei'
+let taxaJurosSelecionada = null; // 'nao_sei' | 'sem' | 'sei
+let tipoCreditoSelecionado = null;
+
+function selecionarTipoCredito(el, tipo) {
+    document.querySelectorAll('#chips-tipo-credito .chip').forEach(c => c.classList.remove('selecionado'));
+    el.classList.add('selecionado');
+    tipoCreditoSelecionado = tipo;
+}
 
 function selecionarParcelamento(el, escolha) {
     document.querySelectorAll('#chips-parcelamento .chip').forEach(c => c.classList.remove('selecionado'));
@@ -9948,9 +10049,11 @@ function salvarCategoriaFuturo() {
         return;
     }
 
-    // Item 4: saldo devedor e taxa (só dívida)
+       // Item 4: saldo devedor e taxa (só dívida)
     let saldoDevedorForm = null;
     let taxaJurosForm = null;
+    let dataVencRealForm = null;  
+    let tipoCreditoForm = null;  
     if (subtipo === 'divida') {
         const elSaldo = document.getElementById('nova-cat-saldo-devedor');
         if (elSaldo && String(elSaldo.value).trim() !== '') {
@@ -9970,6 +10073,13 @@ function salvarCategoriaFuturo() {
         } else {
             taxaJurosForm = null; // não sei
         }
+        
+                const elDataReal = document.getElementById('nova-cat-venc-real');
+        const vDataReal = elDataReal && elDataReal.value;
+        if (vDataReal && /^\d{4}-\d{2}-\d{2}$/.test(String(vDataReal))) {
+            dataVencRealForm = String(vDataReal);
+        }
+        tipoCreditoForm = tipoCreditoSelecionado || null;
     }
 
     // Confirmação de "já paguei" (apenas na criação, edição não pergunta de novo para não confundir)
@@ -10018,7 +10128,8 @@ function salvarCategoriaFuturo() {
                 }
             }
             // taxa: null = não sei; 0 = sem juros; número = % a.m.
-            if (taxaJurosSelecionada) cat.taxaJuros = taxaJurosForm;
+            if (taxaJurosSelecionada) cat.taxaJuros = taxaJurosForm;            cat.dataVencimentoReal = dataVencRealForm;
+            cat.tipoCredito = tipoCreditoForm;
         }
 
         categoriaEditandoId = null;
@@ -10028,6 +10139,7 @@ function salvarCategoriaFuturo() {
         tipoCategoriaSelecionado = null;
         parcelamentoSelecionado = null;
         taxaJurosSelecionada = null;
+        tipoCreditoSelecionado = null;
         custodiaReservaFuturoSelecionada = null;
         
         recalcularTotalFuturo();
@@ -10057,7 +10169,9 @@ function salvarCategoriaFuturo() {
         valorTotal: parcelasTotais ? (valor * parcelasTotais) : null,
         saldoDevedor: saldoInicial,
         saldoDevedorEstimado: (subtipo === 'divida' && saldoInicial !== null && saldoDevedorForm === null),
-        taxaJuros: subtipo === 'divida' ? taxaJurosForm : null,
+                taxaJuros: subtipo === 'divida' ? taxaJurosForm : null,
+        dataVencimentoReal: subtipo === 'divida' ? dataVencRealForm : null,
+        tipoCredito: subtipo === 'divida' ? tipoCreditoForm : null,
         pagamentoConfirmadoMes: pagamentoConfirmadoMes,
         custodiaPadraoId: (subtipo === 'reserva') ? (custodiaReservaFuturoSelecionada || null) : null
     });
@@ -10067,6 +10181,7 @@ function salvarCategoriaFuturo() {
 
     tipoCategoriaSelecionado = null;
     parcelamentoSelecionado = null;
+    tipoCreditoSelecionado = null;
     salvarEstado();
     renderizarDetalheFuturo();
 }
@@ -11987,7 +12102,7 @@ html += `<button type="button" class="btn-option" style="justify-content:center;
     }
 
     // §13.1 Diagnósticos (insuficiência de caixa, orçamentária, sobrecarga informativa)
-    html += renderizarDiagnosticosCartao(state.orcamento);
+    html += renderizarDiagnosticosFinanceiros(state.orcamento);
 
     // Atalhos
     html += `
@@ -12435,21 +12550,57 @@ function _pagoDaObrigacaoNoMes(cat, orc) {
     });
     return pago;
 }
-function _vencidaNaoQuitada(c, orc, diaHoje) {
-    if (!c.vencimento || _categoriaParcelasQuitada(c)) return false;
-    // Boleto: vencido = alguma ocorrência já vencida com valor ainda por pagar (inclusive de meses anteriores)
-    if (_ehContaComVencimento(c)) return _boletoAbertoInfo(orc, c).vencido;
-    if (c.vencimento >= diaHoje) return false;
-    const obrigacao = c.caixa === 'futuro' && c.subtipo === 'divida';
-    return obrigacao ? !_obrigacaoQuitadaNoMes(c, orc) : !_contaEstaPagaNoMes(c, orc);
-}
-/** Dívidas do Futuro com vencimento já passado e não quitadas no mês: atraso REAL, não "meta". */
+
+
+/**
+ * Dívidas do Futuro com vencimento real já passado e não quitadas no mês.
+ * Atravessa o gate "conta paga no mês" e devolve a lista pronta para:
+ *   - card Futuro na Home (renderizarCaixinha)
+ *   - cálculo de inadimplência (calcularInadimplencia)
+ *   - snapshot do resumo semanal (fecharSemana → abrirResumoSemanal)
+ *
+ * Formato esperado pelos callers:
+ *   { id, nome, valor, vencimento, diasAtraso }
+ *
+ * Usa `dataVencimentoReal` quando presente (Opção C, sem teto).
+ * Sem ela, cai no fallback por dia-do-mês (teto ~31d) — retrocompatível.
+ */
 function _obrigacoesFuturoVencidas(orc) {
     if (!orc) return [];
     const diaHoje = new Date().getDate();
     return _dividasFuturoAtivas(orc)
         .filter(c => _vencidaNaoQuitada(c, orc, diaHoje))
-        .map(c => ({ id: c.id, nome: c.nome, valor: Number(c.valor) || 0, vencimento: c.vencimento, diasAtraso: diaHoje - c.vencimento }));
+        .map(c => ({
+            id: c.id,
+            nome: c.nome || 'Dívida',
+            valor: Number(c.valor) || 0,
+            vencimento: c.vencimento,
+            diasAtraso: _calcularDiasAtraso(c.vencimento, c.dataVencimentoReal)
+        }));
+}
+
+function _vencidaNaoQuitada(c, orc, diaHoje) {
+    if (!c.vencimento || _categoriaParcelasQuitada(c)) return false;
+    // Boleto: vencido = alguma ocorrência já vencida com valor ainda por pagar
+    if (_ehContaComVencimento(c)) return _boletoAbertoInfo(orc, c).vencido;
+
+    const obrigacao = c.caixa === 'futuro' && c.subtipo === 'divida';
+
+    // Opção C — data real manda na decisão "está vencida?"
+    if (c.dataVencimentoReal && /^\d{4}-\d{2}-\d{2}$/.test(String(c.dataVencimentoReal))) {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        const dv = new Date(String(c.dataVencimentoReal) + 'T12:00:00');
+        if (!isNaN(dv.getTime())) {
+            dv.setHours(0, 0, 0, 0);
+            if (dv >= hoje) return false; // data real futura → não vencida
+            return obrigacao ? !_obrigacaoQuitadaNoMes(c, orc) : !_contaEstaPagaNoMes(c, orc);
+        }
+    }
+
+    // Fallback legado: dia do mês
+    if (c.vencimento >= diaHoje) return false;
+    return obrigacao ? !_obrigacaoQuitadaNoMes(c, orc) : !_contaEstaPagaNoMes(c, orc);
 }
 
 function _temRegistroPagoNoMes(cat, orc) {
@@ -13893,6 +14044,901 @@ function copiarCodigoQR() {
     } catch (e) {
         alert('Não foi possível copiar. Selecione manualmente.');
     }
+}
+
+function abrirTelaDiagnostico() {
+    goToScreen('screen-diagnostico');
+    renderizarDiagnostico();
+}
+
+function calcularRendaFragil(orc) {
+    const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
+    const totalRenda = fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0);
+    if (totalRenda <= 0) return { porcentagem: 0, valor: 0 };
+    
+    const fragil = fontes
+        .filter(f => f.natureza === 'contratual' || f.natureza === 'variavel')
+        .reduce((s, f) => s + (Number(f.valor) || 0), 0);
+        
+    return {
+        porcentagem: (fragil / totalRenda) * 100,
+        valor: fragil
+    };
+}
+
+function calcularTempoReserva(orc) {
+    const reserva = (orc.custodias || []).filter(_custodiaEhReserva).reduce((s, c) => s + (Number(c.saldoAtual) || 0), 0);
+    const gastoMensal = (Number(orc.base?.fortalezaTotal) || 0) + (Number(orc.vida?.total) || 0);
+    
+    if (gastoMensal <= 0) return { meses: 0, status: 'sem_dados' };
+    
+    const meses = reserva / gastoMensal;
+    return { meses: meses, status: meses >= 3 ? 'ok' : (meses > 0 ? 'atencao' : 'critico') };
+}
+
+function calcularMinimoExistencial(orc) {
+    // 1. Renda total
+    const renda = (orc.rendaDetalhe?.fontes || []).reduce((s, f) => s + (Number(f.valor) || 0), 0);
+
+    // 2. Boletos da Base (APENAS tipo 'conta' - aluguel, luz, água. Ignora consumo)
+    const boletosBase = (orc.categorias || [])
+        .filter(c => c.caixa === 'base' && c.tipo === 'conta' && !_categoriaParcelasQuitada(c))
+        .reduce((s, c) => s + (Number(c.valor) || 0), 0);
+
+    // 3. Dívidas (Futuro) + Compromissos ativos do cartão
+    const dividasFuturo = (orc.categorias || [])
+        .filter(c => c.caixa === 'futuro' && c.subtipo === 'divida' && !_categoriaParcelasQuitada(c))
+        .reduce((s, c) => s + (Number(c.valor) || 0), 0);
+    
+    const compromissos = (orc.compromissos || [])
+        .filter(c => c.estado === 'ativa')
+        .reduce((s, c) => s + (Number(c.valorParcela) || 0), 0);
+    
+    const totalDividas = dividasFuturo + compromissos;
+
+    // 4. Piso legal (R$ 600 por pessoa: titular + dependentes)
+    const numDependentes = Number(orc.rendaDetalhe?.dependentes) || 0;
+    const totalPessoas = 1 + numDependentes;
+    const pisoLegal = 600 * totalPessoas;
+
+    // 5. O que sobra para viver (Renda - Boletos - Dívidas)
+    const sobraParaViver = renda - boletosBase - totalDividas;
+
+    // 6. Preservado?
+    const preservado = sobraParaViver >= pisoLegal;
+
+    return {
+        valor: sobraParaViver,
+        preservado: preservado,
+        pisoLegal: pisoLegal,
+        boletosBase: boletosBase,
+        dividas: totalDividas,
+        rendaTotal: renda,
+        totalPessoas: totalPessoas
+    };
+}
+
+// =============================================================================
+// NOVO MOTOR: MULTICRITÉRIO E IDE (Índice de Distância do Equilíbrio)
+// =============================================================================
+
+function _clamp(n) {
+    return Math.min(1, Math.max(0, n));
+}
+
+function avaliarSistemaMulticriterio(orc) {
+    const fmt = formatarMoeda;
+    
+    // 1. Coleta dos dados brutos
+    const renda = (orc.rendaDetalhe?.fontes || []).reduce((s, f) => s + (Number(f.valor) || 0), 0);
+    const dep = orc.rendaDetalhe?.dependentes || 0;
+    const piso = 600 * (1 + dep);
+    
+    const boletos = (orc.categorias || []).filter(c => c.caixa === 'base' && c.tipo === 'conta' && !_categoriaParcelasQuitada(c)).reduce((s, c) => s + (Number(c.valor) || 0), 0);
+    const dividas = (orc.categorias || []).filter(c => c.caixa === 'futuro' && c.subtipo === 'divida' && !_categoriaParcelasQuitada(c)).reduce((s, c) => s + (Number(c.valor) || 0), 0);
+    const comp = (orc.compromissos || []).filter(c => c.estado === 'ativa').reduce((s, c) => s + (Number(c.valorParcela) || 0), 0);
+    const sobraMin = renda - boletos - (dividas + comp);
+    
+    const diasInad = calcularInadimplencia(orc).dias;
+    const fluxo14 = diagnosticarInsuficienciaCaixa(orc, { dias: 14 });
+    const compRenda = calcularComprometimentoRenda(orc);
+    const mod = contarModalidadesCredito(orc);
+    const rendaFragil = calcularRendaFragil(orc);
+    const reservaMeses = calcularTempoReserva(orc).meses;
+    const folego = calcularFolegoFinanceiro(orc).margemBase;
+    const insOrc = diagnosticarInsuficienciaOrcamentaria(orc).insuficiente;
+    
+    // 2. Cálculo dos Scores Normalizados (0 a 1)
+    let scMin = sobraMin < piso ? _clamp((piso - sobraMin) / piso) : 0;
+    let scInad = _clamp(diasInad / 90);
+    let scFluxo = fluxo14.insuficiente ? _clamp(fluxo14.falta / (renda * 0.2 || 1)) : 0;
+    let scComp = compRenda.porcentagem > 30 ? _clamp((compRenda.porcentagem - 30) / 30) : 0;
+    let scFrag = rendaFragil.porcentagem > 20 ? _clamp((rendaFragil.porcentagem - 20) / 50) : 0;
+    let scRes = reservaMeses < 3 ? _clamp((3 - reservaMeses) / 3) : 0;
+    let scFolego = folego < 0 ? _clamp(Math.abs(folego) / (renda * 0.1 || 1)) : 0;
+    let scMod = mod > 1 ? _clamp((mod - 1) / 3) : 0;
+    let scOrc = insOrc ? 1 : 0;
+
+    // 3. Definição dos Indicadores e Pesos
+    const lista = [
+        { id: 'minimo', nome: 'Mínimo Existencial', icone: '🛡️', valor: sobraMin, score: scMin, peso: 5, 
+          sub: sobraMin >= piso ? 'Sobra garantida' : 'Abaixo do piso (' + fmt(piso) + ')', cor: sobraMin >= piso ? 'var(--success)' : 'var(--danger)', meta: 'Garantir sobra de ' + fmt(piso) },
+        
+        { id: 'inadimplencia', nome: 'Atrasos', icone: '⏰', valor: diasInad, score: scInad, peso: 5, 
+          sub: diasInad > 0 ? diasInad + ' dias' : 'Em dia', cor: diasInad > 0 ? 'var(--danger)' : 'var(--success)', meta: 'Zero dias de atraso' },
+        
+        { id: 'fluxo', nome: 'Fluxo de Caixa (14d)', icone: '🌊', valor: fluxo14.disponivel, score: scFluxo, peso: 4, 
+          sub: fluxo14.insuficiente ? 'Falta ' + fmt(fluxo14.falta) : 'Coberto', cor: fluxo14.insuficiente ? 'var(--danger)' : 'var(--success)', meta: 'Saldo positivo nos próximos 14 dias' },
+        
+        { id: 'comprometimento', nome: 'Peso da Dívida', icone: '⚖️', valor: compRenda.porcentagem, score: scComp, peso: 3, 
+          sub: compRenda.porcentagem.toFixed(0) + '% da renda', cor: compRenda.cor, meta: 'Dívidas < 30% da renda' },
+        
+        { id: 'renda_fragil', nome: 'Renda Frágil', icone: '🪵', valor: rendaFragil.porcentagem, score: scFrag, peso: 3, 
+          sub: rendaFragil.porcentagem.toFixed(0) + '% instável', cor: rendaFragil.porcentagem >= 30 ? 'var(--warning)' : 'var(--text-main)', meta: 'Reduzir renda instável ou cobrir com reserva' },
+        
+        { id: 'reserva', nome: 'Tempo de Reserva', icone: '🐖', valor: reservaMeses, score: scRes, peso: 3, 
+          sub: reservaMeses.toFixed(1) + ' meses', cor: reservaMeses < 3 ? 'var(--warning)' : 'var(--success)', meta: 'Atingir 3 meses de reserva (' + fmt(calcularTempoReserva(orc).meses > 0 ? (calcularFolegoFinanceiro(orc).gastosMes * 3) : 0) + ')' },
+        
+        { id: 'folego', nome: 'Fôlego Financeiro', icone: '🫁', valor: folego, score: scFolego, peso: 2, 
+          sub: folego >= 0 ? 'Sobra mensal' : 'Déficit mensal', cor: folego >= 0 ? 'var(--success)' : 'var(--danger)', meta: 'Fechar o mês no azul' },
+        
+        { id: 'modalidade', nome: 'Multimodalidade', icone: '💳', valor: mod, score: scMod, peso: 2, 
+          sub: mod + ' tipos de crédito', cor: mod >= 3 ? 'var(--danger)' : 'var(--text-main)', meta: 'Reduzir para no máximo 2 tipos' },
+        
+        { id: 'orcamentaria', nome: 'Insuficiência Orçamentária', icone: '🟡', valor: 0, score: scOrc, peso: 2, 
+          sub: insOrc ? 'Despesas > Renda' : 'Equilibrado', cor: insOrc ? 'var(--warning)' : 'var(--success)', meta: 'Plano de gastos caber na renda' }
+    ];
+
+    // 4. Cálculo do IDE e Ordenação
+    let somaPesos = 0;
+    let somaPonderada = 0;
+    
+    lista.forEach(ind => {
+        ind.scorePonderado = ind.score * ind.peso;
+        somaPesos += ind.peso;
+        somaPonderada += ind.scorePonderado;
+        
+        // Formatação visual do valor principal
+        if (ind.id === 'minimo' || ind.id === 'fluxo' || ind.id === 'folego') ind.valorFmt = fmt(ind.valor);
+        else if (ind.id === 'inadimplencia') ind.valorFmt = ind.valor + 'd';
+        else if (ind.id === 'reserva') ind.valorFmt = ind.valor.toFixed(1) + 'm';
+        else if (ind.id === 'modalidade') ind.valorFmt = ind.valor + 'x';
+        else ind.valorFmt = ind.valor.toFixed(0) + '%';
+    });
+
+    const ide = Math.round((somaPonderada / somaPesos) * 100);
+    
+    // 5. Definição do Degrau
+    let degrau = 0, cor = 'var(--success)', bg = 'var(--success-soft)', icone = '✨', nome = 'Em Equilíbrio', msg = 'Seu mês está saudável. Continue monitorando para manter a base firme.';
+    
+    if (ide >= 75) { degrau = 4; cor = 'var(--danger)'; bg = 'var(--danger-soft)'; icone = '🚨'; nome = 'Superendividamento'; msg = 'Suas contas estão no limite. O Mochila tem ferramentas para te ajudar a renegociar com segurança.'; }
+    else if (ide >= 50) { degrau = 3; cor = 'var(--warning)'; bg = 'var(--warning-soft)'; icone = '⚠️'; nome = 'Risco de Endividamento'; msg = 'Você apresenta múltiplos sinais de alerta. Vamos ajustar o plano antes que aperte mais.'; }
+    else if (ide >= 30) { degrau = 2; cor = 'var(--warning)'; bg = 'var(--warning-soft)'; icone = '🟡'; nome = 'Aperto no horizonte'; msg = 'O seu Mínimo Existencial está comprometido ou o caixa está negativo. O jeito é organizar as prioridades.'; }
+    else if (ide >= 10) { degrau = 1; cor = 'var(--primary)'; bg = 'var(--purple-light)'; icone = '👀'; nome = 'Atenção'; msg = 'Suas contas estão em dia, mas a estrutura ainda é frágil e pede cuidado.'; }
+
+    // Regra de Ouro: Se o mínimo for crítico (score 1.0) e houver agravante, joga pro 4
+    if (scMin >= 0.99 && (scInad >= 0.99 || scFluxo > 0)) {
+        degrau = 4; cor = 'var(--danger)'; bg = 'var(--danger-soft)'; icone = '🚨'; nome = 'Superendividamento'; 
+        msg = 'Seu Mínimo Existencial está zerado e você tem atrasos ou aperto imediato. Vamos focar na sobrevivência.';
+    }
+
+    // Ordena os indicadores pelos mais críticos (maior Score Ponderado)
+    const indicadoresOrdenados = [...lista].sort((a, b) => b.scorePonderado - a.scorePonderado);
+
+    return {
+        ide,
+        degrau,
+        classe: { degrau, nome, cor, bg, icone, msg },
+        indicadores: indicadoresOrdenados,
+        todos: lista
+    };
+}
+
+function obterClassificacaoMochila(orc, caixa14, comp, inadimplencia, minimo) {
+    let dti = comp.porcentagem;
+    let atraso90 = inadimplencia.dias > 90;
+    let minimoNaoPreservado = !minimo.preservado;
+    let caixaNegativo = caixa14.insuficiente;
+    
+    // Usa a função unificada e corrigida
+    let modalidades = contarModalidadesCredito(orc);
+    
+    let sinaisBCB = 0;
+    if (inadimplencia.dias > 0) sinaisBCB++;
+    if (dti > 50) sinaisBCB++;
+    if (modalidades >= 3) sinaisBCB++;
+    if (minimoNaoPreservado) sinaisBCB++;
+
+    if (minimoNaoPreservado && (atraso90 || caixaNegativo)) {
+        return { degrau: 4, nome: 'Sinais de Superendividamento', cor: 'var(--danger)', bg: 'var(--danger-soft)', icone: '🚨', msg: 'Suas contas estão no limite. O Mochila tem ferramentas para te ajudar a renegociar com segurança.' };
+    }
+    if (sinaisBCB >= 2) {
+        return { degrau: 3, nome: 'Risco de Endividamento', cor: 'var(--warning)', bg: 'var(--warning-soft)', icone: '⚠️', msg: 'Você apresenta alguns sinais de alerta. Vamos ajustar o plano antes que aperte mais?' };
+    }
+    if (caixaNegativo || inadimplencia.dias > 0) {
+        return { degrau: 2, nome: 'Aperto no horizonte', cor: 'var(--warning)', bg: 'var(--warning-soft)', icone: '🟡', msg: 'O dinheiro vai faltar em alguns dias. O jeito é organizar a ordem de pagamento.' };
+    }
+    if (dti >= 30) {
+        return { degrau: 1, nome: 'Atenção', cor: 'var(--primary)', bg: 'var(--purple-light)', icone: '👀', msg: 'Suas contas estão em dia, mas o peso das dívidas já pede cuidado.' };
+    }
+    return { degrau: 0, nome: 'Em Equilíbrio', cor: 'var(--success)', bg: 'var(--success-soft)', icone: '✨', msg: 'Seu mês está saudável. Continue monitorando para manter a base firme.' };
+}
+
+// Calcula quantas modalidades de crédito diferentes o usuário tem
+// Mapa explícito: cada tipo declarado → bucket usado na contagem BCB.
+// Buckets diferentes = modalidades diferentes. `outro`/`nao_sei` não contam.
+const TIPOS_CREDITO = {
+    cartao_credito:   { label: 'Cartão de crédito', bucket: 'cartao' },
+    cheque_especial:  { label: 'Cheque especial',   bucket: 'cheque' },
+    consignado:       { label: 'Consignado',        bucket: 'consignado' },
+    financiamento:    { label: 'Financiamento',     bucket: 'financiamento' },
+    emprestimo:       { label: 'Empréstimo',        bucket: 'emprestimo' },
+    outro:            { label: 'Outro / não sei',   bucket: null }
+};
+
+/**
+ * Conta modalidades de crédito distintas.
+ * Prioridade:
+ *   1) `compromissos` ativos → SEMPRE cartão de crédito (são compras em cartão por construção).
+ *      Corrige o bug antigo em que uma parcela com nome "Compra X" não contava.
+ *   2) `categorias` do Futuro/dívida → usa `tipoCredito` explícito (Patch 5).
+ *   3) Fallback por keyword (retrocompatível com usuários antigos, sem acento).
+ *
+ * Buckets distintos: cartao, cheque, consignado, financiamento, emprestimo.
+ * Um usuário com consignado + financiamento conta 2. Antes contava 1 (bucket único).
+ * Alinhado ao BCB (Série Cidadania Financeira).
+ */
+function contarModalidadesCredito(orc) {
+    const modalidades = new Set();
+    const normalizar = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    // 1) Compromissos ativos = cartão de crédito (parcelados e recorrentes)
+    const compsAtivos = (orc.compromissos || []).filter(c => c.estado === 'ativa');
+    if (compsAtivos.length > 0) modalidades.add('cartao');
+
+    // 2) Categorias do Futuro/dívida
+    (orc.categorias || []).forEach(c => {
+        if (c.caixa !== 'futuro' || c.subtipo !== 'divida') return;
+        if (_categoriaParcelasQuitada(c)) return;
+
+        // 2a) Declaração explícita manda
+        if (c.tipoCredito && TIPOS_CREDITO[c.tipoCredito]) {
+            const bucket = TIPOS_CREDITO[c.tipoCredito].bucket;
+            if (bucket) modalidades.add(bucket);
+            return;
+        }
+
+        // 2b) Fallback por keyword (compat retroativa)
+        const n = normalizar(c.nome);
+        if (n.includes('cartao')) { modalidades.add('cartao'); return; }
+        if (n.includes('cheque')) { modalidades.add('cheque'); return; }
+        if (n.includes('consignado')) { modalidades.add('consignado'); return; }
+        if (n.includes('financiamento')) { modalidades.add('financiamento'); return; }
+        if (n.includes('emprestimo')) { modalidades.add('emprestimo'); return; }
+    });
+
+    return modalidades.size;
+}
+
+function obterIndicadoresGrid(dadosAvaliacao) {
+    const { indicadores, degrau } = dadosAvaliacao;
+    
+    // Se estiver no Degrau 0 (Equilíbrio), mostramos os 4 de manutenção
+    if (degrau === 0) {
+        const manutencao = ['folego', 'comprometimento', 'alocacao', 'reserva'];
+        return manutencao.map(id => {
+            if (id === 'alocacao') {
+                const alocacao = calcularAlocacaoPlanejada(state.orcamento);
+                return `<div class="card" style="padding:14px; display:flex; flex-direction:column; justify-content:space-between; cursor:pointer;" onclick="abrirModalIndicador('alocacao')">
+                    <div><div style="display:flex; align-items:center; margin-bottom:6px;"><span style="font-size:1.2rem; margin-right:4px;">🥧</span><span style="font-size:0.75rem; font-weight:700; color:var(--secondary); text-transform:uppercase;">Alocação ⓘ</span></div>
+                    <div style="display:flex; flex-direction:column; gap:2px; margin-top:4px;">
+                        <div style="font-size:0.75rem; display:flex; justify-content:space-between;"><span>Base</span> <strong>${alocacao.pctBase.toFixed(0)}%</strong></div>
+                        <div style="font-size:0.75rem; display:flex; justify-content:space-between;"><span>Vida</span> <strong>${alocacao.pctVida.toFixed(0)}%</strong></div>
+                        <div style="font-size:0.75rem; display:flex; justify-content:space-between;"><span>Futuro</span> <strong>${alocacao.pctFuturo.toFixed(0)}%</strong></div>
+                    </div></div></div>`;
+            }
+            const ind = indicadores.find(i => i.id === id);
+            if (!ind) return '';
+            return _renderCardIndicador(ind);
+        }).join('');
+    }
+
+    // Se estiver em qualquer outro degrau, pega os 4 mais críticos
+    return indicadores.slice(0, 4).map(ind => _renderCardIndicador(ind)).join('');
+}
+
+// Helper para montar o card
+function _renderCardIndicador(ind) {
+    const isCritico = ind.score >= 0.8;
+    const isAtencao = ind.score >= 0.3 && ind.score < 0.8;
+    const borda = isCritico ? 'var(--danger)' : (isAtencao ? 'var(--warning)' : 'var(--border)');
+    
+    return `
+        <div class="card" style="padding:14px; display:flex; flex-direction:column; justify-content:space-between; border-color:${borda}; cursor:pointer;" onclick="abrirModalIndicador('${ind.id}')">
+            <div>
+                <div style="display:flex; align-items:center; margin-bottom:6px;">
+                    <span style="font-size:1.2rem; margin-right:4px;">${ind.icone}</span>
+                    <span style="font-size:0.75rem; font-weight:700; color:var(--secondary); text-transform:uppercase;">${ind.nome} ⓘ</span>
+                </div>
+                <div style="font-size:1.2rem; font-weight:800; color:${ind.cor};">
+                    ${ind.valorFmt}
+                </div>
+                <div style="font-size:0.7rem; color:var(--secondary); margin-top:2px; line-height:1.2;">
+                    ${ind.sub}
+                </div>
+            </div>
+        </div>`;
+}
+
+function fecharModalIndicador() {
+    document.getElementById('modal-indicador').classList.remove('ativo');
+}
+/**
+ * Calcula os dias reais de atraso.
+ * - Se `dataVencimentoReal` for informada (YYYY-MM-DD), usa direto: hoje - dataVencimentoReal.
+ *   Sem teto. Corrige o Cenário 4 (atraso 91+) e a pegadinha 90 vs 91.
+ * - Senão, fallback legado pelo dia do mês (teto ~31 dias) — mantém comportamento para
+ *   usuários antigos que nunca declararam data completa.
+ */
+function _calcularDiasAtraso(diaVencimento, dataVencimentoReal) {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    // Modelo N3.5 estendido: data real declarada → sem teto
+    if (dataVencimentoReal && /^\d{4}-\d{2}-\d{2}$/.test(String(dataVencimentoReal))) {
+        const dataVenc = new Date(String(dataVencimentoReal) + 'T12:00:00');
+        if (!isNaN(dataVenc.getTime())) {
+            dataVenc.setHours(0, 0, 0, 0);
+            const diff = Math.floor((hoje - dataVenc) / 86400000);
+            return Math.max(0, diff); // data futura → 0 (não conta como atraso)
+        }
+    }
+
+    // Fallback legado: dia do mês (teto ~31d)
+    if (!diaVencimento) return 0;
+    let dataVenc = new Date(hoje.getFullYear(), hoje.getMonth(), diaVencimento);
+    if (dataVenc > hoje) dataVenc.setMonth(dataVenc.getMonth() - 1);
+    return Math.ceil(Math.abs(hoje - dataVenc) / 86400000);
+}
+
+function abrirModalIndicador(tipo) {
+    const orc = state.orcamento;
+    if (!orc) return;
+    const fmt = formatarMoeda;
+    let titulo = '';
+    let html = '';
+
+    // Se for a tela de classificação, usamos o novo motor
+    if (tipo === 'classificacao') {
+        const dados = avaliarSistemaMulticriterio(orc);
+        const { classe, ide, indicadores } = dados;
+        titulo = classe.nome;
+        
+        // Pega os 3 indicadores que mais estão puxando o IDE para cima
+        const piores = indicadores.slice(0, 3).filter(i => i.score > 0.05);
+        
+        let listaGargalos = '';
+        piores.forEach(i => {
+            listaGargalos += `
+                <div style="margin-bottom: 12px; padding: 12px; background: var(--bg-color); border-radius: 8px; border-left: 3px solid ${i.cor};">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                        <strong style="color:var(--text-main);">${i.icone} ${i.nome}</strong>
+                        <strong style="color:${i.cor};">${i.sub}</strong>
+                    </div>
+                    <div style="font-size:0.85rem; color:var(--secondary);">
+                        <strong>Meta para melhorar:</strong> ${i.meta}
+                    </div>
+                </div>
+            `;
+        });
+
+        let textoComoSubir = '';
+        if (classe.degrau === 0) {
+            textoComoSubir = 'Você está no nível máximo de saúde financeira. Continue mantendo o ritmo, registrando os gastos e construindo sua reserva.';
+        } else {
+            textoComoSubir = `Para o seu IDE cair de <strong>${ide}</strong> para a próxima faixa (abaixo de ${classe.degrau === 1 ? '10' : classe.degrau === 2 ? '30' : '50'}), foque em resolver os gargalos acima. Cada passo nessas metas vai reduzir a sua pontuação de risco.`;
+        }
+
+        html = `
+            <div class="fala-avatar" style="border-left-color:${classe.cor}; background:${classe.bg}; margin-bottom:20px;">
+                <span class="icone">${classe.icone}</span>
+                <span class="texto" style="color:${classe.cor}; font-weight:600;">
+                    ${classe.msg}
+                </span>
+            </div>
+            
+            <div style="text-align:center; margin-bottom:24px;">
+                <div style="font-size:0.9rem; color:var(--secondary); text-transform:uppercase; letter-spacing:1px;">Seu Índice de Distância do Equilíbrio</div>
+                <div style="font-size:2.5rem; font-weight:800; color:${classe.cor};">${ide}<span style="font-size:1rem; opacity:0.5;">/100</span></div>
+            </div>
+
+            <div class="home-section-title">O que está puxando seu risco?</div>
+            <p style="font-size:0.85rem; color:var(--secondary); margin-bottom:12px; line-height:1.4;">
+                Estes são os indicadores com maior peso no seu resultado atual:
+            </p>
+            ${listaGargalos || '<p style="font-size:0.9rem; color:var(--success);">Nenhum gargalo crítico identificado!</p>'}
+
+            <div style="background:var(--card-bg); border:1px solid var(--border); padding:16px; border-radius:12px; margin-top:20px;">
+                <h3 style="font-size:1rem; color:var(--primary); margin-bottom:8px;">Como subir de degrau?</h3>
+                <p style="font-size:0.9rem; color:var(--text-main); line-height:1.5;">
+                    ${textoComoSubir}
+                </p>
+            </div>
+        `;
+
+        const htmlCompleto = `
+            ${cabecalhoTelaSecundaria(titulo, 'Entenda sua situação e o próximo passo')}
+            ${html}
+            <button type="button" class="btn-option" style="justify-content:center; border-color:var(--secondary); margin-top:16px;" onclick="fecharModalIndicador()">Voltar</button>
+        `;
+        document.getElementById('modal-indicador-conteudo').innerHTML = htmlCompleto;
+        document.getElementById('modal-indicador').classList.add('ativo');
+        return;
+    }
+
+    // --- MANTÉM OS OUTROS MODAIS INTACTOS ---
+    const renda = (orc.rendaDetalhe?.fontes || []).reduce((s, f) => s + (Number(f.valor) || 0), 0);
+    const folego = calcularFolegoFinanceiro(orc);
+    const comp = calcularComprometimentoRenda(orc);
+    const minimo = calcularMinimoExistencial(orc);
+    const inadimplencia = calcularInadimplencia(orc);
+    const caixa14 = diagnosticarInsuficienciaCaixa(orc, { dias: 14 });
+    const reserva = calcularTempoReserva(orc);
+    const modalidades = contarModalidadesCredito(orc);
+    const rendaFragil = calcularRendaFragil(orc);
+    const alocacao = calcularAlocacaoPlanejada(orc);
+
+    const wrapp = (texto, dica) => `
+        <div style="font-size:0.9rem; color:var(--secondary); line-height:1.5; margin-bottom:12px;">
+            <div style="background:var(--bg-color); padding:12px; border-radius:8px; border-left:3px solid var(--primary); margin-bottom:12px;">
+                ${texto}
+            </div>
+            <div style="font-size:0.85rem; color:var(--text-main);"><strong>O que fazer:</strong> ${dica}</div>
+        </div>
+    `;
+
+    if (tipo === 'folego') {
+        titulo = '🫁 Fôlego Financeiro';
+        html = wrapp(
+            `A sua renda total é de <strong>${fmt(renda)}</strong>.<br>Desse valor, <strong>${fmt(folego.gastosMes)}</strong> estão comprometidos com as despesas do mês.<br><br>Isso significa que sobram <strong style="color:${folego.margemBase >= 0 ? 'var(--success)' : 'var(--danger)'};">${fmt(folego.margemBase)}</strong> livres para respirar.`,
+            folego.margemBase >= 0 ? 'Direcionar essa sobra para investimentos ou para aumentar sua reserva de emergência.' : 'Identificar quais gastos podem ser cortados para fechar o mês no positivo.'
+        );
+    } else if (tipo === 'comprometimento') {
+        titulo = '⚖️ Comprometimento da Renda (DTI)';
+        html = wrapp(
+            `Sua renda mensal é de <strong>${fmt(renda)}</strong>.<br>Você tem <strong>${fmt(comp.valor)}</strong> comprometidos com parcelas de dívidas ativas.<br><br>Isso consome <strong style="color:${comp.cor};">${comp.porcentagem.toFixed(1)}%</strong> da sua renda.<br><br><em>A literatura do Banco Central considera alerta acima de 30% e risco alto acima de 50%.</em>`,
+            comp.porcentagem >= 30 ? 'Evitar assumir novas dívidas e buscar quitar ou antecipar as parcelas menores.' : 'Você tem margem saudável. Use-a com sabedoria, sem se endividar além da conta.'
+        );
+    } else if (tipo === 'minimo') {
+        titulo = '🛡️ Mínimo Existencial';
+        const statusCor = minimo.preservado ? 'var(--success)' : 'var(--danger)';
+        const statusTexto = minimo.preservado ? 'Preservado' : 'Abaixo do mínimo';
+
+        html = `
+            <div style="font-size:0.9rem; color:var(--secondary); line-height:1.5; margin-bottom:12px;">
+                <div style="background:var(--bg-color); padding:16px; border-radius:8px; border-left:3px solid var(--primary); margin-bottom:16px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>Sua renda total mensal</span><strong style="color:var(--text-main);">${fmt(minimo.rendaTotal)}</strong></div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>(-) Boletos básicos</span><strong style="color:var(--danger);">${fmt(minimo.boletosBase)}</strong></div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>(-) Dívidas e parcelas</span><strong style="color:var(--danger);">${fmt(minimo.dividas)}</strong></div>
+                    <div style="display:flex; justify-content:space-between; border-top:1px dashed var(--border); padding-top:8px; margin-bottom:16px;"><strong>(=) O que sobra para viver</strong><strong style="color:var(--primary);">${fmt(minimo.valor)}</strong></div>
+                    <div style="display:flex; justify-content:space-between; border-top:1px dashed var(--border); padding-top:8px; margin-bottom:8px;"><span>Piso legal (${minimo.totalPessoas} pessoa(s) × R$ 600)</span><strong style="color:var(--text-main);">${fmt(minimo.pisoLegal)}</strong></div>
+                    <div style="font-size:0.8rem; color:var(--secondary); margin-top:6px; line-height:1.3;">O consumo básico (mercado, transporte, remédio) fica fora dessa subtração, pois é exatamente o que a lei busca proteger.</div>
+                </div>
+                <div style="background:${minimo.preservado ? 'var(--success-soft)' : 'var(--danger-soft)'}; padding:12px; border-radius:8px; border-left:3px solid ${statusCor}; margin-bottom:12px;">
+                    <div style="font-weight:700; color:${statusCor}; margin-bottom:4px;">${statusTexto}</div>
+                    <div style="color:var(--text-main); font-size:0.85rem; line-height:1.4;">
+                        ${minimo.preservado ? `Sua sobra cobre o piso de <strong>${fmt(minimo.pisoLegal)}</strong> para a sua família.` : `Faltam <strong>${fmt(minimo.pisoLegal - minimo.valor)}</strong> para você atingir o mínimo exigido de <strong>${fmt(minimo.pisoLegal)}</strong>.`}
+                    </div>
+                </div>
+            </div>
+            <div style="font-size:0.85rem; color:var(--text-main);"><strong>O que fazer:</strong> ${minimo.preservado ? 'Sua dignidade está preservada. Continue mantendo este valor intocável.' : 'Seu mínimo está ameaçado. Abra o Plano de Recuperação para blindar o essencial antes de pagar o restante.'}</div>
+        `;
+    } else if (tipo === 'inadimplencia') {
+        titulo = '⏰ Inadimplência';
+        html = wrapp(
+            `O tempo de atraso da sua conta mais antiga é de <strong style="color:${inadimplencia.temAtraso ? 'var(--danger)' : 'var(--success)'};">${inadimplencia.dias} dias</strong>.<br><br>O mercado considera que acima de 90 dias o risco de calote é crítico.`,
+            inadimplencia.temAtraso ? 'Negociar com o credor imediatamente para evitar a negativação do nome (SERASA).' : 'Parabéns por manter as contas em dia! Continue monitorando a agenda de vencimentos.'
+        );
+    } else if (tipo === 'modalidade') {
+        titulo = '💳 Multimodalidade de Crédito';
+        html = wrapp(
+            `Você está usando <strong>${modalidades}</strong> tipos diferentes de crédito ativos.<br><br>O Banco Central considera risco quando a pessoa usa 3 ou mais modalidades diferentes.`,
+            modalidades >= 3 ? 'O ideal é parar de "rolar" a dívida. Evite pagar um cartão com outro, e considere a unificação de dívidas no Nível 4.' : 'Você está no caminho certo. Evite abrir novas linhas de crédito desnecessárias.'
+        );
+    } else if (tipo === 'fluxo') {
+        titulo = '🌊 Alerta de Fluxo de Caixa';
+        html = wrapp(
+            `A projeção para os próximos 14 dias aponta que ${caixa14.insuficiente ? 'o dinheiro <strong>vai faltar</strong>' : 'o caixa <strong>está coberto</strong>'}.<br><br>Você tem <strong>${fmt(caixa14.disponivel)}</strong> disponíveis hoje, mas tem <strong>${fmt(caixa14.pagamentos)}</strong> em contas a pagar neste período.`,
+            caixa14.insuficiente ? 'Acesse o Fluxo de Caixa ou o Simulador para tentar negociar as datas de vencimento.' : 'Mantenha o monitoramento semanal para não ser pego de surpresa.'
+        );
+    } else if (tipo === 'reserva') {
+        titulo = '🐖 Tempo de Reserva';
+        let explicacaoRendaFragil = '';
+        if (rendaFragil && rendaFragil.porcentagem > 0) {
+            explicacaoRendaFragil = `
+                <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><strong style="color:var(--text-main);">Renda Frágil</strong><strong style="color:${rendaFragil.porcentagem >= 50 ? 'var(--warning)' : 'var(--primary)'};">${rendaFragil.porcentagem.toFixed(0)}%</strong></div>
+                    <div style="font-size:0.85rem; color:var(--secondary); line-height:1.4; margin-bottom:8px;">Isso significa que <strong>${fmt(rendaFragil.valor)}</strong> da sua renda mensal vem de fontes que não são garantidas todo mês.</div>
+                    ${rendaFragil.porcentagem >= 30 ? `<div style="font-size:0.85rem; color:var(--warning); line-height:1.4; background:var(--warning-soft); padding:10px; border-radius:8px;">⚠️ Como mais de 30% da sua renda é imprevisível, o ideal é que sua reserva seja maior (tendendo a 6 meses) para te dar segurança nos meses de "vaca magra".</div>` : ''}
+                </div>
+            `;
+        }
+        html = wrapp(
+            `Sua reserva de emergência hoje é de <strong>${fmt(folego.reserva)}</strong>.<br><br>Ela é capaz de cobrir <strong>${reserva.meses.toFixed(1)} meses</strong> dos seus gastos essenciais (Base + Vida) se a sua renda parar de entrar hoje.${explicacaoRendaFragil}`,
+            reserva.meses >= 3 ? 'Excelente! Sua reserva está no padrão de mercado. Você está protegido contra imprevistos.' : 'Sua meta deve ser acumular de 3 a 6 meses de despesas. Priorize guardar o seu fôlego mensal na reserva.'
+        );
+    } else if (tipo === 'alocacao') {
+        titulo = '🥧 Alocação Planejada';
+        html = wrapp(
+            `A forma como você dividiu o seu orçamento planejado:<br><br>
+             <div style="display:flex; justify-content:space-between; margin-bottom:6px; align-items:center;"><span><strong>🛡️ Base</strong></span><span style="text-align:right;">${fmt(alocacao.valBase)} <br><strong style="color:var(--primary); font-size:0.85rem;">${alocacao.pctBase.toFixed(0)}%</strong></span></div>
+             <div style="display:flex; justify-content:space-between; margin-bottom:6px; align-items:center;"><span><strong>🌿 Vida</strong></span><span style="text-align:right;">${fmt(alocacao.valVida)} <br><strong style="color:var(--primary); font-size:0.85rem;">${alocacao.pctVida.toFixed(0)}%</strong></span></div>
+             <div style="display:flex; justify-content:space-between; margin-bottom:6px; align-items:center;"><span><strong>🔭 Futuro</strong></span><span style="text-align:right;">${fmt(alocacao.valFuturo)} <br><strong style="color:var(--primary); font-size:0.85rem;">${alocacao.pctFuturo.toFixed(0)}%</strong></span></div>
+             <div style="display:flex; justify-content:space-between; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); align-items:center;"><span><strong>Total Planejado</strong></span><span><strong>${fmt(alocacao.total)}</strong></span></div>`,
+            'Certifique-se de que a Base está coberta. Se a Vida estiver consumindo muito espaço, um pequeno corte pode ajudar a engordar a Reserva.'
+        );
+    }
+
+    const htmlCompleto = `
+        ${cabecalhoTelaSecundaria(titulo, 'Entenda sua situação e o próximo passo')}
+        ${html}
+        <button type="button" class="btn-option" style="justify-content:center; border-color:var(--secondary); margin-top:8px;" onclick="fecharModalIndicador()">Voltar</button>
+    `;
+    document.getElementById('modal-indicador-conteudo').innerHTML = htmlCompleto;
+    document.getElementById('modal-indicador').classList.add('ativo');
+}
+
+
+
+function abrirTelaEstudoIndicadores() {
+    goToScreen('screen-estudo-indicadores');
+    renderizarTelaEstudoIndicadores();
+}
+
+function renderizarTelaEstudoIndicadores() {
+    const container = document.getElementById('estudo-indicadores-conteudo');
+    const orc = state.orcamento;
+    if (!container || !orc) return;
+
+    const fmt = formatarMoeda;
+
+    // Executa todos os cálculos
+    const caixa14 = diagnosticarInsuficienciaCaixa(orc, { dias: 14 });
+    const comp = calcularComprometimentoRenda(orc);
+    const inadimplencia = calcularInadimplencia(orc);
+    const minimo = calcularMinimoExistencial(orc);
+    const folego = calcularFolegoFinanceiro(orc);
+    const reserva = calcularTempoReserva(orc);
+    const rendaFragil = calcularRendaFragil(orc);
+    const modalidades = contarModalidadesCredito(orc);
+    const alocacao = calcularAlocacaoPlanejada(orc);
+    const orcamentaria = diagnosticarInsuficienciaOrcamentaria(orc);
+
+    // Array com a definição de cada indicador
+    const indicadores = [
+        {
+            id: 'fluxo',
+            icone: '🌊',
+            nome: 'Fluxo de Caixa (14 dias)',
+            valor: caixa14.insuficiente ? `Falta ${fmt(caixa14.falta)}` : 'Coberto',
+            cor: caixa14.insuficiente ? 'var(--danger)' : 'var(--success)',
+            oQueE: 'Mede se o dinheiro que você tem hoje, somado ao que vai entrar, é suficiente para pagar as contas dos próximos 14 dias.',
+            comoCalculamos: 'Fazemos uma projeção diária partindo do seu saldo bruto em conta, somando os recebimentos e subtraindo os vencimentos e os gastos diluídos do dia a dia. O alerta acende se o saldo ficar negativo em qualquer dia do período.'
+        },
+        {
+            id: 'comprometimento',
+            icone: '⚖️',
+            nome: 'Peso da Dívida (DTI)',
+            valor: `${comp.porcentagem.toFixed(1)}%`,
+            cor: comp.cor,
+            oQueE: 'A "Taxa de Comprometimento da Renda" mostra qual pedaço do seu salário mensal já está comprometido com o pagamento de parcelas de dívidas.',
+            comoCalculamos: 'Dividimos a soma de todas as parcelas ativas de dívidas e cartões pela sua renda mensal. O Banco Central considera alerta a partir de 30% e risco alto acima de 50%.'
+        },
+        {
+            id: 'inadimplencia',
+            icone: '⏰',
+            nome: 'Atrasos',
+            valor: inadimplencia.temAtraso ? `${inadimplencia.dias} dias` : 'Em dia',
+            cor: inadimplencia.temAtraso ? 'var(--danger)' : 'var(--success)',
+            oQueE: 'Mostra há quantos dias você tem a conta mais antiga em aberto sem pagamento.',
+            comoCalculamos: 'Comparamos a data de hoje com o dia de vencimento das contas não pagas (ou a data real que você declarou na dívida). O mercado considera o atraso crítico após 90 dias.'
+        },
+              {
+            id: 'minimo',
+            icone: '🛡️',
+            nome: 'Mínimo Existencial',
+            valor: fmt(minimo.valor),
+            cor: minimo.preservado ? 'var(--success)' : 'var(--danger)',
+            oQueE: 'É o dinheiro que sobra para você viver (comida, remédio, transporte) depois de pagar todas as contas básicas (aluguel, água, luz) e as dívidas.',
+            comoCalculamos: `Pegamos sua Renda Total (${fmt(minimo.rendaTotal)}), subtraímos o custo dos seus Boletos (${fmt(minimo.boletosBase)}) e o valor de todas as Dívidas (${fmt(minimo.dividas)}). O resultado é o que sobra para viver. A lei exige um piso de R$ 600 por pessoa. Como você tem ${minimo.totalPessoas} pessoa(s) na família, o piso é de ${fmt(minimo.pisoLegal)}.`
+        },
+        {
+            id: 'folego',
+            icone: '🫁',
+            nome: 'Fôlego Financeiro',
+            valor: fmt(folego.margemBase),
+            cor: folego.margemBase >= 0 ? 'var(--success)' : 'var(--danger)',
+            oQueE: 'É o quanto sobra (ou falta) do seu salário no final do mês depois de pagar todos os gastos planejados.',
+            comoCalculamos: 'Pegamos sua renda total e subtraímos o custo da sua Base (essenciais) + Vida (lazer). Se der negativo, você está gastando mais do que ganha.'
+        },
+        {
+            id: 'reserva',
+            icone: '🐖',
+            nome: 'Tempo de Reserva',
+            valor: `${reserva.meses.toFixed(1)} meses`,
+            cor: reserva.status === 'critico' ? 'var(--danger)' : (reserva.status === 'atencao' ? 'var(--warning)' : 'var(--success)'),
+            oQueE: 'Quantos meses você conseguiria manter o seu padrão de vida atual se perdesse toda a sua renda hoje.',
+            comoCalculamos: 'Dividimos o saldo da sua carteira de reserva pelo custo mensal da sua Base + Vida. O ideal de mercado é ter de 3 a 6 meses guardados.'
+        },
+        {
+            id: 'renda_fragil',
+            icone: '🪵',
+            nome: 'Renda Frágil',
+            valor: `${rendaFragil.porcentagem.toFixed(0)}%`,
+            cor: rendaFragil.porcentagem >= 50 ? 'var(--warning)' : 'var(--text-main)',
+            oQueE: 'A parte da sua renda que não é garantida todo mês (comissões, autônomos, aluguéis).',
+            comoCalculamos: 'Identificamos na sua tela de Renda quais fontes você marcou como "Variável" ou "Contratual" e calculamos a porcentagem que elas representam do total que entra.'
+        },
+        {
+            id: 'modalidades',
+            icone: '💳',
+            nome: 'Multimodalidade de Crédito',
+            valor: `${modalidades} tipos`,
+            cor: modalidades >= 3 ? 'var(--danger)' : 'var(--text-main)',
+            oQueE: 'Quantas formas diferentes de crédito você está usando ao mesmo tempo.',
+            comoCalculamos: 'Contamos as categorias únicas de dívidas ativas (ex: Cartão de Crédito + Empréstimo + Cheque Especial = 3 modalidades). O BCB acende o alerta a partir de 3, pois indica que você está "rodando" a dívida.'
+        },
+        {
+            id: 'alocacao',
+            icone: '🥧',
+            nome: 'Alocação Planejada',
+            valor: `${alocacao.pctBase.toFixed(0)}% / ${alocacao.pctVida.toFixed(0)}% / ${alocacao.pctFuturo.toFixed(0)}%`,
+            cor: 'var(--primary)',
+            oQueE: 'Como você dividiu o seu orçamento mensal entre Base, Vida e Futuro.',
+            comoCalculamos: 'Pegamos o valor mensal planejado de cada caixinha (definido na tela de Editar Plano) e dividimos pelo total do seu plano. Se a Base estiver pequena, é sinal de que o essencial pode estar desprotegido.'
+        },
+        {
+            id: 'orcamentaria',
+            icone: '🟡',
+            nome: 'Insuficiência Orçamentária',
+            valor: orcamentaria.insuficiente ? `Estouro ${fmt(orcamentaria.excedente)}` : 'Equilibrado',
+            cor: orcamentaria.insuficiente ? 'var(--warning)' : 'var(--success)',
+            oQueE: 'Acontece quando a soma das suas contas planejadas para o mês é maior do que a sua renda recorrente.',
+            comoCalculamos: 'Somamos as contas da Base, Vida, Dívidas e Assinaturas, e subtraímos da sua renda recorrente. Se o total for maior, o plano não é viável a longo prazo.'
+        }
+    ];
+
+    let htmlCards = '';
+    indicadores.forEach(ind => {
+        htmlCards += `
+            <div class="card" style="padding: 18px 20px; border-left: 4px solid ${ind.cor}; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 1.4rem;">${ind.icone}</span>
+                        <strong style="font-size: 1rem; color: var(--text-main);">${ind.nome}</strong>
+                    </div>
+                    <strong style="font-size: 1.1rem; color: ${ind.cor}; text-align: right;">${ind.valor}</strong>
+                </div>
+                
+                <div style="background: var(--bg-color); border-radius: 8px; padding: 12px; margin-top: 10px;">
+                    <div style="font-size: 0.85rem; font-weight: 700; color: var(--primary); margin-bottom: 4px;">O que é?</div>
+                    <p style="font-size: 0.85rem; color: var(--text-main); line-height: 1.4; margin: 0 0 10px 0;">${ind.oQueE}</p>
+                    
+                    <div style="font-size: 0.85rem; font-weight: 700; color: var(--primary); margin-bottom: 4px;">Como calculamos?</div>
+                    <p style="font-size: 0.85rem; color: var(--secondary); line-height: 1.4; margin: 0;">${ind.comoCalculamos}</p>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = `
+        ${cabecalhoTelaSecundaria('Estudo dos Indicadores', 'Entenda a matemática por trás do seu dinheiro')}
+        
+        <div class="fala-avatar" style="margin-bottom: 20px;">
+            <span class="icone">🎓</span>
+            <span class="texto">Aqui está a "radiografia" completa. Nenhum número é inventado: tudo vem da fórmula aplicada aos dados que você nos contou.</span>
+        </div>
+
+        ${htmlCards}
+
+        <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 12px;" onclick="voltarTela()">
+            Voltar
+        </button>
+    `;
+}
+
+function renderizarDiagnostico() {
+    const container = document.getElementById('diagnostico-conteudo');
+    if (!container) return;
+    const orc = state.orcamento;
+    if (!orc) return;
+
+    const fmt = formatarMoeda;
+    const dadosAvaliacao = avaliarSistemaMulticriterio(orc);
+    const { ide, degrau, classe, indicadores } = dadosAvaliacao;
+    
+    const cardsHtml = obterIndicadoresGrid(dadosAvaliacao);
+    const piorIndicador = indicadores[0];
+
+    // Define a Ação Prioritária com base no pior indicador
+    let acaoPrioritaria = '';
+    if (degrau > 0) {
+        acaoPrioritaria = `
+        <div class="card" style="border-left:4px solid ${classe.cor}; margin-bottom:20px; padding:14px 16px; background:var(--card-bg);">
+            <div style="font-weight:700; color:${classe.cor}; margin-bottom:4px;">🎯 Ação Prioritária</div>
+            <div style="font-size:0.9rem; color:var(--text-main); line-height:1.45;">
+                O seu maior gargalo atual é <strong>${piorIndicador.nome}</strong> (${piorIndicador.sub}).
+                <div style="margin-top:8px;">
+                    <a href="#" onclick="abrirModalIndicador('${piorIndicador.id}');return false;" style="color:${classe.cor}; font-weight:700; text-decoration:underline;">Entender como resolver →</a>
+                </div>
+            </div>
+        </div>`;
+    } else {
+        acaoPrioritaria = `
+        <div class="card" style="border-left:4px solid var(--success); margin-bottom:20px; padding:14px 16px; background:var(--card-bg);">
+            <div style="font-weight:700; color:var(--success); margin-bottom:4px;">✅ Ação Recomendada</div>
+            <div style="font-size:0.9rem; color:var(--text-main); line-height:1.45;">
+                Suas contas de curto prazo estão cobertas. Seu fôlego para investir no Futuro é de <strong>${fmt(calcularFolegoFinanceiro(orc).margemBase)}/mês</strong>.
+            </div>
+        </div>`;
+    }
+    
+    container.innerHTML = ` 
+        ${cabecalhoTelaSecundaria('Diagnóstico', 'A saúde financeira do seu mês')} 
+
+        <div class="card" style="padding:24px 20px; border:none; background:${classe.bg}; text-align:center; margin-bottom:16px; cursor:pointer;" onclick="abrirModalIndicador('classificacao')" title="Entenda seu degrau e como subir"> 
+            <div style="font-size:2.8rem; margin-bottom:8px;">${classe.icone}</div> 
+            <h2 style="font-size:1.3rem; font-weight:800; color:${classe.cor}; margin-bottom:8px; line-height:1.2;"> ${classe.nome} <span style="font-size:1rem; opacity:0.7;">ⓘ</span> </h2> 
+            <p style="font-size:0.9rem; color:${classe.cor}; opacity:0.9; line-height:1.4; margin:0;"> ${classe.msg} </p> 
+            <div style="margin-top:12px; font-size:0.8rem; color:${classe.cor}; background:rgba(255,255,255,0.4); display:inline-block; padding:4px 12px; border-radius:12px; font-weight:bold;">
+                IDE: ${ide} / 100
+            </div>
+        </div>
+
+        ${acaoPrioritaria}
+
+        <div class="home-section-title" style="margin-bottom:10px;">O Retrato do Momento</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:24px;">
+            ${cardsHtml}
+        </div>
+
+        <div class="home-section-title" style="margin-bottom:10px;">O que fazer agora?</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:16px;">
+            <button class="btn-option" style="margin:0; padding:14px 10px; flex-direction:column; align-items:center; text-align:center; gap:8px;" onclick="abrirTelaFluxoCaixa()">
+                <span style="font-size:1.5rem;">🧭</span><span style="font-size:0.85rem; font-weight:700; color:var(--text-main);">Fluxo de Caixa</span>
+            </button>
+            <button class="btn-option" style="margin:0; padding:14px 10px; flex-direction:column; align-items:center; text-align:center; gap:8px;" onclick="abrirTelaSimulador()">
+                <span style="font-size:1.5rem;">🧪</span><span style="font-size:0.85rem; font-weight:700; color:var(--text-main);">Simulador</span>
+            </button>
+            <button class="btn-option" style="margin:0; padding:14px 10px; flex-direction:column; align-items:center; text-align:center; gap:8px; border-color:${classe.degrau >= 2 ? 'var(--danger)' : 'var(--border)'};" onclick="abrirPlanoRecuperacao()">
+                <span style="font-size:1.5rem;">🚑</span><span style="font-size:0.85rem; font-weight:700; color:${classe.degrau >= 2 ? 'var(--danger)' : 'var(--text-main)'};">Recuperação</span>
+            </button>
+            <button class="btn-option" style="margin:0; padding:14px 10px; flex-direction:column; align-items:center; text-align:center; gap:8px;" onclick="abrirTelaN4()">
+                <span style="font-size:1.5rem;">🤝</span><span style="font-size:0.85rem; font-weight:700; color:var(--text-main);">Negociação (N4)</span>
+            </button>
+        </div>
+        <button class="btn-primary" style="background: var(--purple-light); color: var(--primary); box-shadow: none; margin-bottom: 12px; border: 1px solid var(--primary);" onclick="abrirTelaEstudoIndicadores()">
+            📚 Entender todos os indicadores
+        </button>
+        <button type="button" class="btn-option" style="justify-content:center;border-color:var(--secondary);color:var(--secondary);margin-top:4px;margin-bottom:0;" onclick="voltarTela()">Voltar</button>
+    `;
+}
+
+function calcularComprometimentoRenda(orc) {
+    const renda = (orc.rendaDetalhe?.fontes || []).reduce((s, f) => s + (Number(f.valor) || 0), 0);
+    if (renda <= 0) return { porcentagem: 0, valor: 0, status: 'sem_dados' };
+
+    // Soma das parcelas de dívidas + contas do Futuro
+    const dividasMensais = (orc.categorias || [])
+        .filter(c => c.caixa === 'futuro' && c.subtipo === 'divida' && !_categoriaParcelasQuitada(c))
+        .reduce((s, c) => s + (Number(c.valor) || 0), 0);
+    
+    const comp = (orc.compromissos || [])
+        .filter(c => c.estado === 'ativa')
+        .reduce((s, c) => s + (Number(c.valorParcela) || 0), 0);
+
+    const total = dividasMensais + comp;
+    const pct = (total / renda) * 100;
+    
+    let status = 'ok';
+    let cor = 'var(--success)';
+    if (pct >= 50) { status = 'critico'; cor = 'var(--danger)'; }
+    else if (pct >= 30) { status = 'atencao'; cor = 'var(--warning)'; }
+
+    return { porcentagem: pct, valor: total, status: status, cor: cor };
+}
+
+function calcularInadimplencia(orc) {
+    const vencidas = (orc.categorias || []).filter(c => _vencidaNaoQuitada(c, orc, new Date().getDate()));
+    const obrigacoes = _obrigacoesFuturoVencidas(orc);
+    
+    let maxDias = 0;
+    let totalAtrasado = 0;
+    
+    vencidas.forEach(c => {
+    const dias = _calcularDiasAtraso(c.vencimento, c.dataVencimentoReal);
+    if (dias > maxDias) maxDias = dias;
+    totalAtrasado += Number(c.valor) || 0;
+});
+
+    obrigacoes.forEach(o => {
+        if (o.diasAtraso > maxDias) maxDias = o.diasAtraso;
+        totalAtrasado += o.valor;
+    });
+
+    return {
+        dias: maxDias,
+        valor: totalAtrasado,
+        temAtraso: maxDias > 0,
+        status: maxDias > 90 ? 'critico' : (maxDias > 0 ? 'atencao' : 'ok')
+    };
+}
+
+// Cards auxiliares para a tela de diagnóstico
+function renderizarCard30DiasDiagnostico(orc) {
+    const fmt = formatarMoeda;
+    const fluxo = projetarFluxo(orc, { dias: 30 });
+    const temEventos = fluxo.eventos.length > 0;
+    
+    if (!temEventos) {
+        return `
+            <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
+                <div style="font-size:0.9rem;font-weight:700;color:var(--secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">📅 Próximos 30 dias</div>
+                <p style="font-size:0.9rem;color:var(--secondary);line-height:1.4;margin:0 0 8px;">Nenhum recebimento ou vencimento com dia declarado neste horizonte.</p>
+                <button class="btn-option" style="justify-content:center;border-color:var(--accent);color:var(--accent);margin-top:4px;" onclick="abrirDetalheRenda()">Informar dias de recebimento</button>
+            </div>
+        `;
+    }
+    
+    const liq = avaliarLiquidezHorizonte(orc, { dias: 30 });
+    
+    let corBorda = 'var(--success)', corBg = 'var(--success-soft)', corTit = 'var(--success)', icone = '💧', titulo = 'Folga no horizonte';
+    if (liq.status === 'aperto') { corBorda = 'var(--danger)'; corBg = 'var(--danger-soft)'; corTit = 'var(--danger)'; icone = '⚠️'; titulo = 'Aperto no horizonte'; }
+    else if (liq.status === 'atencao') { corBorda = 'var(--warning)'; corBg = 'var(--warning-soft)'; corTit = 'var(--warning)'; icone = '🟡'; titulo = 'Atenção no horizonte'; }
+    
+    return `
+        <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid ${corBorda};background:${corBg};">
+            <div style="font-size:0.9rem;font-weight:700;color:${corTit};text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
+                ${icone} Próximos 30 dias
+            </div>
+            <div style="font-size:0.9rem;font-weight:700;color:${corTit};margin-bottom:6px;">${titulo}</div>
+            <div style="font-size:0.9rem;color:var(--secondary);line-height:1.35;">
+                Partida ${fmt(liq.partida)} · entradas ${fmt(liq.entradas)} · saídas ${fmt(liq.saidas)}
+            </div>
+            <div style="font-size:0.9rem;margin-top:6px;">
+                Ponto mais baixo: <strong style="color:${liq.minimo < 0 ? 'var(--danger)' : corTit};">${fmt(liq.minimo)}</strong>
+                ${liq.dataMinimo ? ' em ' + liq.dataMinimo.split('-').reverse().slice(0,2).join('/') : ''}
+            </div>
+        </div>
+    `;
+}
+
+function renderizarCardPontosAtencaoDiagnostico(orc) {
+    const fluxo = projetarFluxo(orc, { dias: 30 });
+    const gargalos = detectarGargalos(fluxo);
+    
+    if (!gargalos.resumo.temGargalo) {
+        return `
+            <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--primary);background:var(--purple-light);">
+                <div style="font-size:0.9rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">✨ Pontos de atenção</div>
+                <p style="font-size:0.9rem;color:var(--primary-press);line-height:1.4;margin:0;">
+                    Nenhum aperto projetado nos próximos 30 dias. O caminho está livre com o que você declarou.
+                </p>
+            </div>
+        `;
+    }
+    
+    const sugestoes = sugerirEquilibrio(gargalos, orc);
+    const itens = (sugestoes.length > 0 ? sugestoes : gargalos.gargalos).slice(0, 3);
+    
+    let lista = itens.map(s => `<li style="font-size:0.9rem;color:var(--text-main);margin-bottom:6px;line-height:1.4;">${s.mensagem || s.tipo}</li>`).join('');
+    
+    return `
+        <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--warning);background:var(--warning-soft);">
+            <div style="font-size:0.9rem;font-weight:700;color:var(--warning);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">⚠️ Pontos de atenção</div>
+            <ul style="margin:0;padding-left:16px;">${lista}</ul>
+        </div>
+    `;
 }
 
 function abrirTelaFluxoCaixa(custodiaId) {
@@ -15511,28 +16557,47 @@ function atualizarSaldoObrigacao(obrigacaoId) {
 function diagnosticarInsuficienciaCaixa(orc, opcoes) {
     opcoes = opcoes || {};
     const dias = opcoes.dias || 14;
-    const posicao = _posicaoLiquidaOperacional(orc);
     const fluxo = projetarFluxo(orc, { dias: dias });
-    const pagamentos = (fluxo.eventos || []).filter(e => e.tipo === 'vencimento')
-        .reduce((s, e) => s + (e.valor || 0), 0);
-    // Reserva da Base até o próximo recebimento
-    const proximoReceb = (fluxo.eventos || []).find(e => e.tipo === 'recebimento');
-    const hoje = new Date();
-    const proxRec = proximoReceb ? new Date(proximoReceb.data + 'T12:00:00') : null;
-    const diasAteRec = proxRec ? Math.max(1, Math.round((proxRec - hoje) / 86400000)) : null;
-    const baseSemanal = (orc.base && orc.base.fortalezaTotal) ? (orc.base.fortalezaTotal / DIVISOR_SEMANAL) : 0;
-    const reservaBase = diasAteRec ? baseSemanal * (diasAteRec / 7) : 0;
+    
+    // Usa o mesmo motor de simulação do Fluxo de Caixa
+    // (considera entradas, saídas, faturas e os gastos diluídos diários)
+    const proj = projetarSaldoDiarioCompleto(orc, fluxo);
+    
+    if (!proj) {
+        return { 
+            dias: dias, 
+            insuficiente: false, 
+            falta: 0, 
+            posicao: 0, 
+            disponivel: 0, 
+            pagamentos: 0 
+        };
+    }
 
-    const disponivel = posicao - reservaBase;
-    const insuficiente = disponivel < pagamentos;
+    let saldoMinimo = proj.saldoInicial;
+    let primeiroDiaNegativo = null;
+    
+    // Encontra o pior dia dentro do horizonte de projeção
+    proj.diasCompletos.forEach(d => {
+        if (d.saldoCorrido < saldoMinimo) {
+            saldoMinimo = d.saldoCorrido;
+        }
+        if (d.saldoCorrido < -0.01 && !primeiroDiaNegativo) {
+            primeiroDiaNegativo = d.dataKey;
+        }
+    });
+
+    const insuficiente = saldoMinimo < -0.01;
+    const falta = insuficiente ? Math.abs(saldoMinimo) : 0;
+
     return {
         dias: dias,
-        posicao: posicao,
-        reservaBase: reservaBase,
-        disponivel: disponivel,
-        pagamentos: pagamentos,
+        posicao: proj.saldoInicial,
+        disponivel: saldoMinimo, // O pior saldo do período
+        pagamentos: fluxo.totais.saidas,
         insuficiente: insuficiente,
-        falta: insuficiente ? (pagamentos - disponivel) : 0
+        falta: falta,
+        primeiroDiaNegativo: primeiroDiaNegativo
     };
 }
 
@@ -15604,56 +16669,31 @@ function diagnosticarSobrecargaMensal(orc, meses) {
     return serie;
 }
 
-function renderizarDiagnosticosCartao(orc) {
+function renderizarDiagnosticosFinanceiros(orc) {
     const fmt = formatarMoeda;
     const caixa = diagnosticarInsuficienciaCaixa(orc, { dias: 14 });
     const orcamentaria = diagnosticarInsuficienciaOrcamentaria(orc);
-    const serie = diagnosticarSobrecargaMensal(orc, 6);
 
-    let html = `<div class="secao-titulo">Diagnósticos</div>`;
+    let html = '';
 
     if (caixa.insuficiente) {
-        html += `<div class="card" style="border-left:4px solid var(--danger);background:var(--danger-soft);">
-            <div style="font-weight:700;color:var(--danger);">⚠️ Insuficiência de caixa (próximos ${caixa.dias} dias)</div>
-            <p style="font-size:0.9rem;color:var(--secondary);line-height:1.45;margin:6px 0;">
-                Seu dinheiro já tem compromissos importantes. Você tem ${fmt(caixa.disponivel)} disponível (já protegida a Base de ${fmt(caixa.reservaBase)}) e ${fmt(caixa.pagamentos)} em pagamentos exigíveis.
-                Faltam ${fmt(caixa.falta)}.
-            </p>
-            <p style="font-size:0.85rem;color:var(--secondary);line-height:1.4;margin:0;">
-                Não vamos reduzir o essencial nem presumir uma solução. Quem decide é você.
+        html += `<div class="card" style="border-left:4px solid var(--danger);background:var(--danger-soft);padding:14px 16px;margin-bottom:12px;">
+            <div style="font-weight:700;color:var(--danger);font-size:0.9rem;margin-bottom:4px;">⚠️ Fôlego curto (14 dias)</div>
+            <p style="font-size:0.85rem;color:var(--text-main);line-height:1.4;margin:0;">
+                Faltam <strong>${fmt(caixa.falta)}</strong> para cobrir as contas exigíveis. O caixa disponível hoje (descontada a Base) é de ${fmt(caixa.disponivel)}.
             </p>
         </div>`;
     }
+    
     if (orcamentaria.insuficiente) {
-        html += `<div class="card" style="border-left:4px solid var(--warning);background:var(--warning-soft);">
-            <div style="font-weight:700;color:var(--warning);">🟡 Insuficiência orçamentária (mês)</div>
-            <p style="font-size:0.9rem;color:var(--secondary);line-height:1.45;margin:6px 0;">
-                Renda mensal ${fmt(orcamentaria.rendaRecorrente)} · despesas ${fmt(orcamentaria.totalDespesas)}.
-                Excede em ${fmt(orcamentaria.excedente)}.
+        html += `<div class="card" style="border-left:4px solid var(--warning);background:var(--warning-soft);padding:14px 16px;margin-bottom:12px;">
+            <div style="font-weight:700;color:var(--warning);font-size:0.9rem;margin-bottom:4px;">🟡 Orçamento estourado</div>
+            <p style="font-size:0.85rem;color:var(--text-main);line-height:1.4;margin:0;">
+                Suas despesas mensais (${fmt(orcamentaria.totalDespesas)}) superam a renda (${fmt(orcamentaria.rendaRecorrente)}) em <strong>${fmt(orcamentaria.excedente)}</strong>.
             </p>
         </div>`;
     }
-    // Série de sobrecarga — sempre informativa (§13.3)
-    if (serie.some(s => s.total > 0)) {
-        let linhas = '';
-        serie.forEach(s => {
-            const [ano, mes] = s.mes.split('-');
-            const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-            const label = meses[parseInt(mes, 10) - 1] + '/' + ano.slice(2);
-            const pct = s.renda > 0 ? Math.min(100, (s.total / s.renda) * 100) : 0;
-            linhas += `<div style="display:flex;justify-content:space-between;font-size:0.85rem;padding:4px 0;border-top:1px solid var(--border);">
-                <span style="color:var(--secondary);">${label}</span>
-                <span>${fmt(s.total)} ${s.renda > 0 ? `<span style="color:var(--secondary);">(${pct.toFixed(0)}% da renda)</span>` : ''}</span>
-            </div>`;
-        });
-        html += `<div class="card" style="border-left:4px solid var(--primary);">
-            <div style="font-weight:700;color:var(--primary);">📊 Sobrecarga — próximos 6 meses</div>
-            <p style="font-size:0.85rem;color:var(--secondary);line-height:1.4;margin:6px 0 10px;">
-                Compare com sua renda mensal declarada. O app não define um limite porque cada família tem margens diferentes. Esta série é informativa.
-            </p>
-            ${linhas}
-        </div>`;
-    }
+    
     return html;
 }
 
@@ -16365,7 +17405,26 @@ function simuladorCopiarMensagem() {
     }
 }
 
-
+function calcularAlocacaoPlanejada(orc) {
+    const totBase = Number(orc.base?.fortalezaTotal) || 0;
+    const totVida = Number(orc.vida?.total) || 0;
+    const totFuturo = Number(orc.futuro?.total) || 0;
+    const totPlan = totBase + totVida + totFuturo;
+    
+    if (totPlan <= 0) {
+        return { pctBase: 0, pctVida: 0, pctFuturo: 0, total: 0, valBase: 0, valVida: 0, valFuturo: 0 };
+    }
+    
+    return {
+        pctBase: (totBase / totPlan) * 100,
+        pctVida: (totVida / totPlan) * 100,
+        pctFuturo: (totFuturo / totPlan) * 100,
+        total: totPlan,
+        valBase: totBase,
+        valVida: totVida,
+        valFuturo: totFuturo
+    };
+}
 function calcularFolegoFinanceiro(orc, cenario) {
     cenario = cenario || {};
     const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
@@ -17391,50 +18450,106 @@ function detectarGargalos(fluxo, opcoes) {
 
     return { gargalos: gargalos, resumo: { temGargalo: gargalos.length > 0, piorDia: piorDia, saldoMinimo: saldoMinimo } };
 }
-	function sugerirEquilibrio(gargalos, orc) {
-    if (!gargalos || !gargalos.gargalos || gargalos.gargalos.length === 0) return [];
+function sugerirEquilibrio(gargalos, orc) {
+    if (!gargalos || !gargalos.gargalos || gargalos.gargalos.length === 0) {
+        return [];
+    }
     const sugestoes = [];
     const lista = gargalos.gargalos;
-    lista.filter(g => g.tipo === 'custodia_negativa').forEach(g => {
-        const outras = (orc.custodias || []).filter(c => c.id !== g.custodiaId && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura);
-        const comSaldo = outras.filter(c => (c.saldoAtual || 0) > 0);
-        if (comSaldo.length > 0) {
-            sugestoes.push({
-                tipo: 'transferencia',
-                mensagem: `"${g.nome}" pode ficar negativa. Você tem saldo em ${comSaldo.map(c => c.nome).join(', ')}.`,
-                dados: { custodiaId: g.custodiaId, saldoFinal: g.saldoFinal, alternativas: comSaldo.map(c => ({ id: c.id, nome: c.nome, saldo: c.saldoAtual || 0 })) }
+
+    for (let i = 0; i < lista.length; i++) {
+        const g = lista[i];
+
+        if (g.tipo === 'custodia_negativa') {
+            const outras = (orc.custodias || []).filter(function(c) {
+                return c.id !== g.custodiaId && !((TIPOS_CUSTODIA[c.tipo] || {}).temFatura);
             });
-        } else {
-            sugestoes.push({ tipo: 'custodia_apertada', mensagem: `"${g.nome}" projeta saldo negativo (R$ ${Math.abs(g.saldoFinal).toFixed(2).replace('.', ',')}).`, dados: { custodiaId: g.custodiaId, saldoFinal: g.saldoFinal } });
+            const comSaldo = outras.filter(function(c) {
+                return (c.saldoAtual || 0) > 0;
+            });
+            if (comSaldo.length > 0) {
+                const nomes = comSaldo.map(function(c) { return c.nome; }).join(', ');
+                const alternativas = comSaldo.map(function(c) {
+                    return { id: c.id, nome: c.nome, saldo: c.saldoAtual || 0 };
+                });
+                sugestoes.push({
+                    tipo: 'transferencia',
+                    mensagem: '"' + g.nome + '" pode ficar negativa. Você tem saldo em ' + nomes + '.',
+                    dados: {
+                        custodiaId: g.custodiaId,
+                        saldoFinal: g.saldoFinal,
+                        alternativas: alternativas
+                    }
+                });
+            } else {
+                const valorFormatado = Math.abs(g.saldoFinal).toFixed(2).replace('.', ',');
+                sugestoes.push({
+                    tipo: 'custodia_apertada',
+                    mensagem: '"' + g.nome + '" projeta saldo negativo (R$ ' + valorFormatado + ').',
+                    dados: { custodiaId: g.custodiaId, saldoFinal: g.saldoFinal }
+                });
+            }
+        } else if (g.tipo === 'concentracao') {
+            const eventosVencimento = (g.eventos || []).filter(function(e) {
+                return e.tipo === 'vencimento';
+            });
+            const nomes = eventosVencimento.map(function(e) { return e.nome; });
+            const dataFmt = g.data ? g.data.split('-').reverse().slice(0, 2).join('/') : '';
+            const percentual = g.percentual.toFixed(0);
+            let mensagem;
+            if (nomes.length > 0) {
+                mensagem = 'No dia ' + dataFmt + ' concentra ' + percentual + '% das saídas: ' + nomes.join(', ') + '.';
+            } else {
+                mensagem = 'No dia ' + dataFmt + ' concentra ' + percentual + '% das saídas da janela.';
+            }
+            sugestoes.push({
+                tipo: 'concentracao',
+                mensagem: mensagem,
+                dados: { data: g.data, percentual: g.percentual, eventos: g.eventos || [] }
+            });
+        } else if (g.tipo === 'acumulado_negativo') {
+            const jaTemJanela = sugestoes.some(function(s) { return s.tipo === 'janela_apertada'; });
+            if (!jaTemJanela) {
+                const acumulados = lista.filter(function(x) { return x.tipo === 'acumulado_negativo'; });
+                let pior = acumulados[0];
+                for (let j = 1; j < acumulados.length; j++) {
+                    if (acumulados[j].saldoAcumulado < pior.saldoAcumulado) {
+                        pior = acumulados[j];
+                    }
+                }
+                const dataFmt = pior.data ? pior.data.split('-').reverse().slice(0, 2).join('/') : '';
+                const valorFormatado = pior.saldoAcumulado.toFixed(2).replace('.', ',');
+                sugestoes.push({
+                    tipo: 'janela_apertada',
+                    mensagem: 'Na janela, o saldo acumulado chega a R$ ' + valorFormatado + ' no dia ' + dataFmt + '.',
+                    dados: { data: pior.data, saldoAcumulado: pior.saldoAcumulado }
+                });
+            }
+        } else if (g.tipo === 'dia_negativo') {
+            const jaCoberto = sugestoes.some(function(s) {
+                return s.dados && s.dados.data === g.data;
+            });
+            if (jaCoberto) continue;
+            const eventosVencimento = (g.eventos || []).filter(function(e) {
+                return e.tipo === 'vencimento';
+            });
+            const nomes = eventosVencimento.map(function(e) { return e.nome; });
+            const dataFmt = g.data ? g.data.split('-').reverse().slice(0, 2).join('/') : '';
+            const valorFormatado = g.deficit.toFixed(2).replace('.', ',');
+            let mensagem;
+            if (nomes.length > 0) {
+                mensagem = 'No dia ' + dataFmt + ' as saídas passam as entradas em R$ ' + valorFormatado + ': ' + nomes.join(', ') + '.';
+            } else {
+                mensagem = 'No dia ' + dataFmt + ' as saídas passam as entradas em R$ ' + valorFormatado + '.';
+            }
+            sugestoes.push({
+                tipo: 'dia_apertado',
+                mensagem: mensagem,
+                dados: { data: g.data, deficit: g.deficit, eventos: g.eventos || [] }
+            });
         }
-    });
-    lista.filter(g => g.tipo === 'concentracao').forEach(g => {
-        const nomes = (g.eventos || []).filter(e => e.tipo === 'vencimento').map(e => e.nome);
-        sugestoes.push({
-            tipo: 'concentracao',
-            mensagem: nomes.length > 0
-                ? `No dia ${g.data.slice(8)} concentra ${g.percentual.toFixed(0)}% das saídas: ${nomes.join(', ')}.`
-                : `No dia ${g.data.slice(8)} concentra ${g.percentual.toFixed(0)}% das saídas da janela.`,
-            dados: { data: g.data, percentual: g.percentual, eventos: g.eventos || [] }
-        });
-    });
-    const acumulados = lista.filter(g => g.tipo === 'acumulado_negativo');
-    if (acumulados.length > 0) {
-        const pior = acumulados.reduce((a, b) => (a.saldoAcumulado < b.saldoAcumulado) ? a : b);
-        sugestoes.push({ tipo: 'janela_apertada', mensagem: `Na janela, o saldo acumulado chega a R$ ${pior.saldoAcumulado.toFixed(2).replace('.', ',')} em ${pior.data.slice(8)}.`, dados: { data: pior.data, saldoAcumulado: pior.saldoAcumulado } });
     }
-    lista.filter(g => g.tipo === 'dia_negativo').forEach(g => {
-        const jaCoberto = sugestoes.some(s => (s.dados && s.dados.data === g.data));
-        if (jaCoberto) return;
-        const nomes = (g.eventos || []).filter(e => e.tipo === 'vencimento').map(e => e.nome);
-        sugestoes.push({
-            tipo: 'dia_apertado',
-            mensagem: nomes.length > 0
-                ? `Em ${g.data.slice(8)} as saídas passam as entradas em R$ ${g.deficit.toFixed(2).replace('.', ',')}: ${nomes.join(', ')}.`
-                : `Em ${g.data.slice(8)} as saídas passam as entradas em R$ ${g.deficit.toFixed(2).replace('.', ',')}.`,
-            dados: { data: g.data, deficit: g.deficit, eventos: g.eventos || [] }
-        });
-    });
+
     return sugestoes;
 }
 function _pertenceSemanaAtual(isoStr) {
