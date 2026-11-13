@@ -14352,8 +14352,13 @@ function obterIndicadoresGrid(dadosAvaliacao) {
         }).join('');
     }
 
-    // Se estiver em qualquer outro degrau, pega os 4 mais críticos
-    return indicadores.filter(i => i.score > 0).slice(0, 4).map(ind => _renderCardIndicador(ind)).join('');
+     // Degrau >= 1: garante sempre 4 cards.
+    // Ordem: primeiro os críticos (score > 0, já ordenados por scorePonderado desc),
+    // depois os "em dia" (score === 0) para completar as 4 posições do grid 2x2.
+    const criticos = indicadores.filter(i => i.score > 0);
+    const emDia    = indicadores.filter(i => i.score === 0);
+    const quatro   = [...criticos, ...emDia].slice(0, 4);
+    return quatro.map(ind => _renderCardIndicador(ind)).join('');
 }
 
 // Helper para montar o card
