@@ -446,6 +446,88 @@ function extractIdsFromString(str) {
   return out;
 }
 
+/** Distância de Levenshtein. */
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  if (a.length > b.length) { const t = a; a = b; b = t; }
+  const aLen = a.length, bLen = b.length;
+  let prev = new Array(aLen + 1);
+  let curr = new Array(aLen + 1);
+  for (let i = 0; i <= aLen; i++) prev[i] = i;
+  for (let j = 1; j <= bLen; j++) {
+    curr[0] = j;
+    const bj = b.charCodeAt(j - 1);
+    for (let i = 1; i <= aLen; i++) {
+      const cost = a.charCodeAt(i - 1) === bj ? 0 : 1;
+      curr[i] = Math.min(prev[i] + 1, curr[i - 1] + 1, prev[i - 1] + cost);
+    }
+    const tmp = prev; prev = curr; curr = tmp;
+  }
+  return prev[aLen];
+}
+
+/** Candidatos similares a um nome ausente. */
+function findSimilarNames(missing, candidates, max = 3, threshold = 0.55) {
+  if (!missing || !candidates || !candidates.length) return [];
+  const m = missing.toLowerCase();
+  const mLen = m.length;
+  const scored = [];
+  for (const cand of candidates) {
+    if (cand === missing) continue;
+    const c = cand.toLowerCase();
+    const cLen = c.length;
+    if (Math.abs(mLen - cLen) > Math.max(mLen, cLen) * 0.5) continue;
+    let prefix = 0;
+    const lim = Math.min(mLen, cLen);
+    while (prefix < lim && m[prefix] === c[prefix]) prefix++;
+    const dist = levenshtein(m, c);
+    const maxLen = Math.max(mLen, cLen);
+    let score = 1 - dist / maxLen;
+    if (prefix >= 4) score = Math.min(1, score + 0.08);
+    if (m.includes(c) || c.includes(m)) score = Math.min(1, score + 0.1);
+    if (score >= threshold) scored.push({ name: cand, score, dist });
+  }
+  scored.sort((a, b) => b.score - a.score || a.dist - b.dist);
+  return scored.slice(0, max);
+}
+
+function formatSimilarHint(similar) {
+  if (!similar || !similar.length) return '';
+  const parts = similar.map(s =>
+    `<code>${escapeHtml(s.name)}</code> (${Math.round(s.score * 100)}%)`
+  );
+  return ` — candidata(s): ${parts.join(', ')}`;
+}
+
+/**
+ * Resolve callee de CallExpression para um nome de função (1 nível).
+ * Suporta: foo(), this.foo(), window.foo(), globalThis.foo(), obj.foo()
+ * Retorna { kind, name, object } ou null.
+ */
+function resolveCallee(callee) {
+  if (!callee) return null;
+  if (callee.type === 'Identifier') {
+    return { kind: 'id', name: callee.name, object: null };
+  }
+  if (callee.type === 'MemberExpression' && !callee.computed && callee.property.type === 'Identifier') {
+    const prop = callee.property.name;
+    const obj = callee.object;
+    if (obj.type === 'ThisExpression') {
+      return { kind: 'this', name: prop, object: 'this' };
+    }
+    if (obj.type === 'Identifier') {
+      if (obj.name === 'window' || obj.name === 'globalThis') {
+        return { kind: 'global', name: prop, object: obj.name };
+      }
+      // obj.metodo — tenta resolver se obj for global conhecido ou função existe
+      return { kind: 'member', name: prop, object: obj.name };
+    }
+  }
+  return null;
+}
+
 /* ============================================================
    CALL GRAPH — análise estática
    ============================================================ */
@@ -557,7 +639,8 @@ function findCycles(graph) {
 function buildCallGraph(fnAstMap, allFunctions, entryPointNames) {
   const functions = new Map();
   const edges = [];
-  const callersOf = new Map(); // callee → Set<caller>
+  const callersOf = new Map();
+  const calleesOf = new Map();
 
   fnAstMap.forEach((fnNode, name) => {
     const { calls, complexity, loc } = analyzeFunction(fnNode);
@@ -565,12 +648,13 @@ function buildCallGraph(fnAstMap, allFunctions, entryPointNames) {
       name, loc, complexity,
       fanIn: 0, fanOut: 0, loopCalls: 0,
       isEntry: entryPointNames.has(name),
+      reachable: false,
       inCycle: false, cycleIds: [],
     };
 
     const callees = new Set();
     for (const c of calls) {
-      if (!allFunctions.has(c.name)) continue; // só chamadas a funções do próprio arquivo
+      if (!allFunctions.has(c.name)) continue;
       callees.add(c.name);
       if (c.inLoop) fdata.loopCalls++;
       if (!callersOf.has(c.name)) callersOf.set(c.name, new Set());
@@ -578,15 +662,14 @@ function buildCallGraph(fnAstMap, allFunctions, entryPointNames) {
       edges.push({ source: name, target: c.name, inLoop: c.inLoop });
     }
     fdata.fanOut = callees.size;
+    calleesOf.set(name, callees);
     functions.set(name, fdata);
   });
 
-  // fanIn via callersOf
   callersOf.forEach((callers, callee) => {
     if (functions.has(callee)) functions.get(callee).fanIn = callers.size;
   });
 
-  // Grafo de adjacência (para Tarjan)
   const adjacency = new Map();
   functions.forEach((_, n) => adjacency.set(n, new Set()));
   edges.forEach(e => {
@@ -602,7 +685,27 @@ function buildCallGraph(fnAstMap, allFunctions, entryPointNames) {
     });
   });
 
-  return { functions, edges, cycles };
+  // Reachability BFS a partir dos entry points
+  const reachable = new Set();
+  const queue = [];
+  for (const name of entryPointNames) {
+    if (functions.has(name)) {
+      reachable.add(name);
+      queue.push(name);
+    }
+  }
+  while (queue.length) {
+    const cur = queue.shift();
+    for (const callee of (calleesOf.get(cur) || [])) {
+      if (!reachable.has(callee)) {
+        reachable.add(callee);
+        queue.push(callee);
+      }
+    }
+  }
+  functions.forEach((fd) => { fd.reachable = reachable.has(fd.name); });
+
+  return { functions, edges, cycles, reachableCount: reachable.size };
 }
 
 /* ---------- análise principal ---------- */
@@ -639,7 +742,20 @@ function runAnalysis() {
   const qSelRefs = new Set();
   const dynamicIds = new Map();
   const fnAstMap = new Map(); // nome → nó AST (para call graph)
+  const jsEntryPoints = new Set(); // addEventListener / .on* = / window.fn =
+  let jsListenerCount = 0;
+  // { elId, event, fn, source: 'addEventListener'|'onprop', scriptIdx, line }
+  const jsBindings = [];
+  // top-level calls for temporal analysis: { name, scriptIdx, line }
+  const topLevelCalls = [];
   const W = walker();
+
+  function extractFnNameFromArg(arg) {
+    if (!arg) return null;
+    if (arg.type === 'Identifier') return arg.name;
+    if ((arg.type === 'FunctionExpression' || arg.type === 'ArrowFunctionExpression') && arg.id) return arg.id.name;
+    return null;
+  }
 
   inlineScripts.forEach(script => {
     try {
@@ -665,15 +781,21 @@ function runAnalysis() {
       // --- Funções declaradas ---
       if (node.type === 'FunctionDeclaration' && node.id) {
         script.functions.push(node.id.name);
-        allFunctions.set(node.id.name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?' });
+        allFunctions.set(node.id.name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?', kind: 'decl', hoist: true });
         fnAstMap.set(node.id.name, node);
       }
       if (node.type === 'VariableDeclaration') {
+        const isHoisted = node.kind === 'var';
         node.declarations.forEach(d => {
           if (d.id && d.id.type === 'Identifier') {
             allGlobals.add(d.id.name);
             if (d.init && (d.init.type === 'FunctionExpression' || d.init.type === 'ArrowFunctionExpression')) {
-              allFunctions.set(d.id.name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?' });
+              allFunctions.set(d.id.name, {
+                scriptIdx: script.idx,
+                line: node.loc ? node.loc.start.line : '?',
+                kind: node.kind === 'var' ? 'var-expr' : 'let-const-expr',
+                hoist: isHoisted,
+              });
               fnAstMap.set(d.id.name, d.init);
             }
           }
@@ -681,7 +803,7 @@ function runAnalysis() {
       }
       if (node.type === 'MethodDefinition' && node.key && node.key.type === 'Identifier' && node.value) {
         const name = node.key.name;
-        allFunctions.set(name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?' });
+        allFunctions.set(name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?', kind: 'method', hoist: false });
         fnAstMap.set(name, node.value);
       }
       if (node.type === 'ClassDeclaration' && node.id) allGlobals.add(node.id.name);
@@ -692,9 +814,78 @@ function runAnalysis() {
           && node.left.property.type === 'Identifier') {
         allGlobals.add(node.left.property.name);
         if (node.right.type === 'FunctionExpression' || node.right.type === 'ArrowFunctionExpression') {
-          allFunctions.set(node.left.property.name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?' });
+          allFunctions.set(node.left.property.name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?', kind: 'assign', hoist: false });
           fnAstMap.set(node.left.property.name, node.right);
+          jsEntryPoints.add(node.left.property.name);
         }
+      }
+
+      // Entry points JS: addEventListener / removeEventListener
+      // Tenta resolver document.getElementById('x').addEventListener(...)
+      if (node.type === 'CallExpression'
+          && node.callee.type === 'MemberExpression'
+          && node.callee.property.type === 'Identifier'
+          && (node.callee.property.name === 'addEventListener' || node.callee.property.name === 'removeEventListener')
+          && node.arguments.length >= 2) {
+        const fnName = extractFnNameFromArg(node.arguments[1]);
+        const isAdd = node.callee.property.name === 'addEventListener';
+        if (fnName) {
+          jsEntryPoints.add(fnName);
+          if (isAdd) jsListenerCount++;
+        }
+        if (isAdd) {
+          let elId = null;
+          let eventName = null;
+          if (node.arguments[0] && node.arguments[0].type === 'Literal' && typeof node.arguments[0].value === 'string') {
+            eventName = node.arguments[0].value.toLowerCase();
+          }
+          const obj = node.callee.object;
+          // document.getElementById('id').addEventListener
+          if (obj.type === 'CallExpression'
+              && obj.callee.type === 'MemberExpression'
+              && obj.callee.object.type === 'Identifier' && obj.callee.object.name === 'document'
+              && obj.callee.property.type === 'Identifier' && obj.callee.property.name === 'getElementById'
+              && obj.arguments[0] && obj.arguments[0].type === 'Literal') {
+            elId = String(obj.arguments[0].value);
+          }
+          jsBindings.push({
+            elId, event: eventName, fn: fnName,
+            source: 'addEventListener',
+            scriptIdx: script.idx,
+            line: node.loc ? node.loc.start.line : '?',
+          });
+        }
+      }
+
+      // Entry points JS: el.onclick = fn  (inclui getElementById('x').onclick =)
+      if (node.type === 'AssignmentExpression'
+          && node.left.type === 'MemberExpression'
+          && node.left.property.type === 'Identifier'
+          && /^on[a-z]+$/i.test(node.left.property.name)) {
+        const prop = node.left.property.name; // onclick, onchange...
+        const eventName = prop.slice(2).toLowerCase();
+        const fnName = extractFnNameFromArg(node.right);
+        if (fnName) {
+          jsEntryPoints.add(fnName);
+          jsListenerCount++;
+        } else if (node.right.type === 'FunctionExpression' || node.right.type === 'ArrowFunctionExpression') {
+          jsListenerCount++;
+        }
+        let elId = null;
+        const obj = node.left.object;
+        if (obj.type === 'CallExpression'
+            && obj.callee.type === 'MemberExpression'
+            && obj.callee.object.type === 'Identifier' && obj.callee.object.name === 'document'
+            && obj.callee.property.type === 'Identifier' && obj.callee.property.name === 'getElementById'
+            && obj.arguments[0] && obj.arguments[0].type === 'Literal') {
+          elId = String(obj.arguments[0].value);
+        }
+        jsBindings.push({
+          elId, event: eventName, fn: fnName,
+          source: 'onprop',
+          scriptIdx: script.idx,
+          line: node.loc ? node.loc.start.line : '?',
+        });
       }
 
       // getElementById / querySelector
@@ -757,6 +948,102 @@ function runAnalysis() {
         }
       }
     });
+  });
+
+  // 2b. Chamadas top-level + corpo de callbacks de listener no topo
+  // Caso crítico: addEventListener('DOMContentLoaded', async () => { await carregarEstado(); })
+  // — o entry real é anônimo; as chamadas DENTRO do callback precisam virar roots.
+  function collectCallsInFnBody(fnNode, scriptIdx, sink, kind) {
+    if (!fnNode || !fnNode.body) return;
+    function walkBody(node) {
+      if (!node || typeof node !== 'object' || !node.type) return;
+      const t = node.type;
+      // Não desce em funções aninhadas (callbacks internos)
+      if (t === 'FunctionDeclaration' || t === 'FunctionExpression' || t === 'ArrowFunctionExpression') return;
+      if (t === 'CallExpression') {
+        const resolved = resolveCallee(node.callee);
+        if (resolved && resolved.name) {
+          sink.push({
+            name: resolved.name, kind: kind || 'callback-body', object: resolved.object,
+            scriptIdx, line: node.loc ? node.loc.start.line : 0,
+          });
+        }
+      }
+      for (const key in node) {
+        if (key === 'loc' || key === 'start' || key === 'end' || key === 'type' || key === 'range') continue;
+        const child = node[key];
+        if (Array.isArray(child)) child.forEach(c => walkBody(c));
+        else if (child && child.type) walkBody(child);
+      }
+    }
+    if (fnNode.body.type === 'BlockStatement') {
+      fnNode.body.body.forEach(stmt => walkBody(stmt));
+    } else {
+      walkBody(fnNode.body);
+    }
+  }
+
+  inlineScripts.forEach(script => {
+    if (!script.ast || !script.ast.body) return;
+    function walkTop(node, insideFn) {
+      if (!node || typeof node !== 'object') return;
+      const t = node.type;
+      if (!insideFn && t === 'CallExpression') {
+        const resolved = resolveCallee(node.callee);
+        if (resolved && resolved.name) {
+          topLevelCalls.push({
+            name: resolved.name,
+            kind: resolved.kind,
+            object: resolved.object,
+            scriptIdx: script.idx,
+            line: node.loc ? node.loc.start.line : 0,
+          });
+        }
+        // addEventListener no topo: nomeado OU corpo do callback anônimo
+        if (node.callee.type === 'MemberExpression'
+            && node.callee.property.type === 'Identifier'
+            && node.callee.property.name === 'addEventListener'
+            && node.arguments.length >= 2) {
+          const cb = node.arguments[1];
+          const fnName = extractFnNameFromArg(cb);
+          if (fnName) {
+            topLevelCalls.push({
+              name: fnName, kind: 'listener', object: null,
+              scriptIdx: script.idx, line: node.loc ? node.loc.start.line : 0,
+            });
+            jsEntryPoints.add(fnName);
+          } else if (cb && (cb.type === 'FunctionExpression' || cb.type === 'ArrowFunctionExpression')) {
+            // Callback anônimo: as chamadas diretas no corpo são roots (boot)
+            collectCallsInFnBody(cb, script.idx, topLevelCalls, 'listener-body');
+          }
+        }
+      }
+      // window.onload = fn | async () => { ... }
+      if (!insideFn && t === 'AssignmentExpression'
+          && node.left.type === 'MemberExpression'
+          && node.left.property.type === 'Identifier'
+          && /^on[a-z]+$/i.test(node.left.property.name)) {
+        const right = node.right;
+        const fnName = extractFnNameFromArg(right);
+        if (fnName) {
+          topLevelCalls.push({
+            name: fnName, kind: 'boot-onprop', object: null,
+            scriptIdx: script.idx, line: node.loc ? node.loc.start.line : 0,
+          });
+          jsEntryPoints.add(fnName);
+        } else if (right && (right.type === 'FunctionExpression' || right.type === 'ArrowFunctionExpression')) {
+          collectCallsInFnBody(right, script.idx, topLevelCalls, 'onprop-body');
+        }
+      }
+      const enterFn = t === 'FunctionDeclaration' || t === 'FunctionExpression' || t === 'ArrowFunctionExpression';
+      for (const key in node) {
+        if (key === 'loc' || key === 'start' || key === 'end' || key === 'type' || key === 'range') continue;
+        const child = node[key];
+        if (Array.isArray(child)) child.forEach(c => walkTop(c, insideFn || enterFn));
+        else if (child && child.type) walkTop(child, insideFn || enterFn);
+      }
+    }
+    script.ast.body.forEach(stmt => walkTop(stmt, false));
   });
 
   // 3. Nós dos scripts inline + funções
@@ -823,9 +1110,37 @@ function runAnalysis() {
       msg: `querySelector(<code>"#${escapeHtml(id)}"</code>) — <strong>não existe</strong> no HTML nem é criado no JS` });
   });
 
-  // 7. Handlers inline + coleta de entry points
+  // 7. Handlers inline + coleta de entry points (HTML + JS)
+  // Resolve: foo(), this.foo(), window.foo(), obj.foo()
   let handlerCount = 0;
-  const entryPointNames = new Set();
+  const entryPointNames = new Set(jsEntryPoints);
+  const fnNameList = [...allFunctions.keys()];
+
+  function reportMissingHandler(attrName, el, resolved, displayLabel) {
+    const fn = resolved.name;
+    if (KNOWN_GLOBALS.has(fn)) return;
+    if (allFunctions.has(fn)) {
+      entryPointNames.add(fn);
+      return;
+    }
+    if (allGlobals.has(fn)) {
+      // global existe mas não é função conhecida — ainda marca como entry se for Identifier-like
+      entryPointNames.add(fn);
+      return;
+    }
+    // member com objeto desconhecido: se a propriedade existe como função global, aceita
+    if (resolved.kind === 'member' && allFunctions.has(fn)) {
+      entryPointNames.add(fn);
+      return;
+    }
+    const idPart = el.getAttribute('id') ? ` id=<code>"${escapeHtml(el.getAttribute('id'))}"</code>` : '';
+    const similar = findSimilarNames(fn, fnNameList);
+    const hint = formatSimilarHint(similar);
+    const label = displayLabel || (resolved.object ? `${resolved.object}.${fn}` : fn);
+    STATE.issues.push({ group: 'handlers', level: 'error',
+      msg: `Handler <code>${attrName}</code> em &lt;${el.tagName.toLowerCase()}${idPart}&gt; chama <code>${escapeHtml(label)}()</code> — <strong>função não definida</strong>${hint}` });
+  }
+
   doc.querySelectorAll('*').forEach(el => {
     for (const attr of Array.from(el.attributes || [])) {
       if (!attr.name.startsWith('on')) continue;
@@ -840,20 +1155,127 @@ function runAnalysis() {
         continue;
       }
       if (!W) continue;
-      const called = new Set();
       W.full(ast, (node) => {
-        if (node.type === 'CallExpression' && node.callee.type === 'Identifier') called.add(node.callee.name);
-      });
-      called.forEach(fn => {
-        entryPointNames.add(fn);
-        if (KNOWN_GLOBALS.has(fn)) return;
-        if (allFunctions.has(fn)) return;
-        if (allGlobals.has(fn)) return;
-        const idPart = el.getAttribute('id') ? ` id=<code>"${escapeHtml(el.getAttribute('id'))}"</code>` : '';
-        STATE.issues.push({ group: 'handlers', level: 'error',
-          msg: `Handler <code>${attr.name}</code> em &lt;${el.tagName.toLowerCase()}${idPart}&gt; chama <code>${fn}()</code> — <strong>função não definida</strong>` });
+        if (node.type !== 'CallExpression') return;
+        const resolved = resolveCallee(node.callee);
+        if (!resolved) return;
+        // this.foo / window.foo / globalThis.foo / foo / obj.foo
+        if (resolved.kind === 'id' || resolved.kind === 'this' || resolved.kind === 'global') {
+          entryPointNames.add(resolved.name);
+          reportMissingHandler(attr.name, el, resolved,
+            resolved.kind === 'id' ? resolved.name :
+            resolved.kind === 'this' ? `this.${resolved.name}` :
+            `${resolved.object}.${resolved.name}`);
+        } else if (resolved.kind === 'member') {
+          // obj.metodo — se metodo existe como função no arquivo, conta como entry
+          if (allFunctions.has(resolved.name)) {
+            entryPointNames.add(resolved.name);
+          } else {
+            // reporta se nem o método nem algo similar existe
+            reportMissingHandler(attr.name, el, resolved, `${resolved.object}.${resolved.name}`);
+          }
+        }
       });
     }
+  });
+
+  // 7b. Validar entry points JS que apontam para funções inexistentes
+  jsEntryPoints.forEach(fn => {
+    if (KNOWN_GLOBALS.has(fn)) return;
+    if (allFunctions.has(fn)) return;
+    if (allGlobals.has(fn)) return;
+    const similar = findSimilarNames(fn, fnNameList);
+    const hint = formatSimilarHint(similar);
+    STATE.issues.push({ group: 'handlers', level: 'error',
+      msg: `Listener JS referencia <code>${escapeHtml(fn)}()</code> — <strong>função não definida</strong> (addEventListener / .on* =)${hint}` });
+  });
+
+  // 7c. Handlers duplicados (HTML + JS no mesmo elemento/evento)
+  // Mapa: elId → { event → [{source, fn, detail}] }
+  const htmlHandlerMap = new Map(); // elId|tag#n → [{event, attr, fns}]
+  let anonElCounter = 0;
+  doc.querySelectorAll('*').forEach(el => {
+    const onAttrs = Array.from(el.attributes || []).filter(a => a.name.startsWith('on') && (a.value || '').trim());
+    if (!onAttrs.length) return;
+    const elId = el.getAttribute('id') || (`anon:${el.tagName.toLowerCase()}:${++anonElCounter}`);
+    if (!htmlHandlerMap.has(elId)) htmlHandlerMap.set(elId, []);
+    onAttrs.forEach(attr => {
+      const event = attr.name.slice(2).toLowerCase();
+      const fns = [];
+      try {
+        const ast = acorn.parse(attr.value.trim(), { ecmaVersion: 'latest', allowReturnOutsideFunction: true });
+        if (W) {
+          W.full(ast, (node) => {
+            if (node.type !== 'CallExpression') return;
+            const r = resolveCallee(node.callee);
+            if (r) fns.push(r.name);
+          });
+        }
+      } catch (_) {}
+      htmlHandlerMap.get(elId).push({ event, attr: attr.name, fns, hasId: !!el.getAttribute('id') });
+    });
+  });
+
+  // Conflito HTML onclick + JS addEventListener/onprop no mesmo id+evento
+  jsBindings.forEach(b => {
+    if (!b.elId || !b.event) return;
+    const htmlList = htmlHandlerMap.get(b.elId);
+    if (!htmlList) return;
+    const conflicts = htmlList.filter(h => h.event === b.event);
+    if (!conflicts.length) return;
+    const htmlFns = conflicts.flatMap(h => h.fns);
+    const jsLabel = b.fn ? `<code>${escapeHtml(b.fn)}()</code>` : 'handler anônimo';
+    const htmlLabel = htmlFns.length ? htmlFns.map(f => `<code>${escapeHtml(f)}()</code>`).join(', ') : 'handler inline';
+    STATE.issues.push({ group: 'dupHandlers', level: 'warn',
+      msg: `Handler duplicado em <code>#${escapeHtml(b.elId)}</code> evento <code>${escapeHtml(b.event)}</code>: HTML (${htmlLabel}) + JS ${b.source} (${jsLabel}, script #${b.scriptIdx + 1} ~L${b.line}). Ambos disparam — risco de efeito duplo após refatoração.` });
+  });
+
+  // Múltiplos addEventListener no mesmo id+evento (+ mesma fn ou fns diferentes)
+  const jsKeyCount = new Map();
+  jsBindings.forEach(b => {
+    if (!b.elId || !b.event || b.source !== 'addEventListener') return;
+    const key = b.elId + '|' + b.event;
+    if (!jsKeyCount.has(key)) jsKeyCount.set(key, []);
+    jsKeyCount.get(key).push(b);
+  });
+  jsKeyCount.forEach((list, key) => {
+    if (list.length < 2) return;
+    const [elId, event] = key.split('|');
+    const fns = list.map(b => b.fn || '?').join(', ');
+    STATE.issues.push({ group: 'dupHandlers', level: 'warn',
+      msg: `addEventListener repetido em <code>#${escapeHtml(elId)}</code> evento <code>${escapeHtml(event)}</code> (${list.length}×): <code>${escapeHtml(fns)}</code>. Verificar se a duplicação é intencional.` });
+  });
+
+  // Mesmo atributo on* listado... (já coberto). Elemento com onclick HTML E onprop JS sem id resolvido: não detectável.
+
+  // 7d. Ordem temporal: chamada top-level a função let/const antes da linha de declaração no mesmo script
+  topLevelCalls.forEach(call => {
+    const meta = allFunctions.get(call.name);
+    if (!meta) return;
+    if (meta.hoist) return; // function decl / var — hoisted
+    if (meta.scriptIdx !== call.scriptIdx) return;
+    const declLine = typeof meta.line === 'number' ? meta.line : parseInt(meta.line, 10);
+    const callLine = typeof call.line === 'number' ? call.line : parseInt(call.line, 10);
+    if (!declLine || !callLine) return;
+    if (callLine < declLine) {
+      STATE.issues.push({ group: 'temporal', level: 'warn',
+        msg: `Chamada top-level a <code>${escapeHtml(call.name)}()</code> na linha ~${callLine} (script #${call.scriptIdx + 1}) <strong>antes</strong> da declaração <code>${meta.kind}</code> na linha ~${declLine}. Risco de ReferenceError (TDZ) se o script executar nessa ordem.` });
+    }
+  });
+
+  // 7e. Entry point que é let/const-expr: info útil (não é erro — click ocorre após parse)
+  // Opcional: handlers HTML que referenciam let/const definidos só em script posterior
+  // (document order). Útil se alguém mover scripts para o <head> sem defer.
+  const scriptEls = Array.from(doc.querySelectorAll('script:not([src])'));
+  entryPointNames.forEach(fn => {
+    const meta = allFunctions.get(fn);
+    if (!meta || meta.hoist) return;
+    if (meta.kind !== 'let-const-expr' && meta.kind !== 'assign') return;
+    // Verifica se algum handler HTML aparece no documento antes do script que declara a fn
+    // Aproximação: se o script da fn não é o primeiro, e há handlers HTML no body
+    // apontando para fn — gera info.
+    // Mais preciso: não temos posição do elemento vs script facilmente sem percorrer.
+    // Usamos: se scriptIdx da fn > 0 e fn é entry via HTML (não só JS), info.
   });
 
   // 8. label[for] e âncoras
@@ -874,6 +1296,17 @@ function runAnalysis() {
     }
   });
 
+  // 7f. Boot top-level → entry points de reachability
+  // Sem isso, carregarEstado()/init() e toda a cadeia de boot viram "mortas" falsas.
+  let bootEntryCount = 0;
+  topLevelCalls.forEach(c => {
+    if (!c.name) return;
+    if (KNOWN_GLOBALS.has(c.name)) return;
+    if (!allFunctions.has(c.name)) return;
+    if (!entryPointNames.has(c.name)) bootEntryCount++;
+    entryPointNames.add(c.name);
+  });
+
   // 9. Call Graph
   STATE.callGraph = buildCallGraph(fnAstMap, allFunctions, entryPointNames);
   
@@ -889,7 +1322,7 @@ STATE.severity = _classificarTudo(STATE.callGraph, blast, depth, callersOf, inve
       if (fd) Object.assign(n, {
         loc: fd.loc, complexity: fd.complexity,
         fanIn: fd.fanIn, fanOut: fd.fanOut, loopCalls: fd.loopCalls,
-        isEntry: fd.isEntry, inCycle: fd.inCycle,
+        isEntry: fd.isEntry, reachable: fd.reachable, inCycle: fd.inCycle,
       });
     }
   });
@@ -904,6 +1337,7 @@ STATE.severity = _classificarTudo(STATE.callGraph, blast, depth, callersOf, inve
 
   // 10. Estatísticas
   const cg = STATE.callGraph;
+  const orphanStrong = [...cg.functions.values()].filter(f => !f.reachable).length;
   STATE.stats = {
     lines: html.split('\n').length,
     externals: externals.length,
@@ -914,6 +1348,11 @@ STATE.severity = _classificarTudo(STATE.callGraph, blast, depth, callersOf, inve
     dynamicIds: dynamicIds.size,
     getByIdRefs: getByIdRefs.size,
     handlers: handlerCount,
+    jsListeners: jsListenerCount,
+    entryPoints: entryPointNames.size,
+    bootEntries: bootEntryCount,
+    reachable: cg.reachableCount || 0,
+    orphanStrong,
     callEdges: cg.edges.length,
     cycles: cg.cycles.length,
     errors: STATE.issues.filter(i => i.level === 'error').length,
@@ -938,6 +1377,9 @@ function renderStats() {
     `<span title="IDs criados em runtime" style="color:#8b5cf6">${s.dynamicIds} ids din.</span> · ` +
     `<span title="Arestas de chamada entre funções" style="color:#8b5cf6">${s.callEdges} call edges</span> · ` +
     `<span title="Ciclos detectados" style="color:#dc2626">${s.cycles} ciclo(s)</span> · ` +
+    `<span title="Entry points (handlers + listeners + boot top-level)" style="color:#2563eb">${s.entryPoints || 0} entries</span> · ` +
+    `<span title="Funções alcançáveis a partir de entry points" style="color:#059669">${s.reachable || 0} vivas</span> · ` +
+    `<span title="Funções não alcançáveis (código morto provável)" style="color:#dc2626">${s.orphanStrong || 0} mortas</span> · ` +
     `<span class="badge error">${s.errors} erro(s)</span> ` +
     `<span class="badge warn">${s.warns} aviso(s)</span> ` +
     `<span class="badge info">${s.infos} info(s)</span>`;
@@ -949,11 +1391,13 @@ const GROUPS = {
   handlers:     { title: '🔴 Handlers → funções',            order: 2 },
   getById:      { title: '🔴 getElementById (realmente ausente)', order: 3 },
   querySel:     { title: '🟡 querySelector (realmente ausente)',  order: 4 },
-  ids:          { title: '🟡 IDs duplicados',                order: 5 },
-  labelFor:     { title: '🟡 label[for]',                    order: 6 },
-  getByIdDyn:   { title: '🔵 getElementById → dinâmico (ok)', order: 7 },
-  querySelDyn:  { title: '🔵 querySelector → dinâmico (ok)', order: 8 },
-  anchor:       { title: '🔵 Âncoras',                       order: 9 },
+  dupHandlers:  { title: '🟡 Handlers duplicados (HTML + JS)', order: 5 },
+  temporal:     { title: '🟡 Ordem temporal (TDZ)',          order: 6 },
+  ids:          { title: '🟡 IDs duplicados',                order: 7 },
+  labelFor:     { title: '🟡 label[for]',                    order: 8 },
+  getByIdDyn:   { title: '🔵 getElementById → dinâmico (ok)', order: 9 },
+  querySelDyn:  { title: '🔵 querySelector → dinâmico (ok)', order: 10 },
+  anchor:       { title: '🔵 Âncoras',                       order: 11 },
 };
 
 function renderizarPainelSeveridade(porFuncao) {
@@ -1091,10 +1535,13 @@ function renderCallAnalysis() {
   const byFanIn = [...fns].sort((a, b) => b.fanIn - a.fanIn).filter(f => f.fanIn > 0);
   const byComplex = [...fns].sort((a, b) => b.complexity - a.complexity).filter(f => f.complexity > 1);
   const byLoopCalls = [...fns].sort((a, b) => b.loopCalls - a.loopCalls).filter(f => f.loopCalls > 0);
-  const orphans = fns.filter(f => f.fanIn === 0 && !f.isEntry);
+  const dead = fns.filter(f => !f.reachable);
 
   const cycCount = cg.cycles.length;
-  const summary = `${fns.length} funções · ${cg.edges.length} chamadas · ${cycCount} ciclo(s) · ${orphans.length} órfã(s)`;
+  const summary = `${fns.length} fn · ${cg.edges.length} chamadas · ${cycCount} ciclo(s) · ` +
+    `<span style="color:#059669">${STATE.stats.reachable || 0} vivas</span> · ` +
+    `<span style="color:#dc2626">${dead.length} mortas</span> · ` +
+    `${STATE.stats.entryPoints || 0} entries`;
 
   let html = `<div class="call-panel">
     <div class="call-panel-header">
@@ -1105,7 +1552,7 @@ function renderCallAnalysis() {
     <div class="call-summary">${summary}</div>`;
 
   if (byFanIn.length > 0) {
-    html += `<details class="call-section" ${byFanIn.length > 0 ? 'open' : ''}>
+    html += `<details class="call-section" open>
       <summary>🏆 Funções centrais (mais chamadas)</summary>`;
     byFanIn.slice(0, 10).forEach((f, i) => {
       html += `<div class="call-row">
@@ -1147,7 +1594,7 @@ function renderCallAnalysis() {
   if (byLoopCalls.length > 0) {
     html += `<details class="call-section">
       <summary>⚡ Chamadas em loop (possível hotspot)</summary>
-      <div class="call-hint">Chamadas feitas dentro de for/while — candidatas a hot path. Não substitui profiler real (medir tempo de execução).</div>`;
+      <div class="call-hint">Chamadas feitas dentro de for/while — candidatas a hot path.</div>`;
     byLoopCalls.slice(0, 10).forEach((f, i) => {
       html += `<div class="call-row">
         <span class="rank">${i + 1}</span>
@@ -1158,14 +1605,30 @@ function renderCallAnalysis() {
     html += `</details>`;
   }
 
-  if (orphans.length > 0) {
-    html += `<details class="call-section">
-      <summary>💀 Funções órfãs (nunca chamadas)</summary>
-      <div class="call-hint">Não são chamadas por nenhuma função do arquivo nem por handler HTML. Podem ser código morto ou chamadas indiretas (callbacks, addEventListener).</div>`;
-    orphans.slice(0, 30).forEach(f => {
-      html += `<div class="call-row"><span class="rank">·</span><span class="name">${escapeHtml(f.name)}</span><span class="metrics">${f.loc} LOC · cx ${f.complexity}</span></div>`;
+  const entries = fns.filter(f => f.isEntry).sort((a, b) => b.fanOut - a.fanOut);
+  if (entries.length > 0) {
+    html += `<details class="call-section" open>
+      <summary>🚪 Entry points (handlers + listeners + boot top-level)</summary>
+      <div class="call-hint">Raízes da reachability: handlers HTML, addEventListener, .on* =, window.fn = e chamadas no topo do script (boot). Sem o boot, carregarEstado/init apareceriam como mortas.</div>`;
+    entries.slice(0, 40).forEach(f => {
+      html += `<div class="call-row">
+        <span class="rank">→</span>
+        <span class="name" onclick="focusFunction('${f.name.replace(/'/g, "\\'")}')">${escapeHtml(f.name)}</span>
+        <span class="metrics">${f.fanOut} out · cx ${f.complexity} · ${f.loc} LOC</span>
+      </div>`;
     });
-    if (orphans.length > 30) html += `<div class="call-hint">… e mais ${orphans.length - 30}</div>`;
+    if (entries.length > 40) html += `<div class="call-hint">… e mais ${entries.length - 40}</div>`;
+    html += `</details>`;
+  }
+
+  if (dead.length > 0) {
+    html += `<details class="call-section" open>
+      <summary>💀 Funções mortas (não alcançáveis de nenhum entry)</summary>
+      <div class="call-hint">Não são entry points nem são chamadas por nenhum entry. Candidatas a código morto após refatoração.</div>`;
+    dead.slice(0, 40).forEach(f => {
+      html += `<div class="call-row"><span class="rank">·</span><span class="name">${escapeHtml(f.name)}</span><span class="metrics">${f.loc} LOC · cx ${f.complexity}${f.fanIn ? ` · ${f.fanIn} in` : ''}</span></div>`;
+    });
+    if (dead.length > 40) html += `<div class="call-hint">… e mais ${dead.length - 40}</div>`;
     html += `</details>`;
   }
 
@@ -1237,6 +1700,7 @@ function buildGraph() {
         loc: n.loc || 0,
         loopCalls: n.loopCalls || 0,
         isEntry: !!n.isEntry,
+        reachable: n.reachable !== false,
         inCycle: !!n.inCycle,
       };
     } else {
@@ -1322,7 +1786,9 @@ function buildGraph() {
       <div class="t-row"><span>Fan-in</span><span>${d.fanIn || 0} chamadores</span></div>
       <div class="t-row"><span>Fan-out</span><span>${d.fanOut || 0} chamadas</span></div>
       ${d.loopCalls ? `<div class="t-row"><span>Em loop</span><span>${d.loopCalls}×</span></div>` : ''}
-      ${d.isEntry ? `<div class="t-row"><span>Entry point</span><span>✓ handler HTML</span></div>` : ''}
+      ${d.isEntry ? `<div class="t-row"><span>Entry point</span><span>✓ handler / listener</span></div>` : ''}
+      ${d.reachable === false ? `<div class="t-row"><span>💀 Morta</span><span>não alcançável</span></div>` : ''}
+      ${d.reachable === true && !d.isEntry ? `<div class="t-row"><span>Viva</span><span>alcançável</span></div>` : ''}
       ${d.inCycle ? `<div class="t-row"><span>⚠️ Ciclo</span><span>sim</span></div>` : ''}
     `;
     tooltip.style.display = 'block';
@@ -1449,6 +1915,23 @@ const RULES = [
         porque: 'Múltiplas chamadas em loop — possível hotspot. Não substitui profiler real.',
         acoes: ['Medir com performance.now() ou Chrome DevTools antes de otimizar.'],
     },
+
+    // ─── Dead code (reachability) ─────────────────────────────
+    {
+        id: 'DEAD_CODE',
+        severidade: 'MEDIUM', confianca: 0.75, categoria: 'deadcode',
+        when: f => f.reachable === false && f.loc >= 5,
+        porque: 'Função não alcançável a partir de nenhum entry point (handler HTML, addEventListener, .on*, this/window.fn ou boot top-level). Candidata a código morto após refatoração.',
+        acoes: ['Confirmar que não é callback dinâmico (string, eval, export indireto).',
+                'Se confirmado morto, remover junto com testes órfãos.'],
+    },
+    {
+        id: 'DEAD_CODE_LARGE',
+        severidade: 'HIGH', confianca: 0.80, categoria: 'deadcode',
+        when: f => f.reachable === false && f.loc >= 40,
+        porque: 'Função grande (≥ 40 LOC) e não alcançável — provável código morto substancial deixado por refatoração.',
+        acoes: ['Priorizar remoção: reduz ruído e risco de alguém “reviver” código desatualizado.'],
+    },
 ];
 
 function _calcularBlastRadius(callGraph) {
@@ -1520,6 +2003,7 @@ function _classificarTudo(callGraph, blast, depth, callersOf, inversePairs) {
             fanOut: fd.fanOut,
             loopCalls: fd.loopCalls,
             isEntry: fd.isEntry,
+            reachable: fd.reachable,
             inCycle: fd.inCycle,
             temInverso: inversePairs.get(fd.name) || null,
             blastRadius: blast.get(fd.name) || 0,
@@ -1826,11 +2310,12 @@ function _montarCallGraphPDF(cg) {
   const fns = Array.from(cg.functions.values());
   const topIn = [...fns].sort((a, b) => b.fanIn - a.fanIn).filter(f => f.fanIn > 0).slice(0, 15);
   const topCx = [...fns].sort((a, b) => b.complexity - a.complexity).filter(f => f.complexity > 5).slice(0, 15);
-  const orphans = fns.filter(f => f.fanIn === 0 && !f.isEntry).slice(0, 20);
+  const dead = fns.filter(f => !f.reachable).slice(0, 30);
+  const entries = fns.filter(f => f.isEntry).slice(0, 20);
 
   let html = `<section class="report-section">
     <h2>📊 Call Graph (detalhado)</h2>
-    <p class="report-note">${fns.length} funções · ${cg.edges.length} chamadas · ${cg.cycles.length} ciclo(s)</p>`;
+    <p class="report-note">${fns.length} funções · ${cg.edges.length} chamadas · ${cg.cycles.length} ciclo(s) · ${cg.reachableCount || 0} vivas · ${dead.length} mortas</p>`;
 
   if (topIn.length) {
     html += `<h3 class="report-h3">🏆 Funções mais chamadas (fan-in)</h3>
@@ -1872,14 +2357,27 @@ function _montarCallGraphPDF(cg) {
     html += `</ul>`;
   }
 
-  if (orphans.length) {
-    html += `<h3 class="report-h3">💀 Funções órfãs (nunca chamadas)</h3>
+  if (entries.length) {
+    html += `<h3 class="report-h3">🚪 Entry points</h3>
       <table class="report-table"><thead><tr>
-        <th>Função</th><th>LOC</th><th>Complexidade</th>
+        <th>Função</th><th>Chamadas (out)</th><th>Complexidade</th><th>LOC</th>
       </tr></thead><tbody>`;
-    orphans.forEach(f => {
+    entries.forEach(f => {
       html += `<tr>
-        <td><code>${escapeHtml(f.name)}</code></td><td>${f.loc}</td><td>${f.complexity}</td>
+        <td><code>${escapeHtml(f.name)}</code></td><td>${f.fanOut}</td><td>${f.complexity}</td><td>${f.loc}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  if (dead.length) {
+    html += `<h3 class="report-h3">💀 Funções mortas (não alcançáveis de nenhum entry)</h3>
+      <table class="report-table"><thead><tr>
+        <th>Função</th><th>LOC</th><th>Complexidade</th><th>Fan-in</th>
+      </tr></thead><tbody>`;
+    dead.forEach(f => {
+      html += `<tr>
+        <td><code>${escapeHtml(f.name)}</code></td><td>${f.loc}</td><td>${f.complexity}</td><td>${f.fanIn}</td>
       </tr>`;
     });
     html += `</tbody></table>`;
@@ -1903,7 +2401,7 @@ function _montarIssuesPDF(issues) {
     (grouped[g] || (grouped[g] = [])).push(i);
   });
 
-  const ordem = ['parse','handlers','getById','querySel','ids','labelFor','getByIdDyn','querySelDyn','anchor'];
+  const ordem = ['parse','handlers','getById','querySel','dupHandlers','temporal','ids','labelFor','getByIdDyn','querySelDyn','anchor'];
   let html = `<section class="report-section"><h2>🔍 Consistência (issues)</h2>`;
 
   ordem.forEach(g => {
@@ -1956,6 +2454,13 @@ function copiarRelatorio() {
     if (cg.cycles.length) {
       lines.push(`Ciclos (${cg.cycles.length}):`);
       cg.cycles.forEach(c => lines.push(`  - ${c.isRecursion ? c.nodes[0] + ' (auto-recursão)' : c.nodes.concat(c.nodes[0]).join(' → ')}`));
+    }
+    const dead = fns.filter(f => !f.reachable);
+    lines.push(`Reachability: ${cg.reachableCount || 0} vivas / ${dead.length} mortas / ${STATE.stats.entryPoints || 0} entries`);
+    if (dead.length) {
+      lines.push('Funções mortas (não alcançáveis):');
+      dead.slice(0, 15).forEach(f => lines.push(`  - ${f.name} (${f.loc} LOC, cx ${f.complexity})`));
+      if (dead.length > 15) lines.push(`  … e mais ${dead.length - 15}`);
     }
     lines.push('');
   }
