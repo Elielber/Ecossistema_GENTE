@@ -1370,10 +1370,8 @@ const TITULOS_TELAS = {
     'screen-projeto': 'Projeto',
     'screen-tutorial': 'Tutorial',
     'screen-excecoes': 'A confirmar',
-    'screen-fluxo-caixa': 'Fluxo de Caixa',
-    'screen-simulador': 'Simulador',
     'screen-diagnostico': 'Diagnóstico Financeiro',
-    'screen-diagnostico': 'Diagnóstico Financeiro', 'screen-estudo-indicadores': 'Estudo dos Indicadores',
+    'screen-estudo-indicadores': 'Estudo dos Indicadores',
 };
 // Funções globais para formatar valores (respeitando a privacidade)
 function formatarMoeda(v) {
@@ -1424,7 +1422,6 @@ function sincronizarRendaBase() {
     }
 }
 
-function obterRendaMensalReal() { if (!state || !state.orcamento) return 0; if (state.orcamento.rendaDetalhe && Array.isArray(state.orcamento.rendaDetalhe.fontes) && state.orcamento.rendaDetalhe.fontes.length > 0) { return state.orcamento.rendaDetalhe.fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0); } return state.orcamento.base?.rendaBase || 0; }
 
 const CHAVE_STORAGE = 'd_mais_1_orcamento';
 const REGISTROS_PARA_NIVEL2 = 10;
@@ -1515,11 +1512,6 @@ function _garantirStubN4(n4) {
         inventarios: Array.isArray(n4.inventarios) ? n4.inventarios : [],
         gates: { ...base.gates, ...(n4.gates || {}) }
     };
-}
-
-/** N0 ainda não entra no fluxo automático; stub sempre "disponível" para QA. */
-function n0EstaDisponivel() {
-    return true; // produto pode trocar para !state.n0.concluido && gate
 }
 
 /** N4 só se nível e estabilidade forem atendidos (gate configurável). */
@@ -1678,11 +1670,26 @@ async function _idbDelete(id) {
 }
 
 /** Grava estado. Fire-and-forget seguro; serializa writes. */
+// Salvamento com debounce: junta rajadas de salvarEstado() (82 chamadores) em uma
+// única gravação. A normalização da rendaBase continua síncrona; o clone do estado
+// e a gravação acontecem depois. Ao ocultar/fechar a página, grava na hora.
+let _saveTimer = null;
+let _saveBloqueado = false;
+const _SAVE_DEBOUNCE_MS = 200;
+
 function salvarEstado() {
 if (state && state.orcamento && state.orcamento.rendaDetalhe && Array.isArray(state.orcamento.rendaDetalhe.fontes) && state.orcamento.rendaDetalhe.fontes.length > 0) {
         if (!state.orcamento.base) state.orcamento.base = {};
         state.orcamento.base.rendaBase = state.orcamento.rendaDetalhe.fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0);
     }
+    if (_saveBloqueado) return;
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(_persistirEstadoAgora, _SAVE_DEBOUNCE_MS);
+}
+
+function _persistirEstadoAgora() {
+    _saveTimer = null;
+    if (_saveBloqueado || !state) return;
     const snapshot = JSON.parse(JSON.stringify(state));
     const payload = {
         id: CHAVE_STORAGE,
@@ -1736,11 +1743,87 @@ async function carregarEstado() {
     }
 }
 
+// Grava imediatamente se houver salvamento pendente (ex.: aba oculta ou fechada).
+// O espelho em localStorage é síncrono, então sobrevive ao fechamento da página.
+function _flushSalvarEstado() {
+    if (!_saveTimer) return;
+    clearTimeout(_saveTimer);
+    _persistirEstadoAgora();
+    try { if (state) localStorage.setItem(CHAVE_STORAGE, JSON.stringify(state)); } catch (_) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') _flushSalvarEstado(); });
+window.addEventListener('pagehide', _flushSalvarEstado);
+
 async function limparPersistencia() {
+    // cancela qualquer gravação pendente para não recriar o que está sendo apagado
+    if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+    _saveBloqueado = true;
     try { await _idbDelete(CHAVE_STORAGE); } catch (_) {}
     try { localStorage.removeItem(CHAVE_STORAGE); } catch (_) {}
 }
 
+
+// =============================================================================
+// MIGRAÇÃO POR SEÇÕES (migrarEstado é a sequência delas; a ORDEM faz parte do comportamento)
+// =============================================================================
+
+// Semana aberta: campos de renda estimada/real, totais e carrego. Também zera o saldoAnterior
+// "fantasma" da semana aberta em N1 (renda estimada não é caixa) — guarda que só existe para a semana.
+function _migrarSemana() {
+    // N1 opção A: zera saldoAnterior fantasma na semana aberta (renda estimada não é caixa)
+    if ((state.orcamento.nivel || 1) < 2 && state.orcamento.semanaAtual && !state.orcamento.semanaAtual.fechada) {
+        if ((state.orcamento.semanaAtual.saldoAnterior || 0) !== 0) {
+            state.orcamento.semanaAtual.saldoAnterior = 0;
+        }
+    }
+
+    // === MIGRAÇÃO PARA rendaEstimada / rendaReal ===
+    if (state.orcamento.semanaAtual) {
+        const s = state.orcamento.semanaAtual;
+        if (typeof s.rendaEstimada !== 'number') {
+            s.rendaEstimada = (typeof s.renda === 'number' && s.renda > 0)
+                ? s.renda
+                : (state.orcamento.base?.rendaBase || 0) / DIVISOR_SEMANAL;
+        }
+        if (typeof s.rendaReal !== 'number') {
+            s.rendaReal = 0; // opção B: começa em 0
+        }
+        delete s.renda; // limpa o campo antigo
+
+        const totalGasto = (s.base?.gasto || 0) + (s.vida?.gasto || 0) + (s.futuro?.gasto || 0);
+        if (typeof s.totalGasto !== 'number') s.totalGasto = totalGasto;
+        if (typeof s.saldo !== 'number') s.saldo = s.rendaReal - totalGasto;
+        // Continuidade: garante campos de carrego na semana aberta
+        ['base', 'vida', 'futuro'].forEach(k => {
+            if (!s[k]) return;
+            if (typeof s[k].carrego !== 'number') s[k].carrego = 0;
+            if (typeof s[k].passivoMeta !== 'number') s[k].passivoMeta = s[k].carrego || 0;
+            if (typeof s[k].sobraAnterior !== 'number') s[k].sobraAnterior = 0;
+            if (typeof s[k].sobra !== 'number') s[k].sobra = 0;
+        });
+        if (!s.carregoCategorias || typeof s.carregoCategorias !== 'object') s.carregoCategorias = {};
+    }
+}
+
+// Resumos de semanas fechadas. ATENÇÃO à ordem: o fallback usa base.rendaBase ANTES de a seção de
+// renda (Ciclo 3.9) recalculá-la a partir de rendaDetalhe — trava: teste S7.
+function _migrarResumos() {
+    if (Array.isArray(state.orcamento.resumos)) {
+        state.orcamento.resumos.forEach(r => {
+            if (typeof r.rendaEstimada !== 'number') {
+                r.rendaEstimada = (typeof r.renda === 'number' && r.renda > 0)
+                    ? r.renda
+                    : (state.orcamento.base?.rendaBase || 0) / DIVISOR_SEMANAL;
+            }
+            if (typeof r.rendaReal !== 'number') r.rendaReal = r.rendaEstimada;
+            delete r.renda;
+
+            const totalGasto = (r.base?.gasto || 0) + (r.vida?.gasto || 0) + (r.futuro?.gasto || 0);
+            if (typeof r.totalGasto !== 'number') r.totalGasto = totalGasto;
+            if (typeof r.saldo !== 'number') r.saldo = r.rendaReal - totalGasto;
+        });
+    }
+}
 
 function migrarEstado() {
     state.n0 = _garantirStubN0(state.n0);
@@ -1760,13 +1843,6 @@ function migrarEstado() {
 
     if (typeof state.orcamento.nivel !== 'number') {
         state.orcamento.nivel = 1;
-    }
-
-    // N1 opção A: zera saldoAnterior fantasma na semana aberta (renda estimada não é caixa)
-    if ((state.orcamento.nivel || 1) < 2 && state.orcamento.semanaAtual && !state.orcamento.semanaAtual.fechada) {
-        if ((state.orcamento.semanaAtual.saldoAnterior || 0) !== 0) {
-            state.orcamento.semanaAtual.saldoAnterior = 0;
-        }
     }
 
     if (state.orcamento.rendaDetalhe === undefined) {
@@ -1790,48 +1866,8 @@ function migrarEstado() {
     if (typeof state.orcamento.semanasFechadas !== 'number') {
         state.orcamento.semanasFechadas = (state.orcamento.resumos || []).length;
     }
-    // === MIGRAÇÃO PARA rendaEstimada / rendaReal ===
-if (state.orcamento.semanaAtual) {
-    const s = state.orcamento.semanaAtual;
-    if (typeof s.rendaEstimada !== 'number') {
-        s.rendaEstimada = (typeof s.renda === 'number' && s.renda > 0)
-            ? s.renda
-            : (state.orcamento.base?.rendaBase || 0) / DIVISOR_SEMANAL;
-    }
-    if (typeof s.rendaReal !== 'number') {
-        s.rendaReal = 0; // opção B: começa em 0
-    }
-    delete s.renda; // limpa o campo antigo
-
-    const totalGasto = (s.base?.gasto || 0) + (s.vida?.gasto || 0) + (s.futuro?.gasto || 0);
-    if (typeof s.totalGasto !== 'number') s.totalGasto = totalGasto;
-    if (typeof s.saldo !== 'number') s.saldo = s.rendaReal - totalGasto;
-    // Continuidade: garante campos de carrego na semana aberta
-    ['base', 'vida', 'futuro'].forEach(k => {
-        if (!s[k]) return;
-        if (typeof s[k].carrego !== 'number') s[k].carrego = 0;
-        if (typeof s[k].passivoMeta !== 'number') s[k].passivoMeta = s[k].carrego || 0;
-        if (typeof s[k].sobraAnterior !== 'number') s[k].sobraAnterior = 0;
-        if (typeof s[k].sobra !== 'number') s[k].sobra = 0;
-    });
-    if (!s.carregoCategorias || typeof s.carregoCategorias !== 'object') s.carregoCategorias = {};
-}
-
-if (Array.isArray(state.orcamento.resumos)) {
-    state.orcamento.resumos.forEach(r => {
-        if (typeof r.rendaEstimada !== 'number') {
-            r.rendaEstimada = (typeof r.renda === 'number' && r.renda > 0)
-                ? r.renda
-                : (state.orcamento.base?.rendaBase || 0) / DIVISOR_SEMANAL;
-        }
-        if (typeof r.rendaReal !== 'number') r.rendaReal = r.rendaEstimada;
-        delete r.renda;
-
-        const totalGasto = (r.base?.gasto || 0) + (r.vida?.gasto || 0) + (r.futuro?.gasto || 0);
-        if (typeof r.totalGasto !== 'number') r.totalGasto = totalGasto;
-        if (typeof r.saldo !== 'number') r.saldo = r.rendaReal - totalGasto;
-    });
-}
+    _migrarSemana();
+    _migrarResumos();
     // === NÍVEL 3 — CUSTÓDIAS ===
     if (!Array.isArray(state.orcamento.custodias)) {
         state.orcamento.custodias = [];
@@ -4468,35 +4504,6 @@ function renderizarOrcamentoCompleto(container, orc) {
     // Recuperação ativa → card de projeção cede o espaço (só rodapé acima).
     // Recuperação inativa → projeção assume.
     const cardProjecao = recuperacaoAtiva ? '' : renderizarCardProjecao(orc);
-
-    // ===== AJUSTES (chips) — Fatia B: tema sempre visível =====
-    const temaAtual = (state && state.theme) === 'dark' ? 'dark' : 'light';
-    const labelTema = temaAtual === 'dark' ? '☀️ Tema claro' : '🌙 Tema escuro';
-    let chipsAjustes = `
-        <div class="secao-titulo">Ajustes</div>
-        <div class="chip-container" style="gap: 8px;">
-            <div class="chip" id="chip-tema" onclick="alternarTemaHome()" title="Alternar aparência">${labelTema}</div>
-    `;
-    if (orc.nivel >= 2) {
-        chipsAjustes += `
-                <div class="chip" onclick="abrirDetalheRenda()">📈 Renda</div>
-                <div class="chip" onclick="abrirDetalheGastos('base')">🛡️ Base</div>
-                <div class="chip" onclick="abrirDetalheGastos('vida')">🌿 Vida</div>
-                <div class="chip" onclick="abrirDetalheFuturo('divida')">🔭 Futuro</div>
-                <div class="chip" onclick="abrirTelaFluxoCaixa()">🧭 Fluxo</div>
-                <div class="chip" onclick="abrirConfigCicloSemana()">🗓️ Ciclo da semana</div>
-                ${orc.nivel === 2 ? `<div class="chip" onclick="reiniciarOnboardingNivel2()"> ▶️ Ver tutorial N2 de novo</div>` : ''}
-                ${orc.nivel >= 3 ? `
-                    <div class="chip" onclick="abrirTelaCustodias()">🏦 Carteiras</div>
-                    <div class="chip" onclick="abrirTelaMapaMes()">🗓️ Agenda</div>
-                    <div class="chip" onclick="reiniciarOnboardingNivel3()">▶️ Ver tutorial N3 de novo</div>
-                ` : ''}
-        `;
-    }
-    chipsAjustes += `
-            <div class="chip" onclick="abrirTelaN0()" title="Slot N0">🌱 N0 Acolhimento</div>
-            <div class="chip" onclick="abrirTelaN4()" title="Slot N4">🧭 N4 Estratégias</div>
-        </div>`;
 
     // ===== BOTÃO DE SEMANAS PASSADAS =====
     const btnHistorico = `
@@ -9530,6 +9537,24 @@ function _aplicarPagamentoPassivo(cat, valorPago) {
     return { parcelasAvancadas };
 }
 
+// BUG-3: aplica o pagamento e devolve também o efeito EFETIVO no passivo (delta medido DEPOIS dos
+// clamps e do forçamento de parcelas). O undo desfaz exatamente esse delta, sobre o estado atual.
+// saldoDevedorAbatido é null quando a categoria não tem saldoDevedor numérico (nada a desfazer ali).
+function _aplicarPagamentoPassivoMedido(cat, valorPago) {
+    const sdNum = c => (typeof c.saldoDevedor === 'number' && !isNaN(c.saldoDevedor)) ? c.saldoDevedor : null;
+    const sdAntes = sdNum(cat);
+    const ppAntes = Number(cat.parcelasPagas) || 0;
+    const info = _aplicarPagamentoPassivo(cat, valorPago);
+    const sdDepois = sdNum(cat);
+    return {
+        info: info,
+        efeito: {
+            saldoDevedorAbatido: (sdAntes !== null && sdDepois !== null) ? (sdAntes - sdDepois) : null,
+            parcelasAvancadas: (Number(cat.parcelasPagas) || 0) - ppAntes
+        }
+    };
+}
+
 function pagarParcela(categoriaId) {
     const cat = (state.orcamento.categorias || []).find(c => c.id === categoriaId);
     if (!cat) return;
@@ -9638,7 +9663,8 @@ function confirmarPagamentoParcela() {
     }
 
     // 2.5: abate saldo; avança parcela só se cobriu ≥ 1 parcela
-    const _pagInfo = _aplicarPagamentoPassivo(cat, valorPago);
+    const _pagMedido = _aplicarPagamentoPassivoMedido(cat, valorPago);
+    const _pagInfo = _pagMedido.info;
 
     if (typeof recalcularTotalFuturo === 'function') {
         try { recalcularTotalFuturo({ somenteTotal: true }); } catch (_) {}
@@ -9679,7 +9705,8 @@ function confirmarPagamentoParcela() {
         custodiaDestinoId: custodiaDestinoId,
         cartaoId: null,
         saldoAtualizado: !!registroTemporario.custodiaId,
-        mesReferencia: mesReferencia // <-- TAG AQUI
+        mesReferencia: mesReferencia, // <-- TAG AQUI
+        _efeitoPassivo: _pagMedido.efeito // BUG-3: o undo desfaz exatamente isto
     });
 
     if (typeof _tickOnboardingAposRegistro === "function") _tickOnboardingAposRegistro();
@@ -14091,7 +14118,7 @@ function calcularMinimoExistencial(orc) {
         .reduce((s, c) => s + (Number(c.valor) || 0), 0);
     
     const compromissos = (orc.compromissos || [])
-        .filter(c => c.estado === 'ativa')
+        .filter(c => c.estado === 'ativa' && c.tipo === 'parcelado')
         .reduce((s, c) => s + (Number(c.valorParcela) || 0), 0);
     
     const totalDividas = dividasFuturo + compromissos;
@@ -14126,18 +14153,27 @@ function _clamp(n) {
     return Math.min(1, Math.max(0, n));
 }
 
+// Pesos do IDE por indicador. PROVISÓRIOS: serão definidos a partir da
+// entrevista do N0 (em discussão com o design). Peso 0 = indicador fora do IDE.
+const PESOS_IDE_PADRAO = {
+    minimo: 5, inadimplencia: 5, fluxo: 4,
+    comprometimento: 3, renda_fragil: 3, reserva: 3,
+    folego: 2, modalidade: 2, orcamentaria: 2
+};
+
+// Ponto único de leitura dos pesos; o N0 passará a personalizá-los aqui.
+function obterPesosIDE() {
+    return PESOS_IDE_PADRAO;
+}
+
 function avaliarSistemaMulticriterio(orc) {
     const fmt = formatarMoeda;
     
     // 1. Coleta dos dados brutos
     const renda = (orc.rendaDetalhe?.fontes || []).reduce((s, f) => s + (Number(f.valor) || 0), 0);
-    const dep = orc.rendaDetalhe?.dependentes || 0;
-    const piso = 600 * (1 + dep);
-    
-    const boletos = (orc.categorias || []).filter(c => c.caixa === 'base' && c.tipo === 'conta' && !_categoriaParcelasQuitada(c)).reduce((s, c) => s + (Number(c.valor) || 0), 0);
-    const dividas = (orc.categorias || []).filter(c => c.caixa === 'futuro' && c.subtipo === 'divida' && !_categoriaParcelasQuitada(c)).reduce((s, c) => s + (Number(c.valor) || 0), 0);
-    const comp = (orc.compromissos || []).filter(c => c.estado === 'ativa').reduce((s, c) => s + (Number(c.valorParcela) || 0), 0);
-    const sobraMin = renda - boletos - (dividas + comp);
+    const minEx = calcularMinimoExistencial(orc);
+    const piso = minEx.pisoLegal;
+    const sobraMin = minEx.valor;
     
     const diasInad = calcularInadimplencia(orc).dias;
     const fluxo14 = diagnosticarInsuficienciaCaixa(orc, { dias: 14 });
@@ -14145,7 +14181,7 @@ function avaliarSistemaMulticriterio(orc) {
     const mod = contarModalidadesCredito(orc);
     const rendaFragil = calcularRendaFragil(orc);
     const reservaMeses = calcularTempoReserva(orc).meses;
-    const folego = calcularFolegoFinanceiro(orc).margemBase;
+    const folego = calcularFolegoFinanceiro(orc, { protegerSaldo: false }).margemBase;
     const insOrc = diagnosticarInsuficienciaOrcamentaria(orc).insuficiente;
     
     // 2. Cálculo dos Scores Normalizados (0 a 1)
@@ -14161,31 +14197,31 @@ function avaliarSistemaMulticriterio(orc) {
 
     // 3. Definição dos Indicadores e Pesos
     const lista = [
-        { id: 'minimo', nome: 'Mínimo Existencial', icone: '🛡️', valor: sobraMin, score: scMin, peso: 5, 
+        { id: 'minimo', nome: 'Mínimo Existencial', icone: '🛡️', valor: sobraMin, score: scMin, 
           sub: sobraMin >= piso ? 'Sobra garantida' : 'Abaixo do piso (' + fmt(piso) + ')', cor: sobraMin >= piso ? 'var(--success)' : 'var(--danger)', meta: 'Garantir sobra de ' + fmt(piso) },
         
-        { id: 'inadimplencia', nome: 'Atrasos', icone: '⏰', valor: diasInad, score: scInad, peso: 5, 
+        { id: 'inadimplencia', nome: 'Atrasos', icone: '⏰', valor: diasInad, score: scInad, 
           sub: diasInad > 0 ? diasInad + ' dias' : 'Em dia', cor: diasInad > 0 ? 'var(--danger)' : 'var(--success)', meta: 'Zero dias de atraso' },
         
-        { id: 'fluxo', nome: 'Fluxo de Caixa (14d)', icone: '🌊', valor: fluxo14.disponivel, score: scFluxo, peso: 4, 
+        { id: 'fluxo', nome: 'Fluxo de Caixa (14d)', icone: '🌊', valor: fluxo14.disponivel, score: scFluxo, 
           sub: fluxo14.insuficiente ? 'Falta ' + fmt(fluxo14.falta) : 'Coberto', cor: fluxo14.insuficiente ? 'var(--danger)' : 'var(--success)', meta: 'Saldo positivo nos próximos 14 dias' },
         
-        { id: 'comprometimento', nome: 'Peso da Dívida', icone: '⚖️', valor: compRenda.porcentagem, score: scComp, peso: 3, 
+        { id: 'comprometimento', nome: 'Peso da Dívida', icone: '⚖️', valor: compRenda.porcentagem, score: scComp, 
           sub: compRenda.porcentagem.toFixed(0) + '% da renda', cor: compRenda.cor, meta: 'Dívidas < 30% da renda' },
         
-        { id: 'renda_fragil', nome: 'Renda Frágil', icone: '🪵', valor: rendaFragil.porcentagem, score: scFrag, peso: 3, 
+        { id: 'renda_fragil', nome: 'Renda Frágil', icone: '🪵', valor: rendaFragil.porcentagem, score: scFrag, 
           sub: rendaFragil.porcentagem.toFixed(0) + '% instável', cor: rendaFragil.porcentagem >= 30 ? 'var(--warning)' : 'var(--text-main)', meta: 'Reduzir renda instável ou cobrir com reserva' },
         
-        { id: 'reserva', nome: 'Tempo de Reserva', icone: '🐖', valor: reservaMeses, score: scRes, peso: 3, 
-          sub: reservaMeses.toFixed(1) + ' meses', cor: reservaMeses < 3 ? 'var(--warning)' : 'var(--success)', meta: 'Atingir 3 meses de reserva (' + fmt(calcularTempoReserva(orc).meses > 0 ? (calcularFolegoFinanceiro(orc).gastosMes * 3) : 0) + ')' },
+        { id: 'reserva', nome: 'Tempo de Reserva', icone: '🐖', valor: reservaMeses, score: scRes, 
+          sub: reservaMeses.toFixed(1) + ' meses', cor: reservaMeses < 3 ? 'var(--warning)' : 'var(--success)', meta: 'Atingir 3 meses de reserva (' + fmt(((Number(orc.base?.fortalezaTotal) || 0) + (Number(orc.vida?.total) || 0)) * 3) + ')' },
         
-        { id: 'folego', nome: 'Fôlego Financeiro', icone: '🫁', valor: folego, score: scFolego, peso: 2, 
+        { id: 'folego', nome: 'Fôlego Financeiro', icone: '🫁', valor: folego, score: scFolego, 
           sub: folego >= 0 ? 'Sobra mensal' : 'Déficit mensal', cor: folego >= 0 ? 'var(--success)' : 'var(--danger)', meta: 'Fechar o mês no azul' },
         
-        { id: 'modalidade', nome: 'Multimodalidade', icone: '💳', valor: mod, score: scMod, peso: 2, 
+        { id: 'modalidade', nome: 'Multimodalidade', icone: '💳', valor: mod, score: scMod, 
           sub: mod + ' tipos de crédito', cor: mod >= 3 ? 'var(--danger)' : 'var(--text-main)', meta: 'Reduzir para no máximo 2 tipos' },
         
-        { id: 'orcamentaria', nome: 'Insuficiência Orçamentária', icone: '🟡', valor: 0, score: scOrc, peso: 2, 
+        { id: 'orcamentaria', nome: 'Insuficiência Orçamentária', icone: '🟡', valor: 0, score: scOrc, 
           sub: insOrc ? 'Despesas > Renda' : 'Equilibrado', cor: insOrc ? 'var(--warning)' : 'var(--success)', meta: 'Plano de gastos caber na renda' }
     ];
 
@@ -14193,7 +14229,10 @@ function avaliarSistemaMulticriterio(orc) {
     let somaPesos = 0;
     let somaPonderada = 0;
     
+    const pesosIDE = obterPesosIDE();
     lista.forEach(ind => {
+        const pesoCfg = Number(pesosIDE[ind.id]);
+        ind.peso = Number.isFinite(pesoCfg) && pesoCfg >= 0 ? pesoCfg : 0;
         ind.scorePonderado = ind.score * ind.peso;
         somaPesos += ind.peso;
         somaPonderada += ind.scorePonderado;
@@ -14206,7 +14245,7 @@ function avaliarSistemaMulticriterio(orc) {
         else ind.valorFmt = ind.valor.toFixed(0) + '%';
     });
 
-    const ide = Math.round((somaPonderada / somaPesos) * 100);
+    const ide = somaPesos > 0 ? Math.round((somaPonderada / somaPesos) * 1000) / 10 : 0;
     
     // 5. Definição do Degrau
     let degrau = 0, cor = 'var(--success)', bg = 'var(--success-soft)', icone = '✨', nome = 'Em Equilíbrio', msg = 'Seu mês está saudável. Continue monitorando para manter a base firme.';
@@ -14232,36 +14271,6 @@ function avaliarSistemaMulticriterio(orc) {
         indicadores: indicadoresOrdenados,
         todos: lista
     };
-}
-
-function obterClassificacaoMochila(orc, caixa14, comp, inadimplencia, minimo) {
-    let dti = comp.porcentagem;
-    let atraso90 = inadimplencia.dias > 90;
-    let minimoNaoPreservado = !minimo.preservado;
-    let caixaNegativo = caixa14.insuficiente;
-    
-    // Usa a função unificada e corrigida
-    let modalidades = contarModalidadesCredito(orc);
-    
-    let sinaisBCB = 0;
-    if (inadimplencia.dias > 0) sinaisBCB++;
-    if (dti > 50) sinaisBCB++;
-    if (modalidades >= 3) sinaisBCB++;
-    if (minimoNaoPreservado) sinaisBCB++;
-
-    if (minimoNaoPreservado && (atraso90 || caixaNegativo)) {
-        return { degrau: 4, nome: 'Sinais de Superendividamento', cor: 'var(--danger)', bg: 'var(--danger-soft)', icone: '🚨', msg: 'Suas contas estão no limite. O Mochila tem ferramentas para te ajudar a renegociar com segurança.' };
-    }
-    if (sinaisBCB >= 2) {
-        return { degrau: 3, nome: 'Risco de Endividamento', cor: 'var(--warning)', bg: 'var(--warning-soft)', icone: '⚠️', msg: 'Você apresenta alguns sinais de alerta. Vamos ajustar o plano antes que aperte mais?' };
-    }
-    if (caixaNegativo || inadimplencia.dias > 0) {
-        return { degrau: 2, nome: 'Aperto no horizonte', cor: 'var(--warning)', bg: 'var(--warning-soft)', icone: '🟡', msg: 'O dinheiro vai faltar em alguns dias. O jeito é organizar a ordem de pagamento.' };
-    }
-    if (dti >= 30) {
-        return { degrau: 1, nome: 'Atenção', cor: 'var(--primary)', bg: 'var(--purple-light)', icone: '👀', msg: 'Suas contas estão em dia, mas o peso das dívidas já pede cuidado.' };
-    }
-    return { degrau: 0, nome: 'Em Equilíbrio', cor: 'var(--success)', bg: 'var(--success-soft)', icone: '✨', msg: 'Seu mês está saudável. Continue monitorando para manter a base firme.' };
 }
 
 // Calcula quantas modalidades de crédito diferentes o usuário tem
@@ -14293,7 +14302,7 @@ function contarModalidadesCredito(orc) {
     const normalizar = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
     // 1) Compromissos ativos = cartão de crédito (parcelados e recorrentes)
-    const compsAtivos = (orc.compromissos || []).filter(c => c.estado === 'ativa');
+    const compsAtivos = (orc.compromissos || []).filter(c => c.estado === 'ativa' && c.tipo === 'parcelado');
     if (compsAtivos.length > 0) modalidades.add('cartao');
 
     // 2) Categorias do Futuro/dívida
@@ -14344,7 +14353,7 @@ function obterIndicadoresGrid(dadosAvaliacao) {
     }
 
     // Se estiver em qualquer outro degrau, pega os 4 mais críticos
-    return indicadores.slice(0, 4).map(ind => _renderCardIndicador(ind)).join('');
+    return indicadores.filter(i => i.score > 0).slice(0, 4).map(ind => _renderCardIndicador(ind)).join('');
 }
 
 // Helper para montar o card
@@ -14566,6 +14575,24 @@ function abrirModalIndicador(tipo) {
         html = wrapp(
             `Sua reserva de emergência hoje é de <strong>${fmt(folego.reserva)}</strong>.<br><br>Ela é capaz de cobrir <strong>${reserva.meses.toFixed(1)} meses</strong> dos seus gastos essenciais (Base + Vida) se a sua renda parar de entrar hoje.${explicacaoRendaFragil}`,
             reserva.meses >= 3 ? 'Excelente! Sua reserva está no padrão de mercado. Você está protegido contra imprevistos.' : 'Sua meta deve ser acumular de 3 a 6 meses de despesas. Priorize guardar o seu fôlego mensal na reserva.'
+        );
+    } else if (tipo === 'renda_fragil') {
+        titulo = '🪵 Renda Frágil';
+        const fragilPct = rendaFragil.porcentagem;
+        html = wrapp(
+            `Da sua renda de <strong>${fmt(renda)}</strong>, <strong>${fmt(rendaFragil.valor)}</strong> (${fragilPct.toFixed(0)}%) vêm de fontes <strong>contratuais ou variáveis</strong> (contrato, freelance, bicos), que podem oscilar ou acabar.<br><br>Acima de 20% já pede atenção; acima de 30%, a reserva de emergência fica ainda mais importante.`,
+            fragilPct > 20 ? 'Montar uma reserva maior para cobrir os meses de renda baixa e, aos poucos, buscar fontes mais estáveis ou complementares.' : 'Sua renda é majoritariamente estável. Continue acompanhando caso alguma fonte mude.'
+        );
+    } else if (tipo === 'orcamentaria') {
+        titulo = '🟡 Insuficiência Orçamentária';
+        const insOrc = diagnosticarInsuficienciaOrcamentaria(orc);
+        html = wrapp(
+            `Sua renda é de <strong>${fmt(insOrc.rendaRecorrente)}</strong> e o plano de gastos soma <strong>${fmt(insOrc.totalDespesas)}</strong>:<br><br>
+             <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>🛡️ Base</span><strong>${fmt(insOrc.baseMensal)}</strong></div>
+             <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>🌿 Vida</span><strong>${fmt(insOrc.vidaMensal)}</strong></div>
+             <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>💳 Parcelas contratadas</span><strong>${fmt(insOrc.contratualMensal)}</strong></div>
+             ${insOrc.insuficiente ? `<strong style="color:var(--warning);">O plano passa da renda em ${fmt(insOrc.excedente)}.</strong>` : '<strong style="color:var(--success);">O plano cabe na renda.</strong>'}`,
+            insOrc.insuficiente ? 'Rever o que pode ser reduzido na Vida ou renegociar parcelas até o plano caber na renda.' : 'Seu plano está equilibrado. Mantenha o acompanhamento.'
         );
     } else if (tipo === 'alocacao') {
         titulo = '🥧 Alocação Planejada';
@@ -14834,7 +14861,7 @@ function calcularComprometimentoRenda(orc) {
         .reduce((s, c) => s + (Number(c.valor) || 0), 0);
     
     const comp = (orc.compromissos || [])
-        .filter(c => c.estado === 'ativa')
+        .filter(c => c.estado === 'ativa' && c.tipo === 'parcelado')
         .reduce((s, c) => s + (Number(c.valorParcela) || 0), 0);
 
     const total = dividasMensais + comp;
@@ -14872,73 +14899,6 @@ function calcularInadimplencia(orc) {
         temAtraso: maxDias > 0,
         status: maxDias > 90 ? 'critico' : (maxDias > 0 ? 'atencao' : 'ok')
     };
-}
-
-// Cards auxiliares para a tela de diagnóstico
-function renderizarCard30DiasDiagnostico(orc) {
-    const fmt = formatarMoeda;
-    const fluxo = projetarFluxo(orc, { dias: 30 });
-    const temEventos = fluxo.eventos.length > 0;
-    
-    if (!temEventos) {
-        return `
-            <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
-                <div style="font-size:0.9rem;font-weight:700;color:var(--secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">📅 Próximos 30 dias</div>
-                <p style="font-size:0.9rem;color:var(--secondary);line-height:1.4;margin:0 0 8px;">Nenhum recebimento ou vencimento com dia declarado neste horizonte.</p>
-                <button class="btn-option" style="justify-content:center;border-color:var(--accent);color:var(--accent);margin-top:4px;" onclick="abrirDetalheRenda()">Informar dias de recebimento</button>
-            </div>
-        `;
-    }
-    
-    const liq = avaliarLiquidezHorizonte(orc, { dias: 30 });
-    
-    let corBorda = 'var(--success)', corBg = 'var(--success-soft)', corTit = 'var(--success)', icone = '💧', titulo = 'Folga no horizonte';
-    if (liq.status === 'aperto') { corBorda = 'var(--danger)'; corBg = 'var(--danger-soft)'; corTit = 'var(--danger)'; icone = '⚠️'; titulo = 'Aperto no horizonte'; }
-    else if (liq.status === 'atencao') { corBorda = 'var(--warning)'; corBg = 'var(--warning-soft)'; corTit = 'var(--warning)'; icone = '🟡'; titulo = 'Atenção no horizonte'; }
-    
-    return `
-        <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid ${corBorda};background:${corBg};">
-            <div style="font-size:0.9rem;font-weight:700;color:${corTit};text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
-                ${icone} Próximos 30 dias
-            </div>
-            <div style="font-size:0.9rem;font-weight:700;color:${corTit};margin-bottom:6px;">${titulo}</div>
-            <div style="font-size:0.9rem;color:var(--secondary);line-height:1.35;">
-                Partida ${fmt(liq.partida)} · entradas ${fmt(liq.entradas)} · saídas ${fmt(liq.saidas)}
-            </div>
-            <div style="font-size:0.9rem;margin-top:6px;">
-                Ponto mais baixo: <strong style="color:${liq.minimo < 0 ? 'var(--danger)' : corTit};">${fmt(liq.minimo)}</strong>
-                ${liq.dataMinimo ? ' em ' + liq.dataMinimo.split('-').reverse().slice(0,2).join('/') : ''}
-            </div>
-        </div>
-    `;
-}
-
-function renderizarCardPontosAtencaoDiagnostico(orc) {
-    const fluxo = projetarFluxo(orc, { dias: 30 });
-    const gargalos = detectarGargalos(fluxo);
-    
-    if (!gargalos.resumo.temGargalo) {
-        return `
-            <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--primary);background:var(--purple-light);">
-                <div style="font-size:0.9rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">✨ Pontos de atenção</div>
-                <p style="font-size:0.9rem;color:var(--primary-press);line-height:1.4;margin:0;">
-                    Nenhum aperto projetado nos próximos 30 dias. O caminho está livre com o que você declarou.
-                </p>
-            </div>
-        `;
-    }
-    
-    const sugestoes = sugerirEquilibrio(gargalos, orc);
-    const itens = (sugestoes.length > 0 ? sugestoes : gargalos.gargalos).slice(0, 3);
-    
-    let lista = itens.map(s => `<li style="font-size:0.9rem;color:var(--text-main);margin-bottom:6px;line-height:1.4;">${s.mensagem || s.tipo}</li>`).join('');
-    
-    return `
-        <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--warning);background:var(--warning-soft);">
-            <div style="font-size:0.9rem;font-weight:700;color:var(--warning);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">⚠️ Pontos de atenção</div>
-            <ul style="margin:0;padding-left:16px;">${lista}</ul>
-        </div>
-    `;
 }
 
 function abrirTelaFluxoCaixa(custodiaId) {
@@ -16225,6 +16185,7 @@ function _ajustarFaturaPorDelta(cartaoId, faturaId, deltaValorTotal, deltaValorP
     if (deltaValorPago) fatura.valorPago = Math.max(0, (Number(fatura.valorPago) || 0) + deltaValorPago);
     _recalcularFatura(fatura);
     _sincronizarFaturaAcumulada(cartaoId);
+    return fatura; // quem chama pode gravar o faturaId resolvido (BUG-7); null/undefined no caminho legado
 }
 
 
@@ -18827,6 +18788,97 @@ function _registroEmPeriodoFechado(r) {
     return false;
 }
 
+// =============================================================================
+// TABELA DE EFEITOS (recebimento, gasto_direto, transferencia)
+// Cada tipo declara o que muda; apply/undo/ajuste usam a mesma descrição, só com sinal
+// diferente. Os demais tipos seguem nas cadeias if/else originais (migrar um a um).
+//   semana:    'renda'  → rendaReal (+ elevação da rendaEstimada)
+//              'caixa'  → semana[caixa].gasto
+//   custodia:  sentido do saldo da carteira do registro (+1 entra, −1 sai); marca saldoAtualizado
+//   origem/destino: sentido do saldo em custodiaId / custodiaDestinoId (sem flag)
+// =============================================================================
+const EFEITOS_REGISTRO = {
+    recebimento:   { semana: 'renda', custodia: +1 },
+    gasto_direto:  { semana: 'caixa', custodia: -1 },
+    transferencia: { origem: -1, destino: +1 }
+};
+
+// Carteira que pode ter saldo movimentado (existe e não é cartão com fatura).
+function _custodiaMovimentavel(id) {
+    const c = id ? (state.orcamento.custodias || []).find(x => x.id === id) : null;
+    return (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) ? c : null;
+}
+
+// sinal +1 = aplicar, −1 = desfazer
+function _efeitoRegistroTabela(r, spec, sinal, semana, naSemana) {
+    const v = r.valor || 0;
+    if (spec.semana === 'renda') {
+        if (naSemana && semana) {
+            if (sinal > 0) {
+                semana.rendaReal = (semana.rendaReal || 0) + v;
+                if (semana.rendaReal > (semana.rendaEstimada || 0)) {
+                    // guarda a elevação para o undo restaurar a estimada (BUG-1)
+                    r._estimadaElevada = { de: semana.rendaEstimada || 0, para: semana.rendaReal };
+                    semana.rendaEstimada = semana.rendaReal;
+                } else {
+                    delete r._estimadaElevada;
+                }
+            } else {
+                semana.rendaReal = Math.max(0, (semana.rendaReal || 0) - v);
+                // restaura a estimada só se ninguém a elevou depois deste registro (BUG-1)
+                const el = r._estimadaElevada;
+                if (el && semana.rendaEstimada === el.para) semana.rendaEstimada = el.de;
+                delete r._estimadaElevada;
+            }
+        }
+    } else if (spec.semana === 'caixa') {
+        if (naSemana && semana && r.caixa && semana[r.caixa]) {
+            const g = semana[r.caixa].gasto || 0;
+            semana[r.caixa].gasto = sinal > 0 ? g + v : Math.max(0, g - v);
+        }
+    }
+    if (spec.custodia && r.custodiaId && (sinal > 0 || r.saldoAtualizado)) {
+        const c = _custodiaMovimentavel(r.custodiaId);
+        if (c) {
+            c.saldoAtual = (c.saldoAtual || 0) + sinal * spec.custodia * v;
+            if (sinal > 0) r.saldoAtualizado = true;
+        }
+    }
+    if (spec.origem) {
+        const o = _custodiaMovimentavel(r.custodiaId);
+        if (o) o.saldoAtual = (o.saldoAtual || 0) + sinal * spec.origem * v;
+    }
+    if (spec.destino) {
+        const d = _custodiaMovimentavel(r.custodiaDestinoId);
+        if (d) d.saldoAtual = (d.saldoAtual || 0) + sinal * spec.destino * v;
+    }
+}
+
+// Ajuste da semana corrente: mesma descrição, com delta (positivo ou negativo) e sem undo.
+function _efeitoAjusteTabela(ajuste, spec, delta) {
+    const semana = state.orcamento && state.orcamento.semanaAtual;
+    const aberta = !!(semana && !semana.fechada);
+    if (spec.semana === 'renda' && aberta) {
+        semana.rendaReal = (semana.rendaReal || 0) + delta;
+        if (semana.rendaReal > (semana.rendaEstimada || 0)) semana.rendaEstimada = semana.rendaReal;
+    } else if (spec.semana === 'caixa' && aberta && ajuste.caixa && semana[ajuste.caixa]) {
+        semana[ajuste.caixa].gasto = (semana[ajuste.caixa].gasto || 0) + delta;
+    }
+    if (ajuste.saldoAtualizado === false) return; // BUG-5: respeita o flag
+    if (spec.custodia && ajuste.custodiaId) {
+        const c = _custodiaMovimentavel(ajuste.custodiaId);
+        if (c) c.saldoAtual = (c.saldoAtual || 0) + spec.custodia * delta;
+    }
+    if (spec.origem) {
+        const o = _custodiaMovimentavel(ajuste.custodiaId);
+        if (o) o.saldoAtual = (o.saldoAtual || 0) + spec.origem * delta;
+    }
+    if (spec.destino) {
+        const d = _custodiaMovimentavel(ajuste.custodiaDestinoId);
+        if (d) d.saldoAtual = (d.saldoAtual || 0) + spec.destino * delta;
+    }
+}
+
 function _aplicarEfeitosAjusteCorrente(ajuste) {
     if (!ajuste) return;
     const semana = state.orcamento && state.orcamento.semanaAtual;
@@ -18834,32 +18886,12 @@ function _aplicarEfeitosAjusteCorrente(ajuste) {
     if (!delta) return;
     const tipo = ajuste.tipoOriginal;
 
+    const spec = EFEITOS_REGISTRO[tipo];
+    if (spec) { _efeitoAjusteTabela(ajuste, spec, delta); return; }
+
     // P0.4: não truncar com Math.max(0) no cálculo — crédito/ajuste negativo precisa fluir.
     // Limite visual (não negativo) fica na formatação/exibição.
-    if (tipo === 'recebimento') {
-        if (semana && !semana.fechada) {
-            semana.rendaReal = (semana.rendaReal || 0) + delta;
-            if (semana.rendaReal > (semana.rendaEstimada || 0)) {
-                semana.rendaEstimada = semana.rendaReal;
-            }
-        }
-        if (ajuste.custodiaId) {
-            const c = (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaId);
-            if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) {
-                c.saldoAtual = (c.saldoAtual || 0) + delta;
-            }
-        }
-    } else if (tipo === 'gasto_direto') {
-        if (semana && !semana.fechada && ajuste.caixa && semana[ajuste.caixa]) {
-            semana[ajuste.caixa].gasto = (semana[ajuste.caixa].gasto || 0) + delta;
-        }
-        if (ajuste.custodiaId) {
-            const c = (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaId);
-            if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) {
-                c.saldoAtual = (c.saldoAtual || 0) - delta;
-            }
-        }
-    } else if (tipo === 'gasto_cartao') {
+    if (tipo === 'gasto_cartao') {
         if (semana && !semana.fechada && ajuste.caixa && semana[ajuste.caixa]) {
             semana[ajuste.caixa].gasto = (semana[ajuste.caixa].gasto || 0) + delta;
         }
@@ -18874,11 +18906,21 @@ function _aplicarEfeitosAjusteCorrente(ajuste) {
         if (ajuste.cartaoId) {
             _ajustarFaturaPorDelta(ajuste.cartaoId, ajuste.faturaId || null, 0, delta);
         }
-    } else if (tipo === 'transferencia') {
-        const o = ajuste.custodiaId ? (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaId) : null;
-        const d = ajuste.custodiaDestinoId ? (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaDestinoId) : null;
-        if (o && !(TIPOS_CUSTODIA[o.tipo] || {}).temFatura) o.saldoAtual = (o.saldoAtual || 0) - delta;
-        if (d && !(TIPOS_CUSTODIA[d.tipo] || {}).temFatura) d.saldoAtual = (d.saldoAtual || 0) + delta;
+    } else if (tipo === 'pagamento_obrigacao') {
+        // BUG-6: antes não tinha ramo. Espelha o apply; o clamp do saldoAberto herda a assimetria do BUG-2.
+        const c = ajuste.custodiaId && ajuste.saldoAtualizado !== false
+            ? (state.orcamento.custodias || []).find(x => x.id === ajuste.custodiaId) : null;
+        if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) c.saldoAtual = (c.saldoAtual || 0) - delta;
+        if (ajuste.obrigacaoId) {
+            const obr = (state.orcamento.obrigacoesCartao || []).find(o => o.id === ajuste.obrigacaoId);
+            if (obr) {
+                obr.saldoAberto = Math.max(0, (Number(obr.saldoAberto) || 0) - delta);
+                obr.valorPago = Math.max(0, (Number(obr.valorPago) || 0) + delta);
+                if (obr.saldoAberto <= 0.005) { obr.saldoAberto = 0; obr.estado = 'quitada'; }
+                else if (obr.estado === 'quitada') obr.estado = 'em_aberto';
+                _sincronizarFaturaAcumulada(obr.cartaoId);
+            }
+        }
     } else if (tipo === 'pagamento_divida' || tipo === 'aporte_reserva') {
         if (semana && !semana.fechada && semana.futuro) {
             semana.futuro.gasto = (semana.futuro.gasto || 0) + delta;
@@ -18953,6 +18995,7 @@ function _criarAjusteSemanaAnterior(origem, operacao, valorNovo) {
         custodiaId: origem.custodiaId || null,
         custodiaDestinoId: origem.custodiaDestinoId || null,
         cartaoId: origem.cartaoId || null,
+        obrigacaoId: origem.obrigacaoId || null,
         saldoAtualizado: origem.saldoAtualizado !== false,
         rotulo: 'Ajuste de semana anterior'
     };
@@ -18968,32 +19011,21 @@ function _desfazerEfeitosRegistro(r) {
     const semana = state.orcamento.semanaAtual;
     const naSemana = _pertenceSemanaAtual(r.data);
 
-    if (r.tipo === 'recebimento') {
-        if (naSemana && semana) {
-            semana.rendaReal = Math.max(0, (semana.rendaReal || 0) - (r.valor || 0));
-        }
-        if (r.custodiaId && r.saldoAtualizado) {
-            const c = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
-            if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) {
-                c.saldoAtual = (c.saldoAtual || 0) - (r.valor || 0);
-            }
-        }
-    } else if (r.tipo === 'gasto_direto') {
-        if (naSemana && semana && r.caixa && semana[r.caixa]) {
-            semana[r.caixa].gasto = Math.max(0, (semana[r.caixa].gasto || 0) - (r.valor || 0));
-        }
-        if (r.custodiaId && r.saldoAtualizado) {
-            const c = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
-            if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) {
-                c.saldoAtual = (c.saldoAtual || 0) + (r.valor || 0);
-            }
-        }
-    } else if (r.tipo === 'gasto_cartao') {
+    const spec = EFEITOS_REGISTRO[r.tipo];
+    if (spec) { _efeitoRegistroTabela(r, spec, -1, semana, naSemana); return; }
+
+    if (r.tipo === 'gasto_cartao') {
         if (naSemana && semana && r.caixa && semana[r.caixa]) {
             semana[r.caixa].gasto = Math.max(0, (semana[r.caixa].gasto || 0) - (r.valor || 0));
         }
         if (r.cartaoId) {
             _ajustarFaturaPorDelta(r.cartaoId, r.faturaId || null, -(Number(r.valor) || 0), 0);
+            // BUG-7: fatura que ficou vazia (sem total nem pagamento) não deve permanecer em faturas[]
+            const f = r.faturaId ? (state.orcamento.faturas || []).find(x => x.faturaId === r.faturaId) : null;
+            if (f && !(Number(f.valorTotal) > 0) && !(Number(f.valorPago) > 0)) {
+                state.orcamento.faturas.splice(state.orcamento.faturas.indexOf(f), 1);
+                _sincronizarFaturaAcumulada(r.cartaoId);
+            }
         }
     } else if (r.tipo === 'pagamento_fatura') {
         // Inverso do pagamento: devolve à origem, recoloca na fatura; envelope intacto
@@ -19017,9 +19049,22 @@ function _desfazerEfeitosRegistro(r) {
         if (r.obrigacaoId) {
             const obr = (state.orcamento.obrigacoesCartao || []).find(o => o.id === r.obrigacaoId);
             if (obr) {
-                obr.saldoAberto = (Number(obr.saldoAberto) || 0) + (Number(r.valor) || 0);
-                obr.valorPago = Math.max(0, (Number(obr.valorPago) || 0) - (Number(r.valor) || 0));
-                if (obr.estado === 'quitada' && obr.saldoAberto > 0.005) obr.estado = 'em_aberto';
+                const ef = r._efeitoObrigacao;
+                if (ef) {
+                    // BUG-2: desfaz exatamente o que o apply fez (já considera o clamp em 0)
+                    obr.saldoAberto = (Number(obr.saldoAberto) || 0) + ef.saldoAbatido;
+                    obr.valorPago = Math.max(0, (Number(obr.valorPago) || 0) - ef.pagoAdicionado);
+                    if (obr.estado === 'quitada' && obr.saldoAberto > 0.005) {
+                        obr.estado = (ef.estadoAntes && ef.estadoAntes !== 'quitada') ? ef.estadoAntes : 'em_aberto';
+                    }
+                    delete r._efeitoObrigacao;
+                } else {
+                    // Registro anterior à correção do BUG-2: mantém o cálculo antigo (pode divergir se houve clamp).
+                    console.warn('[desfazer] pagamento_obrigacao sem _efeitoObrigacao (registro antigo); usando cálculo anterior', r.id);
+                    obr.saldoAberto = (Number(obr.saldoAberto) || 0) + (Number(r.valor) || 0);
+                    obr.valorPago = Math.max(0, (Number(obr.valorPago) || 0) - (Number(r.valor) || 0));
+                    if (obr.estado === 'quitada' && obr.saldoAberto > 0.005) obr.estado = 'em_aberto';
+                }
                 _sincronizarFaturaAcumulada(obr.cartaoId);
             }
        
@@ -19040,39 +19085,38 @@ function _desfazerEfeitosRegistro(r) {
         if (r.categoriaId) {
             const cat = (state.orcamento.categorias || []).find(c => c.id === r.categoriaId);
             if (cat) {
-                const v = Number(r.valor) || 0;
-                if (typeof cat.saldoDevedor === 'number' && !isNaN(cat.saldoDevedor)) {
-                    cat.saldoDevedor = (cat.saldoDevedor || 0) + v;
-                }
-                const parcela = Number(cat.valor) || 0;
-                if (parcela > 0 && (Number(cat.parcelasTotais) || 0) > 0) {
-                    const cabem = Math.floor((v + 0.001) / parcela);
-                    if (cabem >= 1 && (cat.parcelasPagas || 0) >= cabem) {
-                        cat.parcelasPagas -= cabem;
+                const ef = r._efeitoPassivo;
+                if (ef) {
+                    // BUG-3: desfaz exatamente o delta efetivo do apply, sobre o estado ATUAL da categoria
+                    // (preserva efeitos de outros pagamentos feitos depois).
+                    if (ef.saldoDevedorAbatido != null && typeof cat.saldoDevedor === 'number' && !isNaN(cat.saldoDevedor)) {
+                        cat.saldoDevedor = cat.saldoDevedor + ef.saldoDevedorAbatido;
                     }
-                } else if (parcela > 0 && v + 0.001 >= parcela && (cat.parcelasPagas || 0) > 0) {
-                    const cabem = Math.floor((v + 0.001) / parcela);
-                    cat.parcelasPagas = Math.max(0, (cat.parcelasPagas || 0) - cabem);
+                    cat.parcelasPagas = Math.max(0, (Number(cat.parcelasPagas) || 0) - (Number(ef.parcelasAvancadas) || 0));
+                    delete r._efeitoPassivo;
+                } else {
+                    // Registro anterior à correção do BUG-3: mantém o cálculo antigo (pode divergir se houve clamp/forçamento).
+                    console.warn('[desfazer] pagamento_divida/aporte_reserva sem _efeitoPassivo (registro antigo); usando cálculo anterior', r.id);
+                    const v = Number(r.valor) || 0;
+                    if (typeof cat.saldoDevedor === 'number' && !isNaN(cat.saldoDevedor)) {
+                        cat.saldoDevedor = (cat.saldoDevedor || 0) + v;
+                    }
+                    const parcela = Number(cat.valor) || 0;
+                    if (parcela > 0 && (Number(cat.parcelasTotais) || 0) > 0) {
+                        const cabem = Math.floor((v + 0.001) / parcela);
+                        if (cabem >= 1 && (cat.parcelasPagas || 0) >= cabem) {
+                            cat.parcelasPagas -= cabem;
+                        }
+                    } else if (parcela > 0 && v + 0.001 >= parcela && (cat.parcelasPagas || 0) > 0) {
+                        const cabem = Math.floor((v + 0.001) / parcela);
+                        cat.parcelasPagas = Math.max(0, (cat.parcelasPagas || 0) - cabem);
+                    }
                 }
             }
         }
         if (r.custodiaDestinoId) {
             const destino = (state.orcamento.custodias || []).find(x => x.id === r.custodiaDestinoId);
             if (destino && _custodiaEhReserva(destino)) {
-                destino.saldoAtual = (destino.saldoAtual || 0) - (r.valor || 0);
-            }
-        }
-    } else if (r.tipo === 'transferencia') {
-        // Desfazer: devolve para a origem, tira do destino
-        if (r.custodiaId) {
-            const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
-            if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
-                origem.saldoAtual = (origem.saldoAtual || 0) + (r.valor || 0);
-            }
-        }
-        if (r.custodiaDestinoId) {
-            const destino = (state.orcamento.custodias || []).find(x => x.id === r.custodiaDestinoId);
-            if (destino && !(TIPOS_CUSTODIA[destino.tipo] || {}).temFatura) {
                 destino.saldoAtual = (destino.saldoAtual || 0) - (r.valor || 0);
             }
         }
@@ -19084,37 +19128,16 @@ function _aplicarEfeitosRegistro(r) {
     const semana = state.orcamento.semanaAtual;
     const naSemana = _pertenceSemanaAtual(r.data);
 
-    if (r.tipo === 'recebimento') {
-        if (naSemana && semana) {
-            semana.rendaReal = (semana.rendaReal || 0) + (r.valor || 0);
-            if (semana.rendaReal > (semana.rendaEstimada || 0)) {
-                semana.rendaEstimada = semana.rendaReal;
-            }
-        }
-        if (r.custodiaId) {
-            const c = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
-            if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) {
-                c.saldoAtual = (c.saldoAtual || 0) + (r.valor || 0);
-                r.saldoAtualizado = true;
-            }
-        }
-    } else if (r.tipo === 'gasto_direto') {
-        if (naSemana && semana && r.caixa && semana[r.caixa]) {
-            semana[r.caixa].gasto = (semana[r.caixa].gasto || 0) + (r.valor || 0);
-        }
-        if (r.custodiaId) {
-            const c = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
-            if (c && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) {
-                c.saldoAtual = (c.saldoAtual || 0) - (r.valor || 0);
-                r.saldoAtualizado = true;
-            }
-        }
-    } else if (r.tipo === 'gasto_cartao') {
+    const spec = EFEITOS_REGISTRO[r.tipo];
+    if (spec) { _efeitoRegistroTabela(r, spec, +1, semana, naSemana); return; }
+
+    if (r.tipo === 'gasto_cartao') {
         if (naSemana && semana && r.caixa && semana[r.caixa]) {
             semana[r.caixa].gasto = (semana[r.caixa].gasto || 0) + (r.valor || 0);
         }
         if (r.cartaoId) {
-            _ajustarFaturaPorDelta(r.cartaoId, r.faturaId || null, Number(r.valor) || 0, 0);
+            const fat = _ajustarFaturaPorDelta(r.cartaoId, r.faturaId || null, Number(r.valor) || 0, 0);
+            if (fat && fat.faturaId) r.faturaId = fat.faturaId; // BUG-7: undo passa a achar a mesma fatura
         }
     } else if (r.tipo === 'pagamento_fatura') {
         // Pagamento: só caixa + fatura (nunca envelope)
@@ -19139,9 +19162,16 @@ function _aplicarEfeitosRegistro(r) {
         if (r.obrigacaoId) {
             const obr = (state.orcamento.obrigacoesCartao || []).find(o => o.id === r.obrigacaoId);
             if (obr) {
+                // BUG-2: grava o efeito EFETIVO (depois do clamp em 0) para o undo desfazer exatamente isso
+                const antes = { saldo: Number(obr.saldoAberto) || 0, pago: Number(obr.valorPago) || 0, estado: obr.estado };
                 obr.saldoAberto = Math.max(0, (Number(obr.saldoAberto) || 0) - (Number(r.valor) || 0));
                 obr.valorPago = (Number(obr.valorPago) || 0) + (Number(r.valor) || 0);
                 if (obr.saldoAberto <= 0.005) { obr.saldoAberto = 0; obr.estado = 'quitada'; }
+                r._efeitoObrigacao = {
+                    saldoAbatido: antes.saldo - obr.saldoAberto,
+                    pagoAdicionado: obr.valorPago - antes.pago,
+                    estadoAntes: antes.estado
+                };
                 _sincronizarFaturaAcumulada(obr.cartaoId);
             }
         }
@@ -19162,26 +19192,12 @@ function _aplicarEfeitosRegistro(r) {
         if (r.categoriaId) {
             const cat = (state.orcamento.categorias || []).find(c => c.id === r.categoriaId);
             if (cat) {
-                _aplicarPagamentoPassivo(cat, Number(r.valor) || 0);
+                r._efeitoPassivo = _aplicarPagamentoPassivoMedido(cat, Number(r.valor) || 0).efeito;
             }
         }
         if (r.custodiaDestinoId) {
             const destino = (state.orcamento.custodias || []).find(x => x.id === r.custodiaDestinoId);
             if (destino && _custodiaEhReserva(destino)) {
-                destino.saldoAtual = (destino.saldoAtual || 0) + (r.valor || 0);
-            }
-        }
-    } else if (r.tipo === 'transferencia') {
-        // Aplicar: tira da origem, soma no destino
-        if (r.custodiaId) {
-            const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
-            if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
-                origem.saldoAtual = (origem.saldoAtual || 0) - (r.valor || 0);
-            }
-        }
-        if (r.custodiaDestinoId) {
-            const destino = (state.orcamento.custodias || []).find(x => x.id === r.custodiaDestinoId);
-            if (destino && !(TIPOS_CUSTODIA[destino.tipo] || {}).temFatura) {
                 destino.saldoAtual = (destino.saldoAtual || 0) + (r.valor || 0);
             }
         }
