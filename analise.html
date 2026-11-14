@@ -521,54 +521,142 @@ function resolveCallee(callee) {
       if (obj.name === 'window' || obj.name === 'globalThis') {
         return { kind: 'global', name: prop, object: obj.name };
       }
-      // obj.metodo — tenta resolver se obj for global conhecido ou função existe
       return { kind: 'member', name: prop, object: obj.name };
+    }
+    // NOVO: cadeia de membros (app.ui.showConsistencyModal, anp.form.reset, ...)
+    // Usa a última propriedade como nome, o penúltimo como "objeto".
+    if (obj.type === 'MemberExpression' && !obj.computed && obj.property.type === 'Identifier') {
+      return { kind: 'member', name: prop, object: obj.property.name };
     }
   }
   return null;
 }
-
+/**
+ * Registra métodos de um object literal: { foo() {}, bar: () => {}, baz: function() {} }
+ * Ignora getters/setters e computed keys.
+ */
+function registerObjectMethods(objExpr, script, allFunctions, fnAstMap) {
+  if (!objExpr || !Array.isArray(objExpr.properties)) return;
+  for (const prop of objExpr.properties) {
+    if (!prop || prop.type !== 'Property' || prop.computed) continue;
+    let name = null;
+    if (prop.key && prop.key.type === 'Identifier') name = prop.key.name;
+    else if (prop.key && prop.key.type === 'Literal' && typeof prop.key.value === 'string') name = prop.key.value;
+    if (!name) continue;
+    const v = prop.value;
+    if (v && (v.type === 'FunctionExpression' || v.type === 'ArrowFunctionExpression')) {
+      // first wins: evita sobrescrever por nomes duplicados (ex.: vários "onRender")
+      if (!allFunctions.has(name)) {
+        allFunctions.set(name, {
+          scriptIdx: script.idx,
+          line: prop.loc ? prop.loc.start.line : '?',
+          kind: 'object-method',
+          hoist: false,
+        });
+        fnAstMap.set(name, v);
+      }
+    }
+  }
+}
 /* ============================================================
    CALL GRAPH — análise estática
    ============================================================ */
 
 /** Analisa uma função (nó AST): extrai chamadas, complexidade e LOC. */
 function analyzeFunction(fnNode) {
-  const calls = [];
+  const calls = [];          // diretas/executadas → cx + ciclos + reachability
+  const deferredCalls = [];  // callbacks armazenados → só reachability
   let loopDepth = 0;
-  let complexity = 1; // McCabe: base = 1
-  const startLine = fnNode.loc ? fnNode.loc.start.line : 0;
-  const endLine = fnNode.loc ? fnNode.loc.end.line : 0;
-  const loc = Math.max(0, endLine - startLine + 1);
+  let complexity = 1;
+  let inDeferred = 0;        // contador (aninhamento permitido)
+  const loc = Math.max(0, (fnNode.loc?.end.line || 0) - (fnNode.loc?.start.line || 0) + 1);
+  const visitedFns = new Set();
+
+  function walkDeferred(f) {
+    if (!f || visitedFns.has(f)) return;
+    visitedFns.add(f);
+    const savedCx = complexity;
+    const savedLoop = loopDepth;
+    complexity = 0;          // callbacks armazenados NÃO somam cx ao pai
+    loopDepth = 0;
+    inDeferred++;
+    if (f.body) {
+      if (f.body.type === 'BlockStatement') f.body.body.forEach(visit);
+      else visit(f.body);
+    }
+    inDeferred--;
+    complexity = savedCx;
+    loopDepth = savedLoop;
+  }
 
   function visit(node) {
     if (!node || typeof node !== 'object' || !node.type) return;
     const type = node.type;
 
-    // Não descer em funções aninhadas (elas têm análise própria)
-    if (type === 'FunctionDeclaration' || type === 'FunctionExpression' || type === 'ArrowFunctionExpression') {
-      return;
-    }
+    if (type === 'FunctionDeclaration') return;
+    if (type === 'FunctionExpression' || type === 'ArrowFunctionExpression') return;
 
-    // Loops: marcam contexto de "chamado em loop" + incrementam complexidade
     if (type === 'ForStatement' || type === 'ForInStatement' || type === 'ForOfStatement'
         || type === 'WhileStatement' || type === 'DoWhileStatement') {
-      complexity++;
+      if (inDeferred === 0) complexity++;
       loopDepth++;
       visitChildren(node);
       loopDepth--;
       return;
     }
 
-    // Demais pontos de decisão
     if (type === 'IfStatement' || type === 'ConditionalExpression'
         || type === 'SwitchCase' || type === 'CatchClause' || type === 'LogicalExpression') {
-      complexity++;
+      if (inDeferred === 0) complexity++;
     }
 
-    // Chamadas: só consideramos `foo()` com Identifier (foo.bar() é externo)
-    if (type === 'CallExpression' && node.callee.type === 'Identifier') {
-      calls.push({ name: node.callee.name, inLoop: loopDepth > 0 });
+    // Object literal: funções/refs em propriedades são callbacks deferred
+    if (type === 'ObjectExpression') {
+      for (const prop of (node.properties || [])) {
+        if (!prop || prop.type !== 'Property') continue;
+        const v = prop.value;
+        if (!v) continue;
+        if (v.type === 'FunctionExpression' || v.type === 'ArrowFunctionExpression') {
+          walkDeferred(v);
+        } else if (v.type === 'MemberExpression' || v.type === 'Identifier') {
+          const ar = resolveCallee(v);
+          if (ar && ar.name && ar.name !== 'bind' && ar.name !== 'call' && ar.name !== 'apply') {
+            deferredCalls.push({ name: ar.name, inLoop: false });
+          }
+        }
+      }
+    }
+
+    // Array de funções (ex.: registros de testes)
+    if (type === 'ArrayExpression') {
+      for (const el of (node.elements || [])) {
+        if (el && (el.type === 'FunctionExpression' || el.type === 'ArrowFunctionExpression')) {
+          walkDeferred(el);
+        }
+      }
+    }
+
+    if (type === 'CallExpression') {
+      const r = resolveCallee(node.callee);
+      if (r && r.name) {
+        const entry = { name: r.name, inLoop: loopDepth > 0 };
+        if (inDeferred > 0) deferredCalls.push(entry);
+        else calls.push(entry);
+      }
+      // Args: callbacks e referências a funções conhecidas
+      for (const arg of (node.arguments || [])) {
+        if (!arg) continue;
+        if (arg.type === 'FunctionExpression' || arg.type === 'ArrowFunctionExpression') {
+          walkDeferred(arg);
+        } else if (arg.type === 'MemberExpression' || arg.type === 'Identifier') {
+          const ar = resolveCallee(arg);
+          if (ar && ar.name
+              && ar.name !== 'bind' && ar.name !== 'call' && ar.name !== 'apply'
+              && ar.name !== 'then' && ar.name !== 'catch' && ar.name !== 'finally') {
+            deferredCalls.push({ name: ar.name, inLoop: false });
+          }
+        }
+      }
     }
 
     visitChildren(node);
@@ -587,7 +675,7 @@ function analyzeFunction(fnNode) {
   }
 
   if (fnNode.body) visit(fnNode.body);
-  return { calls, complexity, loc };
+  return { calls, deferredCalls, complexity, loc };
 }
 
 /** Tarjan SCC — detecta ciclos (auto-recursão e mútuos/indiretos). */
@@ -642,8 +730,8 @@ function buildCallGraph(fnAstMap, allFunctions, entryPointNames) {
   const callersOf = new Map();
   const calleesOf = new Map();
 
-  fnAstMap.forEach((fnNode, name) => {
-    const { calls, complexity, loc } = analyzeFunction(fnNode);
+    fnAstMap.forEach((fnNode, name) => {
+    const { calls, deferredCalls, complexity, loc } = analyzeFunction(fnNode);
     const fdata = {
       name, loc, complexity,
       fanIn: 0, fanOut: 0, loopCalls: 0,
@@ -659,7 +747,14 @@ function buildCallGraph(fnAstMap, allFunctions, entryPointNames) {
       if (c.inLoop) fdata.loopCalls++;
       if (!callersOf.has(c.name)) callersOf.set(c.name, new Set());
       callersOf.get(c.name).add(name);
-      edges.push({ source: name, target: c.name, inLoop: c.inLoop });
+      edges.push({ source: name, target: c.name, inLoop: c.inLoop, deferred: false });
+    }
+    for (const c of deferredCalls) {
+      if (!allFunctions.has(c.name)) continue;
+      if (!callees.has(c.name)) callees.add(c.name);
+      if (!callersOf.has(c.name)) callersOf.set(c.name, new Set());
+      callersOf.get(c.name).add(name);
+      edges.push({ source: name, target: c.name, inLoop: false, deferred: true });
     }
     fdata.fanOut = callees.size;
     calleesOf.set(name, callees);
@@ -670,9 +765,10 @@ function buildCallGraph(fnAstMap, allFunctions, entryPointNames) {
     if (functions.has(callee)) functions.get(callee).fanIn = callers.size;
   });
 
-  const adjacency = new Map();
+    const adjacency = new Map();
   functions.forEach((_, n) => adjacency.set(n, new Set()));
   edges.forEach(e => {
+    if (e.deferred) return;   // ★ deferred NÃO forma ciclo real
     if (adjacency.has(e.source)) adjacency.get(e.source).add(e.target);
   });
 
@@ -736,12 +832,13 @@ function runAnalysis() {
     inlineScripts.push({ idx: i, code, lineCount: code.split('\n').length, functions: [], ast: null });
   });
 
-  const allFunctions = new Map();
+    const allFunctions = new Map();
   const allGlobals = new Set();
   const getByIdRefs = new Set();
   const qSelRefs = new Set();
   const dynamicIds = new Map();
   const fnAstMap = new Map(); // nome → nó AST (para call graph)
+  const allStringLiterals = new Set(); // ★ NOVO — acumula strings de todos os scripts
   const jsEntryPoints = new Set(); // addEventListener / .on* = / window.fn =
   let jsListenerCount = 0;
   // { elId, event, fn, source: 'addEventListener'|'onprop', scriptIdx, line }
@@ -777,14 +874,32 @@ function runAnalysis() {
     }
     if (!W) return;
 
-    W.full(script.ast, (node) => {
-      // --- Funções declaradas ---
-      if (node.type === 'FunctionDeclaration' && node.id) {
+
+// Wrapper: usa fullAncestor se disponível (permite saber o escopo)
+const hasAncestors = typeof W.fullAncestor === 'function';
+const walkScript = (root, cb) => {
+  if (hasAncestors) {
+    W.fullAncestor(root, (node, state, anc) => cb(node, anc || []));
+  } else {
+    W.full(root, (node) => cb(node, []));
+  }
+};
+        walkScript(script.ast, (node, ancestors) => {
+    
+      const insideFn = ancestors
+        .filter(a => a !== node)
+        .some(a =>
+          a.type === 'FunctionDeclaration' ||
+          a.type === 'FunctionExpression' ||
+          a.type === 'ArrowFunctionExpression'
+        );
+      // --- Funções declaradas (top-level apenas) ---
+      if (node.type === 'FunctionDeclaration' && node.id && !insideFn) {
         script.functions.push(node.id.name);
         allFunctions.set(node.id.name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?', kind: 'decl', hoist: true });
         fnAstMap.set(node.id.name, node);
       }
-      if (node.type === 'VariableDeclaration') {
+      if (node.type === 'VariableDeclaration' && !insideFn) {
         const isHoisted = node.kind === 'var';
         node.declarations.forEach(d => {
           if (d.id && d.id.type === 'Identifier') {
@@ -798,15 +913,64 @@ function runAnalysis() {
               });
               fnAstMap.set(d.id.name, d.init);
             }
+            // ★ NOVO: object literal com métodos ({ foo() {}, bar: () => {} })
+            if (d.init && d.init.type === 'ObjectExpression') {
+              registerObjectMethods(d.init, script, allFunctions, fnAstMap);
+            }
           }
         });
       }
-      if (node.type === 'MethodDefinition' && node.key && node.key.type === 'Identifier' && node.value) {
+      if (node.type === 'MethodDefinition' && node.key && node.key.type === 'Identifier' && node.value && !insideFn) {
         const name = node.key.name;
-        allFunctions.set(name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?', kind: 'method', hoist: false });
-        fnAstMap.set(name, node.value);
+        if (!allFunctions.has(name)) {
+          allFunctions.set(name, { scriptIdx: script.idx, line: node.loc ? node.loc.start.line : '?', kind: 'method', hoist: false });
+          fnAstMap.set(name, node.value);
+        }
       }
       if (node.type === 'ClassDeclaration' && node.id) allGlobals.add(node.id.name);
+
+      // ★ NOVO: Object.assign(Target, { ... })  — ex.: Object.assign(ANPSolverApp.ui, {...})
+      if (node.type === 'CallExpression'
+          && node.callee.type === 'MemberExpression'
+          && node.callee.object.type === 'Identifier' && node.callee.object.name === 'Object'
+          && node.callee.property.type === 'Identifier' && node.callee.property.name === 'assign'
+          && node.arguments.length >= 2
+          && !insideFn) {
+        const last = node.arguments[node.arguments.length - 1];
+        if (last && last.type === 'ObjectExpression') {
+          registerObjectMethods(last, script, allFunctions, fnAstMap);
+        }
+      }
+
+      // ★ NOVO: el.setAttribute('onclick', 'fn()') — string handler
+      if (node.type === 'CallExpression'
+          && node.callee.type === 'MemberExpression'
+          && node.callee.property.type === 'Identifier'
+          && node.callee.property.name === 'setAttribute'
+          && node.arguments.length >= 2
+          && node.arguments[0].type === 'Literal' && typeof node.arguments[0].value === 'string'
+          && /^on[a-z]+$/i.test(node.arguments[0].value)
+          && node.arguments[1].type === 'Literal' && typeof node.arguments[1].value === 'string') {
+        const eventName = node.arguments[0].value.slice(2).toLowerCase();
+        const code = node.arguments[1].value;
+        try {
+          const subAst = acorn.parse(code, { ecmaVersion: 'latest', allowReturnOutsideFunction: true });
+          W.full(subAst, (n) => {
+            if (n.type !== 'CallExpression') return;
+            const r = resolveCallee(n.callee);
+            if (r && r.name) {
+              jsEntryPoints.add(r.name);
+              jsBindings.push({
+                elId: null, event: eventName, fn: r.name,
+                source: 'setAttribute', scriptIdx: script.idx,
+                line: node.loc ? node.loc.start.line : '?',
+              });
+            }
+          });
+        } catch (_) { /* código inválido: ignora */ }
+      }
+
+      // Mantém: window.fn = function() {}  (entry point global)
       if (node.type === 'AssignmentExpression'
           && node.left.type === 'MemberExpression'
           && node.left.object.type === 'Identifier'
@@ -819,8 +983,6 @@ function runAnalysis() {
           jsEntryPoints.add(node.left.property.name);
         }
       }
-
-      // Entry points JS: addEventListener / removeEventListener
       // Tenta resolver document.getElementById('x').addEventListener(...)
       if (node.type === 'CallExpression'
           && node.callee.type === 'MemberExpression'
@@ -942,23 +1104,31 @@ function runAnalysis() {
           && node.arguments[0].value === 'id'
           && node.arguments[1] && node.arguments[1].type === 'Literal'
           && typeof node.arguments[1].value === 'string') {
-        const id = node.arguments[1].value;
+                const id = node.arguments[1].value;
         if (!dynamicIds.has(id)) {
           dynamicIds.set(id, { scriptIdx: script.idx, origem: 'setAttribute', line: node.loc ? node.loc.start.line : '?' });
         }
       }
-    });
-  });
+
+      // ★ NOVO — 4c: coletar strings que parecem IDs (heurístico p/ 4d)
+      if (node.type === 'Literal' && typeof node.value === 'string') {
+        const v = node.value;
+        if (v.length >= 3 && v.length <= 80 && /^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(v)) {
+          allStringLiterals.add(v);
+        }
+      }
+    });  
+  });     
 
   // 2b. Chamadas top-level + corpo de callbacks de listener no topo
   // Caso crítico: addEventListener('DOMContentLoaded', async () => { await carregarEstado(); })
   // — o entry real é anônimo; as chamadas DENTRO do callback precisam virar roots.
+    // Em collectCallsInFnBody: marcar como deferred
   function collectCallsInFnBody(fnNode, scriptIdx, sink, kind) {
     if (!fnNode || !fnNode.body) return;
     function walkBody(node) {
       if (!node || typeof node !== 'object' || !node.type) return;
       const t = node.type;
-      // Não desce em funções aninhadas (callbacks internos)
       if (t === 'FunctionDeclaration' || t === 'FunctionExpression' || t === 'ArrowFunctionExpression') return;
       if (t === 'CallExpression') {
         const resolved = resolveCallee(node.callee);
@@ -966,9 +1136,11 @@ function runAnalysis() {
           sink.push({
             name: resolved.name, kind: kind || 'callback-body', object: resolved.object,
             scriptIdx, line: node.loc ? node.loc.start.line : 0,
+            deferred: true,   // ★ NOVO — executa depois do parse
           });
         }
       }
+     
       for (const key in node) {
         if (key === 'loc' || key === 'start' || key === 'end' || key === 'type' || key === 'range') continue;
         const child = node[key];
@@ -1088,16 +1260,26 @@ function runAnalysis() {
 
   // 6. Cruzamento getElementById / querySelector
   getByIdRefs.forEach(id => {
-    if (domIds.has(id)) return;
-    if (dynamicIds.has(id)) {
-      const m = dynamicIds.get(id);
-      STATE.issues.push({ group: 'getByIdDyn', level: 'info',
-        msg: `getElementById(<code>"${escapeHtml(id)}"</code>) — criado dinamicamente (${m.origem}, linha ~${m.line})` });
-      return;
-    }
-    STATE.issues.push({ group: 'getById', level: 'error',
-      msg: `getElementById(<code>"${escapeHtml(id)}"</code>) — <strong>não existe</strong> no HTML nem é criado no JS` });
-  });
+  if (domIds.has(id)) return;
+  if (dynamicIds.has(id)) {
+    const m = dynamicIds.get(id);
+    STATE.issues.push({ group: 'getByIdDyn', level: 'info',
+      msg: `getElementById(<code>"${escapeHtml(id)}"</code>) — criado dinamicamente (${m.origem}, linha ~${m.line})` });
+    return;
+  }
+  // Heurístico: id aparece como string literal em algum lugar do JS
+  // → provavelmente passado para função construtora (buildComparisonContent, etc.)
+  if (allStringLiterals.has(id)) {
+    dynamicIds.set(id, { scriptIdx: '?', origem: 'string-literal', line: '?' });
+    STATE.nodes.push({ id: 'dyn:' + id, kind: 'dynamic-id', size: 11, label: '#' + id + ' (js)',
+      metaOrigem: 'string-literal', metaLine: '?' });
+    STATE.issues.push({ group: 'getByIdDyn', level: 'info',
+      msg: `getElementById(<code>"${escapeHtml(id)}"</code>) — o ID aparece como string literal no JS, provavelmente criado dinamicamente (não verificado)` });
+    return;
+  }
+  STATE.issues.push({ group: 'getById', level: 'error',
+    msg: `getElementById(<code>"${escapeHtml(id)}"</code>) — <strong>não existe</strong> no HTML nem é criado no JS` });
+});
   qSelRefs.forEach(id => {
     if (domIds.has(id)) return;
     if (dynamicIds.has(id)) {
@@ -1250,9 +1432,10 @@ function runAnalysis() {
 
   // 7d. Ordem temporal: chamada top-level a função let/const antes da linha de declaração no mesmo script
   topLevelCalls.forEach(call => {
+    if (call.deferred) return;   // callbacks deferred executam depois do parse
     const meta = allFunctions.get(call.name);
     if (!meta) return;
-    if (meta.hoist) return; // function decl / var — hoisted
+    if (meta.hoist) return;      // function decl / var — hoisted
     if (meta.scriptIdx !== call.scriptIdx) return;
     const declLine = typeof meta.line === 'number' ? meta.line : parseInt(meta.line, 10);
     const callLine = typeof call.line === 'number' ? call.line : parseInt(call.line, 10);
@@ -1307,9 +1490,19 @@ function runAnalysis() {
     entryPointNames.add(c.name);
   });
 
-  // 9. Call Graph
+   // 9. Call Graph
   STATE.callGraph = buildCallGraph(fnAstMap, allFunctions, entryPointNames);
-  
+
+  //  FIX: garantir que TODA função do callGraph tenha nó em STATE.nodes.
+  // Métodos de objeto (via Object.assign / object literal) entram em allFunctions
+  // e fnAstMap, mas nunca em script.functions — por isso não viravam nós no grafo.
+  STATE.callGraph.functions.forEach((fd, name) => {
+    const fid = 'fn:' + name;
+    if (!STATE.nodes.find(n => n.id === fid)) {
+      STATE.nodes.push({ id: fid, kind: 'function', size: 14, label: name, fnName: name });
+    }
+  });
+
   // ─── Sistema especialista ───
 const { blast, depth, callersOf } = _calcularBlastRadius(STATE.callGraph);
 const inversePairs = _detectarParesInversos(STATE.callGraph);
@@ -1328,10 +1521,10 @@ STATE.severity = _classificarTudo(STATE.callGraph, blast, depth, callersOf, inve
   });
 
   // Adicionar arestas de chamada ao STATE.edges (com prefixo call:)
-  STATE.callGraph.edges.forEach((e, i) => {
+    STATE.callGraph.edges.forEach((e, i) => {
     STATE.edges.push({
       id: 'call:' + i, source: 'fn:' + e.source, target: 'fn:' + e.target,
-      kind: 'calls', inLoop: e.inLoop,
+      kind: 'calls', inLoop: e.inLoop, deferred: !!e.deferred,
     });
   });
 
@@ -1727,7 +1920,7 @@ function buildGraph() {
     if (e.kind === 'loads')    color = '#f59e0b';
     if (e.kind === 'contains') color = '#10b981';
     if (e.kind === 'defines')  color = '#6366f1';
-    if (e.kind === 'calls')    { color = e.inLoop ? '#dc2626' : '#64748b'; width = e.inLoop ? 2 : 1.2; }
+    if (e.kind === 'calls') { color = e.inLoop ? '#dc2626' : '#64748b'; width = e.inLoop ? 2 : 1.2; if (e.deferred) color = '#a78bfa';}
     elements.push({ data: { id: e.id, source: e.source, target: e.target, color, width } });
   });
 
@@ -1844,9 +2037,7 @@ const RULES = [
         acoes: ['Identificar a função raiz do ciclo e quebrar por extração.'],
     },
     {
-        id: 'INVERSE_PAIR',
-        severidade: 'HIGH', confianca: 0.85, categoria: 'invariant',
-        when: f => !!f.temInverso,
+        id: 'INVERSE_PAIR', severidade: 'HIGH', confianca: 0.85, categoria: 'invariant', when: f => !!f.temInverso && f.loc >= 40,
         porque: 'Tem par inverso (_aplicar ↔ _desfazer, abrir ↔ fechar, etc.). Se as duas divergirem, estado corrompe silenciosamente.',
         acoes: ['Adicionar teste de inverso: aplicar(r) + desfazer(r) deve deixar o estado idêntico ao original.',
                 'Manter os dois pares no mesmo arquivo (ou módulo) para facilitar revisão.'],
@@ -2144,22 +2335,47 @@ async function gerarRelatorioPDF() {
   const antigo = document.getElementById('report-view');
   if (antigo) antigo.remove();
 
-  // Captura o grafo ANTES de montar o relatório (cy ainda está vivo)
-  const grafoHTML = await _capturarGrafoParaPDF();
+  let grafoHTML;
+  try {
+    grafoHTML = await _capturarGrafoParaPDF();
+  } catch (e) {
+    console.error('[PDF] falha ao capturar grafo:', e);
+    grafoHTML = `<section class="report-section report-graph-section">
+      <h2>Gráfico do Call Graph</h2>
+      <p class="report-note">⚠️ Não foi possível gerar o gráfico: ${escapeHtml(String(e).slice(0,120))}</p>
+    </section>`;
+  }
 
-  // Monta o HTML completo
-  const html = _montarRelatorioParaPDF(grafoHTML);
+  let html;
+  try {
+    html = _montarRelatorioParaPDF(grafoHTML);
+  } catch (e) {
+    console.error('[PDF] falha ao montar relatório:', e);
+    alert('Erro ao montar relatório: ' + e.message);
+    return;
+  }
 
   const wrapper = document.createElement('div');
   wrapper.id = 'report-view';
-  wrapper.innerHTML = html;
-  document.body.appendChild(wrapper);
+  try {
+    wrapper.innerHTML = html;
+    document.body.appendChild(wrapper);
+  } catch (e) {
+    console.error('[PDF] falha ao inserir relatório:', e);
+    alert('Erro ao inserir relatório (possível falta de memória): ' + e.message);
+    return;
+  }
 
-  // Espera imagens carregarem (crítico para o grafo no PDF)
-  await _esperarImagens(wrapper);
+  try {
+    await _esperarImagens(wrapper);
+  } catch (_) {}
 
-  // Dispara o diálogo de impressão (usuário escolhe "Salvar como PDF")
-  window.print();
+  try {
+    window.print();
+  } catch (e) {
+    console.error('[PDF] window.print falhou:', e);
+    alert('Não foi possível abrir o diálogo de impressão: ' + e.message);
+  }
 }
 
 async function _capturarGrafoParaPDF() {
@@ -2170,42 +2386,66 @@ async function _capturarGrafoParaPDF() {
     </section>`;
   }
 
-  // Ativar call edges se não estiverem visíveis
-  const precisaAtivar = !STATE.filter.callEdges;
-  if (precisaAtivar) {
+  // Limpa foco (que restringe o grafo a uma vizinhança) antes de gerar PDF
+  const focoAnterior = STATE.focusFn;
+  if (focoAnterior) {
+    STATE.focusFn = null;
+    try { buildGraph(); } catch (e) { console.warn('[PDF] rebuild sem foco falhou:', e); }
+  }
+
+  if (!STATE.filter.callEdges) {
     const btn = document.getElementById('showCallEdges');
     if (btn) btn.checked = true;
     STATE.filter.callEdges = true;
-    buildGraph();
-    await new Promise(r => setTimeout(r, 250));
+    try { buildGraph(); } catch (e) { console.error('[PDF] buildGraph falhou:', e); }
+    // ★ Aumentar espera — 63 nós precisam de mais tempo
+    await new Promise(r => setTimeout(r, 800));
   }
 
   const n = STATE.callGraph.functions.size;
-  const escala = n > 300 ? 1 : (n > 100 ? 1.5 : 2);
+  // ★ Escala menor para grafos grandes (evita canvas gigante / crop)
+  const escala = n > 200 ? 0.5 : (n > 100 ? 0.75 : (n > 50 ? 1 : 2));
 
   try {
-    STATE.cy.fit(undefined, 20);
-    await new Promise(r => setTimeout(r, 100));
+    if (!STATE.cy) throw new Error('cy instância indisponível');
 
-    let png;
-    try {
-      png = STATE.cy.png({ full: true, scale: escala, bg: '#ffffff' });
-    } catch (e) {
-      // fallback: escala 1
-      png = STATE.cy.png({ full: true, scale: 1, bg: '#ffffff' });
+    // ★ Forçar fit robusto: reset de zoom + fit com elementos explícitos
+    STATE.cy.minZoom(0.01);
+    STATE.cy.fit(STATE.cy.elements(), 50);
+    await new Promise(r => setTimeout(r, 300));
+    STATE.cy.fit(STATE.cy.elements(), 50);
+    await new Promise(r => setTimeout(r, 200));
+
+    // ★ Sanity check: se bounds ainda parecem pequenos, log
+    const bb = STATE.cy.elements().boundingBox();
+    if (bb.w < 100 || bb.h < 100) {
+      console.warn('[PDF] bounds suspeitos:', bb);
     }
+
+    let png = STATE.cy.png({ full: true, scale: escala, bg: '#ffffff' });
+    if (png && png.length > 25 * 1024 * 1024) {
+      png = STATE.cy.png({ full: true, scale: 0.5, bg: '#ffffff' });
+    }
+    
 
     return `<section class="report-section report-graph-section">
       <h2>Gráfico do Call Graph</h2>
-      <p class="report-note">${n} funções exportadas em PNG (escala ${escala}×). Para navegação interativa, use o analisador.</p>
+      <p class="report-note">${n} funções exportadas em PNG (escala ${escala}×).</p>
       <img src="${png}" alt="Call Graph" class="report-graph-img" />
     </section>`;
   } catch (e) {
-    console.warn('Falha ao exportar grafo:', e);
+    console.warn('[PDF] falha ao exportar grafo:', e);
     return `<section class="report-section report-graph-section">
       <h2>Gráfico do Call Graph</h2>
-      <p class="report-note">⚠️ Não foi possível exportar o grafo como imagem (${escapeHtml(String(e).slice(0, 100))}).</p>
+      <p class="report-note">⚠️ Não foi possível exportar o grafo como imagem (${escapeHtml(String(e).slice(0,120))}).</p>
     </section>`;
+  } finally {
+    // Restaura foco anterior, se havia
+    if (focoAnterior) {
+      STATE.focusFn = focoAnterior;
+      syncFocusBanner();
+      try { buildGraph(); } catch (_) {}
+    }
   }
 }
 
