@@ -1529,6 +1529,7 @@ function abrirTelaN0() {
     state.n0 = _garantirStubN0(state.n0);
     if (!state.n0.iniciadoEm) state.n0.iniciadoEm = new Date().toISOString();
     try { salvarEstado(); } catch (_) {}
+    _resetN0Temp();
     renderizarTelaN0();
     goToScreen('screen-n0-acolhimento');
 }
@@ -1541,40 +1542,218 @@ function abrirTelaN4() {
     goToScreen('screen-n4-estrategias');
 }
 
+let _n0Etapa = 'intro';
+let _n0Temp = { qA: null, prontidao: null, qB: null, qC: { renda: null, gastos: null, dividas: null, reserva: null, atraso: null } };
+
+function _resetN0Temp() {
+    _n0Etapa = 'intro';
+    _n0Temp = { qA: null, prontidao: null, qB: null, qC: { renda: null, gastos: null, dividas: null, reserva: null, atraso: null } };
+    const n0 = state.n0 || {};
+    if (n0.pesos && n0.pesos.origem) {
+        // Pré-preenche se já concluído (revisão)
+        const o = n0.pesos.origem;
+        _n0Temp.qA = o.qA && o.qA.opcao || null;
+        _n0Temp.prontidao = o.prontidao || null;
+        _n0Temp.qB = o.qB && o.qB.opcao || null;
+        _n0Temp.qC = Object.assign({}, o.qC || {});
+    }
+}
+
 function renderizarTelaN0() {
     const el = document.getElementById('n0-acolhimento-conteudo');
     if (!el) return;
-    const n0 = _garantirStubN0(state.n0);
+    state.n0 = _garantirStubN0(state.n0);
+    if (_n0Etapa === 'intro') return _renderN0Intro(el);
+    if (_n0Etapa === 'prontidao') return _renderN0Prontidao(el);
+    if (_n0Etapa === 'qA') return _renderN0QA(el);
+    if (_n0Etapa === 'qB') return _renderN0QB(el);
+    if (_n0Etapa === 'qC') return _renderN0QC(el);
+    if (_n0Etapa === 'concluido') return _renderN0Concluido(el);
+    _renderN0Intro(el);
+}
+
+function _renderN0Intro(el) {
+    const jaConcluido = state.n0.concluido;
     el.innerHTML = `
         <div class="home-header" style="margin-bottom:12px;">
             <div class="home-brand">D+1 <span>Nível 0</span></div>
         </div>
         <div class="card" style="border-left:4px solid var(--primary);">
-            <div style="font-size:0.9rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">Slot reservado · Fatia D</div>
-            <h2 style="font-size:1.2rem;color:var(--text-main);margin:0 0 8px;">Acolhimento</h2>
-            <p style="font-size:0.9rem;color:var(--secondary);line-height:1.45;margin:0 0 14px;">
-                Este espaço guarda a triagem e o tom da conversa <strong>antes</strong> do N1.
-                O fluxo atual ainda começa no welcome → orçamento; N0 não altera N1–N3.
+            <div style="font-size:0.9rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">Acolhimento</div>
+            <h2 style="font-size:1.2rem;color:var(--text-main);margin:0 0 8px;">Antes de começar</h2>
+            <p style="font-size:0.9rem;color:var(--secondary);line-height:1.5;margin:0 0 14px;">
+                ${jaConcluido
+                    ? 'Você já respondeu. Pode revisar as prioridades — o diagnóstico se ajusta.'
+                    : 'Três perguntas curtas para ajustar o diagnóstico ao que mais te aperta agora. Nada aqui é definitivo.'}
             </p>
-            <div style="font-size:0.9rem;color:var(--secondary);margin-bottom:12px;">
-                Estado: ${n0.concluido ? '✅ concluído' : '⏳ em aberto'}
-                ${n0.triagem ? ' · triagem: ' + (n0.triagem.momento || '—') : ''}
-            </div>
-            <button class="btn-primary" onclick="n0MarcarConcluido()">Marcar N0 como visto (stub)</button>
+            <button class="btn-primary" onclick="_n0Avancar('prontidao')">${jaConcluido ? 'Revisar prioridades' : 'Vamos conversar'}</button>
             <button class="btn-option" style="justify-content:center;margin-top:8px;" onclick="goToScreen('screen-welcome')">Voltar ao início</button>
         </div>
     `;
 }
 
-function n0MarcarConcluido() {
-    state.n0 = _garantirStubN0(state.n0);
-    state.n0.concluido = true;
-    state.n0.concluidoEm = new Date().toISOString();
-    if (!state.n0.triagem) state.n0.triagem = { momento: 'estavel', notas: 'stub' };
-    try { salvarEstado(); } catch (_) {}
+function _renderN0Prontidao(el) {
+    let html = `
+        <div class="home-header" style="margin-bottom:12px;"><div class="home-brand">D+1 <span>Nível 0</span></div></div>
+        <div class="fala-avatar"><span class="icone">🛡️</span><span class="texto">Como você está agora?</span></div>
+        <div class="card" style="border-left:4px solid var(--primary);">
+    `;
+    Object.keys(OPCOES_PRONTIDAO_N0).forEach(id => {
+        const op = OPCOES_PRONTIDAO_N0[id];
+        html += `<button class="btn-option" onclick="_n0EscolherProntidao('${id}')">${op.label}</button>`;
+    });
+    html += `</div>`;
+    el.innerHTML = html;
+}
+
+function _renderN0QA(el) {
+    let html = `
+        <div class="home-header" style="margin-bottom:12px;"><div class="home-brand">D+1 <span>Nível 0</span></div></div>
+        <div class="fala-avatar"><span class="icone">🛡️</span><span class="texto">Pensando na sua vida financeira hoje, o que mais te aperta?</span></div>
+        <div class="card" style="border-left:4px solid var(--primary);">
+    `;
+    Object.keys(OPCOES_QA_N0).forEach(id => {
+        const op = OPCOES_QA_N0[id];
+        html += `<button class="btn-option" onclick="_n0EscolherQA('${id}')">${op.label}</button>`;
+    });
+    html += `</div>`;
+    el.innerHTML = html;
+}
+
+function _renderN0QB(el) {
+    let html = `
+        <div class="home-header" style="margin-bottom:12px;"><div class="home-brand">D+1 <span>Nível 0</span></div></div>
+        <div class="fala-avatar"><span class="icone">🛡️</span><span class="texto">Tem alguma coisa que você não abre mão de jeito nenhum?</span></div>
+        <div class="card" style="border-left:4px solid var(--primary);">
+    `;
+    Object.keys(OPCOES_QB_N0).forEach(id => {
+        const op = OPCOES_QB_N0[id];
+        html += `<button class="btn-option" onclick="_n0EscolherQB('${id}')">${op.label}</button>`;
+    });
+    html += `</div>`;
+    el.innerHTML = html;
+}
+
+function _renderN0QC(el) {
+    let html = `
+        <div class="home-header" style="margin-bottom:12px;"><div class="home-brand">D+1 <span>Nível 0</span></div></div>
+        <div class="fala-avatar"><span class="icone">🛡️</span><span class="texto">Quais desses números você consegue me dizer hoje? Pode pular o que não souber.</span></div>
+        <div class="card" style="border-left:4px solid var(--primary);padding:16px;">
+    `;
+    DOMINIOS_N0.forEach(dom => {
+        const rotulos = {
+            renda:   'Quanto entra por mês',
+            gastos:  'Gastos fixos da casa',
+            dividas: 'Dívidas e parcelas',
+            reserva: 'Dinheiro guardado',
+            atraso:  'Contas em atraso'
+        };
+        const atual = _n0Temp.qC[dom];
+        html += `<div style="margin-bottom:14px;">
+            <div style="font-size:0.85rem;color:var(--secondary);margin-bottom:6px;font-weight:600;">${rotulos[dom]}</div>
+            <div class="chip-container" style="margin-bottom:0;">`;
+        Object.keys(OPCOES_QC_N0).forEach(est => {
+            const sel = atual === est ? ' selecionado' : '';
+            html += `<div class="chip${sel}" onclick="_n0EscolherQC('${dom}', '${est}')">${OPCOES_QC_N0[est]}</div>`;
+        });
+        html += `</div></div>`;
+    });
+    html += `</div>
+        <button class="btn-primary" onclick="_n0Concluir()">Concluir</button>
+        <button class="btn-option" style="justify-content:center;margin-top:8px;" onclick="_n0Avancar('intro')">Voltar</button>
+    `;
+    el.innerHTML = html;
+}
+
+function _renderN0Concluido(el) {
+    const p = state.n0.pesos || {};
+    const efetivos = (p.effective || []).length;
+    el.innerHTML = `
+        <div class="home-header" style="margin-bottom:12px;"><div class="home-brand">D+1 <span>Nível 0</span></div></div>
+        <div class="card" style="border-left:4px solid var(--success);">
+            <h2 style="font-size:1.2rem;margin:0 0 8px;">Pronto.</h2>
+            <p style="font-size:0.9rem;color:var(--secondary);line-height:1.5;margin:0 0 12px;">
+                ${efetivos >= 4
+                    ? 'O diagnóstico já está ajustado ao que você priorizou.'
+                    : 'Ainda faltam dados para o diagnóstico. Conforme você informar no Nível 1, ele se ativa.'}
+            </p>
+            <div style="font-size:0.85rem;color:var(--secondary);margin-bottom:14px;">
+                Indicadores ativos: ${efetivos} de 9 · Peso total ativo: ${p.somaAtiva || 0}
+            </div>
+            <button class="btn-primary" onclick="goToScreen('screen-welcome')">Voltar ao início</button>
+            <button class="btn-option" style="justify-content:center;margin-top:8px;" onclick="_resetN0Temp();renderizarTelaN0()">Revisar</button>
+        </div>
+    `;
+}
+
+function _n0Avancar(etapa) {
+    _n0Etapa = etapa;
     renderizarTelaN0();
 }
 
+function _n0EscolherProntidao(id) {
+    _n0Temp.prontidao = id;
+    const op = OPCOES_PRONTIDAO_N0[id];
+    if (op.aplicaQA) _n0Avancar('qA');
+    else if (op.aplicaQB) _n0Avancar('qB');
+    else _n0Avancar('qC');
+}
+
+function _n0EscolherQA(id) {
+    _n0Temp.qA = id;
+    const op = OPCOES_PRONTIDAO_N0[_n0Temp.prontidao] || {};
+    if (op.aplicaQB) _n0Avancar('qB');
+    else _n0Avancar('qC');
+}
+
+function _n0EscolherQB(id) {
+    _n0Temp.qB = id;
+    _n0Avancar('qC');
+}
+
+function _n0EscolherQC(dom, estado) {
+    _n0Temp.qC[dom] = estado;
+    renderizarTelaN0(); // re-render mantém seleção
+}
+
+function _n0Concluir() {
+    const prontidao = OPCOES_PRONTIDAO_N0[_n0Temp.prontidao] || { aplicaQA: false, aplicaQB: false };
+    const qAId = prontidao.aplicaQA ? _n0Temp.qA : null;
+    const qBId = prontidao.aplicaQB ? _n0Temp.qB : null;
+    const qA = qAId && OPCOES_QA_N0[qAId] ? OPCOES_QA_N0[qAId] : { alvos: [] };
+    const qB = qBId && OPCOES_QB_N0[qBId] ? OPCOES_QB_N0[qBId] : { alvo: null };
+
+    const origem = {
+        qA: { opcao: qAId, alvos: qA.alvos.slice() },
+        qB: { opcao: qBId, alvo: qB.alvo },
+        qC: Object.assign({}, _n0Temp.qC),
+        prontidao: _n0Temp.prontidao
+    };
+    const situacao = derivarSituacaoEfetiva(origem, state.orcamento);
+    const calc = calcularPesosIDE(origem, situacao);
+
+    state.n0.pesos = {
+        versao: PESOS_ALGORITMO_VERSAO,
+        origem: origem,
+        situacao: situacao,
+        base: calc.base,
+        final: calc.final,
+        somaAtiva: calc.somaAtiva,
+        effective: calc.effective,
+        pending: calc.pending,
+        zeroed: calc.zeroed,
+        ideCalculavel: calc.ideCalculavel,
+        overrideAvaliavel: calc.overrideAvaliavel,
+        reinvite: calc.reinvite,
+        rebalanceIncompleto: calc.rebalanceIncompleto
+    };
+    state.n0.concluido = true;
+    state.n0.concluidoEm = new Date().toISOString();
+    if (!state.n0.iniciadoEm) state.n0.iniciadoEm = state.n0.concluidoEm;
+    try { salvarEstado(); } catch (_) {}
+    _n0Etapa = 'concluido';
+    renderizarTelaN0();
+}
 function renderizarTelaN4() {
     const el = document.getElementById('n4-estrategias-conteudo');
     if (!el) return;
@@ -1728,6 +1907,7 @@ async function carregarEstado() {
                 loaded = JSON.parse(salvo);
                 state = loaded;
                 migrarEstado();
+                garantirPesosConsistentes(state);
                 salvarEstado(); // grava no IDB
                 return;
             } catch (e) {
@@ -1741,6 +1921,7 @@ async function carregarEstado() {
     } else {
         state = { orcamento: null };
     }
+    garantirPesosConsistentes(state);
 }
 
 // Grava imediatamente se houver salvamento pendente (ex.: aba oculta ou fechada).
@@ -1825,49 +2006,13 @@ function _migrarResumos() {
     }
 }
 
-function migrarEstado() {
-    state.n0 = _garantirStubN0(state.n0);
-    state.n4 = _garantirStubN4(state.n4);
-    if (state.theme !== 'light' && state.theme !== 'dark') {
-        state.theme = 'light';
-    }
-    if (state.fontSize !== 'normal' && state.fontSize !== 'grande' && state.fontSize !== 'maior') { state.fontSize = 'normal'; } try { document.documentElement.setAttribute('data-theme', state.theme || 'light'); const _sizes = { normal: '16px', grande: '18px', maior: '20px' }; document.documentElement.style.fontSize = _sizes[state.fontSize] || '16px'; } catch (_) {} if (!state.orcamento) return;
-    
-    if (typeof state.ocultarValores !== 'boolean') { state.ocultarValores = false; }
-    if (typeof state.orcamento.futuroStreak !== 'number') { state.orcamento.futuroStreak = 0; }
-
-    
-    if (!state.orcamento.configFluxo) {
-    state.orcamento.configFluxo = { protegerSaldo: true };
-}
-
-    if (typeof state.orcamento.nivel !== 'number') {
-        state.orcamento.nivel = 1;
-    }
-
-    if (state.orcamento.rendaDetalhe === undefined) {
-        state.orcamento.rendaDetalhe = null;
-    }
-    if (!Array.isArray(state.orcamento.categorias)) {
-        state.orcamento.categorias = [];
-    }
-    if (state.orcamento.dividaReserva === undefined) {
-        state.orcamento.dividaReserva = null;
-    }
-    if (state.orcamento.transicaoNivelPendente === undefined) {
-        state.orcamento.transicaoNivelPendente = null;
-    }
-    if (state.orcamento.categoriasConcluidas === undefined) {
-        state.orcamento.categoriasConcluidas = false;
-    }
-    if (state.orcamento.dividaConcluida === undefined) {
-        state.orcamento.dividaConcluida = false;
-    }
-    if (typeof state.orcamento.semanasFechadas !== 'number') {
-        state.orcamento.semanasFechadas = (state.orcamento.resumos || []).length;
-    }
-    _migrarSemana();
-    _migrarResumos();
+// Custódias e cartões (N3 / N3.5). UMA função só, de propósito: a ORDEM dos passos é comportamento.
+//   1. defaults por custódia (faturaAcumulada = 0 se ausente; regra/dias do cartão)
+//   2. listas do N3.5 (faturas, excecoes, compromissos, obrigacoesCartao)
+//   3. fatura sintética a partir de faturaAcumulada legado (lê o cache ANTES de ele ser recalculado)
+//   4. sincronização do cache a partir de faturas[] (dentro de try/catch: falha não aborta a migração)
+// Trocar 3 e 4 zera a dívida legado do cartão sem criar a fatura. Travas: C3, C5b, C7, C8, C9.
+function _migrarCustodiasCartoes() {
     // === NÍVEL 3 — CUSTÓDIAS ===
     if (!Array.isArray(state.orcamento.custodias)) {
         state.orcamento.custodias = [];
@@ -1926,7 +2071,14 @@ function migrarEstado() {
             try { _sincronizarFaturaAcumulada(c.id); } catch (_) {}
         }
     });
+}
 
+// Registros (N3.5 + N3), em duas partes na MESMA função:
+//   1. normaliza campos de cartão (faturaId, compromissoId, numeroParcela, obrigacaoId, origem)
+//   2. migração N3 (tipo padrão gasto_direto, custodiaId/cartaoId nulos, saldoAtualizado false, dataCompra)
+// A parte 1 lê r.tipo ANTES do default da parte 2. Hoje a ordem não é observável (o default 'gasto_direto'
+// também dá origem null), mas fica junta para não criar essa dependência por acidente. Travas: R1 a R7.
+function _migrarRegistros() {
     // Normaliza campos de registros de cartão (N3.5)
     (state.orcamento.historicoRegistros || []).forEach(r => {
         if (r.faturaId === undefined) r.faturaId = null;
@@ -1950,6 +2102,15 @@ function migrarEstado() {
             r.dataCompra = r.data || null;
         }
     });
+}
+
+// Categorias (todas as caixas), em TRÊS passos na mesma função, nesta ordem:
+//   1. caixa padrão (base) e subtipo do Futuro (divida)
+//   2. parcelas e saldoDevedor derivado (depende do subtipo do passo 1; só no Futuro) + campos comuns
+//   3. N2: vencimento, conversão fixo/variavel → conta/consumo (depende do vencimento), custódia padrão, provisão
+// O passo 3 ficava DEPOIS da migração de renda; categorias e rendaDetalhe não se tocam, então mover não muda a
+// saída (travado por golden + K1..K16). Os passos 1→2→3 têm dependência real entre si: não reordenar.
+function _migrarCategorias() {
 	// === FUTURO — categorias (dívida e reserva) ===
 if (!Array.isArray(state.orcamento.categorias)) {
     state.orcamento.categorias = [];
@@ -1992,22 +2153,6 @@ if (c.dataVencimentoReal === undefined) c.dataVencimentoReal = null;
 
 if (c.tipoCredito === undefined) c.tipoCredito = null;
 });
-    // === CICLO 3.9 — MIGRAÇÃO DE BASE ===
-
-    // 1. diaRecebimento em fontes de renda (N2)
-        if (state.orcamento.rendaDetalhe && Array.isArray(state.orcamento.rendaDetalhe.fontes)) {
-        if (typeof state.orcamento.rendaDetalhe.dependentes !== 'number') {
-            state.orcamento.rendaDetalhe.dependentes = 0;
-        }
-        state.orcamento.rendaDetalhe.fontes.forEach(f => {
-            if (f.diaRecebimento === undefined) f.diaRecebimento = null;
-            if (f.natureza === undefined) f.natureza = null;
-        });
-        if (state.orcamento.rendaDetalhe.fontes.length > 0) {
-            state.orcamento.base.rendaBase = state.orcamento.rendaDetalhe.fontes.reduce((s, f) => s + (Number(f.valor) || 0), 0);
-        }
-        sincronizarRendaBase();
-    }
 
     // 2. vencimento em categorias de Vida (N2)
     //    (Base já exige vencimento; Vida historicamente não pedia)
@@ -2026,7 +2171,31 @@ if (c.tipo !== 'conta' && c.tipo !== 'consumo') {
         if (c.valorProvisaoTotal === undefined) c.valorProvisaoTotal = null;
         if (c.periodicidadeProvisao === undefined) c.periodicidadeProvisao = null; // anual|semestral|trimestral|mensal
     });
+}
 
+// Renda (Ciclo 3.9): defaults das fontes e rendaBase = soma das fontes (sobrescreve o valor anterior).
+// FRAGILIDADE conhecida (teste F1): grava orcamento.base.rendaBase sem garantir que base exista;
+// sincronizarRendaBase logo abaixo já tem esse guarda. Correção prevista num segundo passo.
+function _migrarRenda() {
+    // === CICLO 3.9 — MIGRAÇÃO DE BASE ===
+
+    // 1. diaRecebimento em fontes de renda (N2)
+        if (state.orcamento.rendaDetalhe && Array.isArray(state.orcamento.rendaDetalhe.fontes)) {
+        if (typeof state.orcamento.rendaDetalhe.dependentes !== 'number') {
+            state.orcamento.rendaDetalhe.dependentes = 0;
+        }
+        state.orcamento.rendaDetalhe.fontes.forEach(f => {
+            if (f.diaRecebimento === undefined) f.diaRecebimento = null;
+            if (f.natureza === undefined) f.natureza = null;
+        });
+        // rendaBase = soma das fontes (com o guarda de base) fica a cargo de sincronizarRendaBase
+        sincronizarRendaBase();
+    }
+}
+
+// Configurações, graduação, onboarding e apoio (sem ordem interna sensível; onboardingNivel3 lê nivel e custodias,
+// onboardingNivel1 lê historicoRegistros e semanasFechadas — todos já migrados antes desta chamada).
+function _migrarConfiguracoes() {
     // 4. Garante que a estrutura mínima do Ciclo 3.9 exista
     if (state.orcamento.projecao === undefined) {
         state.orcamento.projecao = {
@@ -2086,6 +2255,59 @@ if ('forcarMostrar' in state.orcamento.uiApoio) {
         state.orcamento.cenarioAlisamento.ajustes = [];
     }
     
+}
+
+function migrarEstado() {
+    state.n0 = _garantirStubN0(state.n0);
+    state.n4 = _garantirStubN4(state.n4);
+    if (state.theme !== 'light' && state.theme !== 'dark') {
+        state.theme = 'light';
+    }
+    if (state.fontSize !== 'normal' && state.fontSize !== 'grande' && state.fontSize !== 'maior') { state.fontSize = 'normal'; } try { document.documentElement.setAttribute('data-theme', state.theme || 'light'); const _sizes = { normal: '16px', grande: '18px', maior: '20px' }; document.documentElement.style.fontSize = _sizes[state.fontSize] || '16px'; } catch (_) {} if (!state.orcamento) return;
+    
+    if (typeof state.ocultarValores !== 'boolean') { state.ocultarValores = false; }
+    if (typeof state.orcamento.futuroStreak !== 'number') { state.orcamento.futuroStreak = 0; }
+
+    
+    if (!state.orcamento.configFluxo) {
+    state.orcamento.configFluxo = { protegerSaldo: true };
+}
+
+    if (typeof state.orcamento.nivel !== 'number') {
+        state.orcamento.nivel = 1;
+    }
+
+    if (state.orcamento.rendaDetalhe === undefined) {
+        state.orcamento.rendaDetalhe = null;
+    }
+    if (!Array.isArray(state.orcamento.categorias)) {
+        state.orcamento.categorias = [];
+    }
+    if (state.orcamento.dividaReserva === undefined) {
+        state.orcamento.dividaReserva = null;
+    }
+    if (state.orcamento.transicaoNivelPendente === undefined) {
+        state.orcamento.transicaoNivelPendente = null;
+    }
+    if (state.orcamento.categoriasConcluidas === undefined) {
+        state.orcamento.categoriasConcluidas = false;
+    }
+    if (state.orcamento.dividaConcluida === undefined) {
+        state.orcamento.dividaConcluida = false;
+    }
+    if (typeof state.orcamento.semanasFechadas !== 'number') {
+        state.orcamento.semanasFechadas = (state.orcamento.resumos || []).length;
+    }
+    _migrarSemana();
+    _migrarResumos();
+    _migrarCustodiasCartoes();
+
+    _migrarRegistros();
+    _migrarCategorias();
+
+    _migrarRenda();
+    _migrarConfiguracoes();
+
     if (typeof atualizarTotaisEnvelopes === 'function') {
         atualizarTotaisEnvelopes();
     }
@@ -2195,6 +2417,10 @@ function voltarParaOrcamento() {
 
 
 function iniciarJornada() {
+if (!state.n0 || !state.n0.concluido) {
+        abrirTelaN0();
+        return;
+    }
     if (!state.orcamento) {
         state.orcamento = {
             fase: "inicio",
@@ -5261,6 +5487,7 @@ function renderizarTelaAjustes() {
 
     const chips = `
         <button type="button" class="chip" id="chip-tema" onclick="alternarTemaHome()">${labelTema}</button>
+    <button type="button" class="chip" onclick="abrirTelaN0()">🎯 Prioridades</button>
         <button type="button" class="chip" onclick="abrirConfigCicloSemana()">🗓️ Ciclo da semana</button>
         <button type="button" class="chip" onclick="abrirModalQRCode()">📤 Compartilhar</button>
     `;
@@ -14161,9 +14388,287 @@ const PESOS_IDE_PADRAO = {
     folego: 2, modalidade: 2, orcamentaria: 2
 };
 
-// Ponto único de leitura dos pesos; o N0 passará a personalizá-los aqui.
-function obterPesosIDE() {
-    return PESOS_IDE_PADRAO;
+// === N0 → PESOS DO IDE (v3.2.1) ===
+// Ordem canônica dos 9 indicadores. Toda API pública indexa por ID, nunca por índice.
+const INDICADORES_IDE = [
+    'minimo', 'inadimplencia', 'fluxo',
+    'comprometimento', 'renda_fragil', 'reserva',
+    'folego', 'modalidade', 'orcamentaria'
+];
+
+// Dependência declarativa de cada indicador nos domínios de Q-C.
+const DOMINIOS_POR_INDICADOR = {
+    minimo:          ['renda', 'gastos'],
+    inadimplencia:   ['dividas', 'atraso'],
+    fluxo:           ['renda'],
+    comprometimento: ['renda', 'dividas'],
+    renda_fragil:    ['renda'],
+    reserva:         ['reserva', 'gastos'],
+    folego:          ['renda', 'gastos'],
+    modalidade:      ['dividas'],
+    orcamentaria:    ['renda', 'gastos']
+};
+
+// Domínios em que "não ter" (zero dívidas, zero atrasos, zero reserva) é uma resposta válida:
+// a ausência de registros no state NÃO significa ausência de dado.
+const DOMINIOS_AUSENCIA_VALIDA = ['dividas', 'atraso', 'reserva'];
+
+const DOMINIOS_N0 = ['renda', 'gastos', 'dividas', 'reserva', 'atraso'];
+
+const ORDEM_ESTADOS = {
+    conhecido: 0,
+    incerto: 1,
+    desconhecido_descobrivel: 2,
+    desconhecido_nao_descobrivel: 3
+};
+
+// Q-B "cartão" mapeia para DTI (comprometimento), não multimodalidade.
+const OPCOES_QA_N0 = {
+    basico:     { label: 'Não tenho dinheiro para o básico do mês',     alvos: ['minimo', 'folego'] },
+    atrasadas:  { label: 'Tenho conta atrasada e não sei como sair',    alvos: ['inadimplencia', 'fluxo'] },
+    dividas:    { label: 'As dívidas são grandes demais',               alvos: ['comprometimento', 'modalidade'] },
+    imprevisto: { label: 'Qualquer imprevisto me quebra',               alvos: ['reserva', 'fluxo'] },
+    tudo:       { label: 'Tudo ao mesmo tempo / não sei dizer',         alvos: [] }
+};
+
+const OPCOES_QB_N0 = {
+    familia:    { label: 'Minha família não fica sem o básico', alvo: 'minimo' },
+    nome_limpo: { label: 'Quero limpar meu nome',               alvo: 'inadimplencia' },
+    cartao:     { label: 'Não quero viver de cartão/limite',    alvo: 'comprometimento' },
+    reserva:    { label: 'Preciso guardar um mínimo todo mês',  alvo: 'reserva' },
+    nao_sei:    { label: 'Não consigo dizer agora',             alvo: null }
+};
+
+const OPCOES_PRONTIDAO_N0 = {
+    nao_consigo:  { label: 'Não consigo organizar nada agora', aplicaQA: false, aplicaQB: false },
+    so_entender:  { label: 'Só quero entender',                aplicaQA: true,  aplicaQB: false },
+    alguns_dados: { label: 'Consigo informar alguns dados',    aplicaQA: true,  aplicaQB: true },
+    decidir:      { label: 'Quero decidir agora',              aplicaQA: true,  aplicaQB: true }
+};
+
+const OPCOES_QC_N0 = {
+    conhecido: 'Sei',
+    incerto: 'Aproximado',
+    desconhecido_descobrivel: 'Posso descobrir',
+    desconhecido_nao_descobrivel: 'Não sei'
+};
+
+const PESOS_ALGORITMO_VERSAO = 1;
+
+function _piorEstado(estados) {
+    let pior = 'conhecido';
+    estados.forEach(e => {
+        const ord = ORDEM_ESTADOS[e] != null ? ORDEM_ESTADOS[e] : ORDEM_ESTADOS.conhecido;
+        if (ord > (ORDEM_ESTADOS[pior] || 0)) pior = e;
+    });
+    return pior;
+}
+
+function _estadoIndicador(id, situacao) {
+    const deps = DOMINIOS_POR_INDICADOR[id] || [];
+    const estados = deps.map(d => (situacao && situacao[d]) || 'conhecido');
+    return _piorEstado(estados);
+}
+
+// Reconciliação Q-C × state, por domínio.
+//  - Há dado no state: o state vence (calculável); só 'incerto' declarado mantém o rótulo "estimado".
+//  - Sem dado no state e declarado desconhecido (descobrível ou não): mantém o declarado.
+//  - Sem dado no state e declarado conhecido/incerto: onde "não ter" é resposta válida (dívidas, atrasos,
+//    reserva), vale o declarado; em renda e gastos, vira descobrível (o usuário sabe, ainda não informou).
+//  - Pergunta pulada (null): sem dado, é desconhecido descobrível.
+function _reconciliarEstado(dom, declarado, temDado) {
+    if (temDado) return declarado === 'incerto' ? 'incerto' : 'conhecido';
+    if (declarado === 'desconhecido_nao_descobrivel' || declarado === 'desconhecido_descobrivel') return declarado;
+    if ((declarado === 'conhecido' || declarado === 'incerto') && DOMINIOS_AUSENCIA_VALIDA.indexOf(dom) >= 0) return declarado;
+    return 'desconhecido_descobrivel';
+}
+
+function derivarSituacaoEfetiva(origem, orc) {
+    const qC = (origem && origem.qC) || {};
+    const o = orc || {};
+    const temRenda = !!(o.rendaDetalhe && Array.isArray(o.rendaDetalhe.fontes) && o.rendaDetalhe.fontes.length > 0);
+    const temGastos = Array.isArray(o.categorias) && o.categorias.some(c => c && (c.caixa === 'base' || c.caixa === 'vida'));
+    const temDividas = (Array.isArray(o.categorias) && o.categorias.some(c => c && c.caixa === 'futuro' && c.subtipo === 'divida'))
+        || (Array.isArray(o.compromissos) && o.compromissos.length > 0)
+        || (Array.isArray(o.obrigacoesCartao) && o.obrigacoesCartao.length > 0);
+    const temReserva = Array.isArray(o.custodias) && o.custodias.some(c => c && _custodiaEhReserva(c));
+    let temAtraso = false;
+    try {
+        const diaHoje = new Date().getDate();
+        temAtraso = (Array.isArray(o.categorias) && o.categorias.some(c => {
+            if (!c || !c.vencimento || _categoriaParcelasQuitada(c)) return false;
+            return typeof _vencidaNaoQuitada === 'function' ? _vencidaNaoQuitada(c, o, diaHoje) : false;
+        })) || (typeof _obrigacoesFuturoVencidas === 'function' && _obrigacoesFuturoVencidas(o).length > 0);
+    } catch (_) {}
+
+    return {
+        renda:    _reconciliarEstado('renda', qC.renda,    temRenda),
+        gastos:   _reconciliarEstado('gastos', qC.gastos,   temGastos),
+        dividas:  _reconciliarEstado('dividas', qC.dividas,  temDividas),
+        reserva:  _reconciliarEstado('reserva', qC.reserva,  temReserva),
+        atraso:   _reconciliarEstado('atraso', qC.atraso,   temAtraso)
+    };
+}
+
+/**
+ * Núcleo puro. Recebe `origem` (Q-A/Q-B/Q-C declarados) e `situacao` (já reconciliada com state).
+ * Devolve pesos finais e metadados. Não lê state, não persiste.
+ *
+ * Invariantes:
+ *  - Inv-1: com 9 ativos e sem ajuste, soma = 29.
+ *  - Inv-2: não-priorizado/não-vetado perde no máximo 1 ponto.
+ *  - Inv-3: vetado nunca é reduzido pelo rebalanceamento.
+ */
+function calcularPesosIDE(origem, situacao) {
+    origem = origem || {};
+    situacao = situacao || {};
+    const qA = origem.qA || {};
+    const qB = origem.qB || {};
+
+    // Prio: aceita até N alvos (UI limita a 2; testes usam N=3 em casos sintéticos)
+    const priosBrutos = Array.isArray(qA.alvos) ? qA.alvos : [];
+    const prio = priosBrutos.filter((id, i) => INDICADORES_IDE.indexOf(id) >= 0 && priosBrutos.indexOf(id) === i);
+    const vetoed = qB.alvo && INDICADORES_IDE.indexOf(qB.alvo) >= 0 ? qB.alvo : null;
+
+    // Estado por indicador (pior domínio)
+    const estadoPorIndicador = {};
+    INDICADORES_IDE.forEach(id => {
+        estadoPorIndicador[id] = _estadoIndicador(id, situacao);
+    });
+
+    // Zeroed: desconhecido_* (peso 0). incerto mantém peso.
+    const zeroedSet = new Set();
+    INDICADORES_IDE.forEach(id => {
+        const e = estadoPorIndicador[id];
+        if (e === 'desconhecido_descobrivel' || e === 'desconhecido_nao_descobrivel') {
+            zeroedSet.add(id);
+        }
+    });
+
+    // Pending: vetado + dado ausente → peso preservado, fora de somaAtiva
+    const pendingSet = new Set();
+    if (vetoed && zeroedSet.has(vetoed)) {
+        pendingSet.add(vetoed);
+    }
+
+    // Monta final a partir de base
+    const final = {};
+    INDICADORES_IDE.forEach(id => { final[id] = PESOS_IDE_PADRAO[id]; });
+
+    zeroedSet.forEach(id => {
+        if (!pendingSet.has(id)) final[id] = 0;
+    });
+
+    prio.forEach(id => {
+        if (!zeroedSet.has(id)) final[id] += 1;
+    });
+
+    if (vetoed && !zeroedSet.has(vetoed) && prio.indexOf(vetoed) < 0) {
+        final[vetoed] += 1;
+    }
+
+    const effective = INDICADORES_IDE.filter(id => final[id] > 0 && !pendingSet.has(id));
+    const target = effective.reduce((s, id) => s + PESOS_IDE_PADRAO[id], 0);
+    const somaAtual = effective.reduce((s, id) => s + final[id], 0);
+    let excess = somaAtual - target;
+    let rebalanceIncompleto = false;
+
+    while (excess > 0) {
+        const cands = effective.filter(id =>
+            prio.indexOf(id) < 0
+            && id !== vetoed
+            && final[id] > PESOS_IDE_PADRAO[id] - 1
+        );
+        if (cands.length === 0) { rebalanceIncompleto = true; break; }
+        cands.sort((a, b) => {
+            if (final[b] !== final[a]) return final[b] - final[a];
+            if (PESOS_IDE_PADRAO[b] !== PESOS_IDE_PADRAO[a]) return PESOS_IDE_PADRAO[b] - PESOS_IDE_PADRAO[a];
+            return INDICADORES_IDE.indexOf(a) - INDICADORES_IDE.indexOf(b);
+        });
+        final[cands[0]] -= 1;
+        excess -= 1;
+    }
+
+    const somaAtiva = effective.reduce((s, id) => s + final[id], 0);
+    const ideCalculavel = effective.length >= 4;
+    const overrideAvaliavel = effective.indexOf('minimo') >= 0
+        && (effective.indexOf('inadimplencia') >= 0 || effective.indexOf('fluxo') >= 0);
+
+    const reinvitePendente = [];
+    const reinviteNaoDescobrivel = [];
+    INDICADORES_IDE.forEach(id => {
+        const e = estadoPorIndicador[id];
+        if (e === 'desconhecido_descobrivel') reinvitePendente.push(id);
+        else if (e === 'desconhecido_nao_descobrivel') reinviteNaoDescobrivel.push(id);
+    });
+
+    return {
+        base: INDICADORES_IDE.map(id => PESOS_IDE_PADRAO[id]),
+        final: INDICADORES_IDE.map(id => final[id]),
+        finalById: final,
+        pesosMotor: (function () { const m = Object.assign({}, final); pendingSet.forEach(id => { m[id] = 0; }); return m; })(),
+        target,
+        somaAtiva,
+        effective,
+        pending: Array.from(pendingSet),
+        zeroed: Array.from(zeroedSet),
+        prio,
+        vetoed,
+        ideCalculavel,
+        overrideAvaliavel,
+        reinvite: { pendente: reinvitePendente, naoDescobrivel: reinviteNaoDescobrivel },
+        rebalanceIncompleto,
+        estadoPorIndicador
+    };
+}
+
+// Re-deriva state.n0.pesos quando a versão do algoritmo mudou. No-op se `pesos` não existe:
+// só _n0Concluir cria `pesos` (sem N0 concluído o motor usa PESOS_IDE_PADRAO). `origem` é a fonte da verdade.
+function garantirPesosConsistentes(st) {
+    if (!st || !st.n0 || !st.n0.pesos || !st.n0.pesos.origem) return false;
+    const p = st.n0.pesos;
+    if (p.versao >= PESOS_ALGORITMO_VERSAO) return false;
+    const situacao = derivarSituacaoEfetiva(p.origem, st.orcamento);
+    const calc = calcularPesosIDE(p.origem, situacao);
+    st.n0.pesos = {
+        versao: PESOS_ALGORITMO_VERSAO,
+        origem: p.origem,
+        situacao,
+        base: calc.base,
+        final: calc.final,
+        somaAtiva: calc.somaAtiva,
+        effective: calc.effective,
+        pending: calc.pending,
+        zeroed: calc.zeroed,
+        ideCalculavel: calc.ideCalculavel,
+        overrideAvaliavel: calc.overrideAvaliavel,
+        reinvite: calc.reinvite,
+        rebalanceIncompleto: calc.rebalanceIncompleto
+    };
+    return true;
+}
+
+function _origemVaziaN0() {
+    return {
+        qA: { alvos: [], opcao: null },
+        qB: { alvo: null, opcao: null },
+        qC: { renda: null, gastos: null, dividas: null, reserva: null, atraso: null }
+    };
+}
+
+// Análise completa dos pesos (null sem N0 concluído). A situação é derivada do state a cada chamada.
+function obterAnalisePesosIDE(orc) {
+    orc = orc || (state && state.orcamento);
+    if (!state || !state.n0 || !state.n0.concluido || !state.n0.pesos || !state.n0.pesos.origem) return null;
+    const situacao = derivarSituacaoEfetiva(state.n0.pesos.origem, orc);
+    return calcularPesosIDE(state.n0.pesos.origem, situacao);
+}
+
+// Ponto único de leitura dos pesos usados pelo motor. Indicador sem dado tem peso 0; o pendente
+// (veto + sem dado) também fica fora da soma, para não entrar no IDE sem dado real.
+function obterPesosIDE(orc) {
+    const analise = obterAnalisePesosIDE(orc);
+    return analise ? analise.pesosMotor : PESOS_IDE_PADRAO;
 }
 
 function avaliarSistemaMulticriterio(orc) {
@@ -14229,10 +14734,17 @@ function avaliarSistemaMulticriterio(orc) {
     let somaPesos = 0;
     let somaPonderada = 0;
     
-    const pesosIDE = obterPesosIDE();
+    const pesosIDE = obterPesosIDE(orc);
+    const analisePesos = typeof obterAnalisePesosIDE === 'function' ? obterAnalisePesosIDE(orc) : null;
     lista.forEach(ind => {
         const pesoCfg = Number(pesosIDE[ind.id]);
         ind.peso = Number.isFinite(pesoCfg) && pesoCfg >= 0 ? pesoCfg : 0;
+        // metadados para a tela: ativo (entra no IDE), estado do dado, pendente (veto sem dado), inegociável
+        ind.ativo = ind.peso > 0;
+        ind.estadoDado = analisePesos ? analisePesos.estadoPorIndicador[ind.id] : 'conhecido';
+        ind.pendente = !!analisePesos && analisePesos.pending.indexOf(ind.id) >= 0;
+        ind.inegociavel = !!analisePesos && analisePesos.vetoed === ind.id;
+        ind.prioritario = !!analisePesos && analisePesos.prio.indexOf(ind.id) >= 0;
         ind.scorePonderado = ind.score * ind.peso;
         somaPesos += ind.peso;
         somaPonderada += ind.scorePonderado;
@@ -14245,18 +14757,23 @@ function avaliarSistemaMulticriterio(orc) {
         else ind.valorFmt = ind.valor.toFixed(0) + '%';
     });
 
-    const ide = somaPesos > 0 ? Math.round((somaPonderada / somaPesos) * 1000) / 10 : 0;
+    // Com N0 concluído, o IDE só existe com pelo menos 4 indicadores ativos (piso do diagnóstico).
+    const ideCalculavel = analisePesos ? analisePesos.ideCalculavel : true;
+    const ide = !ideCalculavel ? null : (somaPesos > 0 ? Math.round((somaPonderada / somaPesos) * 1000) / 10 : 0);
     
     // 5. Definição do Degrau
     let degrau = 0, cor = 'var(--success)', bg = 'var(--success-soft)', icone = '✨', nome = 'Em Equilíbrio', msg = 'Seu mês está saudável. Continue monitorando para manter a base firme.';
     
-    if (ide >= 75) { degrau = 4; cor = 'var(--danger)'; bg = 'var(--danger-soft)'; icone = '🚨'; nome = 'Superendividamento'; msg = 'Suas contas estão no limite. O Mochila tem ferramentas para te ajudar a renegociar com segurança.'; }
+    if (ide === null) { /* diagnóstico incompleto: sem degrau */ }
+    else if (ide >= 75) { degrau = 4; cor = 'var(--danger)'; bg = 'var(--danger-soft)'; icone = '🚨'; nome = 'Superendividamento'; msg = 'Suas contas estão no limite. O Mochila tem ferramentas para te ajudar a renegociar com segurança.'; }
     else if (ide >= 50) { degrau = 3; cor = 'var(--warning)'; bg = 'var(--warning-soft)'; icone = '⚠️'; nome = 'Risco de Endividamento'; msg = 'Você apresenta múltiplos sinais de alerta. Vamos ajustar o plano antes que aperte mais.'; }
     else if (ide >= 30) { degrau = 2; cor = 'var(--warning)'; bg = 'var(--warning-soft)'; icone = '🟡'; nome = 'Aperto no horizonte'; msg = 'O seu Mínimo Existencial está comprometido ou o caixa está negativo. O jeito é organizar as prioridades.'; }
     else if (ide >= 10) { degrau = 1; cor = 'var(--primary)'; bg = 'var(--purple-light)'; icone = '👀'; nome = 'Atenção'; msg = 'Suas contas estão em dia, mas a estrutura ainda é frágil e pede cuidado.'; }
 
     // Regra de Ouro: Se o mínimo for crítico (score 1.0) e houver agravante, joga pro 4
-    if (scMin >= 0.99 && (scInad >= 0.99 || scFluxo > 0)) {
+    // A regra só é afirmada com os dados que a sustentam (Mínimo Existencial e Atrasos ou Fluxo com dado).
+    const overrideAvaliavel = analisePesos ? analisePesos.overrideAvaliavel : true;
+    if (ideCalculavel && overrideAvaliavel && scMin >= 0.99 && (scInad >= 0.99 || scFluxo > 0)) {
         degrau = 4; cor = 'var(--danger)'; bg = 'var(--danger-soft)'; icone = '🚨'; nome = 'Superendividamento'; 
         msg = 'Seu Mínimo Existencial está zerado e você tem atrasos ou aperto imediato. Vamos focar na sobrevivência.';
     }
@@ -14264,12 +14781,20 @@ function avaliarSistemaMulticriterio(orc) {
     // Ordena os indicadores pelos mais críticos (maior Score Ponderado)
     const indicadoresOrdenados = [...lista].sort((a, b) => b.scorePonderado - a.scorePonderado);
 
+    if (!ideCalculavel) {
+        degrau = null; cor = 'var(--secondary)'; bg = 'var(--bg-color)'; icone = '🧩'; nome = 'Diagnóstico incompleto';
+        msg = 'Ainda faltam informações para calcular o seu índice sem chutar. Informe os dados abaixo para ativar o diagnóstico completo.';
+    }
+
     return {
         ide,
+        ideCalculavel,
+        overrideAvaliavel,
         degrau,
         classe: { degrau, nome, cor, bg, icone, msg },
         indicadores: indicadoresOrdenados,
-        todos: lista
+        todos: lista,
+        pesosInfo: analisePesos
     };
 }
 
@@ -14329,6 +14854,56 @@ function contarModalidadesCredito(orc) {
     return modalidades.size;
 }
 
+// Quatro cards do grid, SEMPRE quatro (há 9 indicadores): primeiro os ativos de maior score ponderado
+// (já ordenados pelo motor); se houver menos de 4 ativos, o resto é preenchido com o indicador mais
+// útil para o usuário ativar: o inegociável sem dado, depois os descobríveis (maior peso base primeiro),
+// depois os que estão fora do cálculo. Sem N0, todos estão ativos e vale só o top 4 do motor.
+function _selecionarIndicadoresGrid(indicadores) {
+    const lista = indicadores || [];
+    const ativos = lista.filter(i => i.ativo !== false && !i.pendente);
+    if (ativos.length >= 4) return ativos.slice(0, 4);
+    const inativos = lista.filter(i => !(i.ativo !== false && !i.pendente));
+    const rank = i => i.pendente ? 0 : (i.estadoDado === 'desconhecido_descobrivel' ? 1 : 2);
+    const base = id => (PESOS_IDE_PADRAO[id] || 0);
+    inativos.sort((a, b) => (rank(a) - rank(b)) || (base(b.id) - base(a.id)) || (lista.indexOf(a) - lista.indexOf(b)));
+    return ativos.concat(inativos).slice(0, 4);
+}
+
+// Texto do modal de classificação: o IDE é uma DISTÂNCIA, então a meta é reduzi-lo abaixo do limite do degrau atual.
+function _textoComoReduzirIDE(ide, degrau) {
+    if (degrau === 0) {
+        return 'Seu IDE está abaixo de 10 — você está na faixa mais próxima do equilíbrio. Continue mantendo o ritmo, registrando os gastos e construindo sua reserva.';
+    }
+    const nomesDegrau = { 0: 'Em Equilíbrio', 1: 'Atenção', 2: 'Aperto no horizonte', 3: 'Risco de Endividamento' };
+    const limitePorDegrau = { 1: 10, 2: 30, 3: 50, 4: 75 };
+    const limite = limitePorDegrau[degrau];
+    const proximoNome = nomesDegrau[degrau - 1] || 'Em Equilíbrio';
+    if (ide < limite) {
+        // Degrau 4 acionado pela regra de ouro (Mínimo Existencial zerado + atraso/aperto), com IDE calculado menor que a faixa.
+        return `Seu IDE calculado é <strong>${ide}</strong>, mas o Mínimo Existencial está zerado e há atraso ou aperto no caixa. Por isso o foco agora é a sobrevivência: cobrir o básico do mês e tratar os atrasos antes de qualquer outra meta.`;
+    }
+    return `Seu IDE está em <strong>${ide}</strong>. Para chegar a <strong>${proximoNome}</strong>, você precisa <strong>reduzir</strong> o IDE para abaixo de <strong>${limite}</strong>. Cada passo nas metas acima reduz a sua pontuação de risco.`;
+}
+
+// Card de indicador que ainda não entra no IDE (sem dado ou veto pendente): convida a informar o dado.
+function _renderCardAtivacao(ind) {
+    const descobrivel = ind.pendente || ind.estadoDado === 'desconhecido_descobrivel';
+    const chamada = descobrivel ? 'Informe para ativar' : 'Fora do cálculo por enquanto';
+    const badge = ind.inegociavel ? '<div style="font-size:0.65rem; font-weight:700; color:var(--danger); margin-top:4px;">INEGOCIÁVEL</div>' : '';
+    return `
+        <div class="card" style="padding:14px; display:flex; flex-direction:column; justify-content:space-between; border:1px dashed var(--border); cursor:pointer;" onclick="abrirModalIndicador('${ind.id}')">
+            <div>
+                <div style="display:flex; align-items:center; margin-bottom:6px;">
+                    <span style="font-size:1.2rem; margin-right:4px;">${ind.icone}</span>
+                    <span style="font-size:0.75rem; font-weight:700; color:var(--secondary); text-transform:uppercase;">${ind.nome} ⓘ</span>
+                </div>
+                <div style="font-size:0.95rem; font-weight:800; color:var(--secondary);">${chamada}</div>
+                <div style="font-size:0.7rem; color:var(--secondary); margin-top:2px; line-height:1.2;">${descobrivel ? 'Falta o dado para calcular este indicador.' : 'Você marcou que não sabe este dado.'}</div>
+                ${badge}
+            </div>
+        </div>`;
+}
+
 function obterIndicadoresGrid(dadosAvaliacao) {
     const { indicadores, degrau } = dadosAvaliacao;
     
@@ -14348,17 +14923,14 @@ function obterIndicadoresGrid(dadosAvaliacao) {
             }
             const ind = indicadores.find(i => i.id === id);
             if (!ind) return '';
-            return _renderCardIndicador(ind);
+            return (ind.ativo === false || ind.pendente) ? _renderCardAtivacao(ind) : _renderCardIndicador(ind);
         }).join('');
     }
 
-     // Degrau >= 1: garante sempre 4 cards.
-    // Ordem: primeiro os críticos (score > 0, já ordenados por scorePonderado desc),
-    // depois os "em dia" (score === 0) para completar as 4 posições do grid 2x2.
-    const criticos = indicadores.filter(i => i.score > 0);
-    const emDia    = indicadores.filter(i => i.score === 0);
-    const quatro   = [...criticos, ...emDia].slice(0, 4);
-    return quatro.map(ind => _renderCardIndicador(ind)).join('');
+    // Se estiver em qualquer outro degrau, pega os 4 mais críticos
+    return _selecionarIndicadoresGrid(indicadores)
+        .map(ind => (ind.ativo === false || ind.pendente) ? _renderCardAtivacao(ind) : _renderCardIndicador(ind))
+        .join('');
 }
 
 // Helper para montar o card
@@ -14380,8 +14952,17 @@ function _renderCardIndicador(ind) {
                 <div style="font-size:0.7rem; color:var(--secondary); margin-top:2px; line-height:1.2;">
                     ${ind.sub}
                 </div>
+                ${_badgesIndicador(ind)}
             </div>
         </div>`;
+}
+
+function _badgesIndicador(ind) {
+    const b = [];
+    if (ind.inegociavel) b.push('inegociável');
+    else if (ind.prioritario) b.push('prioridade sua');
+    if (ind.estadoDado === 'incerto') b.push('estimado');
+    return b.length ? `<div style="font-size:0.65rem; font-weight:700; color:var(--primary); margin-top:4px; text-transform:uppercase;">${b.join(' · ')}</div>` : '';
 }
 
 function fecharModalIndicador() {
@@ -14446,16 +15027,23 @@ function abrirModalIndicador(tipo) {
             `;
         });
 
-                let textoComoSubir = '';
+        if (dados.ideCalculavel === false) {
+            const faltam = _selecionarIndicadoresGrid(dados.indicadores).filter(i => i.ativo === false || i.pendente);
+            titulo = classe.nome;
+            const itens = faltam.map(i => `<div style="margin-bottom:8px;"><strong>${i.icone} ${i.nome}</strong> — ${(i.pendente || i.estadoDado === 'desconhecido_descobrivel') ? 'informe o dado para ativar' : 'fora do cálculo por enquanto'}</div>`).join('');
+            document.getElementById('modal-indicador-conteudo').innerHTML = `
+                ${cabecalhoTelaSecundaria(titulo, 'Falta pouco para o seu diagnóstico')}
+                <div class="fala-avatar" style="margin-bottom:16px;"><span class="icone">${classe.icone}</span><span class="texto">${classe.msg}</span></div>
+                <div style="font-size:0.9rem; color:var(--text-main); line-height:1.5;">${itens}</div>
+                <button type="button" class="btn-option" style="justify-content:center; border-color:var(--secondary); margin-top:16px;" onclick="fecharModalIndicador()">Voltar</button>`;
+            document.getElementById('modal-indicador').classList.add('ativo');
+            return;
+        }
+        let textoComoSubir = '';
         if (classe.degrau === 0) {
-            textoComoSubir = 'Seu IDE está abaixo de 10 — você está na faixa mais próxima do equilíbrio. Continue mantendo o ritmo, registrando os gastos e construindo sua reserva.';
+            textoComoSubir = 'Você está no nível máximo de saúde financeira. Continue mantendo o ritmo, registrando os gastos e construindo sua reserva.';
         } else {
-            const nomesDegrau = { 0: 'Em Equilíbrio', 1: 'Atenção', 2: 'Aperto no horizonte', 3: 'Risco de Endividamento' };
-            const limitePorDegrau = { 1: 10, 2: 30, 3: 50, 4: 75 };
-            const proximoDegrau = classe.degrau - 1;
-            const proximoNome = nomesDegrau[proximoDegrau] || 'Em Equilíbrio';
-            const limite = limitePorDegrau[classe.degrau];
-            textoComoSubir = `Seu IDE está em <strong>${ide}</strong>. Para chegar a <strong>${proximoNome}</strong>, você precisa <strong>reduzir</strong> o IDE para abaixo de <strong>${limite}</strong>. Cada passo nos gargalos acima aproxima você dessa faixa.`;
+            textoComoSubir = _textoComoReduzirIDE(ide, classe.degrau);
         }
 
         html = `
@@ -14478,7 +15066,7 @@ function abrirModalIndicador(tipo) {
             ${listaGargalos || '<p style="font-size:0.9rem; color:var(--success);">Nenhum gargalo crítico identificado!</p>'}
 
             <div style="background:var(--card-bg); border:1px solid var(--border); padding:16px; border-radius:12px; margin-top:20px;">
-                <h3 style="font-size:1rem; color:var(--primary); margin-bottom:8px;">Como reduzir seu Índice de Distância do Equilíbrio - IDE</h3>
+                <h3 style="font-size:1rem; color:var(--primary); margin-bottom:8px;">Como reduzir seu IDE</h3>
                 <p style="font-size:0.9rem; color:var(--text-main); line-height:1.5;">
                     ${textoComoSubir}
                 </p>
@@ -14799,7 +15387,16 @@ function renderizarDiagnostico() {
 
     // Define a Ação Prioritária com base no pior indicador
     let acaoPrioritaria = '';
-    if (degrau > 0) {
+    if (dadosAvaliacao.ideCalculavel === false) {
+        const proximo = _selecionarIndicadoresGrid(indicadores).find(i => i.ativo === false || i.pendente);
+        acaoPrioritaria = `
+        <div class="card" style="border-left:4px solid var(--primary); margin-bottom:20px; padding:14px 16px; background:var(--card-bg);">
+            <div style="font-weight:700; color:var(--primary); margin-bottom:4px;">🧩 Próximo passo</div>
+            <div style="font-size:0.9rem; color:var(--text-main); line-height:1.45;">
+                ${proximo ? `Informe os dados de <strong>${proximo.nome}</strong> para ativar o seu diagnóstico.` : 'Informe mais dados para ativar o seu diagnóstico.'}
+            </div>
+        </div>`;
+    } else if (degrau > 0) {
         acaoPrioritaria = `
         <div class="card" style="border-left:4px solid ${classe.cor}; margin-bottom:20px; padding:14px 16px; background:var(--card-bg);">
             <div style="font-weight:700; color:${classe.cor}; margin-bottom:4px;">🎯 Ação Prioritária</div>
@@ -14828,7 +15425,7 @@ function renderizarDiagnostico() {
             <h2 style="font-size:1.3rem; font-weight:800; color:${classe.cor}; margin-bottom:8px; line-height:1.2;"> ${classe.nome} <span style="font-size:1rem; opacity:0.7;">ⓘ</span> </h2> 
             <p style="font-size:0.9rem; color:${classe.cor}; opacity:0.9; line-height:1.4; margin:0;"> ${classe.msg} </p> 
             <div style="margin-top:12px; font-size:0.8rem; color:${classe.cor}; background:rgba(255,255,255,0.4); display:inline-block; padding:4px 12px; border-radius:12px; font-weight:bold;">
-                IDE: ${ide} / 100
+                ${ide === null ? 'IDE indisponível' : 'IDE: ' + ide + ' / 100'}
             </div>
         </div>
 
@@ -19005,6 +19602,7 @@ function _criarAjusteSemanaAnterior(origem, operacao, valorNovo) {
         custodiaId: origem.custodiaId || null,
         custodiaDestinoId: origem.custodiaDestinoId || null,
         cartaoId: origem.cartaoId || null,
+        faturaId: origem.faturaId || null, // BUG-8: o delta vai para a MESMA fatura do registro original
         obrigacaoId: origem.obrigacaoId || null,
         saldoAtualizado: origem.saldoAtualizado !== false,
         rotulo: 'Ajuste de semana anterior'
@@ -19014,6 +19612,95 @@ function _criarAjusteSemanaAnterior(origem, operacao, valorNovo) {
     state.orcamento.historicoRegistros.unshift(ajuste);
     _aplicarEfeitosAjusteCorrente(ajuste);
     return ajuste;
+}
+
+// ---------------------------------------------------------------------
+// Pagamento de fatura / de obrigação: apply e undo como funções nomeadas (não entram em EFEITOS_REGISTRO:
+// mexem em fatura/obrigação com clamp e delta efetivo, não só em caixa/custódia).
+// Assimetria preservada de propósito: o undo da fatura exige r.saldoAtualizado verdadeiro; o da obrigação só ignora `=== false`.
+// ---------------------------------------------------------------------
+function _aplicarPagamentoFatura(r) {
+    // Pagamento: só caixa + fatura (nunca envelope)
+    if (r.custodiaId) {
+        const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
+        if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
+            origem.saldoAtual = (origem.saldoAtual || 0) - (r.valor || 0);
+            r.saldoAtualizado = true;
+        }
+    }
+    if (r.cartaoId) {
+        _ajustarFaturaPorDelta(r.cartaoId, r.faturaId || null, 0, Number(r.valor) || 0);
+    }
+}
+
+function _desfazerPagamentoFatura(r) {
+    // Inverso do pagamento: devolve à origem, recoloca na fatura; envelope intacto
+    if (r.custodiaId && r.saldoAtualizado) {
+        const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
+        if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
+            origem.saldoAtual = (origem.saldoAtual || 0) + (r.valor || 0);
+        }
+    }
+    if (r.cartaoId) {
+        _ajustarFaturaPorDelta(r.cartaoId, r.faturaId || null, 0, -(Number(r.valor) || 0));
+    }
+}
+
+function _aplicarPagamentoObrigacao(r) {
+    if (r.custodiaId) {
+        const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
+        if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
+            origem.saldoAtual = (origem.saldoAtual || 0) - (r.valor || 0);
+            r.saldoAtualizado = true;
+        }
+    }
+    if (r.obrigacaoId) {
+        const obr = (state.orcamento.obrigacoesCartao || []).find(o => o.id === r.obrigacaoId);
+        if (obr) {
+            // BUG-2: grava o efeito EFETIVO (depois do clamp em 0) para o undo desfazer exatamente isso
+            const antes = { saldo: Number(obr.saldoAberto) || 0, pago: Number(obr.valorPago) || 0, estado: obr.estado };
+            obr.saldoAberto = Math.max(0, (Number(obr.saldoAberto) || 0) - (Number(r.valor) || 0));
+            obr.valorPago = (Number(obr.valorPago) || 0) + (Number(r.valor) || 0);
+            if (obr.saldoAberto <= 0.005) { obr.saldoAberto = 0; obr.estado = 'quitada'; }
+            r._efeitoObrigacao = {
+                saldoAbatido: antes.saldo - obr.saldoAberto,
+                pagoAdicionado: obr.valorPago - antes.pago,
+                estadoAntes: antes.estado
+            };
+            _sincronizarFaturaAcumulada(obr.cartaoId);
+        }
+    }
+}
+
+function _desfazerPagamentoObrigacao(r) {
+    if (r.custodiaId && r.saldoAtualizado !== false) {
+        const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
+        if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
+            origem.saldoAtual = (origem.saldoAtual || 0) + (Number(r.valor) || 0);
+        }
+    }
+    if (r.obrigacaoId) {
+        const obr = (state.orcamento.obrigacoesCartao || []).find(o => o.id === r.obrigacaoId);
+        if (obr) {
+            const ef = r._efeitoObrigacao;
+            if (ef) {
+                // BUG-2: desfaz exatamente o que o apply fez (já considera o clamp em 0)
+                obr.saldoAberto = (Number(obr.saldoAberto) || 0) + ef.saldoAbatido;
+                obr.valorPago = Math.max(0, (Number(obr.valorPago) || 0) - ef.pagoAdicionado);
+                if (obr.estado === 'quitada' && obr.saldoAberto > 0.005) {
+                    obr.estado = (ef.estadoAntes && ef.estadoAntes !== 'quitada') ? ef.estadoAntes : 'em_aberto';
+                }
+                delete r._efeitoObrigacao;
+            } else {
+                // Registro anterior à correção do BUG-2: mantém o cálculo antigo (pode divergir se houve clamp).
+                console.warn('[desfazer] pagamento_obrigacao sem _efeitoObrigacao (registro antigo); usando cálculo anterior', r.id);
+                obr.saldoAberto = (Number(obr.saldoAberto) || 0) + (Number(r.valor) || 0);
+                obr.valorPago = Math.max(0, (Number(obr.valorPago) || 0) - (Number(r.valor) || 0));
+                if (obr.estado === 'quitada' && obr.saldoAberto > 0.005) obr.estado = 'em_aberto';
+            }
+            _sincronizarFaturaAcumulada(obr.cartaoId);
+        }
+    }
 }
 
 function _desfazerEfeitosRegistro(r) {
@@ -19038,48 +19725,10 @@ function _desfazerEfeitosRegistro(r) {
             }
         }
     } else if (r.tipo === 'pagamento_fatura') {
-        // Inverso do pagamento: devolve à origem, recoloca na fatura; envelope intacto
-        if (r.custodiaId && r.saldoAtualizado) {
-            const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
-            if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
-                origem.saldoAtual = (origem.saldoAtual || 0) + (r.valor || 0);
-            }
-        }
-        if (r.cartaoId) {
-            _ajustarFaturaPorDelta(r.cartaoId, r.faturaId || null, 0, -(Number(r.valor) || 0));
-        }
-
-        } else if (r.tipo === 'pagamento_obrigacao') {
-        if (r.custodiaId && r.saldoAtualizado !== false) {
-            const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
-            if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
-                origem.saldoAtual = (origem.saldoAtual || 0) + (Number(r.valor) || 0);
-            }
-        }
-        if (r.obrigacaoId) {
-            const obr = (state.orcamento.obrigacoesCartao || []).find(o => o.id === r.obrigacaoId);
-            if (obr) {
-                const ef = r._efeitoObrigacao;
-                if (ef) {
-                    // BUG-2: desfaz exatamente o que o apply fez (já considera o clamp em 0)
-                    obr.saldoAberto = (Number(obr.saldoAberto) || 0) + ef.saldoAbatido;
-                    obr.valorPago = Math.max(0, (Number(obr.valorPago) || 0) - ef.pagoAdicionado);
-                    if (obr.estado === 'quitada' && obr.saldoAberto > 0.005) {
-                        obr.estado = (ef.estadoAntes && ef.estadoAntes !== 'quitada') ? ef.estadoAntes : 'em_aberto';
-                    }
-                    delete r._efeitoObrigacao;
-                } else {
-                    // Registro anterior à correção do BUG-2: mantém o cálculo antigo (pode divergir se houve clamp).
-                    console.warn('[desfazer] pagamento_obrigacao sem _efeitoObrigacao (registro antigo); usando cálculo anterior', r.id);
-                    obr.saldoAberto = (Number(obr.saldoAberto) || 0) + (Number(r.valor) || 0);
-                    obr.valorPago = Math.max(0, (Number(obr.valorPago) || 0) - (Number(r.valor) || 0));
-                    if (obr.estado === 'quitada' && obr.saldoAberto > 0.005) obr.estado = 'em_aberto';
-                }
-                _sincronizarFaturaAcumulada(obr.cartaoId);
-            }
-       
-    }
-       } else if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
+        _desfazerPagamentoFatura(r);
+    } else if (r.tipo === 'pagamento_obrigacao') {
+        _desfazerPagamentoObrigacao(r);
+    } else if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
         // Reverter gasto da caixa Futuro
         if (naSemana && semana && semana.futuro) {
             semana.futuro.gasto = Math.max(0, (semana.futuro.gasto || 0) - (r.valor || 0));
@@ -19150,42 +19799,10 @@ function _aplicarEfeitosRegistro(r) {
             if (fat && fat.faturaId) r.faturaId = fat.faturaId; // BUG-7: undo passa a achar a mesma fatura
         }
     } else if (r.tipo === 'pagamento_fatura') {
-        // Pagamento: só caixa + fatura (nunca envelope)
-        if (r.custodiaId) {
-            const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
-            if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
-                origem.saldoAtual = (origem.saldoAtual || 0) - (r.valor || 0);
-                r.saldoAtualizado = true;
-            }
-        }
-        if (r.cartaoId) {
-            _ajustarFaturaPorDelta(r.cartaoId, r.faturaId || null, 0, Number(r.valor) || 0);
-        }
-       } else if (r.tipo === 'pagamento_obrigacao') {
-        if (r.custodiaId) {
-            const origem = (state.orcamento.custodias || []).find(x => x.id === r.custodiaId);
-            if (origem && !(TIPOS_CUSTODIA[origem.tipo] || {}).temFatura) {
-                origem.saldoAtual = (origem.saldoAtual || 0) - (r.valor || 0);
-                r.saldoAtualizado = true;
-            }
-        }
-        if (r.obrigacaoId) {
-            const obr = (state.orcamento.obrigacoesCartao || []).find(o => o.id === r.obrigacaoId);
-            if (obr) {
-                // BUG-2: grava o efeito EFETIVO (depois do clamp em 0) para o undo desfazer exatamente isso
-                const antes = { saldo: Number(obr.saldoAberto) || 0, pago: Number(obr.valorPago) || 0, estado: obr.estado };
-                obr.saldoAberto = Math.max(0, (Number(obr.saldoAberto) || 0) - (Number(r.valor) || 0));
-                obr.valorPago = (Number(obr.valorPago) || 0) + (Number(r.valor) || 0);
-                if (obr.saldoAberto <= 0.005) { obr.saldoAberto = 0; obr.estado = 'quitada'; }
-                r._efeitoObrigacao = {
-                    saldoAbatido: antes.saldo - obr.saldoAberto,
-                    pagoAdicionado: obr.valorPago - antes.pago,
-                    estadoAntes: antes.estado
-                };
-                _sincronizarFaturaAcumulada(obr.cartaoId);
-            }
-        }
-       } else if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
+        _aplicarPagamentoFatura(r);
+    } else if (r.tipo === 'pagamento_obrigacao') {
+        _aplicarPagamentoObrigacao(r);
+    } else if (r.tipo === 'pagamento_divida' || r.tipo === 'aporte_reserva') {
         // Aplicar gasto na caixa Futuro
         if (naSemana && semana && semana.futuro) {
             semana.futuro.gasto = (semana.futuro.gasto || 0) + (r.valor || 0);
