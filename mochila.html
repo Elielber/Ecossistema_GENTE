@@ -1542,6 +1542,39 @@ function abrirTelaN4() {
     goToScreen('screen-n4-estrategias');
 }
 
+// Entrada por problema (v3.6): a pessoa se reconhece numa situação antes das perguntas do N0.
+// Só registra e acolhe; não altera pesos nem o diagnóstico. Pode ser pulada.
+const SITUACOES_ENTRADA_N0 = {
+    dinheiro_acaba:   { label: 'O dinheiro acaba antes do mês',            acolhe: 'Isso é mais comum do que parece, e dá para entender para onde ele vai. Vamos ver isso juntos, no seu ritmo.' },
+    dividas_inicio:   { label: 'Tenho dívidas e não sei por onde começar', acolhe: 'Começar por aqui já é um passo. Você não precisa resolver tudo hoje; primeiro vamos enxergar o quadro.' },
+    conta_com_conta:  { label: 'Estou pagando uma conta com outra',        acolhe: 'Muita gente passa por isso. Vamos olhar o que vence e quando entra dinheiro, sem pressa.' },
+    nao_sei_para_onde:{ label: 'Não sei para onde meu dinheiro está indo', acolhe: 'Dá para descobrir. As próximas perguntas ajudam a ajustar o que vale olhar primeiro.' },
+    medo_fatura:      { label: 'Tenho medo de abrir a fatura do cartão',   acolhe: 'Sem pressa. Você escolhe o que mostrar, e nada aqui julga o que já aconteceu.' },
+    evitar_piorar:    { label: 'Quero evitar que minha situação piore',    acolhe: 'Ótimo ponto de partida. Vamos ver o que merece atenção antes.' },
+    so_entender:      { label: 'Só quero entender melhor minha situação',  acolhe: 'Perfeito. Entender vem antes de decidir.' }
+};
+
+function _n0EscolherSituacao(id) {
+    if (id !== 'pular' && !Object.prototype.hasOwnProperty.call(SITUACOES_ENTRADA_N0, id)) return;
+    state.n0 = _garantirStubN0(state.n0);
+    state.n0.situacaoEntrada = (id === 'pular') ? null : { id: id, em: new Date().toISOString() };
+    try { salvarEstado(); } catch (_) {}
+    _n0Avancar('prontidao');
+}
+
+function _renderN0Situacao(el) {
+    let html = `
+        <div class="home-header" style="margin-bottom:12px;"><div class="home-brand">D+1 <span>Nível 0</span></div></div>
+        <div class="fala-avatar"><span class="icone">🛡️</span><span class="texto">O que está acontecendo com você hoje? Escolha o que mais se parece. Você não precisa saber todas as respostas para começar.</span></div>
+        <div class="card" style="border-left:4px solid var(--primary);">
+    `;
+    Object.keys(SITUACOES_ENTRADA_N0).forEach(id => {
+        html += `<button class="btn-option" onclick="_n0EscolherSituacao('${id}')">${SITUACOES_ENTRADA_N0[id].label}</button>`;
+    });
+    html += `<button class="btn-option" style="justify-content:center;margin-top:8px;" onclick="_n0EscolherSituacao('pular')">Prefiro não dizer agora</button></div>`;
+    el.innerHTML = html;
+}
+
 let _n0Etapa = 'intro';
 let _n0Temp = { qA: null, prontidao: null, qB: null, qC: { renda: null, gastos: null, dividas: null, reserva: null, atraso: null } };
 
@@ -1564,6 +1597,7 @@ function renderizarTelaN0() {
     if (!el) return;
     state.n0 = _garantirStubN0(state.n0);
     if (_n0Etapa === 'intro') return _renderN0Intro(el);
+    if (_n0Etapa === 'situacao') return _renderN0Situacao(el);
     if (_n0Etapa === 'prontidao') return _renderN0Prontidao(el);
     if (_n0Etapa === 'qA') return _renderN0QA(el);
     if (_n0Etapa === 'qB') return _renderN0QB(el);
@@ -1586,15 +1620,22 @@ function _renderN0Intro(el) {
                     ? 'Você já respondeu. Pode revisar as prioridades — o diagnóstico se ajusta.'
                     : 'Três perguntas curtas para ajustar o diagnóstico ao que mais te aperta agora. Nada aqui é definitivo.'}
             </p>
-            <button class="btn-primary" onclick="_n0Avancar('prontidao')">${jaConcluido ? 'Revisar prioridades' : 'Vamos conversar'}</button>
+            <button class="btn-primary" onclick="_n0Avancar('${jaConcluido ? 'prontidao' : 'situacao'}')">${jaConcluido ? 'Revisar prioridades' : 'Vamos conversar'}</button>
             <button class="btn-option" style="justify-content:center;margin-top:8px;" onclick="goToScreen('screen-welcome')">Voltar ao início</button>
         </div>
     `;
 }
 
+function _htmlAcolhimentoSituacaoN0() {
+    const sit = state.n0 && state.n0.situacaoEntrada;
+    const def = sit && Object.prototype.hasOwnProperty.call(SITUACOES_ENTRADA_N0, sit.id) ? SITUACOES_ENTRADA_N0[sit.id] : null;
+    return def ? `<div class="fala-avatar"><span class="icone">🛡️</span><span class="texto">${def.acolhe}</span></div>` : '';
+}
+
 function _renderN0Prontidao(el) {
     let html = `
         <div class="home-header" style="margin-bottom:12px;"><div class="home-brand">D+1 <span>Nível 0</span></div></div>
+        ${_htmlAcolhimentoSituacaoN0()}
         <div class="fala-avatar"><span class="icone">🛡️</span><span class="texto">Como você está agora?</span></div>
         <div class="card" style="border-left:4px solid var(--primary);">
     `;
@@ -13470,6 +13511,25 @@ function detectarSinalRecuperacao(orc) {
     };
 }
 
+/**
+ * Contas ainda em aberto para a lista "Em que ordem pagar".
+ * Boleto: só o que tem valor por pagar até o fim do mês. Demais: as não pagas neste mês.
+ * Categoria com todas as parcelas pagas (quitada) não entra: não há mais o que pagar.
+ */
+function _categoriasParaPriorizacaoRecuperacao(orc) {
+    const infoBoleto = {};
+    return (orc.categorias || []).filter(c => {
+        if (!c.vencimento) return false;
+        if (_categoriaParcelasQuitada(c)) return false;
+        if (_ehContaComVencimento(c)) {
+            const info = _boletoAbertoInfo(orc, c);
+            infoBoleto[c.id] = info;
+            return info.total > 0.05;
+        }
+        return !_contaEstaPagaNoMes(c, orc);
+    }).map(c => infoBoleto[c.id] ? Object.assign({}, c, { _vencida: infoBoleto[c.id].vencido, _emAberto: infoBoleto[c.id].total }) : c);
+}
+
 function abrirPlanoRecuperacao() {
     goToScreen('screen-plano-recuperacao');
     renderizarPlanoRecuperacao();
@@ -13552,16 +13612,7 @@ function renderizarPlanoRecuperacao() {
     // ===== ESTÁGIO 2: PRIORIZAÇÃO =====
     // Lista todas as contas com vencimento (vencidas + futuras) para o usuário ordenar
         // Lista só as contas ainda em aberto (vencidas + futuras), não pagas neste mês
-    const infoBoleto = {};
-    const categoriasComVenc = (orc.categorias || []).filter(c => {
-        if (!c.vencimento) return false;
-        if (_ehContaComVencimento(c)) {
-            const info = _boletoAbertoInfo(orc, c);
-            infoBoleto[c.id] = info;
-            return info.total > 0.05;
-        }
-        return !_contaEstaPagaNoMes(c, orc);
-    }).map(c => infoBoleto[c.id] ? Object.assign({}, c, { _vencida: infoBoleto[c.id].vencido, _emAberto: infoBoleto[c.id].total }) : c);
+    const categoriasComVenc = _categoriasParaPriorizacaoRecuperacao(orc);
     const diaHoje = new Date().getDate();
 
     let htmlPriorizacao = '';
