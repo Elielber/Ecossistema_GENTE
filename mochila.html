@@ -2452,6 +2452,11 @@ if (!state.n0 || !state.n0.concluido) {
 
     verificarFechamentoSemana();
 
+    if (state.orcamento.semanaAtual && !state.orcamento.semanaAtual.fechada && state.orcamento.semanaAtual.aguardandoDecisoes) {
+        abrirDecisoesSemana();
+        return;
+    }
+
     if (state.orcamento.semanaAtual && state.orcamento.semanaAtual.fechada && !state.orcamento.semanaAtual.resumoLido) {
         abrirResumoSemanal();
         return;
@@ -3508,14 +3513,17 @@ function _calcularDiluicaoMensal(orc, opcoes) {
     const tipos = _tiposAbatemDiluido();
     (orc.historicoRegistros || []).forEach(r => {
         if (!r || r.anulado) return;
-        if (tipos.indexOf(r.tipo) < 0) return;
+        const ehResgate = r.tipo === 'resgate_evento';
+        if (!ehResgate && tipos.indexOf(r.tipo) < 0) return;
         if (!_pertenceMesAtual(r.data)) return;
         const cid = r.categoriaId;
         if (!cid || !ids.has(cid)) return;
         const v = Number(r.valor) || 0;
         if (v <= 0) return;
-        porCategoria[cid].realizado += v;
+        // resgate_evento: a reserva pagou parte do gasto, então o orçamento do mês consumiu menos
+        porCategoria[cid].realizado += ehResgate ? -v : v;
     });
+    Object.keys(porCategoria).forEach(id => { porCategoria[id].realizado = Math.max(0, porCategoria[id].realizado); });
 
     const porCaixa = {
         base:  { planejado: 0, realizado: 0, restante: 0 },
@@ -3837,7 +3845,16 @@ function _gastoCategoriaNaSemana(cat, semana) {
             return dela(a);
         })
         .reduce((s, a) => s + (Number(a.delta) || 0), 0);
-    return diretos + ajustes;
+    // Evento coberto pela reserva (resgate_evento): o que a reserva pagou não pesa no orçamento da categoria
+    const cobertoPelaReserva = regs
+        .filter(r => {
+            if (r.tipo !== 'resgate_evento' || r.anulado) return false;
+            const d = _isoLocalDe(r.data);
+            if (!d || d < semana.inicio || d > semana.fim) return false;
+            return dela(r);
+        })
+        .reduce((s, r) => s + (Number(r.valor) || 0), 0);
+    return diretos + ajustes - cobertoPelaReserva;
 }
 
 /** Quanto ainda cabe na categoria (limite da semana + folga herdada − passivo herdado − gasto). */
@@ -6298,6 +6315,463 @@ function _resultadoCaixaNoFechamento(caixaObj, opcoes) {
 }
 
 
+// === ESTOURO DE CATEGORIA — evento ou rotina (v3.4, funções puras; ainda sem wiring) ===
+const ESTOURO_EVENTO_FATOR = 2;    // gasto da semana >= 2x a dotação semanal da categoria
+const ESTOURO_TOLERANCIA = 0.005;  // meio centavo: evita erro de ponto flutuante no limite
+
+function _centavosEstouro(v) { return Math.round((Number(v) || 0) * 100) / 100; }
+
+/**
+ * Gatilho do evento, com DUAS condições ao mesmo tempo:
+ *   1. o gasto da semana na categoria chegou a 2x (ou mais) a dotação semanal; e
+ *   2. o gasto do MÊS na categoria já alcançou a dotação mensal.
+ * A 2ª evita perguntar sobre gasto que se concentra numa semana mas cabe no mês.
+ * Base = gasto contra dotação; saldo acumulado/carregado NÃO entra.
+ * Sem dotação semanal, ou sem dado do mês (opcoes.gastoMes / opcoes.metaMes), não dispara.
+ * Futuro é meta mínima e não estoura (opcoes.caixa === 'futuro').
+ * excesso = quanto o gasto da semana passou da dotação (valor do estouro).
+ */
+function avaliarEstouroCategoria(gastoSem, metaSem, opcoes) {
+    opcoes = opcoes || {};
+    const gasto = Number(gastoSem) || 0;
+    const meta = Number(metaSem) || 0;
+    const futuro = opcoes.caixa === 'futuro';
+    const temMes = isFinite(Number(opcoes.gastoMes)) && isFinite(Number(opcoes.metaMes)) && Number(opcoes.metaMes) > 0;
+    const semanaDobrou = meta > 0 && (gasto + ESTOURO_TOLERANCIA) >= ESTOURO_EVENTO_FATOR * meta;
+    const mesEstourou = temMes && (Number(opcoes.gastoMes) + ESTOURO_TOLERANCIA) >= Number(opcoes.metaMes);
+    return {
+        dispara: !futuro && semanaDobrou && mesEstourou,
+        semanaDobrou: semanaDobrou,
+        mesEstourou: mesEstourou,
+        fator: meta > 0 ? gasto / meta : null,
+        excesso: Math.max(0, _centavosEstouro(gasto - meta))
+    };
+}
+
+/**
+ * Gasto e dotação do MÊS de uma categoria, da mesma fonte da projeção (diluição mensal).
+ * Categoria fora da diluição (conta com vencimento, quitada) devolve null: não dispara.
+ */
+function obterDadosMesCategoria(orc, categoriaId) {
+    const d = _calcularDiluicaoMensal(orc);
+    const row = d.porCategoria[categoriaId];
+    return row ? { gastoMes: row.realizado, metaMes: row.planejado } : null;
+}
+
+// Estouro crônico: a categoria passou do limite da semana em 3 ou mais das últimas 4 semanas fechadas.
+const ESTOURO_CRONICO_JANELA = 4;
+const ESTOURO_CRONICO_MINIMO = 3;
+
+/**
+ * Lê só os resumos já gravados (resumos[i].carregoCategorias, mais recente primeiro).
+ * "Passou do limite" = gastoSem − metaSem >= 0,50. Futuro e boleto reservado ficam de fora.
+ * Categoria ausente num resumo conta como "não passou" nessa semana.
+ */
+function detectarEstouroCronico(resumos) {
+    const lista = (resumos || []).slice(0, ESTOURO_CRONICO_JANELA);
+    const acc = {};
+    lista.forEach(rs => {
+        const mapa = (rs && rs.carregoCategorias) || {};
+        Object.keys(mapa).forEach(id => {
+            const c = mapa[id];
+            if (!c || c.caixa === 'futuro' || c.reservada) return;
+            const meta = Number(c.metaSem) || 0;
+            if (meta <= 0) return;
+            const exc = (Number(c.gastoSem) || 0) - meta;
+            if (!acc[id]) acc[id] = { categoriaId: id, nome: c.nome || '', caixa: c.caixa || null, semanasAcima: 0, somaExcesso: 0 };
+            if (exc >= 0.5) { acc[id].semanasAcima++; acc[id].somaExcesso += exc; }
+        });
+    });
+    return Object.keys(acc).map(id => acc[id])
+        .filter(x => x.semanasAcima >= ESTOURO_CRONICO_MINIMO)
+        .map(x => ({
+            categoriaId: x.categoriaId, nome: x.nome, caixa: x.caixa,
+            semanasAcima: x.semanasAcima, janela: lista.length,
+            excessoMedio: _centavosEstouro(x.somaExcesso / x.semanasAcima)
+        }))
+        .sort((a, b) => (b.semanasAcima - a.semanasAcima) || (b.excessoMedio - a.excessoMedio));
+}
+
+// === Resposta ao estouro (por categoria e semana) ===
+// semana.estouroRespostas = { [categoriaId]: { tipo: 'evento' | 'rotina' | 'pendente', registroId, resgate } }
+// 'pendente' = o usuário escolheu decidir no resumo da semana; a semana só fecha depois de decidir.
+function obterRespostaEstouro(semana, categoriaId) {
+    const m = semana && semana.estouroRespostas;
+    return (m && categoriaId && m[categoriaId]) || null;
+}
+
+function registrarRespostaEstouro(semana, categoriaId, tipo, registroId) {
+    if (!semana || !categoriaId || (tipo !== 'evento' && tipo !== 'rotina' && tipo !== 'pendente')) return null;
+    if (!semana.estouroRespostas) semana.estouroRespostas = {};
+    semana.estouroRespostas[categoriaId] = { tipo: tipo, registroId: registroId || null, resgate: 0 };
+    return semana.estouroRespostas[categoriaId];
+}
+
+/**
+ * Depois de salvar um gasto: a pergunta evento ou rotina deve aparecer?
+ * Só gasto (direto ou cartão) com categoria, na semana aberta e atual, fora do Futuro,
+ * uma vez por categoria e semana (resposta anterior silencia), com dado do mês disponível.
+ */
+function avaliarGatilhoRegistro(reg) {
+    const nao = { dispara: false };
+    const orc = state.orcamento;
+    if (!reg || reg.anulado || !orc) return nao;
+    if (reg.tipo !== 'gasto_direto' && reg.tipo !== 'gasto_cartao') return nao;
+    if (!reg.categoriaId) return nao;
+    const semana = orc.semanaAtual;
+    if (!semana || semana.fechada || !_pertenceSemanaAtual(reg.data)) return nao;
+    const cat = (orc.categorias || []).find(c => c.id === reg.categoriaId);
+    if (!cat || cat.caixa === 'futuro') return nao;
+    if (obterRespostaEstouro(semana, cat.id)) return nao;
+    const dados = obterDadosMesCategoria(orc, cat.id);
+    if (!dados) return nao;
+    const gastoSem = _gastoCategoriaNaSemana(cat, semana);
+    const metaSem = calcularLimiteCategoriaSemana(cat, semana);
+    const ava = avaliarEstouroCategoria(gastoSem, metaSem, { caixa: cat.caixa, gastoMes: dados.gastoMes, metaMes: dados.metaMes });
+    return Object.assign({}, ava, {
+        categoriaId: cat.id, nome: cat.nome || '', caixa: cat.caixa,
+        gastoSem: gastoSem, metaSem: metaSem, gastoMes: dados.gastoMes, metaMes: dados.metaMes
+    });
+}
+
+/** Conta que recebe o dinheiro da reserva: a do gasto, senão a padrão, senão a 1ª operacional com saldo. */
+function escolherDestinoResgate(orc, reg) {
+    const serve = id => {
+        const c = id ? ((orc.custodias || []).find(x => x.id === id)) : null;
+        return (c && !_custodiaEhReserva(c) && !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) ? c : null;
+    };
+    return serve(reg && reg.custodiaId) || serve(orc.custodiaPadrao) ||
+        _custodiasOperacionais(orc).find(c => !(TIPOS_CUSTODIA[c.tipo] || {}).temFatura) || null;
+}
+
+/** Aplica o resgate (um registro por reserva usada). Devolve os registros criados. */
+function aplicarResgateEvento(reg, plano) {
+    const orc = state.orcamento;
+    const destino = escolherDestinoResgate(orc, reg);
+    if (!destino || !plano || !(plano.total > 0)) return [];
+    const cat = (orc.categorias || []).find(c => c.id === reg.categoriaId);
+    if (!orc.historicoRegistros) orc.historicoRegistros = [];
+    const criados = [];
+    plano.origens.forEach((o, i) => {
+        const r = montarRegistroResgateReserva({
+            id: 'reg_resg_' + Date.now() + '_' + i, data: reg.data, valor: o.valor,
+            custodiaOrigemId: o.custodiaId, custodiaDestinoId: destino.id,
+            categoriaId: reg.categoriaId, categoriaNome: cat ? cat.nome : (reg.categoria || null),
+            caixa: cat ? cat.caixa : reg.caixa, registroId: reg.id
+        });
+        orc.historicoRegistros.push(r);
+        _aplicarEfeitosRegistro(r);
+        criados.push(r);
+    });
+    const resp = obterRespostaEstouro(orc.semanaAtual, reg.categoriaId);
+    if (resp) resp.resgate = _centavosEstouro(criados.reduce((t, r) => t + r.valor, 0));
+    return criados;
+}
+
+/** Excluir o gasto que disparou a pergunta: desfaz os resgates ligados a ele e a resposta (antes de desfazer o gasto). */
+function desfazerRespostaEstouroDoRegistro(r) {
+    const orc = state.orcamento;
+    if (!r || !orc) return false;
+    const lista = orc.historicoRegistros || [];
+    let mexeu = false;
+    for (let i = lista.length - 1; i >= 0; i--) {
+        const x = lista[i];
+        if (x && x.tipo === 'resgate_evento' && x.resgateEvento && x.resgateEvento.registroId === r.id) {
+            _desfazerEfeitosRegistro(x);
+            lista.splice(i, 1);
+            mexeu = true;
+        }
+    }
+    const semana = orc.semanaAtual;
+    const resp = obterRespostaEstouro(semana, r.categoriaId);
+    if (resp && resp.registroId === r.id) {
+        delete semana.estouroRespostas[r.categoriaId];
+        if (Object.keys(semana.estouroRespostas).length === 0) delete semana.estouroRespostas;
+        mexeu = true;
+    }
+    return mexeu;
+}
+
+// --- UI: pergunta no fim do registro ---
+let _estouroPergunta = null; // { registroId, categoriaId, ava, plano }
+const _BTN_PRONTO_REGISTRO = '<button class="btn-primary" onclick="fecharModalRegistro()">Pronto</button>';
+
+function _fimRegistroComEstouro(reg) {
+    let ava;
+    try { ava = avaliarGatilhoRegistro(reg); } catch (e) { console.warn('[estouro] gatilho falhou', e); return false; }
+    if (!ava || !ava.dispara) return false;
+    _estouroPergunta = { registroId: reg.id, categoriaId: ava.categoriaId, ava: ava, plano: null };
+    const fmt = formatarMoeda;
+    dialogoPushPersonagem('torres',
+        `Em <strong>${ava.nome}</strong> você já gastou ${fmt(ava.gastoSem)} nesta semana, e o mês passou do combinado. ` +
+        `Isso foi algo fora do comum, ou faz parte da sua rotina?`);
+    _pintarModalRegistroDialogo(
+        `<button class="btn-option" style="justify-content:center;" onclick="responderEstouro('evento')">Foi um evento</button>` +
+        `<button class="btn-option" style="justify-content:center;" onclick="responderEstouro('rotina')">Faz parte da rotina</button>` +
+        `<button class="btn-option" style="justify-content:center;" onclick="responderEstouro('pendente')">Decidir no resumo da semana</button>`,
+        'Evento ou rotina?'
+    );
+    return true;
+}
+
+function _estouroFecharConversa(texto) {
+    dialogoPushPersonagem('torres', texto);
+    _pintarModalRegistroDialogo(_BTN_PRONTO_REGISTRO, 'Registro salvo');
+    _estouroPergunta = null;
+}
+
+function responderEstouro(tipo) {
+    const q = _estouroPergunta;
+    const orc = state.orcamento;
+    const reg = q && (orc.historicoRegistros || []).find(r => r.id === q.registroId);
+    if (!q || !reg || !orc.semanaAtual || orc.semanaAtual.fechada) { _estouroPergunta = null; fecharModalRegistro(); return; }
+    registrarRespostaEstouro(orc.semanaAtual, q.categoriaId, tipo, reg.id);
+    reg.marcaEstouro = tipo;
+    salvarEstado();
+    dialogoPushUsuario(tipo === 'evento' ? 'Foi um evento' : (tipo === 'pendente' ? 'Decidir no resumo da semana' : 'Faz parte da rotina'));
+    if (tipo === 'pendente') {
+        _estouroFecharConversa('Combinado. Antes de fechar a semana eu te pergunto de novo.');
+        return;
+    }
+    if (tipo === 'rotina') {
+        _estouroFecharConversa('Anotado como rotina. O que passou do combinado segue para as próximas semanas, como sempre.');
+        return;
+    }
+    const fmt = formatarMoeda;
+    const plano = planejarResgateReserva(orc, q.ava.excesso);
+    q.plano = plano;
+    if (plano.total > 0 && escolherDestinoResgate(orc, reg)) {
+        const resto = plano.restante > 0 ? ` Isso cobre uma parte; o restante (${fmt(plano.restante)}) segue para as próximas semanas.` : '';
+        dialogoPushPersonagem('torres',
+            `Você tem ${fmt(plano.reservaDisponivel)} na reserva. Quer usar ${fmt(plano.total)} dela para cobrir esse evento?${resto}`);
+        _pintarModalRegistroDialogo(
+            `<button class="btn-option" style="justify-content:center;" onclick="estouroUsarReserva(true)">Usar a reserva</button>` +
+            `<button class="btn-option" style="justify-content:center;" onclick="estouroUsarReserva(false)">Não usar agora</button>`,
+            'Usar a reserva?'
+        );
+        return;
+    }
+    _estouroFecharConversa(
+        'Não há reserva para cobrir agora. O que passou do combinado segue para as próximas semanas, e tudo bem. ' +
+        'Se o dinheiro da conta acabar, o jeito mais caro de cobrir é o cheque especial; vale olhar a conta antes.');
+}
+
+function estouroUsarReserva(usar) {
+    const q = _estouroPergunta;
+    const orc = state.orcamento;
+    const reg = q && (orc.historicoRegistros || []).find(r => r.id === q.registroId);
+    if (!q || !q.plano || !reg || !orc.semanaAtual || orc.semanaAtual.fechada) { _estouroPergunta = null; fecharModalRegistro(); return; }
+    const fmt = formatarMoeda;
+    if (!usar) {
+        dialogoPushUsuario('Não usar agora');
+        _estouroFecharConversa('Tudo bem. O que passou do combinado segue para as próximas semanas.');
+        return;
+    }
+    dialogoPushUsuario('Usar a reserva');
+    const criados = aplicarResgateEvento(reg, q.plano);
+    salvarEstado();
+    renderizarOrcamentoInicio();
+    const total = _centavosEstouro(criados.reduce((t, r) => t + r.valor, 0));
+    const restante = _centavosEstouro(q.plano.alvo - total);
+    let msg = `Pronto: ${fmt(total)} saíram da reserva e cobriram esse evento.`;
+    if (restante > 0) {
+        msg += ` O restante (${fmt(restante)}) segue para as próximas semanas. ` +
+               `Se o dinheiro da conta acabar, o jeito mais caro de cobrir é o cheque especial; vale olhar a conta antes.`;
+    }
+    _estouroFecharConversa(msg);
+}
+
+// --- Decidir no resumo da semana ---
+function listarEstourosPendentes(semana) {
+    const m = (semana && semana.estouroRespostas) || {};
+    return Object.keys(m).filter(id => m[id] && m[id].tipo === 'pendente')
+        .map(id => ({ categoriaId: id, registroId: m[id].registroId || null }));
+}
+
+/**
+ * Resolve uma pendência. Devolve { ok, plano, reg } ; plano só para 'evento' com excesso atual > 0.
+ * Recalcula o excesso agora (o gasto pode ter mudado desde a pergunta).
+ */
+function resolverEstouroPendente(categoriaId, tipo) {
+    const orc = state.orcamento;
+    const semana = orc && orc.semanaAtual;
+    const resp = obterRespostaEstouro(semana, categoriaId);
+    if (!resp || resp.tipo !== 'pendente' || (tipo !== 'evento' && tipo !== 'rotina')) return { ok: false };
+    const reg = (orc.historicoRegistros || []).find(r => r.id === resp.registroId) || null;
+    resp.tipo = tipo;
+    if (reg) reg.marcaEstouro = tipo;
+    let plano = null;
+    if (tipo === 'evento' && reg) {
+        const cat = (orc.categorias || []).find(c => c.id === categoriaId);
+        if (cat) {
+            const exc = _gastoCategoriaNaSemana(cat, semana) - calcularLimiteCategoriaSemana(cat, semana);
+            if (exc > ESTOURO_TOLERANCIA) plano = planejarResgateReserva(orc, exc);
+        }
+    }
+    return { ok: true, plano: plano, reg: reg };
+}
+
+let _decisaoPendente = null; // { categoriaId, plano, reg }
+
+function _htmlDecisoesSemana() {
+    const orc = state.orcamento, semana = orc.semanaAtual, fmt = formatarMoeda;
+    const pend = listarEstourosPendentes(semana);
+    const cards = pend.map(p => {
+        const cat = (orc.categorias || []).find(c => c.id === p.categoriaId);
+        const nome = cat ? cat.nome : 'Categoria';
+        const gasto = cat ? _gastoCategoriaNaSemana(cat, semana) : 0;
+        return `<div class="card" style="margin-bottom:12px;">
+            <p style="margin:0 0 8px;"><strong>${nome}</strong>: você gastou ${fmt(gasto)} nesta semana. Foi algo fora do comum, ou faz parte da sua rotina?</p>
+            <button class="btn-option" style="justify-content:center;" onclick="decidirPendenteSemana('${p.categoriaId}','evento')">Foi um evento</button>
+            <button class="btn-option" style="justify-content:center;" onclick="decidirPendenteSemana('${p.categoriaId}','rotina')">Faz parte da rotina</button>
+        </div>`;
+    }).join('');
+    return cards;
+}
+
+function abrirDecisoesSemana() {
+    goToScreen('screen-resumo-semanal');
+    const container = document.getElementById('resumo-semanal-conteudo');
+    const pend = listarEstourosPendentes(state.orcamento.semanaAtual);
+    const perguntaReserva = !!(_decisaoPendente && _decisaoPendente.plano && _decisaoPendente.plano.total > 0);
+    if (pend.length === 0 && !perguntaReserva) { concluirDecisoesSemana(); return; }
+    let corpo;
+    if (perguntaReserva) {
+        const pl = _decisaoPendente.plano, fmt = formatarMoeda;
+        const resto = pl.restante > 0 ? ` Isso cobre uma parte; o restante (${fmt(pl.restante)}) segue para as próximas semanas.` : '';
+        corpo = `<div class="card"><p>Você tem ${fmt(pl.reservaDisponivel)} na reserva. Quer usar ${fmt(pl.total)} dela para cobrir esse evento?${resto}</p>
+            <button class="btn-option" style="justify-content:center;" onclick="usarReservaPendenteSemana(true)">Usar a reserva</button>
+            <button class="btn-option" style="justify-content:center;" onclick="usarReservaPendenteSemana(false)">Não usar agora</button></div>`;
+    } else {
+        corpo = _htmlDecisoesSemana() +
+            `<button class="btn-secondary" style="margin-top:8px;" onclick="decidirTudoComoRotina()">Deixar tudo como rotina</button>`;
+    }
+    container.innerHTML = `${cabecalhoTelaSecundaria('Antes de fechar a semana', 'Categorias que saíram do planejado')}
+        <p style="color: var(--secondary); font-size: 0.9rem; margin: 0 0 12px;">Nada aqui é erro seu. É só para a semana fechar do jeito certo.</p>${corpo}`;
+}
+
+function decidirPendenteSemana(categoriaId, tipo) {
+    const r = resolverEstouroPendente(categoriaId, tipo);
+    if (!r.ok) { abrirDecisoesSemana(); return; }
+    salvarEstado();
+    _decisaoPendente = (r.plano && r.plano.total > 0 && r.reg && escolherDestinoResgate(state.orcamento, r.reg))
+        ? { categoriaId: categoriaId, plano: r.plano, reg: r.reg } : null;
+    abrirDecisoesSemana();
+}
+
+function usarReservaPendenteSemana(usar) {
+    const d = _decisaoPendente;
+    _decisaoPendente = null;
+    if (d && usar) {
+        aplicarResgateEvento(d.reg, d.plano);
+        salvarEstado();
+    }
+    abrirDecisoesSemana();
+}
+
+function decidirTudoComoRotina() {
+    _decisaoPendente = null;
+    listarEstourosPendentes(state.orcamento.semanaAtual).forEach(p => resolverEstouroPendente(p.categoriaId, 'rotina'));
+    salvarEstado();
+    concluirDecisoesSemana();
+}
+
+/** Sem pendências: fecha a semana (se já terminou) e mostra o resumo. */
+function concluirDecisoesSemana() {
+    const semana = state.orcamento.semanaAtual;
+    if (semana) delete semana.aguardandoDecisoes;
+    verificarFechamentoSemana();
+    if (state.orcamento.semanaAtual && state.orcamento.semanaAtual.fechada) abrirResumoSemanal();
+    else { renderizarOrcamentoInicio(); goToScreen('screen-orcamento-inicio'); }
+}
+
+/**
+ * Resgate da reserva para cobrir um evento: o menor entre a reserva disponível e o valor do estouro.
+ * Pode ser parcial; o que não for coberto carrega como hoje. Não muta o estado: só planeja.
+ * Reservas são as custódias com finalidade 'reserva'; saldo negativo ou zero não contribui.
+ */
+function planejarResgateReserva(orc, excesso) {
+    const alvo = Math.max(0, _centavosEstouro(excesso));
+    const origens = [];
+    let restante = alvo;
+    let reservaDisponivel = 0;
+    _custodiasReserva(orc).forEach(c => {
+        const saldo = Math.max(0, Number(c.saldoAtual) || 0);
+        reservaDisponivel += saldo;
+        if (restante <= 0 || saldo <= 0) return;
+        const v = _centavosEstouro(Math.min(saldo, restante));
+        if (v <= 0) return;
+        origens.push({ custodiaId: c.id, nome: c.nome || '', valor: v });
+        restante = _centavosEstouro(restante - v);
+    });
+    const total = _centavosEstouro(alvo - restante);
+    return {
+        alvo: alvo,
+        total: total,
+        restante: restante,
+        origens: origens,
+        reservaDisponivel: _centavosEstouro(reservaDisponivel),
+        semReserva: reservaDisponivel <= 0,
+        parcial: total > 0 && restante > 0
+    };
+}
+
+/**
+ * Registro de resgate (tipo próprio 'resgate_evento'): a reserva cobre parte de um evento.
+ * Efeitos (par nomeado _aplicarResgateEvento / _desfazerResgateEvento):
+ *   - saldo: origem (reserva) −valor, destino (conta) +valor
+ *   - orçamento: gasto do envelope da semana −valor (o gasto da categoria é abatido em _gastoCategoriaNaSemana)
+ * caixa/categoria vêm da categoria do evento. registroId = o gasto que disparou a pergunta.
+ */
+function montarRegistroResgateReserva(p) {
+    return {
+        id: p.id,
+        data: p.data,
+        tipo: 'resgate_evento',
+        caixa: p.caixa || null,
+        categoria: p.categoriaNome || null,
+        categoriaId: p.categoriaId || null,
+        valor: _centavosEstouro(p.valor),
+        custodiaId: p.custodiaOrigemId,
+        cartaoId: null,
+        custodiaDestinoId: p.custodiaDestinoId,
+        saldoAtualizado: true,
+        resgateEvento: { registroId: p.registroId || null }
+    };
+}
+
+function _aplicarResgateEvento(r) {
+    const semana = state.orcamento.semanaAtual;
+    const v = Number(r.valor) || 0;
+    let abatido = 0;
+    if (_pertenceSemanaAtual(r.data) && semana && r.caixa && semana[r.caixa]) {
+        const antes = semana[r.caixa].gasto || 0;
+        const depois = Math.max(0, antes - v);
+        abatido = antes - depois;       // o que realmente saiu (com clamp), para desfazer exato
+        semana[r.caixa].gasto = depois;
+    }
+    r._efeitoResgate = { gastoAbatido: abatido };
+    const origem = _custodiaMovimentavel(r.custodiaId);
+    if (origem) origem.saldoAtual = (origem.saldoAtual || 0) - v;
+    const destino = _custodiaMovimentavel(r.custodiaDestinoId);
+    if (destino) destino.saldoAtual = (destino.saldoAtual || 0) + v;
+}
+
+function _desfazerResgateEvento(r) {
+    const semana = state.orcamento.semanaAtual;
+    const v = Number(r.valor) || 0;
+    const ef = r._efeitoResgate;
+    if (_pertenceSemanaAtual(r.data) && semana && r.caixa && semana[r.caixa]) {
+        const devolver = ef && typeof ef.gastoAbatido === 'number' ? ef.gastoAbatido : v;
+        semana[r.caixa].gasto = (semana[r.caixa].gasto || 0) + devolver;
+    }
+    delete r._efeitoResgate;
+    const origem = _custodiaMovimentavel(r.custodiaId);
+    if (origem) origem.saldoAtual = (origem.saldoAtual || 0) + v;
+    const destino = _custodiaMovimentavel(r.custodiaDestinoId);
+    if (destino) destino.saldoAtual = (destino.saldoAtual || 0) - v;
+}
+
 function calcularCarregoCategoriasDaSemana(semana) {
     if (!semana || !semana.inicio || !semana.fim) return {};
     const cats = state.orcamento.categorias || [];
@@ -7583,7 +8057,7 @@ function confirmarRegistro(nomeCategoria) {
 
     if (!state.orcamento.historicoRegistros) state.orcamento.historicoRegistros = [];
     
-    state.orcamento.historicoRegistros.push({
+    const regNovo = {
         id: 'reg_' + Date.now(),
         data: dataISO,
         tipo: 'gasto_direto',
@@ -7595,7 +8069,8 @@ function confirmarRegistro(nomeCategoria) {
         cartaoId: null,
         saldoAtualizado: !!registroTemporario.custodiaId,
         mesReferencia: mesReferencia // <-- TAG SALVA AQUI
-    });
+    };
+    state.orcamento.historicoRegistros.push(regNovo);
 
     verificarGatilhoNivel2();
     if (typeof _tickOnboardingAposRegistro === 'function') _tickOnboardingAposRegistro();
@@ -7610,12 +8085,13 @@ function confirmarRegistro(nomeCategoria) {
     // Confirmação em bolha (Fatia C)
     const quem = _personagemRegistro(caixa, 'gasto');
     dialogoPushPersonagem(quem, fala);
-    _pintarModalRegistroDialogo(
-        `<button class="btn-primary" onclick="fecharModalRegistro()">Pronto</button>`,
-        'Registro salvo'
-    );
-
     renderizarOrcamentoInicio();
+    if (!_fimRegistroComEstouro(regNovo)) {
+        _pintarModalRegistroDialogo(
+            `<button class="btn-primary" onclick="fecharModalRegistro()">Pronto</button>`,
+            'Registro salvo'
+        );
+    }
 }
 // REGISTRO — TIPO (gasto ou recebimento)
 
@@ -10468,6 +10944,7 @@ function verificarFechamentoSemana() {
     const fim = new Date(semana.fim + 'T23:59:59');
 try { _executarAgendador(); } catch (e) { console.warn('[agendador]', e); }
     if (hoje > fim) {
+        if (listarEstourosPendentes(semana).length > 0) { semana.aguardandoDecisoes = true; return; }
         fecharSemana();
     }
 }
@@ -10564,6 +11041,47 @@ function fecharSemana() {
 
     verificarGatilhoNivel2();
     salvarEstado();
+}
+
+/** Folga por envelope (Base/Vida) que a semana fechada deixa para a próxima; ignora boleto reservado e resíduo < 0,50. */
+function listarFolgasParaReserva(semana) {
+    const mapa = (semana && semana.carregoCategorias) || {};
+    const tot = { base: 0, vida: 0 };
+    Object.keys(mapa).forEach(id => {
+        const c = mapa[id];
+        if (!c || c.reservada || !(c.caixa in tot)) return;
+        tot[c.caixa] += Number(c.sobra) || 0;
+    });
+    return ['base', 'vida'].filter(k => tot[k] >= 0.5).map(k => ({ caixa: k, valor: _centavosEstouro(tot[k]) }));
+}
+
+function _htmlConviteFolga(semana) {
+    const lista = listarFolgasParaReserva(semana);
+    if (!lista.length) return '';
+    const nomes = { base: 'Base', vida: 'Vida' };
+    return lista.map(f => `<div class="card" style="margin-top:16px; border-left: 4px solid var(--primary); background: var(--info-soft);">
+        <p style="margin:0 0 8px;">Sobrou ${formatarMoeda(f.valor)} em ${nomes[f.caixa]}. Quer guardar uma parte na reserva? Se não, o valor segue para a próxima semana como sempre.</p>
+        <button class="btn-option" style="justify-content:center;" onclick="guardarFolgaDoResumo('${f.caixa}')">Guardar na reserva</button>
+    </div>`).join('');
+}
+
+/** Abre a semana nova (a folga passa a ser herdada) e leva direto ao fluxo existente de destino da folga. */
+function guardarFolgaDoResumo(caixa) {
+    fecharResumoEIniciarNovaSemana();
+    abrirDestinoSobra(caixa);
+}
+
+function _htmlConviteCronico() {
+    let lista = [];
+    try { lista = detectarEstouroCronico((state.orcamento && state.orcamento.resumos) || []); } catch (e) { return ''; }
+    const cats = (state.orcamento.categorias || []);
+    lista = lista.filter(x => cats.some(c => c.id === x.categoriaId));
+    if (!lista.length) return '';
+    const fmt = formatarMoeda;
+    return lista.map(x => `<div class="card" style="margin-top:16px; border-left: 4px solid var(--primary); background: var(--info-soft);">
+        <p style="margin:0 0 8px;"><strong>${x.nome}</strong> passou do limite em ${x.semanasAcima} das últimas ${x.janela} semanas (em média ${fmt(x.excessoMedio)} a mais). Pode ser que o combinado não esteja refletindo a sua rotina. Quer revisar o valor dessa categoria?</p>
+        <button class="btn-option" style="justify-content:center;" onclick="abrirFormularioCategoria('${x.categoriaId}')">Revisar categoria</button>
+    </div>`).join('');
 }
 
 function abrirResumoSemanal() {
@@ -10729,6 +11247,8 @@ if (futuroObrig.length > 0) {
         </div>
         ${renderizarCaixinha('futuro', '🔭 Futuro', semana.futuro.gasto, semana.futuro.limite, { carrego: semana.futuro.carrego || 0, sobraAnterior: semana.futuro.sobraAnterior || 0 })}
 
+        ${_htmlConviteFolga(semana)}
+        ${_htmlConviteCronico()}
         <button class="btn-primary" style="margin-top: 30px;" onclick="fecharResumoEIniciarNovaSemana()">Começar nova semana</button>
     `;
 
@@ -11455,6 +11975,12 @@ function _registrosDaCustodia(custodia) {
         } else if (r.tipo === 'transferencia' && r.custodiaId === custodia.id) {
             out.push({ registro: r, direcao: 'saida', rotulo: 'Transferência enviada',
                 categoriaMostrar: 'Transferência' });
+        } else if (r.tipo === 'resgate_evento' && r.custodiaId === custodia.id) {
+            out.push({ registro: r, direcao: 'saida', rotulo: 'Reserva usada em evento',
+                categoriaMostrar: r.categoria || 'Evento' });
+        } else if (r.tipo === 'resgate_evento' && r.custodiaDestinoId === custodia.id) {
+            out.push({ registro: r, direcao: 'entrada', rotulo: 'Reserva cobriu evento',
+                categoriaMostrar: r.categoria || 'Evento' });
         } else if (r.tipo === 'ajuste_conciliacao'
                 && r.custodiaId === custodia.id && r.campo === 'saldo') {
             const d = Number(r.delta) || 0;
@@ -13963,12 +14489,13 @@ function confirmarRegistroCartao() {
     }
 
     dialogoPushPersonagem('torres', falaCartao);
-    _pintarModalRegistroDialogo(
-        `<button class="btn-primary" onclick="fecharModalRegistro()">Pronto</button>`,
-        'Registro salvo'
-    );
-
     renderizarOrcamentoInicio();
+    if (!_fimRegistroComEstouro(registro)) {
+        _pintarModalRegistroDialogo(
+            `<button class="btn-primary" onclick="fecharModalRegistro()">Pronto</button>`,
+            'Registro salvo'
+        );
+    }
 }
 
 function renderizarMapaMes() {
@@ -19172,6 +19699,7 @@ function _filtrarRegistrosLista(ctx) {
         return todos.filter(r => {
             if (!_pertenceSemanaAtual(r.data)) return false;
             if (r.tipo === 'ajuste_semana_anterior' && r.caixa === ctx.caixa) return true;
+            if (r.tipo === 'resgate_evento') return r.caixa === ctx.caixa;
             return TIPOS_DEBITAM_ENVELOPE.indexOf(r.tipo) !== -1 && r.caixa === ctx.caixa;
         });
     }
@@ -19179,7 +19707,7 @@ function _filtrarRegistrosLista(ctx) {
     if (ctx.modo === 'categoria') {
         return todos.filter(r => {
             // Aceita os tipos de débito E recebimento
-            if (TIPOS_DEBITAM_ENVELOPE.indexOf(r.tipo) === -1 && r.tipo !== 'recebimento') return false;
+            if (TIPOS_DEBITAM_ENVELOPE.indexOf(r.tipo) === -1 && r.tipo !== 'recebimento' && r.tipo !== 'resgate_evento') return false;
             
             if (ctx.categoriaId && r.categoriaId === ctx.categoriaId) return true;
             if (ctx.categoriaNome && r.categoria === ctx.categoriaNome) return true;
@@ -19275,15 +19803,17 @@ function renderizarModalListaRegistros() {
             </div>
         `;
     } else {
-        const total = regs.reduce((s, r) => s + (r.valor || 0), 0);
+        const total = regs.reduce((s, r) => s + (r.tipo === 'resgate_evento' ? -(r.valor || 0) : (r.valor || 0)), 0);
         cont.innerHTML = `
             <div class="home-pill" style="margin-bottom:14px;cursor:default;">
                 ${regs.length} registro${regs.length > 1 ? 's' : ''} · ${_fmtBRL(total)}
             </div>
             ${regs.map(r => {
                 const isAjuste = r.tipo === 'ajuste_semana_anterior' || r.tipo === 'ajuste_conciliacao';
-                const isReceb = r.tipo === 'recebimento' || (isAjuste && r.tipoOriginal === 'recebimento' && (r.delta || 0) > 0);
+                const isResgate = r.tipo === 'resgate_evento';
+                const isReceb = isResgate || r.tipo === 'recebimento' || (isAjuste && r.tipoOriginal === 'recebimento' && (r.delta || 0) > 0);
                 let nome = r.categoria || (isReceb ? 'Recebimento' : 'Gasto');
+                if (isResgate) nome = 'Reserva cobriu o evento' + (r.categoria ? ' · ' + r.categoria : '');
                 if (r.tipo === 'ajuste_semana_anterior') nome = 'Ajuste de semana anterior';
                 if (r.tipo === 'ajuste_conciliacao') nome = 'Conciliação de conta';
                 if (r.anulado) nome = (nome || 'Registro') + ' (anulado)';
@@ -19300,13 +19830,15 @@ function renderizarModalListaRegistros() {
                 const sinal = isReceb ? '+' : '−';
                 const valorMostrar = isAjuste ? (r.valor != null ? r.valor : Math.abs(r.delta || 0)) : _valorEfetivoRegistro(r);
                 if (!isAjuste && Math.abs(_valorEfetivoRegistro(r) - (Number(r.valor) || 0)) >= 0.005) meta += (meta ? ' · ' : '') + 'corrigido (original ' + _fmtBRL(r.valor) + ')';
-                const podeEditar = !isAjuste && !r.anulado;
+                const podeEditar = !isAjuste && !r.anulado && !isResgate;
                                 const ehAutoAgendador = r.origem === 'agendador';
                 let acoes;
                 if (isAjuste) {
                     acoes = '<span style="font-size:0.9rem;color:var(--secondary);">auditável</span>';
                 } else if (r.anulado) {
                     acoes = '<span style="font-size:0.9rem;color:var(--secondary);">anulado</span>';
+                } else if (isResgate) {
+                    acoes = `<button class="btn-reg excluir" onclick="excluirRegistro('${r.id}')">Desfazer</button>`;
                 } else {
                     acoes =
                         `<button class="btn-reg editar" onclick="editarRegistro('${r.id}')">${_registroEmPeriodoFechado(r) ? 'Ajustar' : 'Editar'}</button>` +
@@ -19711,7 +20243,9 @@ function _desfazerEfeitosRegistro(r) {
     const spec = EFEITOS_REGISTRO[r.tipo];
     if (spec) { _efeitoRegistroTabela(r, spec, -1, semana, naSemana); return; }
 
-    if (r.tipo === 'gasto_cartao') {
+    if (r.tipo === 'resgate_evento') {
+        _desfazerResgateEvento(r);
+    } else if (r.tipo === 'gasto_cartao') {
         if (naSemana && semana && r.caixa && semana[r.caixa]) {
             semana[r.caixa].gasto = Math.max(0, (semana[r.caixa].gasto || 0) - (r.valor || 0));
         }
@@ -19790,7 +20324,9 @@ function _aplicarEfeitosRegistro(r) {
     const spec = EFEITOS_REGISTRO[r.tipo];
     if (spec) { _efeitoRegistroTabela(r, spec, +1, semana, naSemana); return; }
 
-    if (r.tipo === 'gasto_cartao') {
+    if (r.tipo === 'resgate_evento') {
+        _aplicarResgateEvento(r);
+    } else if (r.tipo === 'gasto_cartao') {
         if (naSemana && semana && r.caixa && semana[r.caixa]) {
             semana[r.caixa].gasto = (semana[r.caixa].gasto || 0) + (r.valor || 0);
         }
@@ -19847,6 +20383,11 @@ function excluirRegistro(id) {
         return;
     }
 
+    if (r.tipo === 'resgate_evento' && _registroEmPeriodoFechado(r)) {
+        alert('Este resgate é de uma semana já fechada e não é alterado.');
+        return;
+    }
+
     if (_registroEmPeriodoFechado(r)) {
         if (!confirm('Este lançamento é de uma semana já fechada.\n\nO histórico dessa semana não será reescrito. Vamos criar um ajuste na semana atual (efeito líquido no caixa/envelope/custódia).\n\nContinuar?')) return;
         const ajuste = _criarAjusteSemanaAnterior(r, 'exclusao');
@@ -19861,6 +20402,8 @@ function excluirRegistro(id) {
 
         if (!confirm('Excluir este registro de ' + _fmtBRL(r.valor) + '?')) return;
 
+    // Gasto que disparou a pergunta de evento: desfaz antes os resgates ligados a ele e a resposta
+    desfazerRespostaEstouroDoRegistro(r);
     _desfazerEfeitosRegistro(r);
 
     // TA.4 — sincroniza contador de parcelas lançadas ao excluir gasto_cartao.
