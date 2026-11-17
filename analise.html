@@ -321,7 +321,7 @@
 </head>
 <body>
 <div id="topbar">
-  <h1>🔎 Analisador v3 — Consistência + Call Graph</h1>
+  <h1>🔎 Analisador v3.2 — Consistência + Call Graph</h1>
   <input type="file" id="fileinput" accept=".html,.htm">
   <span id="stats">Aguardando arquivo…</span>
   <button id="copybtn" onclick="copiarRelatorio()" style="display:none">📋 Copiar relatório</button>
@@ -371,6 +371,33 @@ const KNOWN_GLOBALS = new Set([
   'alert','confirm','prompt','console','fetch','setTimeout','clearTimeout','setInterval','clearInterval','requestAnimationFrame','cancelAnimationFrame',
   'requestIdleCallback','cancelIdleCallback','queueMicrotask','structuredClone','atob','btoa','postMessage','matchMedia','getComputedStyle',
   'event','this','true','false','null','void',
+]);
+
+
+const PLATFORM_METHODS = new Set([
+  // Event
+  'preventDefault','stopPropagation','stopImmediatePropagation','composedPath',
+  // HTMLElement / Element
+  'focus','blur','click','submit','reset','remove','removeChild','appendChild',
+  'insertBefore','replaceChild','cloneNode','getAttribute','setAttribute',
+  'removeAttribute','hasAttribute','getBoundingClientRect','scrollIntoView',
+  'querySelector','querySelectorAll','closest','matches','contains',
+  'addEventListener','removeEventListener','dispatchEvent','insertAdjacentHTML',
+  // classList
+  'add','remove','toggle','replace',
+  // Object/JSON/Array/String (comuns em handlers)
+  'toString','valueOf','hasOwnProperty','toLowerCase','toUpperCase',
+  'trim','split','join','slice','splice','indexOf','includes','startsWith','endsWith',
+  'stringify','parse','keys','values','entries','assign','freeze',
+  'forEach','map','filter','reduce','find','findIndex','some','every',
+  'sort','reverse','concat','push','pop','shift','unshift',
+  'toFixed','padStart','padEnd',
+  // window / document / console
+  'alert','confirm','prompt','open','close','print','write','writeln',
+  'log','warn','error','info','debug','dir','table','group','groupEnd',
+  'getElementById','createElement',
+  // Math
+  'round','floor','ceil','abs','min','max','random','pow','sqrt',
 ]);
 
 const STATE = {
@@ -523,10 +550,19 @@ function resolveCallee(callee) {
       }
       return { kind: 'member', name: prop, object: obj.name };
     }
-    // NOVO: cadeia de membros (app.ui.showConsistencyModal, anp.form.reset, ...)
-    // Usa a última propriedade como nome, o penúltimo como "objeto".
-    if (obj.type === 'MemberExpression' && !obj.computed && obj.property.type === 'Identifier') {
-      return { kind: 'member', name: prop, object: obj.property.name };
+    // Cadeia de membros (app.ui.showConsistencyModal, anp.form.reset, ...)
+    // Constrói o caminho completo do objeto para melhor identificação de namespace.
+    if (obj.type === 'MemberExpression' && !obj.computed) {
+      const parts = [];
+      let cur = obj;
+      while (cur && cur.type === 'MemberExpression' && !cur.computed && cur.property.type === 'Identifier') {
+        parts.unshift(cur.property.name);
+        cur = cur.object;
+      }
+      if (cur && cur.type === 'Identifier') parts.unshift(cur.name);
+      else if (cur && cur.type === 'ThisExpression') parts.unshift('this');
+      const objectPath = parts.join('.') || (obj.property && obj.property.name) || '?';
+      return { kind: 'member', name: prop, object: objectPath };
     }
   }
   return null;
@@ -656,6 +692,16 @@ function analyzeFunction(fnNode) {
             deferredCalls.push({ name: ar.name, inLoop: false });
           }
         }
+      }
+    }
+
+    // new Foo() / new app.Repository() — trata como aresta para o construtor
+    if (type === 'NewExpression') {
+      const r = resolveCallee(node.callee);
+      if (r && r.name) {
+        const entry = { name: r.name, inLoop: loopDepth > 0 };
+        if (inDeferred > 0) deferredCalls.push(entry);
+        else calls.push(entry);
       }
     }
 
@@ -810,9 +856,11 @@ function runAnalysis() {
   const html = STATE.html;
   const doc = new DOMParser().parseFromString(html, 'text/html');
   STATE.nodes = []; STATE.edges = []; STATE.issues = []; STATE.callGraph = null;
+  const nodeIdSet = new Set(); // evita O(n²) em lookups de nós
 
   const rootId = 'file:root';
   STATE.nodes.push({ id: rootId, label: STATE.file.name, kind: 'file', size: 44 });
+  nodeIdSet.add(rootId);
 
   // 1. Recursos externos
   const externals = [];
@@ -840,7 +888,50 @@ function runAnalysis() {
   const fnAstMap = new Map(); // nome → nó AST (para call graph)
   const allStringLiterals = new Set(); // ★ NOVO — acumula strings de todos os scripts
   const jsEntryPoints = new Set(); // addEventListener / .on* = / window.fn =
+  const dynamicHandlerEntries = new Set(); // onclick="fn()" dentro de strings/templates
   let jsListenerCount = 0;
+
+  /** Extrai nomes de handlers de atributos on* embutidos em HTML gerado (innerHTML/templates). */
+  
+  
+  function extractHandlersFromHtmlString(str) {
+  if (!str || typeof str !== 'string' || str.length < 8) return;
+  const attrRe = /\bon([a-z]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+  let m;
+  while ((m = attrRe.exec(str)) !== null) {
+    let code = (m[2] || m[3] || m[4] || '').trim();
+    if (!code) continue;
+    // Neutraliza interpolação (${...}) para permitir parse
+    code = code.replace(/\$\{[^}]*\}/g, 'null');
+    let subAst;
+    try {
+      subAst = acorn.parse(code, {
+        ecmaVersion: 'latest',
+        allowReturnOutsideFunction: true,
+        allowAwaitOutsideFunction: true,
+      });
+    } catch (_) { continue; }
+    if (!W) continue;
+    W.full(subAst, (node) => {
+  if (node.type !== 'CallExpression') return;
+  const r = resolveCallee(node.callee);
+  if (!r || !r.name) return;
+  if (KNOWN_GLOBALS.has(r.name)) return;
+  if (PLATFORM_METHODS.has(r.name)) return; 
+
+  // ★ AQUI: Aceita bare identifiers (foo) E também membros se forem 'this' ou namespaces do app
+  const isAppNamespace = (r.kind === 'this') || 
+                         (r.kind === 'member' && (r.object === 'app' || r.object === 'ANPSolverApp')); // adicione seus namespaces
+
+  if (r.kind !== 'id' && r.kind !== 'global' && !isAppNamespace) return;
+
+  dynamicHandlerEntries.add(r.name);
+  jsEntryPoints.add(r.name);
+});
+  }
+}
+
+
   // { elId, event, fn, source: 'addEventListener'|'onprop', scriptIdx, line }
   const jsBindings = [];
   // top-level calls for temporal analysis: { name, scriptIdx, line }
@@ -851,6 +942,21 @@ function runAnalysis() {
     if (!arg) return null;
     if (arg.type === 'Identifier') return arg.name;
     if ((arg.type === 'FunctionExpression' || arg.type === 'ArrowFunctionExpression') && arg.id) return arg.id.name;
+    // this.handler.bind(this) / fn.bind(ctx) → extrai o nome da função alvo
+    if (arg.type === 'CallExpression'
+        && arg.callee
+        && arg.callee.type === 'MemberExpression'
+        && !arg.callee.computed
+        && arg.callee.property
+        && arg.callee.property.type === 'Identifier'
+        && arg.callee.property.name === 'bind') {
+      const inner = resolveCallee(arg.callee.object);
+      if (inner && inner.name) return inner.name;
+    }
+    // obj.method / this.method / app.ui.foo — usa o nome da propriedade final
+    if (arg.type === 'MemberExpression' && !arg.computed && arg.property && arg.property.type === 'Identifier') {
+      return arg.property.name;
+    }
     return null;
   }
 
@@ -1071,11 +1177,12 @@ const walkScript = (root, cb) => {
         if (m) qSelRefs.add(m[1]);
       }
 
-      // IDs dinâmicos
+      // IDs dinâmicos + handlers embutidos em HTML gerado
       if (node.type === 'Literal' && typeof node.value === 'string') {
         for (const id of extractIdsFromString(node.value)) {
           if (!dynamicIds.has(id)) dynamicIds.set(id, { scriptIdx: script.idx, origem: 'innerHTML', line: node.loc ? node.loc.start.line : '?' });
         }
+        extractHandlersFromHtmlString(node.value);
       }
       if (node.type === 'TemplateLiteral') {
         for (const q of node.quasis) {
@@ -1083,6 +1190,7 @@ const walkScript = (root, cb) => {
           for (const id of extractIdsFromString(str)) {
             if (!dynamicIds.has(id)) dynamicIds.set(id, { scriptIdx: script.idx, origem: 'template', line: node.loc ? node.loc.start.line : '?' });
           }
+          extractHandlersFromHtmlString(str);
         }
       }
       if (node.type === 'AssignmentExpression'
@@ -1126,6 +1234,8 @@ const walkScript = (root, cb) => {
     // Em collectCallsInFnBody: marcar como deferred
   function collectCallsInFnBody(fnNode, scriptIdx, sink, kind) {
     if (!fnNode || !fnNode.body) return;
+    // IIFE executa imediatamente (boot); listeners/onprop são deferred.
+    const isDeferred = kind !== 'iife-body';
     function walkBody(node) {
       if (!node || typeof node !== 'object' || !node.type) return;
       const t = node.type;
@@ -1136,7 +1246,7 @@ const walkScript = (root, cb) => {
           sink.push({
             name: resolved.name, kind: kind || 'callback-body', object: resolved.object,
             scriptIdx, line: node.loc ? node.loc.start.line : 0,
-            deferred: true,   // ★ NOVO — executa depois do parse
+            deferred: isDeferred,
           });
         }
       }
@@ -1170,6 +1280,12 @@ const walkScript = (root, cb) => {
             scriptIdx: script.idx,
             line: node.loc ? node.loc.start.line : 0,
           });
+        }
+        // IIFE: (function(){ init(); })() ou (() => { load(); })()
+        // Chamadas internas são boot imediato (não deferred).
+        const cal = node.callee;
+        if (cal && (cal.type === 'FunctionExpression' || cal.type === 'ArrowFunctionExpression')) {
+          collectCallsInFnBody(cal, script.idx, topLevelCalls, 'iife-body');
         }
         // addEventListener no topo: nomeado OU corpo do callback anônimo
         if (node.callee.type === 'MemberExpression'
@@ -1228,8 +1344,9 @@ const walkScript = (root, cb) => {
     script.functions.forEach(fn => {
       if (seen.has(fn)) return; seen.add(fn);
       const fid = 'fn:' + fn;
-      if (!STATE.nodes.find(n => n.id === fid)) {
+      if (!nodeIdSet.has(fid)) {
         STATE.nodes.push({ id: fid, kind: 'function', size: 14, label: fn, fnName: fn });
+        nodeIdSet.add(fid);
       }
       STATE.edges.push({ id: `e-${i}-${fid}`, source: id, target: fid, kind: 'defines' });
     });
@@ -1315,6 +1432,24 @@ const walkScript = (root, cb) => {
       entryPointNames.add(fn);
       return;
     }
+
+    // Evita falsos positivos massivos em APIs de plataforma (console.log, this.focus,
+    // event.preventDefault, document.querySelector, Math.max, el.classList.toggle, …).
+    // Só reportamos member se o objeto for um namespace do próprio código
+    // (está em allGlobals e/ou tem métodos registrados).
+    if (resolved.kind === 'this') return; // tipo de `this` é desconhecido
+    if (resolved.kind === 'member') {
+      const obj = resolved.object;
+      // namespaces de plataforma comuns — nunca reportar
+      if (obj && /^(console|document|window|globalThis|Math|JSON|Object|Array|String|Number|Date|RegExp|Promise|Reflect|Proxy|Map|Set|WeakMap|WeakSet|Error|TypeError|event|navigator|location|history|localStorage|sessionStorage|performance|crypto)$/i.test(obj)) {
+        return;
+      }
+      // só reporta se o objeto parecer um namespace do usuário
+      if (!obj || (!allGlobals.has(obj) && !allFunctions.has(obj))) {
+        return;
+      }
+    }
+
     const idPart = el.getAttribute('id') ? ` id=<code>"${escapeHtml(el.getAttribute('id'))}"</code>` : '';
     const similar = findSimilarNames(fn, fnNameList);
     const hint = formatSimilarHint(similar);
@@ -1362,8 +1497,10 @@ const walkScript = (root, cb) => {
   });
 
   // 7b. Validar entry points JS que apontam para funções inexistentes
+  
   jsEntryPoints.forEach(fn => {
     if (KNOWN_GLOBALS.has(fn)) return;
+    if (PLATFORM_METHODS.has(fn)) return;
     if (allFunctions.has(fn)) return;
     if (allGlobals.has(fn)) return;
     const similar = findSimilarNames(fn, fnNameList);
@@ -1490,6 +1627,31 @@ const walkScript = (root, cb) => {
     entryPointNames.add(c.name);
   });
 
+  // 7g. Handlers embutidos em HTML dinâmico (innerHTML/templates) → entries
+  dynamicHandlerEntries.forEach(fn => {
+    if (allFunctions.has(fn)) entryPointNames.add(fn);
+  });
+
+  // 7h. Soft entries: métodos de objeto / funções com nome de UI típico
+  // que existem no código. Em SPAs single-file, a maior parte da UI é
+  // alcançada via dispatch ou onclick em HTML gerado — sem isso viram "mortas".
+  // Nomes tipicamente ligados a UI/handlers (não helpers internos como calcular*/avaliar*)
+  const UI_NAME_RE = /^(renderizar|abrir|fechar|salvar|confirmar|iniciar|concluir|mostrar|toggle|selecionar|escolher|responder|editar|excluir|pagar|voltar|avancar|avançar|registrar|carregar|importar|exportar|pular|aceitar|adiar|retomar|pausar|cancelar|continuar|refazer|alternar|alterar|acionar|decidir|comecar|começar|reiniciar|goTo|atualizarBotao|atualizarTela)/i;
+  let softEntryCount = 0;
+  allFunctions.forEach((meta, name) => {
+    if (entryPointNames.has(name)) return;
+    // Métodos de object literal (Object.assign / { foo(){} }) quase sempre são API pública do módulo
+    if (meta.kind === 'object-method') {
+      entryPointNames.add(name);
+      softEntryCount++;
+      return;
+    }
+    if (UI_NAME_RE.test(name)) {
+      entryPointNames.add(name);
+      softEntryCount++;
+    }
+  });
+
    // 9. Call Graph
   STATE.callGraph = buildCallGraph(fnAstMap, allFunctions, entryPointNames);
 
@@ -1498,8 +1660,9 @@ const walkScript = (root, cb) => {
   // e fnAstMap, mas nunca em script.functions — por isso não viravam nós no grafo.
   STATE.callGraph.functions.forEach((fd, name) => {
     const fid = 'fn:' + name;
-    if (!STATE.nodes.find(n => n.id === fid)) {
+    if (!nodeIdSet.has(fid)) {
       STATE.nodes.push({ id: fid, kind: 'function', size: 14, label: name, fnName: name });
+      nodeIdSet.add(fid);
     }
   });
 
@@ -1544,6 +1707,8 @@ STATE.severity = _classificarTudo(STATE.callGraph, blast, depth, callersOf, inve
     jsListeners: jsListenerCount,
     entryPoints: entryPointNames.size,
     bootEntries: bootEntryCount,
+    softEntries: softEntryCount,
+    dynamicHandlers: dynamicHandlerEntries.size,
     reachable: cg.reachableCount || 0,
     orphanStrong,
     callEdges: cg.edges.length,
@@ -1802,7 +1967,7 @@ function renderCallAnalysis() {
   if (entries.length > 0) {
     html += `<details class="call-section" open>
       <summary>🚪 Entry points (handlers + listeners + boot top-level)</summary>
-      <div class="call-hint">Raízes da reachability: handlers HTML, addEventListener, .on* =, window.fn = e chamadas no topo do script (boot). Sem o boot, carregarEstado/init apareceriam como mortas.</div>`;
+      <div class="call-hint">Raízes: handlers HTML estáticos, onclick em templates/innerHTML, addEventListener, .on* =, window.fn =, boot top-level/IIFE, métodos de object literal e nomes tipicamente de UI (renderizar*/abrir*/salvar*/…).</div>`;
     entries.slice(0, 40).forEach(f => {
       html += `<div class="call-row">
         <span class="rank">→</span>
@@ -2108,20 +2273,30 @@ const RULES = [
     },
 
     // ─── Dead code (reachability) ─────────────────────────────
+    // Só marca órfãos verdadeiros (fan-in 0). Funções com chamadores mas
+    // cadeia inalcançável são "cluster morto" em severidade baixa — evita
+    // poluir o painel quando a detecção de entry points é incompleta.
     {
         id: 'DEAD_CODE',
-        severidade: 'MEDIUM', confianca: 0.75, categoria: 'deadcode',
-        when: f => f.reachable === false && f.loc >= 5,
-        porque: 'Função não alcançável a partir de nenhum entry point (handler HTML, addEventListener, .on*, this/window.fn ou boot top-level). Candidata a código morto após refatoração.',
+        severidade: 'MEDIUM', confianca: 0.70, categoria: 'deadcode',
+        when: f => f.reachable === false && f.fanIn === 0 && f.loc >= 5,
+        porque: 'Função órfã (fan-in 0) e não alcançável a partir de nenhum entry point. Candidata a código morto.',
         acoes: ['Confirmar que não é callback dinâmico (string, eval, export indireto).',
                 'Se confirmado morto, remover junto com testes órfãos.'],
     },
     {
         id: 'DEAD_CODE_LARGE',
-        severidade: 'HIGH', confianca: 0.80, categoria: 'deadcode',
-        when: f => f.reachable === false && f.loc >= 40,
-        porque: 'Função grande (≥ 40 LOC) e não alcançável — provável código morto substancial deixado por refatoração.',
+        severidade: 'HIGH', confianca: 0.75, categoria: 'deadcode',
+        when: f => f.reachable === false && f.fanIn === 0 && f.loc >= 40,
+        porque: 'Função grande (≥ 40 LOC), órfã (fan-in 0) e não alcançável — provável código morto substancial.',
         acoes: ['Priorizar remoção: reduz ruído e risco de alguém “reviver” código desatualizado.'],
+    },
+    {
+        id: 'DEAD_CLUSTER',
+        severidade: 'LOW', confianca: 0.45, categoria: 'deadcode',
+        when: f => f.reachable === false && f.fanIn > 0 && f.loc >= 10,
+        porque: 'Função com chamadores, mas toda a cadeia é inalcançável dos entry points detectados. Pode ser falso positivo se o app usa dispatch dinâmico.',
+        acoes: ['Verificar se há roteador/mapa de handlers que referencia esta função por string.'],
     },
 ];
 
@@ -2156,11 +2331,23 @@ function _calcularBlastRadius(callGraph) {
 
 function _detectarParesInversos(callGraph) {
     const PADROES = [
+        // PT
         [/^_?aplicar(.+)$/i, 'desfazer'],
         [/^abrir(.+)$/i, 'fechar'],
         [/^salvar(.+)$/i, 'carregar'],
         [/^iniciar(.+)$/i, 'finalizar'],
         [/^_?computar(.+)$/i, 'reverter'],
+        // EN
+        [/^_?apply(.+)$/i, 'undo'],
+        [/^open(.+)$/i, 'close'],
+        [/^save(.+)$/i, 'load'],
+        [/^start(.+)$/i, 'stop'],
+        [/^begin(.+)$/i, 'end'],
+        [/^_?compute(.+)$/i, 'revert'],
+        [/^enable(.+)$/i, 'disable'],
+        [/^show(.+)$/i, 'hide'],
+        [/^add(.+)$/i, 'remove'],
+        [/^create(.+)$/i, 'destroy'],
     ];
     const nomes = [...callGraph.functions.keys()];
     const pares = new Map();
@@ -2493,7 +2680,7 @@ function _montarRelatorioParaPDF(grafoHTML) {
     ${_montarCallGraphPDF(STATE.callGraph)}
     ${grafoHTML}
     ${_montarIssuesPDF(STATE.issues)}
-    <footer class="report-footer">Gerado por Analisador v3 — ${dataStr}</footer>
+    <footer class="report-footer">Gerado por Analisador v3.2 — ${dataStr}</footer>
   </div>`;
 }
 
@@ -2550,12 +2737,13 @@ function _montarCallGraphPDF(cg) {
   const fns = Array.from(cg.functions.values());
   const topIn = [...fns].sort((a, b) => b.fanIn - a.fanIn).filter(f => f.fanIn > 0).slice(0, 15);
   const topCx = [...fns].sort((a, b) => b.complexity - a.complexity).filter(f => f.complexity > 5).slice(0, 15);
-  const dead = fns.filter(f => !f.reachable).slice(0, 30);
+  const deadAll = fns.filter(f => !f.reachable).sort((a, b) => b.loc - a.loc || b.complexity - a.complexity);
+  const dead = deadAll.slice(0, 30);
   const entries = fns.filter(f => f.isEntry).slice(0, 20);
 
   let html = `<section class="report-section">
     <h2>📊 Call Graph (detalhado)</h2>
-    <p class="report-note">${fns.length} funções · ${cg.edges.length} chamadas · ${cg.cycles.length} ciclo(s) · ${cg.reachableCount || 0} vivas · ${dead.length} mortas</p>`;
+    <p class="report-note">${fns.length} funções · ${cg.edges.length} chamadas · ${cg.cycles.length} ciclo(s) · ${cg.reachableCount || 0} vivas · ${deadAll.length} mortas</p>`;
 
   if (topIn.length) {
     html += `<h3 class="report-h3">🏆 Funções mais chamadas (fan-in)</h3>
@@ -2610,9 +2798,12 @@ function _montarCallGraphPDF(cg) {
     html += `</tbody></table>`;
   }
 
-  if (dead.length) {
-    html += `<h3 class="report-h3">💀 Funções mortas (não alcançáveis de nenhum entry)</h3>
-      <table class="report-table"><thead><tr>
+  if (deadAll.length) {
+    html += `<h3 class="report-h3">💀 Funções mortas (não alcançáveis de nenhum entry)</h3>`;
+    if (deadAll.length > dead.length) {
+      html += `<p class="report-note">Exibindo top ${dead.length} de ${deadAll.length} (ordenadas por presença no grafo).</p>`;
+    }
+    html += `<table class="report-table"><thead><tr>
         <th>Função</th><th>LOC</th><th>Complexidade</th><th>Fan-in</th>
       </tr></thead><tbody>`;
     dead.forEach(f => {
