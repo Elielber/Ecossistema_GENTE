@@ -14460,6 +14460,8 @@ function renderizarPlanoRecuperacao() {
 // NÍVEL 3 — MAPA DO MÊS
 
 function abrirTelaMapaMes() {
+    _mapaAba = 'agenda';
+    _ocMes = null;
     goToScreen('screen-mapa-mes');
     renderizarMapaMes();
 }
@@ -15263,7 +15265,37 @@ function confirmarRegistroCartao() {
     }
 }
 
+// Agenda do mês com duas abas: Vencimentos (a agenda de sempre) e Orçado × Realizado.
+let _mapaAba = 'agenda';
+let _ocMes = null;   // 'YYYY-MM' consultado; null = mês corrente
+
 function renderizarMapaMes() {
+    if (_mapaAba === 'orcado') {
+        _renderizarOrcadoRealizado();
+        return;
+    }
+    _mapaAba = 'agenda';
+    _renderizarAgendaMes();
+    const c = document.getElementById('mapa-mes-conteudo');
+    if (c && !c.querySelector('.sim-tabs-top')) c.insertAdjacentHTML('afterbegin', _mapaAbasHtml());
+}
+
+function _mapaAbasHtml() {
+    return `
+        <div class="sim-abas sim-tabs-top">
+            <button type="button" class="sim-aba${_mapaAba === 'agenda' ? ' ativa' : ''}" onclick="_mapaSetAba('agenda')">📅 Vencimentos</button>
+            <button type="button" class="sim-aba${_mapaAba === 'orcado' ? ' ativa' : ''}" onclick="_mapaSetAba('orcado')">📊 Orçado × Realizado</button>
+        </div>`;
+}
+
+function _mapaSetAba(aba) {
+    if (aba !== 'agenda' && aba !== 'orcado') return;
+    _mapaAba = aba;
+    if (aba === 'orcado') _ocMes = null;   // sempre abre no mês corrente
+    renderizarMapaMes();
+}
+
+function _renderizarAgendaMes() {
     const container = document.getElementById('mapa-mes-conteudo');
     const orc = state.orcamento;
 
@@ -15386,6 +15418,181 @@ function renderizarMapaMes() {
         </div>
     `;
 }
+// === Orçado × Realizado (aba da Agenda do mês) ===
+// Orçado = o plano de hoje (rendas e categorias cadastradas). Realizado = o que os registros mostram no mês.
+// Diferença = realizado − orçado, sempre com o mesmo sentido, sem veredicto.
+// Gasto de semana fechada que foi editado/excluído volta para o mês do gasto original (valor efetivo).
+const OC_TIPOS_SAIDA = ['gasto_direto', 'gasto_cartao', 'pagamento_divida', 'aporte_reserva'];
+const OC_MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+function _ocChaveMesRegistro(r) {
+    if (!r) return null;
+    if (/^\d{4}-\d{2}$/.test(String(r.mesReferencia || ''))) return r.mesReferencia;   // adiantamento de outro mês
+    const iso = _isoLocalDe(r.data);
+    return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.slice(0, 7) : null;
+}
+
+function _ocDeslocarMes(chave, n) {
+    const m = /^(\d{4})-(\d{2})$/.exec(String(chave || ''));
+    if (!m) return null;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1 + n, 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function _ocRotuloMes(chave) {
+    const m = /^(\d{4})-(\d{2})$/.exec(String(chave || ''));
+    return m ? OC_MESES[Number(m[2]) - 1] + ' de ' + m[1] : '';
+}
+
+/** Primeiro mês com algum registro de entrada ou saída; sem registros, o mês corrente. */
+function _ocPrimeiroMes(orc) {
+    const atual = _mesAtualYYYYMM();
+    let menor = atual;
+    ((orc && orc.historicoRegistros) || []).forEach(r => {
+        if (!r || r.anulado) return;
+        if (r.tipo !== 'recebimento' && OC_TIPOS_SAIDA.indexOf(r.tipo) < 0) return;
+        const k = _ocChaveMesRegistro(r);
+        if (k && k < menor) menor = k;
+    });
+    return menor;
+}
+
+function _arred2(v) { return Math.round((Number(v) || 0) * 100) / 100; }
+
+function _obterOrcadoRealizadoMes(orc, chave) {
+    const o = orc || {};
+    const atual = _mesAtualYYYYMM();
+    const mes = /^\d{4}-\d{2}$/.test(String(chave || '')) ? chave : atual;
+    const regs = Array.isArray(o.historicoRegistros) ? o.historicoRegistros : [];
+
+    // Entradas
+    const fontes = (o.rendaDetalhe && Array.isArray(o.rendaDetalhe.fontes)) ? o.rendaDetalhe.fontes : [];
+    const ent = fontes.filter(f => f).map(f => ({ id: f.id, nome: f.nome || 'Renda', orcado: Number(f.valor) > 0 ? Number(f.valor) : 0, realizado: 0 }));
+    const outrasEnt = { nome: 'Outras entradas', orcado: 0, realizado: 0, semOrcamento: true };
+
+    // Saídas (todas as categorias servem para casar o realizado; só as vivas mostram orçado)
+    const todas = (o.categorias || []).filter(c => c);
+    const sai = todas.map(c => ({
+        id: c.id, nomeCat: c.nome || '', nome: c.nome || 'Categoria', caixa: c.caixa || 'base',
+        icone: SIM_ICONE_CAIXA[c.caixa] || SIM_ICONE_CAIXA.base,
+        orcado: (!_categoriaParcelasQuitada(c) && Number(c.valor) > 0) ? Number(c.valor) : 0, realizado: 0
+    }));
+    const outrasSai = { nome: 'Outras saídas', orcado: 0, realizado: 0, semOrcamento: true, icone: '' };
+
+    const acharSaida = r => sai.find(s => (r.categoriaId && r.categoriaId === s.id) ||
+        (!r.categoriaId && r.categoria && s.nomeCat && r.categoria === s.nomeCat));
+    const acharEntrada = r => ent.find(f => (r.categoriaId && r.categoriaId === f.id) ||
+        (!r.categoriaId && r.categoria && f.nome && r.categoria === f.nome));
+
+    regs.forEach(r => {
+        if (!r || r.anulado) return;
+        if (_ocChaveMesRegistro(r) !== mes) return;
+        if (r.tipo === 'recebimento') {
+            const v = Number(_valorEfetivoRegistro(r)) || 0;
+            const alvo = acharEntrada(r) || outrasEnt;
+            alvo.realizado += v;
+        } else if (r.tipo === 'resgate_evento') {
+            // a reserva pagou parte do gasto: o orçamento da categoria consumiu menos
+            const v = Number(r.valor) || 0;
+            if (v > 0) (acharSaida(r) || outrasSai).realizado -= v;
+        } else if (OC_TIPOS_SAIDA.indexOf(r.tipo) >= 0) {
+            const bruto = (r.tipo === 'gasto_direto' || r.tipo === 'gasto_cartao') ? _valorEfetivoRegistro(r) : r.valor;
+            const v = Number(bruto) || 0;
+            if (v > 0) (acharSaida(r) || outrasSai).realizado += v;
+        }
+    });
+
+    const fecha = l => { l.realizado = Math.max(0, _arred2(l.realizado)); l.orcado = _arred2(l.orcado); l.dif = _arred2(l.realizado - l.orcado); return l; };
+    const entradas = ent.concat([outrasEnt]).map(fecha).filter(l => l.orcado > 0 || l.realizado > 0);
+    const saidas = sai.concat([outrasSai]).map(fecha).filter(l => l.orcado > 0 || l.realizado > 0);
+
+    const soma = (lista, k) => _arred2(lista.reduce((s, l) => s + l[k], 0));
+    const totais = {
+        entradas: { orcado: soma(entradas, 'orcado'), realizado: soma(entradas, 'realizado') },
+        saidas: { orcado: soma(saidas, 'orcado'), realizado: soma(saidas, 'realizado') },
+        folego: { orcado: 0, realizado: 0 }
+    };
+    totais.entradas.dif = _arred2(totais.entradas.realizado - totais.entradas.orcado);
+    totais.saidas.dif = _arred2(totais.saidas.realizado - totais.saidas.orcado);
+    totais.folego.orcado = _arred2(totais.entradas.orcado - totais.saidas.orcado);
+    totais.folego.realizado = _arred2(totais.entradas.realizado - totais.saidas.realizado);
+    totais.folego.dif = _arred2(totais.folego.realizado - totais.folego.orcado);
+
+    return { mes: mes, rotulo: _ocRotuloMes(mes), ehAtual: mes === atual, ehPassado: mes < atual, entradas: entradas, saidas: saidas, totais: totais };
+}
+
+function _ocIrMes(delta) {
+    const orc = state && state.orcamento;
+    if (!orc) return;
+    const atual = _mesAtualYYYYMM();
+    const alvo = _ocDeslocarMes(_ocMes || atual, delta);
+    if (!alvo || alvo > atual || alvo < _ocPrimeiroMes(orc)) return;
+    _ocMes = alvo === atual ? null : alvo;
+    _renderizarOrcadoRealizado();
+}
+
+function _renderizarOrcadoRealizado() {
+    const container = document.getElementById('mapa-mes-conteudo');
+    if (!container) return;
+    if (!state || !state.orcamento) {
+        container.innerHTML = _mapaAbasHtml() + '<div class="placeholder-info">Abra o orçamento primeiro.</div>';
+        return;
+    }
+    const orc = state.orcamento;
+    const fmt = formatarMoeda;
+    const atual = _mesAtualYYYYMM();
+    const chave = _ocMes || atual;
+    const d = _obterOrcadoRealizadoMes(orc, chave);
+    const temAnterior = _ocDeslocarMes(chave, -1) >= _ocPrimeiroMes(orc);
+    const temProximo = chave < atual;
+    const sinal = v => v > 0 ? '+' : '';
+    const dif = v => sinal(v) + fmt(v);
+
+    const linha = (l, icone) => `
+        <div class="sim-comp-row">
+            <div class="sim-comp-item">${icone ? icone + ' ' : ''}${_escHtmlObs(l.nome)}</div>
+            <div class="sim-comp-val">${l.semOrcamento ? '—' : fmt(l.orcado)}</div>
+            <div class="sim-comp-val">${fmt(l.realizado)}</div>
+            <div class="sim-comp-val">${l.semOrcamento ? '—' : dif(l.dif)}</div>
+        </div>`;
+    const total = (rotulo, t) => `
+        <div class="sim-comp-row sim-comp-total">
+            <div class="sim-comp-item">${rotulo}</div>
+            <div class="sim-comp-val">${fmt(t.orcado)}</div>
+            <div class="sim-comp-val">${fmt(t.realizado)}</div>
+            <div class="sim-comp-val">${dif(t.dif)}</div>
+        </div>`;
+
+    const nav = `
+        <div id="oc-nav" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px;">
+            <button type="button" class="btn-sm" id="oc-mes-ant" style="background:var(--purple-light);color:var(--primary);${temAnterior ? '' : 'opacity:.4;'}" ${temAnterior ? '' : 'disabled'} onclick="_ocIrMes(-1)" aria-label="Mês anterior">‹</button>
+            <strong id="oc-mes-rotulo" style="font-size:0.95rem;color:var(--primary);">${_escHtmlObs(d.rotulo)}</strong>
+            <button type="button" class="btn-sm" id="oc-mes-prox" style="background:var(--purple-light);color:var(--primary);${temProximo ? '' : 'opacity:.4;'}" ${temProximo ? '' : 'disabled'} onclick="_ocIrMes(1)" aria-label="Próximo mês">›</button>
+        </div>`;
+
+    const aviso = d.ehPassado
+        ? 'O orçado usa o plano de hoje: o app ainda não guarda o plano de cada mês. O realizado é o que foi registrado naquele mês.'
+        : 'Realizado é o que já foi registrado até agora neste mês. Diferença = realizado − orçado.';
+
+    container.innerHTML = `
+        ${_mapaAbasHtml()}
+        ${cabecalhoTelaSecundaria('Orçado × Realizado', 'O plano ao lado do que aconteceu')}
+        ${nav}
+        <div class="card" style="padding:14px 10px;">
+            <div class="sim-comp-header">
+                <div class="sim-comp-item">Item</div><div class="sim-comp-val">Orçamento</div><div class="sim-comp-val">Realizado</div><div class="sim-comp-val">Diferença</div>
+            </div>
+            <div class="sim-comp-secao">Entradas</div>
+            ${d.entradas.map(l => linha(l, '')).join('') || '<div class="placeholder-info" style="padding:8px 4px;">Sem entradas.</div>'}
+            ${total('Total entrada', d.totais.entradas)}
+            <div class="sim-comp-secao">Saídas</div>
+            ${d.saidas.map(l => linha(l, l.icone)).join('') || '<div class="placeholder-info" style="padding:8px 4px;">Sem saídas.</div>'}
+            ${total('Total saída', d.totais.saidas)}
+            ${total('Total fôlego', d.totais.folego)}
+        </div>
+        <div class="sim-extrato-aviso">${aviso}</div>`;
+}
+
 // NÍVEL 3 — PROVISÃO
 
 function calcularProvisao(orc) {
