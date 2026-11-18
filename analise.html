@@ -18,8 +18,16 @@
   #controls label{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
   #controls input[type=search]{padding:4px 8px;border:1px solid #ccc;border-radius:4px;width:220px;font-size:12px}
   #main{display:flex;flex:1;min-height:0}
-  #cy{flex:1;min-height:400px;background:#fafafa;border-right:1px solid #ddd}
-  #issues{width:440px;overflow-y:auto;background:#fff}
+  #cy{flex:1;min-height:400px;background:#fafafa;border-right:1px solid #ddd;transition:border .2s}
+  #issues{width:440px;overflow-y:auto;background:#fff;transition:width .2s ease,opacity .2s ease,min-width .2s ease;flex-shrink:0}
+  #main.panel-hidden #issues{width:0;min-width:0;opacity:0;overflow:hidden;pointer-events:none;border:none}
+  #main.panel-hidden #cy{border-right:none}
+  #togglePanelBtn,#toggleLegendBtn{
+    padding:4px 10px;border:1px solid #ccc;background:#fff;border-radius:4px;cursor:pointer;font-size:11px;
+  }
+  #togglePanelBtn:hover,#toggleLegendBtn:hover{background:#f0f0f0}
+  #togglePanelBtn.active{background:#eef2ff;border-color:#818cf8;color:#3730a3}
+  #toggleLegendBtn.active{background:#ecfdf5;border-color:#34d399;color:#065f46}
   .issue-group{border-bottom:1px solid #eee}
   .issue-group-header{padding:8px 14px;background:#f4f4f6;font-weight:600;font-size:12px;color:#333;display:flex;justify-content:space-between;cursor:pointer;position:sticky;top:0;z-index:1}
   .issue-group-header:hover{background:#eaeaea}
@@ -34,9 +42,30 @@
   .badge.warn{background:#ffe;color:#b70}
   .badge.ok{background:#efe;color:#070}
   .badge.info{background:#e8f4ff;color:#069}
-  #legend{position:absolute;bottom:12px;left:12px;background:rgba(255,255,255,.95);border:1px solid #ddd;border-radius:8px;padding:8px 12px;font-size:11px;line-height:1.6;box-shadow:0 2px 8px rgba(0,0,0,.1);z-index:10}
-  #legend div{display:flex;align-items:center;gap:6px}
-  #legend span.dot{display:inline-block;width:10px;height:10px;border-radius:50%}
+  #legend-fab{
+    position:absolute;bottom:12px;left:12px;z-index:20;
+    display:flex;flex-direction:column;align-items:flex-start;gap:6px;
+  }
+  #legend-toggle{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:8px 12px;border:1px solid #ddd;border-radius:20px;
+    background:rgba(255,255,255,.96);box-shadow:0 2px 10px rgba(0,0,0,.12);
+    font-size:12px;font-weight:600;color:#333;cursor:pointer;user-select:none;
+  }
+  #legend-toggle:hover{background:#fff;border-color:#bbb}
+  #legend-toggle .chev{font-size:10px;opacity:.7;transition:transform .15s}
+  #legend-fab.open #legend-toggle .chev{transform:rotate(180deg)}
+  #legend{
+    display:none;max-width:260px;max-height:50vh;overflow:auto;
+    background:rgba(255,255,255,.98);border:1px solid #ddd;border-radius:10px;
+    padding:10px 12px;font-size:11px;line-height:1.6;
+    box-shadow:0 4px 16px rgba(0,0,0,.14);
+  }
+  #legend-fab.open #legend{display:block}
+  #legend .leg-row{display:flex;align-items:center;gap:6px}
+  #legend span.dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  #legend #legend-call,#legend #legend-uml,#legend #legend-screens{display:none;flex-direction:column;align-items:flex-start;gap:2px;margin-top:6px;padding-top:6px;border-top:1px solid #ccc}
+  #legend #legend-call.visible,#legend #legend-uml.visible,#legend #legend-screens.visible{display:flex !important}
   #mainwrap{position:relative;flex:1;display:flex;min-height:0}
   #copybtn{padding:4px 10px;border:1px solid #ccc;background:#fff;border-radius:4px;cursor:pointer;font-size:11px}
   #copybtn:hover{background:#f0f0f0}
@@ -321,7 +350,7 @@
 </head>
 <body>
 <div id="topbar">
-  <h1>🔎 Analisador v3.3 — Consistência + Call Graph + UML</h1>
+  <h1>🔎 Analisador v3.5 — Consistência + Call Graph + UML</h1>
   <input type="file" id="fileinput" accept=".html,.htm">
   <span id="stats">Aguardando arquivo…</span>
   <button id="copybtn" onclick="copiarRelatorio()" style="display:none">📋 Copiar relatório</button>
@@ -345,37 +374,57 @@
       <option value="contracts">Contratos críticos</option>
       <option value="sequence">Sequência (entry)</option>
       <option value="dom">Função ↔ DOM</option>
+      <option value="screens">Telas / Casos de uso</option>
     </select>
   </label>
   <input type="search" id="search" placeholder="Filtrar nós do grafo…">
   <span id="searchmatches" style="color:#888"></span>
+  <span style="border-left:2px solid #94a3b8;padding-left:12px;display:inline-flex;gap:8px;align-items:center">
+    <button type="button" id="togglePanelBtn" title="Ocultar/mostrar painel de análise">🗂 Painel</button>
+    <button type="button" id="toggleLegendBtn" title="Abrir/fechar legenda flutuante">🗺 Legenda</button>
+  </span>
 </div>
 <div id="mainwrap">
   <div id="main">
     <div id="cy"></div>
     <div id="issues"><div class="empty">Selecione o arquivo <code>mochila.html</code>.</div></div>
   </div>
+  <div id="legend-fab">
+  <button type="button" id="legend-toggle" aria-expanded="false" title="Mostrar/ocultar legenda">
+    <span>🗺 Legenda</span>
+    <span class="chev">▲</span>
+  </button>
   <div id="legend">
-    <div><span class="dot" style="background:#7C3AED"></span> Arquivo</div>
-    <div><span class="dot" style="background:#f59e0b"></span> Recurso externo</div>
-    <div><span class="dot" style="background:#10b981"></span> Script inline</div>
-    <div><span class="dot" style="background:#6366f1"></span> Função</div>
-    <div><span class="dot" style="background:#ec4899"></span> ID estático</div>
-    <div><span class="dot" style="background:#8b5cf6"></span> ID dinâmico</div>
-    <div id="legend-call" style="display:none;flex-direction:column;align-items:flex-start;gap:2px;margin-top:6px;padding-top:6px;border-top:1px solid #ccc">
-      <div><span class="dot" style="background:#10b981"></span> <span class="dot" style="background:#84cc16"></span> <span class="dot" style="background:#f59e0b"></span> <span class="dot" style="background:#ef4444"></span> Complexidade</div>
-      <div style="font-size:10px;color:#888">borda vermelha = ciclo · borda azul = entry point</div>
+    <div class="leg-row"><span class="dot" style="background:#7C3AED"></span> Arquivo</div>
+    <div class="leg-row"><span class="dot" style="background:#f59e0b"></span> Recurso externo</div>
+    <div class="leg-row"><span class="dot" style="background:#10b981"></span> Script inline</div>
+    <div class="leg-row"><span class="dot" style="background:#6366f1"></span> Função</div>
+    <div class="leg-row"><span class="dot" style="background:#ec4899"></span> ID estático</div>
+    <div class="leg-row"><span class="dot" style="background:#8b5cf6"></span> ID dinâmico</div>
+    <div id="legend-call">
+      <div class="leg-row"><span class="dot" style="background:#10b981"></span> <span class="dot" style="background:#84cc16"></span> <span class="dot" style="background:#f59e0b"></span> <span class="dot" style="background:#ef4444"></span> Complexidade</div>
+      <div class="leg-row" style="font-size:10px;color:#888">borda vermelha = ciclo · borda azul = entry point</div>
     </div>
-    <div id="legend-uml" style="display:none;flex-direction:column;align-items:flex-start;gap:2px;margin-top:6px;padding-top:6px;border-top:1px solid #ccc">
-      <div style="font-weight:600;margin-bottom:2px">Camadas UML</div>
-      <div><span class="dot" style="background:#2563eb"></span> Entry / Boot</div>
-      <div><span class="dot" style="background:#ec4899"></span> UI / Handlers</div>
-      <div><span class="dot" style="background:#059669"></span> Domínio</div>
-      <div><span class="dot" style="background:#d97706"></span> Persistência</div>
-      <div><span class="dot" style="background:#6b7280"></span> Utilitários</div>
-      <div><span class="dot" style="background:#9ca3af"></span> Código morto</div>
+    <div id="legend-uml">
+      <div class="leg-row" style="font-weight:600;margin-bottom:2px">Camadas UML</div>
+      <div class="leg-row"><span class="dot" style="background:#2563eb"></span> Entry / Boot</div>
+      <div class="leg-row"><span class="dot" style="background:#ec4899"></span> UI / Handlers</div>
+      <div class="leg-row"><span class="dot" style="background:#059669"></span> Domínio</div>
+      <div class="leg-row"><span class="dot" style="background:#d97706"></span> Persistência</div>
+      <div class="leg-row"><span class="dot" style="background:#6b7280"></span> Utilitários</div>
+      <div class="leg-row"><span class="dot" style="background:#9ca3af"></span> Código morto</div>
+    </div>
+    <div id="legend-screens">
+      <div class="leg-row" style="font-weight:600;margin-bottom:2px">Telas / Casos de uso</div>
+      <div class="leg-row"><span class="dot" style="background:#2563eb"></span> Tela / View</div>
+      <div class="leg-row"><span class="dot" style="background:#c026d3"></span> Modal / Dialog</div>
+      <div class="leg-row"><span class="dot" style="background:#0891b2"></span> Widget / Controle</div>
+      <div class="leg-row"><span class="dot" style="background:#7c3aed"></span> Caso de uso (entry)</div>
+      <div class="leg-row"><span class="dot" style="background:#64748b"></span> Compartilhado</div>
+      <div class="leg-row" style="font-size:10px;color:#888">▶ = entry point da tela</div>
     </div>
   </div>
+</div>
   <div id="focus-banner">
     Focado em <code id="focus-name"></code>
     <button onclick="clearFocus()">✕ Ver tudo</button>
@@ -429,9 +478,10 @@ const STATE = {
   search: '',
   focusFn: null, // nome da função em foco (call graph)
   callGraph: null, // { functions: Map, edges: [], cycles: [] },
-  diagramMode: 'callgraph', // callgraph | layers | contracts | sequence | dom
+  diagramMode: 'callgraph', // callgraph | layers | contracts | sequence | dom | screens
   layers: null, // Map nome → layer
   domBindings: [], // { fn, elId, event, source }
+  screens: null, // { name, elIds, entryFns, functions: Set }
 };
 
 const $ = (s) => document.querySelector(s);
@@ -457,7 +507,8 @@ document.querySelectorAll('#controls input[type=checkbox]').forEach(cb => {
     };
     if (!STATE.filter.callEdges) STATE.focusFn = null;
     syncFocusBanner();
-    $('#legend-call').style.display = STATE.filter.callEdges ? 'flex' : 'none';
+    const legCall0 = document.getElementById('legend-call');
+    if (legCall0) legCall0.classList.toggle('visible', STATE.filter.callEdges);
     buildGraph();
   });
 });
@@ -488,12 +539,85 @@ $('#diagramMode').addEventListener('change', (e) => {
     STATE.filter.dynamic = true;
     STATE.filter.functions = true;
   }
-  $('#legend-call').style.display = (STATE.filter.callEdges || STATE.diagramMode !== 'callgraph') ? 'flex' : 'none';
+  if (STATE.diagramMode === 'screens') {
+    $('#showFunctions').checked = true;
+    STATE.filter.functions = true;
+    if (!$('#showCallEdges').checked) {
+      $('#showCallEdges').checked = true;
+      STATE.filter.callEdges = true;
+    }
+  }
+  const legCall = document.getElementById('legend-call');
+  if (legCall) legCall.classList.toggle('visible', !!(STATE.filter.callEdges || (STATE.diagramMode && STATE.diagramMode !== 'callgraph')));
   const legUml = document.getElementById('legend-uml');
-  if (legUml) legUml.style.display = (STATE.diagramMode === 'layers') ? 'flex' : 'none';
+  if (legUml) legUml.classList.toggle('visible', STATE.diagramMode === 'layers');
+  const legSc = document.getElementById('legend-screens');
+  if (legSc) legSc.classList.toggle('visible', STATE.diagramMode === 'screens');
   syncFocusBanner();
   buildGraph();
 });
+
+
+/* UI: painel direito e legenda flutuante */
+(function setupUiToggles(){
+  const main = document.getElementById('main');
+  const panelBtn = document.getElementById('togglePanelBtn');
+  const legendBtn = document.getElementById('toggleLegendBtn');
+  const fab = document.getElementById('legend-fab');
+  const legendToggle = document.getElementById('legend-toggle');
+
+  function resizeCy() {
+    if (STATE.cy) {
+      try { STATE.cy.resize(); STATE.cy.fit(undefined, 30); } catch (_) {}
+    }
+  }
+
+  function setPanelVisible(visible) {
+    if (!main) return;
+    main.classList.toggle('panel-hidden', !visible);
+    if (panelBtn) {
+      panelBtn.classList.toggle('active', !visible);
+      panelBtn.textContent = visible ? '🗂 Painel' : '🗂 Mostrar painel';
+      panelBtn.title = visible ? 'Ocultar painel de análise' : 'Mostrar painel de análise';
+    }
+    // dá tempo pro CSS animar a largura
+    setTimeout(resizeCy, 220);
+  }
+
+  function setLegendOpen(open) {
+    if (!fab) return;
+    fab.classList.toggle('open', open);
+    if (legendToggle) legendToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (legendBtn) {
+      legendBtn.classList.toggle('active', open);
+      legendBtn.textContent = open ? '🗺 Legenda ✓' : '🗺 Legenda';
+    }
+  }
+
+  if (panelBtn) {
+    panelBtn.addEventListener('click', () => {
+      const hidden = main && main.classList.contains('panel-hidden');
+      setPanelVisible(hidden); // se estava hidden, mostra
+    });
+  }
+  if (legendBtn) {
+    legendBtn.addEventListener('click', () => {
+      const open = fab && fab.classList.contains('open');
+      setLegendOpen(!open);
+    });
+  }
+  if (legendToggle) {
+    legendToggle.addEventListener('click', () => {
+      const open = fab && fab.classList.contains('open');
+      setLegendOpen(!open);
+    });
+  }
+
+  // estado inicial: painel visível, legenda fechada
+  setPanelVisible(true);
+  setLegendOpen(false);
+})();
+
 
 /* ---------- helpers ---------- */
 
@@ -1723,6 +1847,7 @@ const inversePairs = _detectarParesInversos(STATE.callGraph);
 STATE.severity = _classificarTudo(STATE.callGraph, blast, depth, callersOf, inversePairs);
   STATE.domBindings = jsBindings.slice();
   STATE.layers = _classificarCamadas(STATE.callGraph, entryPointNames, jsBindings, getByIdRefs, qSelRefs);
+  STATE.screens = _detectarTelas(doc, STATE.callGraph, entryPointNames, jsBindings, domIds, dynamicIds);
 
 
   // Enriquecer nós de função com métricas
@@ -1884,7 +2009,8 @@ function focusFunction(fnName) {
   if (!STATE.filter.callEdges) {
     $('#showCallEdges').checked = true;
     STATE.filter.callEdges = true;
-    $('#legend-call').style.display = 'flex';
+    const _lc = document.getElementById('legend-call');
+    if (_lc) _lc.classList.add('visible');
   }
   STATE.focusFn = fnName;
   syncFocusBanner();
@@ -2488,6 +2614,327 @@ function _buildDomElements(cg, domBindings, nodes, search) {
   return elements;
 }
 
+
+/**
+ * Detecta "telas" (pontos de interface com o usuário) e agrupa funções.
+ * Fontes:
+ *  1) Containers HTML com id tipicamente de tela/modal/painel
+ *  2) IDs alvo de handlers (onclick / addEventListener)
+ *  3) Padrões de nome: abrirX, fecharX, renderizarX, showX...
+ *  4) Alcance no call graph a partir dos entry points da tela
+ */
+const SCREEN_ID_RE = /^(modal|tela|page|view|screen|painel|secao|seção|dialog|drawer|tab|step|wizard|panel|overlay|popup|janela|formulario|formulário|card|screen_)/i;
+const SCREEN_NAME_FROM_FN = /^(?:abrir|fechar|mostrar|esconder|renderizar|carregar|iniciar|concluir|toggle|show|hide|open|close|render|load|goTo|goto|navegar)[_$]?(.+)$/i;
+
+function _detectarTelas(doc, callGraph, entryPointNames, jsBindings, domIds, dynamicIds) {
+  const screens = new Map(); // key -> { id, label, elIds:Set, entryFns:Set, functions:Set, kind }
+
+  function ensureScreen(key, label, kind) {
+    if (!screens.has(key)) {
+      screens.set(key, {
+        id: key,
+        label: label || key,
+        elIds: new Set(),
+        entryFns: new Set(),
+        functions: new Set(),
+        kind: kind || 'view',
+      });
+    }
+    return screens.get(key);
+  }
+
+  // 1) Containers HTML candidatos a tela
+  if (doc) {
+    doc.querySelectorAll('[id]').forEach(el => {
+      const id = el.getAttribute('id');
+      if (!id) return;
+      const tag = el.tagName.toLowerCase();
+      const isContainer = /^(div|section|main|article|dialog|form|aside|nav)$/.test(tag);
+      const looksLikeScreen = SCREEN_ID_RE.test(id) || tag === 'dialog';
+      if (isContainer && looksLikeScreen) {
+        const sc = ensureScreen(id, id, tag === 'dialog' || /modal|dialog|popup|overlay/i.test(id) ? 'modal' : 'view');
+        sc.elIds.add(id);
+      }
+    });
+  }
+
+  // 2) Bindings → tela pelo elId (sobe para container candidato se possível)
+  (jsBindings || []).forEach(b => {
+    if (!b.fn) return;
+    let screenKey = null;
+    if (b.elId) {
+      // se o próprio id é tela
+      if (screens.has(b.elId)) screenKey = b.elId;
+      else if (SCREEN_ID_RE.test(b.elId)) {
+        const sc = ensureScreen(b.elId, b.elId, 'view');
+        sc.elIds.add(b.elId);
+        screenKey = b.elId;
+      } else {
+        // agrupa por elemento âncora mesmo sem nome de tela
+        screenKey = 'ui:' + b.elId;
+        const sc = ensureScreen(screenKey, '#' + b.elId, 'widget');
+        sc.elIds.add(b.elId);
+      }
+    }
+    if (screenKey) {
+      const sc = screens.get(screenKey);
+      sc.entryFns.add(b.fn);
+      sc.functions.add(b.fn);
+    }
+  });
+
+  // 3) Handlers HTML inline já cobertos via jsBindings parcialmente;
+  //    entry points com nome de tela
+  const entryList = entryPointNames
+    ? (entryPointNames instanceof Set ? [...entryPointNames] : [...entryPointNames])
+    : [];
+  entryList.forEach(fn => {
+    const m = String(fn).match(SCREEN_NAME_FROM_FN);
+    if (m && m[1] && m[1].length >= 2) {
+      let base = m[1];
+      // normaliza primeira letra
+      base = base.charAt(0).toLowerCase() + base.slice(1);
+      // tenta casar com tela existente
+      let found = null;
+      for (const [k, sc] of screens) {
+        if (k.toLowerCase() === base.toLowerCase() ||
+            sc.label.toLowerCase() === base.toLowerCase() ||
+            [...sc.elIds].some(id => id.toLowerCase().includes(base.toLowerCase()) || base.toLowerCase().includes(id.toLowerCase()))) {
+          found = k;
+          break;
+        }
+      }
+      const key = found || ('tela:' + base);
+      const sc = ensureScreen(key, found ? screens.get(found).label : base, 'view');
+      sc.entryFns.add(fn);
+      sc.functions.add(fn);
+    }
+  });
+
+  // 4) Propaga funções alcançáveis no call graph a partir dos entryFns de cada tela
+  if (callGraph) {
+    const calleesOf = new Map();
+    callGraph.edges.forEach(e => {
+      if (e.deferred) return;
+      if (!calleesOf.has(e.source)) calleesOf.set(e.source, []);
+      calleesOf.get(e.source).push(e.target);
+    });
+
+    screens.forEach(sc => {
+      const queue = [...sc.entryFns];
+      const seen = new Set(queue);
+      while (queue.length) {
+        const cur = queue.shift();
+        sc.functions.add(cur);
+        for (const t of (calleesOf.get(cur) || [])) {
+          if (!seen.has(t)) {
+            seen.add(t);
+            queue.push(t);
+          }
+        }
+      }
+    });
+  }
+
+  // 5) Se não achou nenhuma tela, fallback: um "caso de uso" por entry point de UI
+  if (screens.size === 0 && callGraph) {
+    callGraph.functions.forEach((fd, name) => {
+      if (!fd.isEntry) return;
+      const key = 'uc:' + name;
+      const sc = ensureScreen(key, name, 'usecase');
+      sc.entryFns.add(name);
+      sc.functions.add(name);
+      // 1 hop
+      callGraph.edges.forEach(e => {
+        if (!e.deferred && e.source === name) sc.functions.add(e.target);
+      });
+    });
+  }
+
+  // Funções compartilhadas por 2+ telas
+  const fnCount = new Map();
+  screens.forEach(sc => {
+    sc.functions.forEach(fn => fnCount.set(fn, (fnCount.get(fn) || 0) + 1));
+  });
+  const shared = new Set([...fnCount.entries()].filter(([, c]) => c >= 2).map(([n]) => n));
+
+  return { screens, shared };
+}
+
+/** Elementos Cytoscape: telas como compound nodes + funções. */
+function _buildScreensElements(screenData, cg, search) {
+  const elements = [];
+  if (!screenData || !screenData.screens) return elements;
+
+  const { screens, shared } = screenData;
+  const colorByKind = {
+    modal: '#c026d3',
+    view: '#2563eb',
+    widget: '#0891b2',
+    usecase: '#7c3aed',
+  };
+
+  // Tela "Compartilhado" se houver funções multi-tela
+  const sharedFns = [...(shared || [])].filter(fn => {
+    if (search && !fn.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  screens.forEach((sc, key) => {
+    const fns = [...sc.functions].filter(fn => {
+      if (shared.has(fn) && screens.size > 1) return false; // vai para compartilhado
+      if (search && !fn.toLowerCase().includes(search) && !sc.label.toLowerCase().includes(search)) return false;
+      return true;
+    });
+    // mostra tela mesmo vazia se search casa com label
+    if (fns.length === 0 && search && !sc.label.toLowerCase().includes(search)) return;
+
+    const color = colorByKind[sc.kind] || '#2563eb';
+    elements.push({
+      data: {
+        id: 'screen:' + key,
+        label: (sc.kind === 'modal' ? '🗔 ' : sc.kind === 'usecase' ? '▶ ' : '🖥 ') + sc.label + ' (' + (fns.length + [...sc.functions].filter(f => shared.has(f)).length) + ')',
+        kind: 'screen',
+        color,
+        shape: 'round-rectangle',
+        fz: 12,
+        size: 40,
+      },
+      classes: 'layer-parent',
+    });
+
+    fns.forEach(name => {
+      const fd = cg && cg.functions.get(name);
+      const isEntry = sc.entryFns.has(name);
+      elements.push({
+        data: {
+          id: 'fn:' + key + ':' + name,
+          label: (isEntry ? '▶ ' : '') + name,
+          kind: 'function',
+          parent: 'screen:' + key,
+          color: isEntry ? color : complexityColor(fd ? fd.complexity : 1),
+          shape: isEntry ? 'round-rectangle' : 'ellipse',
+          fz: 9,
+          size: isEntry ? 28 : 16,
+          complexity: fd ? fd.complexity : 1,
+          fanIn: fd ? fd.fanIn : 0,
+          fanOut: fd ? fd.fanOut : 0,
+          loc: fd ? fd.loc : 0,
+          isEntry: isEntry,
+          reachable: true,
+          inCycle: fd ? fd.inCycle : false,
+          screen: sc.label,
+        }
+      });
+    });
+  });
+
+  if (sharedFns.length && screens.size > 1) {
+    elements.push({
+      data: {
+        id: 'screen:__shared__',
+        label: '🔗 Compartilhado (' + sharedFns.length + ')',
+        kind: 'screen',
+        color: '#64748b',
+        shape: 'round-rectangle',
+        fz: 12,
+        size: 40,
+      },
+      classes: 'layer-parent',
+    });
+    sharedFns.forEach(name => {
+      const fd = cg && cg.functions.get(name);
+      elements.push({
+        data: {
+          id: 'fn:shared:' + name,
+          label: name,
+          kind: 'function',
+          parent: 'screen:__shared__',
+          color: '#64748b',
+          shape: 'ellipse',
+          fz: 9,
+          size: 16,
+          complexity: fd ? fd.complexity : 1,
+          fanIn: fd ? fd.fanIn : 0,
+          fanOut: fd ? fd.fanOut : 0,
+          loc: fd ? fd.loc : 0,
+          isEntry: false,
+          reachable: true,
+          inCycle: fd ? fd.inCycle : false,
+          screen: 'compartilhado',
+        }
+      });
+    });
+  }
+
+  // Arestas de chamada apenas dentro da mesma tela (ou para compartilhado)
+  // Mapa nome → ids de nó (pode haver duplicata se mesma fn em shared)
+  const fnToNodes = new Map();
+  elements.forEach(el => {
+    if (el.data.kind !== 'function') return;
+    const raw = (el.data.label || '').replace(/^▶\s*/, '');
+    if (!fnToNodes.has(raw)) fnToNodes.set(raw, []);
+    fnToNodes.get(raw).push(el.data.id);
+  });
+
+  if (cg) {
+    const seen = new Set();
+    cg.edges.forEach(e => {
+      if (e.deferred) return;
+      const srcs = fnToNodes.get(e.source) || [];
+      const tgts = fnToNodes.get(e.target) || [];
+      srcs.forEach(s => {
+        tgts.forEach(t => {
+          // só liga se mesmo parent ou envolvendo shared
+          const sEl = elements.find(x => x.data.id === s);
+          const tEl = elements.find(x => x.data.id === t);
+          if (!sEl || !tEl) return;
+          if (sEl.data.parent !== tEl.data.parent &&
+              sEl.data.parent !== 'screen:__shared__' &&
+              tEl.data.parent !== 'screen:__shared__') return;
+          const eid = s + '->' + t;
+          if (seen.has(eid)) return;
+          seen.add(eid);
+          elements.push({
+            data: {
+              id: 'scall:' + eid,
+              source: s,
+              target: t,
+              color: '#94a3b8',
+              width: 1.2,
+            }
+          });
+        });
+      });
+    });
+  }
+
+  return elements;
+}
+
+function _mermaidScreens(screenData, cg) {
+  const lines = ['flowchart TB'];
+  if (!screenData || !screenData.screens) return 'flowchart TB\n  note["Sem telas detectadas"]';
+  const { screens, shared } = screenData;
+  screens.forEach((sc, key) => {
+    const sid = _mId('sc_' + key);
+    lines.push(`  subgraph ${sid}["${sc.kind === 'modal' ? 'Modal' : 'Tela'}: ${sc.label}"]`);
+    [...sc.functions].filter(f => !shared.has(f)).slice(0, 20).forEach(fn => {
+      const isE = sc.entryFns.has(fn);
+      lines.push(`    ${_mId(key + '_' + fn)}["${isE ? '▶ ' : ''}${fn}"]`);
+    });
+    lines.push('  end');
+  });
+  if (shared.size) {
+    lines.push('  subgraph shared["Compartilhado"]');
+    [...shared].slice(0, 15).forEach(fn => {
+      lines.push(`    ${_mId('sh_' + fn)}["${fn}"]`);
+    });
+    lines.push('  end');
+  }
+  return lines.join('\n');
+}
+
 function complexityColor(c) {
 
   if (c <= 5) return '#10b981';
@@ -2562,6 +3009,21 @@ function buildGraph() {
       numIter: 400,
     }, false);
     $('#searchmatches').textContent = '· função ↔ DOM';
+    return;
+  }
+
+  if (mode === 'screens' && STATE.screens) {
+    const elements = _buildScreensElements(STATE.screens, cg, STATE.search);
+    _renderCy(elements, {
+      name: 'cose',
+      animate: false,
+      nodeRepulsion: 14000,
+      idealEdgeLength: 100,
+      nestingFactor: 1.4,
+      numIter: 700,
+    }, true);
+    const n = STATE.screens.screens ? STATE.screens.screens.size : 0;
+    $('#searchmatches').textContent = '· ' + n + ' tela(s) / casos de uso';
     return;
   }
 
@@ -2679,7 +3141,7 @@ function _renderCy(elements, layout, compound) {
         'color': '#222', 'border-width': 1, 'border-color': '#fff' } },
     { selector: 'node[kind="file"], node[kind="inline-script"]', style: {
         'color': '#fff', 'text-valign': 'center', 'text-halign': 'center', 'font-weight': 'bold' } },
-    { selector: 'node[kind="layer"]', style: {
+    { selector: 'node[kind="layer"], node[kind="screen"]', style: {
         'background-color': 'data(color)', 'background-opacity': 0.12,
         'border-width': 2, 'border-color': 'data(color)',
         'color': '#111', 'text-valign': 'top', 'text-halign': 'center',
@@ -3460,6 +3922,9 @@ function exportarMermaid() {
   } else if (mode === 'dom') {
     text = _mermaidDom(STATE.domBindings);
     fname = 'funcao-dom';
+  } else if (mode === 'screens') {
+    text = _mermaidScreens(STATE.screens, STATE.callGraph);
+    fname = 'telas';
   } else {
     text = _mermaidCallGraph(STATE.callGraph);
     fname = 'callgraph';
