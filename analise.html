@@ -321,11 +321,12 @@
 </head>
 <body>
 <div id="topbar">
-  <h1>🔎 Analisador v3.2 — Consistência + Call Graph</h1>
+  <h1>🔎 Analisador v3.3 — Consistência + Call Graph + UML</h1>
   <input type="file" id="fileinput" accept=".html,.htm">
   <span id="stats">Aguardando arquivo…</span>
   <button id="copybtn" onclick="copiarRelatorio()" style="display:none">📋 Copiar relatório</button>
   <button id="pdfbtn" onclick="gerarRelatorioPDF()" style="display:none">📄 Gerar PDF</button>
+  <button id="mermaidbtn" onclick="exportarMermaid()" style="display:none">📥 Exportar Mermaid</button>
 </div>
 <div id="controls">
   <label><input type="checkbox" id="showExternals" checked> Externos</label>
@@ -334,7 +335,17 @@
   <label><input type="checkbox" id="showElements"> IDs estáticos</label>
   <label><input type="checkbox" id="showDynamic"> IDs dinâmicos</label>
   <label style="border-left:2px solid #8b5cf6;padding-left:14px;font-weight:600;color:#4c1d95">
-    <input type="checkbox" id="showCallEdges"> Call edges (funções → funções)
+    <input type="checkbox" id="showCallEdges"> Call edges
+  </label>
+  <label style="border-left:2px solid #0d9488;padding-left:14px;font-weight:600;color:#0f766e">
+    Diagrama:
+    <select id="diagramMode" style="margin-left:4px;padding:3px 6px;border:1px solid #ccc;border-radius:4px;font-size:12px">
+      <option value="callgraph">Call Graph</option>
+      <option value="layers">Camadas / Componentes</option>
+      <option value="contracts">Contratos críticos</option>
+      <option value="sequence">Sequência (entry)</option>
+      <option value="dom">Função ↔ DOM</option>
+    </select>
   </label>
   <input type="search" id="search" placeholder="Filtrar nós do grafo…">
   <span id="searchmatches" style="color:#888"></span>
@@ -354,6 +365,15 @@
     <div id="legend-call" style="display:none;flex-direction:column;align-items:flex-start;gap:2px;margin-top:6px;padding-top:6px;border-top:1px solid #ccc">
       <div><span class="dot" style="background:#10b981"></span> <span class="dot" style="background:#84cc16"></span> <span class="dot" style="background:#f59e0b"></span> <span class="dot" style="background:#ef4444"></span> Complexidade</div>
       <div style="font-size:10px;color:#888">borda vermelha = ciclo · borda azul = entry point</div>
+    </div>
+    <div id="legend-uml" style="display:none;flex-direction:column;align-items:flex-start;gap:2px;margin-top:6px;padding-top:6px;border-top:1px solid #ccc">
+      <div style="font-weight:600;margin-bottom:2px">Camadas UML</div>
+      <div><span class="dot" style="background:#2563eb"></span> Entry / Boot</div>
+      <div><span class="dot" style="background:#ec4899"></span> UI / Handlers</div>
+      <div><span class="dot" style="background:#059669"></span> Domínio</div>
+      <div><span class="dot" style="background:#d97706"></span> Persistência</div>
+      <div><span class="dot" style="background:#6b7280"></span> Utilitários</div>
+      <div><span class="dot" style="background:#9ca3af"></span> Código morto</div>
     </div>
   </div>
   <div id="focus-banner">
@@ -408,7 +428,10 @@ const STATE = {
   filter: { externals: true, scripts: true, functions: false, elements: false, dynamic: true, callEdges: false },
   search: '',
   focusFn: null, // nome da função em foco (call graph)
-  callGraph: null, // { functions: Map, edges: [], cycles: [] }
+  callGraph: null, // { functions: Map, edges: [], cycles: [] },
+  diagramMode: 'callgraph', // callgraph | layers | contracts | sequence | dom
+  layers: null, // Map nome → layer
+  domBindings: [], // { fn, elId, event, source }
 };
 
 const $ = (s) => document.querySelector(s);
@@ -441,6 +464,34 @@ document.querySelectorAll('#controls input[type=checkbox]').forEach(cb => {
 
 $('#search').addEventListener('input', (e) => {
   STATE.search = e.target.value.trim().toLowerCase();
+  buildGraph();
+});
+
+$('#diagramMode').addEventListener('change', (e) => {
+  STATE.diagramMode = e.target.value;
+  // Modos UML forçam call edges / funções visíveis
+  if (STATE.diagramMode !== 'callgraph' && STATE.diagramMode !== 'dom') {
+    if (!$('#showCallEdges').checked) {
+      $('#showCallEdges').checked = true;
+      STATE.filter.callEdges = true;
+    }
+    if (!$('#showFunctions').checked && STATE.diagramMode !== 'layers') {
+      $('#showFunctions').checked = true;
+      STATE.filter.functions = true;
+    }
+  }
+  if (STATE.diagramMode === 'dom') {
+    $('#showElements').checked = true;
+    $('#showDynamic').checked = true;
+    $('#showFunctions').checked = true;
+    STATE.filter.elements = true;
+    STATE.filter.dynamic = true;
+    STATE.filter.functions = true;
+  }
+  $('#legend-call').style.display = (STATE.filter.callEdges || STATE.diagramMode !== 'callgraph') ? 'flex' : 'none';
+  const legUml = document.getElementById('legend-uml');
+  if (legUml) legUml.style.display = (STATE.diagramMode === 'layers') ? 'flex' : 'none';
+  syncFocusBanner();
   buildGraph();
 });
 
@@ -1670,6 +1721,9 @@ const walkScript = (root, cb) => {
 const { blast, depth, callersOf } = _calcularBlastRadius(STATE.callGraph);
 const inversePairs = _detectarParesInversos(STATE.callGraph);
 STATE.severity = _classificarTudo(STATE.callGraph, blast, depth, callersOf, inversePairs);
+  STATE.domBindings = jsBindings.slice();
+  STATE.layers = _classificarCamadas(STATE.callGraph, entryPointNames, jsBindings, getByIdRefs, qSelRefs);
+
 
   // Enriquecer nós de função com métricas
   STATE.nodes.forEach(n => {
@@ -1721,6 +1775,7 @@ STATE.severity = _classificarTudo(STATE.callGraph, blast, depth, callersOf, inve
   renderStats(); renderIssues(); buildGraph();
   $('#copybtn').style.display = 'inline-block';
   $('#pdfbtn').style.display = 'inline-block';
+  $('#mermaidbtn').style.display = 'inline-block';
 }
 
 /* ---------- stats ---------- */
@@ -1995,7 +2050,446 @@ function renderCallAnalysis() {
 }
 
 /* ---------- grafo ---------- */
+
+/* ============================================================
+   DIAGRAMAS UML-INSPIRED — camadas, contratos, sequência, DOM
+   ============================================================ */
+
+const LAYER_META = {
+  entry:   { label: 'Entry / Boot',     color: '#2563eb', order: 0 },
+  ui:      { label: 'UI / Handlers',    color: '#ec4899', order: 1 },
+  domain:  { label: 'Domínio',          color: '#059669', order: 2 },
+  persist: { label: 'Persistência',     color: '#d97706', order: 3 },
+  util:    { label: 'Utilitários',      color: '#6b7280', order: 4 },
+  dead:    { label: 'Código morto',     color: '#9ca3af', order: 5 },
+};
+
+const UI_LAYER_RE = /^(renderizar|abrir|fechar|salvar|confirmar|iniciar|concluir|mostrar|toggle|selecionar|escolher|responder|editar|excluir|pagar|voltar|avancar|avançar|registrar|pular|aceitar|adiar|retomar|pausar|cancelar|continuar|refazer|alternar|alterar|acionar|decidir|comecar|começar|reiniciar|goTo|atualizarBotao|atualizarTela|atualizarStatus|atualizar|show|hide|open|close|toggle|render|draw|paint)/i;
+const PERSIST_RE = /^(carregar|salvar|gravar|persistir|load|save|store|fetch|getItem|setItem|localStorage|sessionStorage|importar|exportar)/i;
+const DOMAIN_RE = /^(validar|calcular|aplicar|desfazer|computar|avaliar|processar|converter|normalizar|parse|format|compute|validate|apply|undo|calc)/i;
+
+function _classificarCamadas(callGraph, entryPointNames, jsBindings, getByIdRefs, qSelRefs) {
+  const layers = new Map();
+  if (!callGraph) return layers;
+  const touchesDom = new Set();
+  (jsBindings || []).forEach(b => { if (b.fn) touchesDom.add(b.fn); });
+
+  callGraph.functions.forEach((fd, name) => {
+    let layer = 'util';
+    if (!fd.reachable) {
+      layer = 'dead';
+    } else if (entryPointNames.has(name) || fd.isEntry) {
+      // entry pode ser UI ou boot
+      if (UI_LAYER_RE.test(name) || touchesDom.has(name)) layer = 'ui';
+      else if (PERSIST_RE.test(name)) layer = 'persist';
+      else layer = 'entry';
+    } else if (PERSIST_RE.test(name)) {
+      layer = 'persist';
+    } else if (UI_LAYER_RE.test(name) || touchesDom.has(name)) {
+      layer = 'ui';
+    } else if (DOMAIN_RE.test(name) || fd.fanIn >= 2) {
+      layer = 'domain';
+    } else {
+      layer = 'util';
+    }
+    layers.set(name, layer);
+  });
+  return layers;
+}
+
+/** Constrói elementos Cytoscape para modo Camadas (compound nodes). */
+function _buildLayersElements(cg, layers, search) {
+  const elements = [];
+  const layerNodes = new Map(); // layer -> set of fn names
+  const layerOrder = ['entry','ui','domain','persist','util','dead'];
+
+  cg.functions.forEach((fd, name) => {
+    if (search && !name.toLowerCase().includes(search)) return;
+    const L = layers.get(name) || 'util';
+    if (!layerNodes.has(L)) layerNodes.set(L, []);
+    layerNodes.get(L).push(fd);
+  });
+
+  // Compound parents
+  layerOrder.forEach(L => {
+    if (!layerNodes.has(L)) return;
+    const meta = LAYER_META[L];
+    elements.push({
+      data: {
+        id: 'layer:' + L,
+        label: meta.label + ' (' + layerNodes.get(L).length + ')',
+        kind: 'layer',
+        color: meta.color,
+        shape: 'round-rectangle',
+        fz: 12,
+        size: 40,
+        isLayer: true,
+      },
+      classes: 'layer-parent',
+    });
+  });
+
+  // Function nodes as children
+  layerNodes.forEach((fns, L) => {
+    fns.forEach(fd => {
+      const meta = LAYER_META[L] || LAYER_META.util;
+      const size = Math.min(48, 14 + Math.log2(1 + (fd.fanIn||0) + (fd.fanOut||0)) * 5);
+      elements.push({
+        data: {
+          id: 'fn:' + fd.name,
+          label: fd.name,
+          kind: 'function',
+          parent: 'layer:' + L,
+          color: complexityColor(fd.complexity || 1),
+          shape: 'ellipse',
+          fz: 9,
+          size,
+          complexity: fd.complexity || 1,
+          fanIn: fd.fanIn || 0,
+          fanOut: fd.fanOut || 0,
+          loc: fd.loc || 0,
+          isEntry: !!fd.isEntry,
+          reachable: fd.reachable !== false,
+          inCycle: !!fd.inCycle,
+          layer: L,
+        }
+      });
+    });
+  });
+
+  // Inter-layer aggregated edges + internal
+  const interCount = new Map(); // "L1->L2" -> count
+  const seenEdge = new Set();
+  cg.edges.forEach(e => {
+    if (e.deferred) return;
+    const ls = layers.get(e.source);
+    const lt = layers.get(e.target);
+    if (!ls || !lt) return;
+    if (search && (!e.source.toLowerCase().includes(search) && !e.target.toLowerCase().includes(search))) return;
+    if (ls === lt) {
+      const eid = 'call:' + e.source + '->' + e.target;
+      if (seenEdge.has(eid)) return;
+      seenEdge.add(eid);
+      elements.push({
+        data: {
+          id: eid,
+          source: 'fn:' + e.source,
+          target: 'fn:' + e.target,
+          color: e.inLoop ? '#dc2626' : '#94a3b8',
+          width: e.inLoop ? 2 : 1,
+        }
+      });
+    } else {
+      const key = ls + '->' + lt;
+      interCount.set(key, (interCount.get(key) || 0) + 1);
+    }
+  });
+
+  interCount.forEach((count, key) => {
+    const [ls, lt] = key.split('->');
+    elements.push({
+      data: {
+        id: 'inter:' + key,
+        source: 'layer:' + ls,
+        target: 'layer:' + lt,
+        color: '#0d9488',
+        width: Math.min(8, 1.5 + Math.log2(count)),
+        label: String(count),
+      }
+    });
+  });
+
+  return elements;
+}
+
+/** Contratos críticos: high severity, high fan-in, inverse pairs, entries. */
+function _buildContractsElements(cg, severity, inversePairs, search) {
+  const elements = [];
+  const keep = new Set();
+
+  cg.functions.forEach((fd, name) => {
+    if (search && !name.toLowerCase().includes(search)) return;
+    const sev = severity && severity[name];
+    const maxSev = sev ? sev.findings.reduce((a, f) =>
+      SEVERITY_ORDER[f.severidade] < SEVERITY_ORDER[a.severidade] ? f : a
+    ).severidade : null;
+    const isCritical = maxSev === 'CRITICAL' || maxSev === 'HIGH';
+    const highFan = (fd.fanIn || 0) >= 3 || (fd.fanOut || 0) >= 4;
+    const hasInv = inversePairs && inversePairs.has(name);
+    if (isCritical || highFan || hasInv || fd.isEntry) keep.add(name);
+  });
+
+  // Inclui vizinhos de 1 hop dos contratos
+  cg.edges.forEach(e => {
+    if (e.deferred) return;
+    if (keep.has(e.source)) keep.add(e.target);
+    if (keep.has(e.target)) keep.add(e.source);
+  });
+
+  keep.forEach(name => {
+    const fd = cg.functions.get(name);
+    if (!fd) return;
+    const sev = severity && severity[name];
+    const prio = sev ? sev.prioridade : 0;
+    const inv = inversePairs && inversePairs.get(name);
+    let color = complexityColor(fd.complexity || 1);
+    if (prio >= 80) color = '#dc2626';
+    else if (prio >= 40) color = '#ea580c';
+    const size = Math.min(55, 16 + Math.log2(1 + prio) * 4 + Math.log2(1 + fd.fanIn) * 3);
+    elements.push({
+      data: {
+        id: 'fn:' + name,
+        label: name + (inv ? ' ⇄' : ''),
+        kind: 'function',
+        color, shape: 'round-rectangle', fz: 9, size,
+        complexity: fd.complexity || 1,
+        fanIn: fd.fanIn || 0, fanOut: fd.fanOut || 0, loc: fd.loc || 0,
+        isEntry: !!fd.isEntry, reachable: fd.reachable !== false, inCycle: !!fd.inCycle,
+        prioridade: prio, temInverso: inv || null,
+      }
+    });
+  });
+
+  const seen = new Set();
+  cg.edges.forEach(e => {
+    if (e.deferred) return;
+    if (!keep.has(e.source) || !keep.has(e.target)) return;
+    const eid = e.source + '->' + e.target;
+    if (seen.has(eid)) return;
+    seen.add(eid);
+    elements.push({
+      data: {
+        id: 'call:' + eid,
+        source: 'fn:' + e.source,
+        target: 'fn:' + e.target,
+        color: e.inLoop ? '#dc2626' : '#64748b',
+        width: e.inLoop ? 2.5 : 1.4,
+      }
+    });
+  });
+
+  // Arestas de par inverso (tracejado conceitual)
+  if (inversePairs) {
+    const drawn = new Set();
+    inversePairs.forEach((b, a) => {
+      if (!keep.has(a) || !keep.has(b)) return;
+      const key = [a,b].sort().join('|');
+      if (drawn.has(key)) return;
+      drawn.add(key);
+      elements.push({
+        data: {
+          id: 'inv:' + key,
+          source: 'fn:' + a,
+          target: 'fn:' + b,
+          color: '#7c3aed',
+          width: 2,
+          label: 'par inverso',
+        }
+      });
+    });
+  }
+
+  return elements;
+}
+
+/** Sequência: BFS a partir do focusFn (ou top entries), layout hierárquico. */
+function _buildSequenceElements(cg, focusFn, search) {
+  const elements = [];
+  if (!cg) return elements;
+
+  let roots = [];
+  if (focusFn && cg.functions.has(focusFn)) {
+    roots = [focusFn];
+  } else {
+    // top entries por fanOut
+    roots = [...cg.functions.values()]
+      .filter(f => f.isEntry)
+      .sort((a,b) => b.fanOut - a.fanOut)
+      .slice(0, 5)
+      .map(f => f.name);
+  }
+  if (!roots.length) {
+    roots = [...cg.functions.values()].sort((a,b) => b.fanOut - a.fanOut).slice(0, 3).map(f => f.name);
+  }
+
+  // BFS profundidade máx 3
+  const depthOf = new Map();
+  const keep = new Set();
+  const queue = [];
+  roots.forEach(r => { depthOf.set(r, 0); keep.add(r); queue.push(r); });
+
+  const calleesOf = new Map();
+  cg.edges.forEach(e => {
+    if (e.deferred) return;
+    if (!calleesOf.has(e.source)) calleesOf.set(e.source, []);
+    calleesOf.get(e.source).push(e.target);
+  });
+
+  while (queue.length) {
+    const cur = queue.shift();
+    const d = depthOf.get(cur);
+    if (d >= 3) continue;
+    for (const t of (calleesOf.get(cur) || [])) {
+      if (!keep.has(t)) {
+        keep.add(t);
+        depthOf.set(t, d + 1);
+        queue.push(t);
+      }
+    }
+  }
+
+  keep.forEach(name => {
+    if (search && !name.toLowerCase().includes(search)) return;
+    const fd = cg.functions.get(name);
+    if (!fd) return;
+    const d = depthOf.get(name) || 0;
+    const isRoot = roots.includes(name);
+    elements.push({
+      data: {
+        id: 'fn:' + name,
+        label: (isRoot ? '▶ ' : '') + name,
+        kind: 'function',
+        color: isRoot ? '#2563eb' : complexityColor(fd.complexity || 1),
+        shape: isRoot ? 'round-rectangle' : 'ellipse',
+        fz: 9,
+        size: isRoot ? 36 : Math.min(42, 14 + (fd.fanIn||0)),
+        complexity: fd.complexity || 1,
+        fanIn: fd.fanIn || 0, fanOut: fd.fanOut || 0, loc: fd.loc || 0,
+        isEntry: !!fd.isEntry, reachable: true, inCycle: !!fd.inCycle,
+        seqDepth: d,
+      }
+    });
+  });
+
+  const seen = new Set();
+  cg.edges.forEach(e => {
+    if (e.deferred) return;
+    if (!keep.has(e.source) || !keep.has(e.target)) return;
+    const eid = e.source + '->' + e.target;
+    if (seen.has(eid)) return;
+    seen.add(eid);
+    elements.push({
+      data: {
+        id: 'call:' + eid,
+        source: 'fn:' + e.source,
+        target: 'fn:' + e.target,
+        color: e.inLoop ? '#dc2626' : '#0ea5e9',
+        width: 1.6,
+      }
+    });
+  });
+
+  return elements;
+}
+
+/** Função ↔ DOM: funções de UI ligadas a IDs. */
+function _buildDomElements(cg, domBindings, nodes, search) {
+  const elements = [];
+  const fnKeep = new Set();
+  const idKeep = new Set();
+
+  (domBindings || []).forEach(b => {
+    if (b.fn) fnKeep.add(b.fn);
+    if (b.elId) idKeep.add(b.elId);
+  });
+
+  // Também funções que são entry points de UI
+  if (cg) {
+    cg.functions.forEach((fd, name) => {
+      if (fd.isEntry && UI_LAYER_RE.test(name)) fnKeep.add(name);
+    });
+  }
+
+  // Nós de função
+  fnKeep.forEach(name => {
+    if (search && !name.toLowerCase().includes(search)) return;
+    const fd = cg && cg.functions.get(name);
+    elements.push({
+      data: {
+        id: 'fn:' + name,
+        label: name,
+        kind: 'function',
+        color: '#6366f1',
+        shape: 'ellipse',
+        fz: 9,
+        size: 22,
+        complexity: fd ? fd.complexity : 1,
+        fanIn: fd ? fd.fanIn : 0,
+        fanOut: fd ? fd.fanOut : 0,
+        loc: fd ? fd.loc : 0,
+        isEntry: fd ? fd.isEntry : true,
+        reachable: true,
+        inCycle: fd ? fd.inCycle : false,
+      }
+    });
+  });
+
+  // Nós de DOM a partir de STATE.nodes
+  nodes.forEach(n => {
+    if (n.kind !== 'dom-id' && n.kind !== 'dynamic-id') return;
+    const id = (n.label || '').replace(/^#/, '').replace(/ \(js\)$/, '');
+    if (!idKeep.has(id) && !search) {
+      // inclui se houver binding
+      if (!idKeep.has(id)) return;
+    }
+    if (search && !(n.label || '').toLowerCase().includes(search) && !idKeep.has(id)) return;
+    if (!idKeep.has(id) && search) return;
+    elements.push({
+      data: {
+        id: n.id,
+        label: n.label,
+        kind: n.kind,
+        color: n.kind === 'dynamic-id' ? '#8b5cf6' : '#ec4899',
+        shape: 'tag',
+        fz: 9,
+        size: 14,
+      }
+    });
+  });
+
+  // Arestas binding
+  const seen = new Set();
+  (domBindings || []).forEach((b, i) => {
+    if (!b.fn) return;
+    const src = 'fn:' + b.fn;
+    let tgt = null;
+    if (b.elId) {
+      // procura nó dom
+      const staticId = 'dom:' + b.elId;
+      const dynId = 'dyn:' + b.elId;
+      if (elements.some(el => el.data.id === staticId)) tgt = staticId;
+      else if (elements.some(el => el.data.id === dynId)) tgt = dynId;
+      else {
+        // cria nó sob demanda
+        tgt = 'dom:' + b.elId;
+        if (!elements.some(el => el.data.id === tgt)) {
+          elements.push({
+            data: { id: tgt, label: '#' + b.elId, kind: 'dom-id', color: '#ec4899', shape: 'tag', fz: 9, size: 14 }
+          });
+        }
+      }
+    }
+    if (!tgt) return;
+    const eid = src + '->' + tgt + ':' + (b.event || i);
+    if (seen.has(eid)) return;
+    seen.add(eid);
+    elements.push({
+      data: {
+        id: 'bind:' + i,
+        source: src,
+        target: tgt,
+        color: '#db2777',
+        width: 1.5,
+        label: b.event || b.source || '',
+      }
+    });
+  });
+
+  return elements;
+}
+
 function complexityColor(c) {
+
   if (c <= 5) return '#10b981';
   if (c <= 10) return '#84cc16';
   if (c <= 15) return '#f59e0b';
@@ -2011,6 +2505,67 @@ function computeNodeSize(n) {
 }
 
 function buildGraph() {
+  const mode = STATE.diagramMode || 'callgraph';
+  const cg = STATE.callGraph;
+
+  // ── Modos UML dedicados ──────────────────────────────
+  if (mode === 'layers' && cg && STATE.layers) {
+    const elements = _buildLayersElements(cg, STATE.layers, STATE.search);
+    _renderCy(elements, {
+      name: 'cose',
+      animate: false,
+      nodeRepulsion: 12000,
+      idealEdgeLength: 90,
+      nestingFactor: 1.2,
+      numIter: 600,
+    }, true);
+    $('#searchmatches').textContent = STATE.search ? `· modo camadas` : '· modo camadas';
+    return;
+  }
+
+  if (mode === 'contracts' && cg) {
+    const inv = _detectarParesInversos(cg);
+    const elements = _buildContractsElements(cg, STATE.severity, inv, STATE.search);
+    _renderCy(elements, {
+      name: 'cose',
+      animate: false,
+      nodeRepulsion: 10000,
+      idealEdgeLength: 100,
+      numIter: 500,
+    }, false);
+    $('#searchmatches').textContent = '· contratos críticos';
+    return;
+  }
+
+  if (mode === 'sequence' && cg) {
+    const elements = _buildSequenceElements(cg, STATE.focusFn, STATE.search);
+    _renderCy(elements, {
+      name: 'breadthfirst',
+      animate: false,
+      directed: true,
+      spacingFactor: 1.3,
+      maximal: true,
+    }, false);
+    $('#searchmatches').textContent = STATE.focusFn
+      ? `· sequência de ${STATE.focusFn}`
+      : '· sequência (top entries)';
+    return;
+  }
+
+  if (mode === 'dom') {
+    const elements = _buildDomElements(cg, STATE.domBindings, STATE.nodes, STATE.search);
+    _renderCy(elements, {
+      name: 'cose',
+      animate: false,
+      nodeRepulsion: 8000,
+      idealEdgeLength: 80,
+      numIter: 400,
+    }, false);
+    $('#searchmatches').textContent = '· função ↔ DOM';
+    return;
+  }
+
+  // ── Modo Call Graph original ─────────────────────────
   let nodes = STATE.nodes.filter(n => {
     const showFns = STATE.filter.functions || STATE.filter.callEdges;
     if (n.kind === 'external'      && !STATE.filter.externals) return false;
@@ -2022,13 +2577,14 @@ function buildGraph() {
     return true;
   });
 
-  // Foco em função: isola vizinhança no call graph
   if (STATE.focusFn && STATE.filter.callEdges) {
     const related = new Set([STATE.focusFn]);
-    STATE.callGraph.edges.forEach(e => {
-      if (e.source === STATE.focusFn) related.add(e.target);
-      if (e.target === STATE.focusFn) related.add(e.source);
-    });
+    if (STATE.callGraph) {
+      STATE.callGraph.edges.forEach(e => {
+        if (e.source === STATE.focusFn) related.add(e.target);
+        if (e.target === STATE.focusFn) related.add(e.source);
+      });
+    }
     nodes = nodes.filter(n => n.kind === 'function' && related.has(n.fnName));
   }
 
@@ -2036,7 +2592,6 @@ function buildGraph() {
   let edges = STATE.edges.filter(e => {
     if (!ids.has(e.source) || !ids.has(e.target)) return false;
     if (e.kind === 'calls' && !STATE.filter.callEdges) return false;
-    // No modo foco, só arestas de chamada entre os nós visíveis
     if (STATE.focusFn && STATE.filter.callEdges && e.kind !== 'calls') return false;
     return true;
   });
@@ -2089,9 +2644,8 @@ function buildGraph() {
     elements.push({ data: { id: e.id, source: e.source, target: e.target, color, width } });
   });
 
-  if (STATE.cy) { STATE.cy.destroy(); STATE.cy = null; }
-  const n = nodes.length;
   let layout;
+  const n = nodes.length;
   if (STATE.filter.callEdges && STATE.focusFn) {
     layout = { name: 'concentric', animate: false, concentric: x => x.data('fanIn') || 0, levelWidth: () => 2 };
   } else if (STATE.filter.callEdges) {
@@ -2108,46 +2662,71 @@ function buildGraph() {
                    concentric: x => ({ file: 10, external: 8, 'inline-script': 6 }[x.data('kind')] || 3),
                    levelWidth: () => 2 };
   }
+  _renderCy(elements, layout, false);
+}
+
+/** Renderização Cytoscape compartilhada. */
+function _renderCy(elements, layout, compound) {
+  if (STATE.cy) { STATE.cy.destroy(); STATE.cy = null; }
+
+  const style = [
+    { selector: 'node', style: {
+        'background-color': 'data(color)', 'shape': 'data(shape)',
+        'width': 'data(size)', 'height': 'data(size)',
+        'label': 'data(label)', 'font-size': 'data(fz)',
+        'text-valign': 'bottom', 'text-margin-y': 4,
+        'text-wrap': 'ellipsis', 'text-max-width': 140,
+        'color': '#222', 'border-width': 1, 'border-color': '#fff' } },
+    { selector: 'node[kind="file"], node[kind="inline-script"]', style: {
+        'color': '#fff', 'text-valign': 'center', 'text-halign': 'center', 'font-weight': 'bold' } },
+    { selector: 'node[kind="layer"]', style: {
+        'background-color': 'data(color)', 'background-opacity': 0.12,
+        'border-width': 2, 'border-color': 'data(color)',
+        'color': '#111', 'text-valign': 'top', 'text-halign': 'center',
+        'font-weight': 'bold', 'font-size': 13,
+        'padding': '24px', 'shape': 'round-rectangle',
+        'width': 'label', 'height': 'label',
+        'text-margin-y': -8 } },
+    { selector: 'node[inCycle]', style: {
+        'border-width': 3, 'border-color': '#dc2626', 'border-style': 'dashed' } },
+    { selector: 'node[isEntry]', style: {
+        'border-width': 3, 'border-color': '#2563eb' } },
+    { selector: 'edge', style: {
+        'width': 'data(width)', 'line-color': 'data(color)',
+        'target-arrow-color': 'data(color)', 'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier', 'arrow-scale': 0.7, 'opacity': 0.7,
+        'label': 'data(label)', 'font-size': 9, 'text-rotation': 'autorotate',
+        'color': '#555', 'text-background-color': '#fff', 'text-background-opacity': 0.8,
+        'text-background-padding': 2 } },
+  ];
 
   STATE.cy = cytoscape({
-    container: $('#cy'), elements, layout, wheelSensitivity: 0.2,
-    style: [
-      { selector: 'node', style: {
-          'background-color': 'data(color)', 'shape': 'data(shape)',
-          'width': 'data(size)', 'height': 'data(size)',
-          'label': 'data(label)', 'font-size': 'data(fz)',
-          'text-valign': 'bottom', 'text-margin-y': 4,
-          'text-wrap': 'ellipsis', 'text-max-width': 140,
-          'color': '#222', 'border-width': 1, 'border-color': '#fff' } },
-      { selector: 'node[kind="file"], node[kind="inline-script"]', style: {
-          'color': '#fff', 'text-valign': 'center', 'text-halign': 'center', 'font-weight': 'bold' } },
-      { selector: 'node[inCycle]', style: {
-          'border-width': 3, 'border-color': '#dc2626', 'border-style': 'dashed' } },
-      { selector: 'node[isEntry]', style: {
-          'border-width': 3, 'border-color': '#2563eb' } },
-      { selector: 'edge', style: {
-          'width': 'data(width)', 'line-color': 'data(color)',
-          'target-arrow-color': 'data(color)', 'target-arrow-shape': 'triangle',
-          'curve-style': 'bezier', 'arrow-scale': 0.7, 'opacity': 0.65 } },
-    ],
+    container: $('#cy'), elements, layout, wheelSensitivity: 0.2, style,
   });
 
-  // Tooltip + click-focus
   const tooltip = document.getElementById('tooltip');
   STATE.cy.on('mouseover', 'node', (evt) => {
     const d = evt.target.data();
-    if (d.kind !== 'function' || !STATE.filter.callEdges) return;
+    if (d.kind === 'layer') {
+      tooltip.innerHTML = `<div><strong>${escapeHtml(d.label)}</strong></div><div class="t-row"><span>Camada</span><span>${escapeHtml(d.id)}</span></div>`;
+      tooltip.style.display = 'block';
+      return;
+    }
+    if (d.kind !== 'function') return;
     tooltip.innerHTML = `
       <div><strong>${escapeHtml(d.label)}</strong></div>
       <div class="t-row"><span>Complexidade</span><span>${d.complexity || 1}</span></div>
       <div class="t-row"><span>LOC</span><span>${d.loc || 0}</span></div>
       <div class="t-row"><span>Fan-in</span><span>${d.fanIn || 0} chamadores</span></div>
       <div class="t-row"><span>Fan-out</span><span>${d.fanOut || 0} chamadas</span></div>
+      ${d.layer ? `<div class="t-row"><span>Camada</span><span>${escapeHtml(d.layer)}</span></div>` : ''}
+      ${d.prioridade ? `<div class="t-row"><span>Prioridade</span><span>${d.prioridade}</span></div>` : ''}
+      ${d.temInverso ? `<div class="t-row"><span>Par inverso</span><span>${escapeHtml(d.temInverso)}</span></div>` : ''}
       ${d.loopCalls ? `<div class="t-row"><span>Em loop</span><span>${d.loopCalls}×</span></div>` : ''}
       ${d.isEntry ? `<div class="t-row"><span>Entry point</span><span>✓ handler / listener</span></div>` : ''}
       ${d.reachable === false ? `<div class="t-row"><span>💀 Morta</span><span>não alcançável</span></div>` : ''}
-      ${d.reachable === true && !d.isEntry ? `<div class="t-row"><span>Viva</span><span>alcançável</span></div>` : ''}
       ${d.inCycle ? `<div class="t-row"><span>⚠️ Ciclo</span><span>sim</span></div>` : ''}
+      ${d.seqDepth != null ? `<div class="t-row"><span>Profundidade</span><span>${d.seqDepth}</span></div>` : ''}
     `;
     tooltip.style.display = 'block';
   });
@@ -2159,11 +2738,12 @@ function buildGraph() {
   STATE.cy.on('mouseout', 'node', () => { tooltip.style.display = 'none'; });
   STATE.cy.on('tap', 'node', (evt) => {
     const d = evt.target.data();
-    if (d.kind !== 'function' || !STATE.filter.callEdges) return;
-    if (STATE.focusFn === d.label) {
+    if (d.kind !== 'function') return;
+    const name = (d.label || '').replace(/^▶\s*/, '').replace(/\s*⇄\s*$/, '');
+    if (STATE.focusFn === name) {
       clearFocus();
     } else {
-      focusFunction(d.label);
+      focusFunction(name);
     }
   });
   STATE.cy.on('tap', (evt) => {
@@ -2854,7 +3434,212 @@ function _montarIssuesPDF(issues) {
   return html;
 }
 
+
+/* ============================================================
+   EXPORT MERMAID / PLANTUML — diagramas UML-inspired
+   ============================================================ */
+
+function exportarMermaid() {
+  if (!STATE.callGraph) {
+    alert('Nenhuma análise carregada.');
+    return;
+  }
+  const mode = STATE.diagramMode || 'callgraph';
+  let text = '';
+  let fname = 'diagrama';
+
+  if (mode === 'layers') {
+    text = _mermaidLayers(STATE.callGraph, STATE.layers);
+    fname = 'camadas';
+  } else if (mode === 'contracts') {
+    text = _mermaidContracts(STATE.callGraph, STATE.severity);
+    fname = 'contratos';
+  } else if (mode === 'sequence') {
+    text = _mermaidSequence(STATE.callGraph, STATE.focusFn);
+    fname = 'sequencia';
+  } else if (mode === 'dom') {
+    text = _mermaidDom(STATE.domBindings);
+    fname = 'funcao-dom';
+  } else {
+    text = _mermaidCallGraph(STATE.callGraph);
+    fname = 'callgraph';
+  }
+
+  // Download
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fname + '_' + (STATE.file?.name || 'analise').replace(/\.\w+$/, '') + '.mmd';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  // Também tenta clipboard
+  copyToClipboard(text).then(({ ok }) => {
+    if (ok) alert('✅ Diagrama Mermaid exportado e copiado!\n\nArquivo: ' + a.download + '\n\nCole em mermaid.live ou no README.');
+    else alert('✅ Diagrama Mermaid baixado: ' + a.download);
+  });
+}
+
+function _mermaidCallGraph(cg) {
+  const lines = ['flowchart LR'];
+  const fns = [...cg.functions.values()].slice(0, 80);
+  const names = new Set(fns.map(f => f.name));
+  fns.filter(f => f.isEntry).forEach(f => {
+    lines.push(`  ${_mId(f.name)}["▶ ${f.name}"]`);
+  });
+  const seen = new Set();
+  cg.edges.forEach(e => {
+    if (e.deferred) return;
+    if (!names.has(e.source) || !names.has(e.target)) return;
+    const k = e.source + '->' + e.target;
+    if (seen.has(k)) return;
+    seen.add(k);
+    lines.push(`  ${_mId(e.source)} --> ${_mId(e.target)}`);
+  });
+  return lines.join('\n');
+}
+
+function _mermaidLayers(cg, layers) {
+  const lines = ['flowchart TB'];
+  const byL = {};
+  cg.functions.forEach((fd, name) => {
+    const L = (layers && layers.get(name)) || 'util';
+    (byL[L] || (byL[L] = [])).push(fd);
+  });
+  const order = ['entry','ui','domain','persist','util','dead'];
+  order.forEach(L => {
+    if (!byL[L]) return;
+    const meta = LAYER_META[L];
+    lines.push(`  subgraph ${L}["${meta.label}"]`);
+    byL[L].slice(0, 25).forEach(fd => {
+      lines.push(`    ${_mId(fd.name)}["${fd.name}"]`);
+    });
+    lines.push('  end');
+  });
+  // arestas entre camadas agregadas
+  const inter = new Map();
+  cg.edges.forEach(e => {
+    if (e.deferred) return;
+    const ls = layers && layers.get(e.source);
+    const lt = layers && layers.get(e.target);
+    if (!ls || !lt || ls === lt) return;
+    inter.set(ls + '->' + lt, true);
+  });
+  inter.forEach((_, key) => {
+    const [a,b] = key.split('->');
+    lines.push(`  ${a} -.-> ${b}`);
+  });
+  return lines.join('\n');
+}
+
+function _mermaidContracts(cg, severity) {
+  const lines = ['classDiagram'];
+  const inv = _detectarParesInversos(cg);
+  const keep = new Set();
+  cg.functions.forEach((fd, name) => {
+    const sev = severity && severity[name];
+    const maxSev = sev ? sev.findings.reduce((a, f) =>
+      SEVERITY_ORDER[f.severidade] < SEVERITY_ORDER[a.severidade] ? f : a
+    ).severidade : null;
+    if (maxSev === 'CRITICAL' || maxSev === 'HIGH' || fd.fanIn >= 3 || inv.has(name) || fd.isEntry) {
+      keep.add(name);
+    }
+  });
+  keep.forEach(name => {
+    const fd = cg.functions.get(name);
+    if (!fd) return;
+    const stereo = fd.isEntry ? '<<entry>>' : (inv.has(name) ? '<<par inverso>>' : '');
+    lines.push(`  class ${_mId(name)} {`);
+    if (stereo) lines.push(`    ${stereo}`);
+    lines.push(`    cx: ${fd.complexity}`);
+    lines.push(`    fanIn: ${fd.fanIn}`);
+    lines.push(`    LOC: ${fd.loc}`);
+    lines.push('  }');
+  });
+  const seen = new Set();
+  cg.edges.forEach(e => {
+    if (e.deferred) return;
+    if (!keep.has(e.source) || !keep.has(e.target)) return;
+    const k = e.source + '->' + e.target;
+    if (seen.has(k)) return;
+    seen.add(k);
+    lines.push(`  ${_mId(e.source)} --> ${_mId(e.target)}`);
+  });
+  inv.forEach((b, a) => {
+    if (keep.has(a) && keep.has(b) && a < b) {
+      lines.push(`  ${_mId(a)} .. ${_mId(b)} : par inverso`);
+    }
+  });
+  return lines.join('\n');
+}
+
+function _mermaidSequence(cg, focusFn) {
+  const lines = ['sequenceDiagram'];
+  let roots = [];
+  if (focusFn && cg.functions.has(focusFn)) roots = [focusFn];
+  else {
+    roots = [...cg.functions.values()].filter(f => f.isEntry)
+      .sort((a,b) => b.fanOut - a.fanOut).slice(0, 3).map(f => f.name);
+  }
+  if (!roots.length) return 'sequenceDiagram\n  Note over X: Sem entry points';
+
+  const calleesOf = new Map();
+  cg.edges.forEach(e => {
+    if (e.deferred) return;
+    if (!calleesOf.has(e.source)) calleesOf.set(e.source, []);
+    if (!calleesOf.get(e.source).includes(e.target)) calleesOf.get(e.source).push(e.target);
+  });
+
+  const root = roots[0];
+  lines.push(`  actor User`);
+  lines.push(`  User->>+${_mId(root)}: trigger`);
+  const visited = new Set([root]);
+  function walk(from, depth) {
+    if (depth >= 3) return;
+    for (const t of (calleesOf.get(from) || []).slice(0, 6)) {
+      lines.push(`  ${_mId(from)}->>+${_mId(t)}: call`);
+      if (!visited.has(t)) {
+        visited.add(t);
+        walk(t, depth + 1);
+      }
+      lines.push(`  ${_mId(t)}-->>-${_mId(from)}: return`);
+    }
+  }
+  walk(root, 0);
+  lines.push(`  ${_mId(root)}-->>-User: done`);
+  return lines.join('\n');
+}
+
+function _mermaidDom(bindings) {
+  const lines = ['flowchart LR'];
+  const seen = new Set();
+  (bindings || []).forEach(b => {
+    if (!b.fn) return;
+    const fn = _mId(b.fn);
+    lines.push(`  ${fn}["${b.fn}"]`);
+    if (b.elId) {
+      const el = _mId('dom_' + b.elId);
+      lines.push(`  ${el}("#${b.elId}")`);
+      const k = fn + '->' + el;
+      if (!seen.has(k)) {
+        seen.add(k);
+        lines.push(`  ${fn} -->|${b.event || 'bind'}| ${el}`);
+      }
+    }
+  });
+  if (lines.length === 1) lines.push('  note["Sem bindings DOM detectados"]');
+  return lines.join('\n');
+}
+
+function _mId(name) {
+  return String(name).replace(/[^a-zA-Z0-9_]/g, '_');
+}
+
 function copiarRelatorio() {
+
   if (!STATE.stats.lines) return;
 
   const lines = [];
