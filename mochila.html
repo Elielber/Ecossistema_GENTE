@@ -787,6 +787,28 @@
         }
         .btn-sm:active { transform: scale(0.97); }
 
+        /* === SIMULADOR: abas top-level + sub-abas de cenários === */
+        .sim-abas { display: flex; gap: 4px; margin-bottom: 14px; background: var(--bg-color); padding: 4px; border-radius: 999px; border: 1px solid var(--border); }
+        .sim-aba { flex: 1; padding: 8px 10px; border: none; background: transparent; border-radius: 999px; font-size: 0.78rem; font-weight: 600; color: var(--secondary); cursor: pointer; font-family: inherit; white-space: nowrap; }
+        .sim-aba.ativa { background: var(--card-bg); color: var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+        .sim-edit-linha { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+        .sim-edit-nome { flex: 2; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text-main); font-size: 0.85rem; font-family: inherit; min-width: 0; }
+        .sim-edit-valor { flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text-main); font-size: 0.85rem; font-family: inherit; text-align: right; min-width: 0; }
+        .sim-edit-remover { width: 30px; height: 30px; border-radius: 50%; border: none; background: var(--danger-soft); color: var(--danger); font-weight: bold; cursor: pointer; flex-shrink: 0; font-size: 1rem; line-height: 1; }
+        .sim-edit-icone { font-size: 1.05rem; flex-shrink: 0; width: 1.4em; text-align: center; }
+        .sim-comp-header, .sim-comp-row { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 4px; padding: 6px 4px; font-size: 0.75rem; align-items: center; border-bottom: 1px solid var(--border); }
+        .sim-comp-header { font-weight: 700; color: var(--secondary); text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.68rem; }
+        .sim-comp-item { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sim-comp-val { text-align: right; white-space: nowrap; }
+        .sim-comp-secao { margin-top: 12px; font-size: 0.72rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.05em; padding: 4px 4px 2px; }
+        .sim-comp-total { font-weight: 700; background: var(--bg-color); }
+        .sim-comp-delta { font-size: 0.7rem; color: var(--secondary); font-style: italic; }
+        .sim-extrato-titulo { margin: 4px 0 8px; font-size: 0.72rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.05em; }
+        .sim-extrato-linha, .sim-extrato-subtotal, .sim-extrato-folego { display: flex; justify-content: space-between; gap: 8px; padding: 6px 2px; font-size: 0.85rem; border-bottom: 1px solid var(--border); }
+        .sim-extrato-subtotal { font-weight: 600; }
+        .sim-extrato-folego { font-weight: 700; background: var(--bg-color); }
+        .sim-extrato-aviso { margin-top: 12px; font-size: 0.85rem; color: var(--secondary); line-height: 1.4; }
+
         /* DIÁLOGO ESTRUTURADO (piloto N1 etapas) */
         .dialogo-thread {
             display: flex;
@@ -981,6 +1003,19 @@
     <div id="screen-resumo-semanal" class="screen">
         
         <div id="resumo-semanal-conteudo"></div>
+    </div>
+
+    <!-- Diário da visita da semana -->
+    <div id="screen-diario" class="screen">
+        <div id="diario-conteudo"></div>
+    </div>
+
+    <div id="screen-semana-passada" class="screen">
+        <div id="semana-passada-conteudo"></div>
+    </div>
+
+    <div id="screen-vocabulario" class="screen">
+        <div id="vocabulario-conteudo"></div>
     </div>
 
     <!-- TELA 4: Histórico de Resumos -->
@@ -1347,6 +1382,9 @@ const TITULOS_TELAS = {
     'screen-orcamento-inicio': '🎒 Mochila',
     'screen-resumo-semanal': 'Resumo da Semana',
     'screen-historico-resumos': 'Semanas Passadas',
+    'screen-diario': 'Diário',
+    'screen-semana-passada': 'Semana Passada',
+    'screen-vocabulario': 'Palavras e Temas',
     'screen-transicao-nivel': 'Novo Passo',
     'screen-renda-detalhe': 'Sua Renda',
     'screen-gastos-detalhe': 'Seus Gastos',
@@ -4972,6 +5010,15 @@ function montarDrawerHTML() {
             <span class="ico">✏️</span><span>Editar plano</span>
         </button>`;
     }
+    // Diário: só aparece quando existe algo escrito pela pessoa (nada de tela vazia convidando a preencher)
+    if (contarVisitas() > 0) {
+        itens += `<button type="button" class="drawer-item" onclick="fecharDrawer(); abrirDiario()">
+            <span class="ico">📓</span><span>Diário</span>
+        </button>`;
+    }
+    itens += `<button type="button" class="drawer-item" onclick="fecharDrawer(); abrirVocabulario()">
+        <span class="ico">🔤</span><span>Palavras e temas</span>
+    </button>`;
     itens += `<button type="button" class="drawer-item" onclick="fecharDrawer(); abrirTelaAjustes()">
         <span class="ico">⚙️</span><span>Ajustes</span>
     </button>`;
@@ -5387,6 +5434,8 @@ function abrirTelaAjustes() {
 // === CÓPIA DE SEGURANÇA (export / import do estado completo) ===
 
 function exportarEstadoCompleto() {
+    const _nVisitas = contarVisitas() + contarPalavrasVocab();
+    if (_nVisitas > 0 && !confirm('A cópia inclui as suas anotações da visita da semana (' + _nVisitas + '). Quem tiver o arquivo consegue lê-las.\n\nBaixar mesmo assim?')) return;
     try {
         const snapshot = JSON.parse(JSON.stringify(state));
         const payload = {
@@ -5565,6 +5614,7 @@ function renderizarTelaAjustes() {
         <p style="font-size: 0.9rem; color: var(--secondary); line-height: 1.45; margin-bottom: 12px;">
             Baixe uma cópia completa do que está neste aparelho ou restaure a partir de um arquivo. Tudo fica só no seu celular — nada é enviado para servidores.
         </p>
+        ${(contarVisitas() + contarPalavrasVocab()) > 0 ? `<p style="font-size: 0.9rem; color: var(--secondary); line-height: 1.45; margin-bottom: 12px;">A cópia inclui as suas anotações da visita da semana (${contarVisitas() + contarPalavrasVocab()}). Quem tiver o arquivo consegue lê-las.</p>` : ''}
         <button type="button" class="btn-option" style="justify-content: flex-start;" onclick="exportarEstadoCompleto()">
             <span style="font-size: 1.3rem;">💾</span>
             <span>Baixar cópia de segurança</span>
@@ -5573,6 +5623,10 @@ function renderizarTelaAjustes() {
             <span style="font-size: 1.3rem;">📥</span>
             <span>Restaurar a partir de arquivo</span>
         </button>
+        ${(contarVisitas() + Object.keys(_vocabMapa()).length) > 0 ? `<button type="button" class="btn-option" style="justify-content: flex-start;" onclick="apagarAnotacoesComConfirmacao()">
+            <span style="font-size: 1.3rem;">🗑️</span>
+            <span>Apagar as anotações da visita da semana</span>
+        </button>` : ''}
     `;
 }
 
@@ -11112,21 +11166,730 @@ function guardarFolgaDoResumo(caixa) {
     abrirDestinoSobra(caixa);
 }
 
-function _htmlConviteCronico() {
+function _htmlConviteCronico(modo) {
     let lista = [];
     try { lista = detectarEstouroCronico((state.orcamento && state.orcamento.resumos) || []); } catch (e) { return ''; }
     const cats = (state.orcamento.categorias || []);
     lista = lista.filter(x => cats.some(c => c.id === x.categoriaId));
     if (!lista.length) return '';
     const fmt = formatarMoeda;
-    return lista.map(x => `<div class="card" style="margin-top:16px; border-left: 4px solid var(--primary); background: var(--info-soft);">
+    // modo (opcional): { categoriaId, estado: 'oculto' | 'destaque' | 'discreto' } — só para a categoria que a observação da semana já cobre.
+    return lista.map(x => {
+        const estado = (modo && modo.categoriaId === x.categoriaId) ? modo.estado : 'destaque';
+        if (estado === 'oculto') return '';
+        const estilo = estado === 'discreto'
+            ? 'border-left: 4px solid var(--border);'
+            : 'border-left: 4px solid var(--primary); background: var(--info-soft);';
+        return `<div class="card" style="margin-top:16px; ${estilo}">
         <p style="margin:0 0 8px;"><strong>${x.nome}</strong> passou do limite em ${x.semanasAcima} das últimas ${x.janela} semanas (em média ${fmt(x.excessoMedio)} a mais). Pode ser que o combinado não esteja refletindo a sua rotina. Quer revisar o valor dessa categoria?</p>
         <button class="btn-option" style="justify-content:center;" onclick="abrirFormularioCategoria('${x.categoriaId}')">Revisar categoria</button>
-    </div>`).join('');
+    </div>`;
+    }).join('');
+}
+
+// === Visita da semana · camada 2: uma observação, oferecida como hipótese ===
+// A primeira regra que se aplica vence: 1 estouro crônico, 2 gasto concentrado que coube no mês, 4 semana sem nada fora do combinado.
+// (A regra 3, dinheiro concentrado em poucos dias, fica para depois.) Nada é gravado: responder ou ignorar não deixa rastro.
+const OBS_RESPOSTAS_PADRAO = ['Faz sentido', 'Não é bem isso', 'Agora não'];
+const OBS_RESPOSTAS_LIMPA = ['Sim, algo ajudou', 'Não sei dizer', 'Agora não'];
+
+function escolherObservacaoSemana(dados) {
+    const d = dados || {};
+    const c = d.cronicas && d.cronicas[0];
+    if (c) {
+        return {
+            regra: 1, categoriaId: c.categoriaId, respostas: OBS_RESPOSTAS_PADRAO,
+            texto: `${c.nome} passou do combinado em ${c.semanasAcima} das últimas ${c.janela} semanas. Às vezes o combinado é que ficou pequeno para a vida real. Faz sentido para você?`
+        };
+    }
+    const g = d.concentrados && d.concentrados[0];
+    if (g) {
+        return {
+            regra: 2, categoriaId: g.categoriaId, respostas: OBS_RESPOSTAS_PADRAO,
+            texto: `${g.nome} pesou muito em uma semana só, mas o mês ficou dentro do combinado. Isso costuma acontecer com gastos que não são toda semana. Faz sentido para você?`
+        };
+    }
+    if (d.semanaLimpa) {
+        return {
+            regra: 4, categoriaId: null, respostas: OBS_RESPOSTAS_LIMPA,
+            texto: 'Esta semana nenhuma categoria passou do combinado. Algo ajudou a ser assim?'
+        };
+    }
+    return null;
+}
+
+// Lê a semana fechada e o estado; só leitura. Futuro e boleto reservado ficam de fora, como no estouro crônico.
+function coletarDadosObservacao(semana, orc) {
+    const cats = (orc && orc.categorias) || [];
+    const existe = id => cats.some(c => c.id === id);
+    let cronicas = [];
+    try { cronicas = detectarEstouroCronico((orc && orc.resumos) || []).filter(x => existe(x.categoriaId)); } catch (e) { cronicas = []; }
+    const mapa = (semana && semana.carregoCategorias) || {};
+    const concentrados = [];
+    let avaliadas = 0, acima = 0;
+    Object.keys(mapa).forEach(id => {
+        const c = mapa[id];
+        if (!c || c.caixa === 'futuro' || c.reservada || !existe(id)) return;
+        const meta = Number(c.metaSem) || 0;
+        if (meta <= 0) return;
+        avaliadas++;
+        const gasto = Number(c.gastoSem) || 0;
+        if (gasto - meta >= 0.5) acima++;
+        let mes = null;
+        try { mes = obterDadosMesCategoria(orc, id); } catch (e) { mes = null; }
+        if (!mes) return;
+        const av = avaliarEstouroCategoria(gasto, meta, { caixa: c.caixa, gastoMes: mes.gastoMes, metaMes: mes.metaMes });
+        if (av.semanaDobrou && !av.mesEstourou) concentrados.push({ categoriaId: id, nome: c.nome || '', fator: av.fator });
+    });
+    concentrados.sort((a, b) => b.fator - a.fator);
+    return { cronicas: cronicas, concentrados: concentrados, semanaLimpa: avaliadas > 0 && acima === 0 };
+}
+
+let _obsAtual = null;      // observação mostrada no resumo aberto (só em memória)
+let _obsResposta = null;   // índice da resposta dada nesta abertura do resumo (só em memória)
+
+function _escHtmlObs(t) {
+    return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\x22/g, '&quot;').replace(/\x27/g, '&#39;');
+}
+
+function _htmlObservacaoSemana(obs) {
+    if (!obs) return '';
+    const botoes = obs.respostas.map((r, i) =>
+        `<button class="btn-option" style="justify-content:center;" onclick="responderObservacao(${i})">${_escHtmlObs(r)}</button>`).join('');
+    return `<div id="obs-semana" class="card" style="margin-top:20px; border-left: 4px solid var(--border);">
+        <p style="margin:0 0 6px; font-size:0.85rem; color: var(--secondary);">Notei isto</p>
+        <p style="margin:0 0 12px;">${_escHtmlObs(obs.texto)}</p>
+        <div style="display:flex; flex-direction:column; gap:8px;">${botoes}</div>
+    </div>`;
+}
+
+// Como o convite de revisar categoria aparece, dada a observação: oculto enquanto a pergunta está aberta,
+// em destaque se a pessoa disse que faz sentido, discreto nas outras respostas (continua disponível).
+function _modoConviteObservacao() {
+    if (!_obsAtual || _obsAtual.regra !== 1) return null;
+    let estado = 'oculto';
+    if (_obsResposta === 0) estado = 'destaque';
+    else if (_obsResposta === 1 || _obsResposta === 2) estado = 'discreto';
+    return { categoriaId: _obsAtual.categoriaId, estado: estado };
+}
+
+function responderObservacao(indice) {
+    if (!_obsAtual || !_obsAtual.respostas[indice]) return;
+    _obsResposta = indice;
+    const caixa = document.getElementById('obs-semana');
+    if (caixa) caixa.innerHTML = '<p style="margin:0; color: var(--secondary);">Certo.</p>';
+    const convites = document.getElementById('convites-cronico');
+    if (convites) convites.innerHTML = _htmlConviteCronico(_modoConviteObservacao());
+}
+
+// === Visita da semana · camada 3: uma pergunta opcional, o nome da semana e as anotações ===
+// As anotações moram em state.visitasSemana[inicioDaSemana] = { perguntaId, texto, nome, em }.
+// Slot próprio, criado só quando a pessoa guarda algo; a semana fechada não é tocada. Entra na cópia de segurança.
+const PERGUNTAS_VISITA = [
+    { id: 'leve-pesada', gate: 'normal', texto: 'Como foi a semana com o dinheiro: mais leve, mais pesada, ou as duas coisas?' },
+    { id: 'surpreendeu', gate: 'normal', texto: 'Teve algum gasto que te surpreendeu, para bem ou para mal?' },
+    { id: 'sentimento', gate: 'normal', texto: 'Teve algum gasto que veio com um sentimento junto? Qual?' },
+    { id: 'diferente', gate: 'quase', texto: 'O que você gostaria que fosse diferente na semana que vem, mesmo que seja pequeno?' },
+    { id: 'proxima-leve', gate: 'quase', texto: 'O que ajudaria a deixar a próxima semana mais leve?' },
+    { id: 'marcou', gate: 'quase', texto: 'O que marcou esta semana?' }
+];
+const PERGUNTA_AMIGO = { id: 'amigo', gate: 'normal', texto: 'Se um amigo estivesse no seu lugar esta semana, o que você diria a ele?' };
+const PERGUNTA_AMIGO_A_CADA = 5;   // a pergunta do amigo é ocasional
+const FRASE_FECHO_VISITA = 'A semana fica registrada. O nome foi você quem deu.';
+
+function numeroDaSemanaVisita(inicioISO) {
+    const p = String(inicioISO || '').slice(0, 10).split('-').map(Number);
+    if (p.length !== 3 || p.some(isNaN)) return null;
+    return Math.floor(Date.UTC(p[0], p[1] - 1, p[2]) / 86400000 / 7);
+}
+
+// A pergunta vem do número da semana: não grava o que mostrou e nunca repete em semanas seguidas.
+// cuidado: 'normal' | 'quase' (só perguntas que olham para frente ou neutras) | 'sobrevivencia' (nenhuma).
+function escolherPerguntaSemana(inicioISO, cuidado) {
+    if (cuidado === 'sobrevivencia') return null;
+    const n = numeroDaSemanaVisita(inicioISO);
+    if (n === null) return null;
+    const permitida = p => cuidado !== 'quase' || p.gate === 'quase';
+    if (n % PERGUNTA_AMIGO_A_CADA === 0 && permitida(PERGUNTA_AMIGO)) return PERGUNTA_AMIGO;
+    const lista = PERGUNTAS_VISITA.filter(permitida);
+    return lista.length ? lista[n % lista.length] : null;
+}
+
+function perguntaVisitaPorId(id) {
+    if (PERGUNTA_AMIGO.id === id) return PERGUNTA_AMIGO;
+    return PERGUNTAS_VISITA.find(p => p.id === id) || null;
+}
+
+// Modo sobrevivência = a regra de ouro do diagnóstico (mesmo sinal do Degrau 4 por override).
+// Quase = degrau 3 ou mais. Se o diagnóstico falhar, vale o mais cuidadoso dos dois que ainda mostram algo.
+function nivelCuidadoVisita(orc) {
+    try {
+        const av = avaliarSistemaMulticriterio(orc);
+        if (av && av.sobrevivencia) return 'sobrevivencia';
+        if (av && typeof av.degrau === 'number' && av.degrau >= 3) return 'quase';
+        return 'normal';
+    } catch (e) { return 'quase'; }
+}
+
+function _chaveVisita(inicio) {
+    return (typeof inicio === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(inicio)) ? inicio : null;   // só data ISO: nada de chave estranha
+}
+
+function obterVisitaSemana(inicio) {
+    const k = _chaveVisita(inicio);
+    const mapa = state && state.visitasSemana;
+    if (!k || !mapa || typeof mapa !== 'object' || !Object.prototype.hasOwnProperty.call(mapa, k)) return null;
+    const e = mapa[k];
+    return (e && typeof e === 'object') ? e : null;
+}
+
+function contarVisitas() {
+    const mapa = state && state.visitasSemana;
+    return (mapa && typeof mapa === 'object') ? Object.keys(mapa).length : 0;
+}
+
+// Guarda texto e/ou nome. Sem nenhum dos dois, apaga a entrada (e o slot, se esvaziar). Nunca toca a semana.
+function salvarVisitaSemana(inicio, dados) {
+    const k = _chaveVisita(inicio);
+    if (!k || !state) return { ok: false };
+    const texto = String((dados && dados.texto) || '').trim();
+    const nome = String((dados && dados.nome) || '').trim();
+    if (!texto && !nome) return { ok: true, apagou: apagarVisitaSemana(k) };
+    if (!state.visitasSemana || typeof state.visitasSemana !== 'object') state.visitasSemana = {};
+    state.visitasSemana[k] = {
+        perguntaId: (dados && dados.perguntaId) || null,
+        texto: texto,
+        nome: nome,
+        em: new Date().toISOString()
+    };
+    salvarEstado();
+    return { ok: true, apagou: false };
+}
+
+function apagarVisitaSemana(inicio) {
+    const k = _chaveVisita(inicio);
+    if (!k || !obterVisitaSemana(k)) return false;
+    delete state.visitasSemana[k];
+    if (Object.keys(state.visitasSemana).length === 0) delete state.visitasSemana;
+    salvarEstado();
+    return true;
+}
+
+function apagarTodasVisitas() {
+    if (!state || state.visitasSemana === undefined) return 0;
+    const n = contarVisitas();
+    delete state.visitasSemana;
+    salvarEstado();
+    return n;
+}
+
+function apagarTodasVisitasComConfirmacao() {
+    const n = contarVisitas();
+    if (!n) return;
+    if (!confirm('Apagar as ' + n + ' anotações da visita da semana? Isso não dá para desfazer.')) return;
+    apagarTodasVisitas();
+    try { renderizarTelaAjustes(); } catch (e) { /* tela fechada */ }
+    try { if (document.querySelector('.screen.active')?.id === 'screen-diario') renderizarDiario(); } catch (e) { /* tela fechada */ }
+}
+
+// Ajustes: apaga o diário e também as respostas de vocabulário (palavras próprias incluídas).
+function apagarAnotacoesComConfirmacao() {
+    const n = contarVisitas() + Object.keys(_vocabMapa()).length;
+    if (!n) return;
+    if (!confirm('Apagar todas as anotações e respostas da visita da semana (' + n + ')? Isso não dá para desfazer.')) return;
+    apagarTodasVisitas();
+    apagarVocabulario();
+    try { renderizarTelaAjustes(); } catch (e) { /* tela fechada */ }
+    try { if (document.querySelector('.screen.active')?.id === 'screen-diario') renderizarDiario(); } catch (e) { /* tela fechada */ }
+}
+
+let _visitaCtx = null;   // { inicio, pergunta } da semana aberta no resumo (só em memória)
+
+function _htmlVisitaCard(ctx, modo) {
+    const salva = obterVisitaSemana(ctx.inicio);
+    if (modo === 'recolhido') return '<p style="margin:0; color: var(--secondary);">Certo.</p>';
+    if (modo === 'guardado') {
+        return `<p style="margin:0 0 6px;">Guardado neste aparelho.</p>
+        ${salva && salva.nome ? `<p style="margin:0 0 10px; color: var(--secondary);">${_escHtmlObs(FRASE_FECHO_VISITA)}</p>` : ''}
+        <div style="display:flex; gap:8px;">
+            <button class="btn-option" style="justify-content:center; flex:1;" onclick="editarVisita()">Editar</button>
+            <button class="btn-option" style="justify-content:center; flex:1;" onclick="apagarVisita()">Apagar</button>
+        </div>`;
+    }
+    return `<p style="margin:0 0 6px; font-size:0.85rem; color: var(--secondary);">Uma pergunta, se quiser</p>
+        <p style="margin:0 0 10px;">${_escHtmlObs(ctx.pergunta.texto)}</p>
+        <textarea id="visita-texto" rows="3" placeholder="Com as suas palavras" style="width:100%; box-sizing:border-box; padding:10px; border:1px solid var(--border); border-radius:8px; font: inherit; background: var(--card-bg, transparent); color: inherit;">${_escHtmlObs(salva ? salva.texto : '')}</textarea>
+        <label for="visita-nome" style="display:block; margin:12px 0 4px; font-size:0.9rem; color: var(--secondary);">Que nome você daria para esta semana? (opcional)</label>
+        <input id="visita-nome" type="text" placeholder="Uma a três palavras" value="${_escHtmlObs(salva ? salva.nome : '')}" style="width:100%; box-sizing:border-box; padding:10px; border:1px solid var(--border); border-radius:8px; font: inherit; background: var(--card-bg, transparent); color: inherit;">
+        <p style="margin:10px 0; font-size:0.85rem; color: var(--secondary);">Fica só neste aparelho. Você pode apagar quando quiser.</p>
+        <div style="display:flex; gap:8px;">
+            <button class="btn-option" style="justify-content:center; flex:1;" onclick="guardarVisita()">Guardar</button>
+            <button class="btn-option" style="justify-content:center; flex:1;" onclick="recolherVisita()">Agora não</button>
+        </div>`;
+}
+
+function _montarContextoVisita(semana, orc) {
+    if (!semana || !semana.inicio) return null;
+    const salva = obterVisitaSemana(semana.inicio);
+    const cuidado = nivelCuidadoVisita(orc);
+    const doDia = escolherPerguntaSemana(semana.inicio, cuidado);
+    if (!doDia) return null;
+    const guardada = salva && salva.perguntaId ? perguntaVisitaPorId(salva.perguntaId) : null;
+    return { inicio: semana.inicio, pergunta: guardada || doDia };
+}
+
+function _htmlVisitaSemana(ctx) {
+    if (!ctx) return '';
+    const modo = obterVisitaSemana(ctx.inicio) ? 'guardado' : 'editar';
+    return `<div class="card" style="margin-top:20px; border-left: 4px solid var(--border);"><div id="visita-semana">${_htmlVisitaCard(ctx, modo)}</div></div>`;
+}
+
+function _pintarVisita(modo) {
+    const alvo = document.getElementById('visita-semana');
+    if (alvo && _visitaCtx) alvo.innerHTML = _htmlVisitaCard(_visitaCtx, modo);
+}
+
+function guardarVisita() {
+    if (!_visitaCtx) return;
+    const t = document.getElementById('visita-texto');
+    const n = document.getElementById('visita-nome');
+    const r = salvarVisitaSemana(_visitaCtx.inicio, {
+        perguntaId: _visitaCtx.pergunta.id, texto: t ? t.value : '', nome: n ? n.value : ''
+    });
+    _pintarVisita(r.ok && obterVisitaSemana(_visitaCtx.inicio) ? 'guardado' : 'recolhido');
+}
+
+function recolherVisita() { _pintarVisita('recolhido'); }   // "Agora não": não grava nada
+function editarVisita() { _pintarVisita('editar'); }
+function apagarVisita() {
+    if (!_visitaCtx) return;
+    apagarVisitaSemana(_visitaCtx.inicio);
+    _pintarVisita('recolhido');
+}
+
+// === Visita da semana · diário: o que a pessoa escreveu, com o nome que ela deu como título ===
+function _dataBRVisita(inicio) {
+    const p = String(inicio || '').split('-');
+    return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(inicio || '');
+}
+
+// Mais recente primeiro. Só lê; entradas inválidas ficam de fora.
+function listarVisitas() {
+    const mapa = (state && state.visitasSemana && typeof state.visitasSemana === 'object') ? state.visitasSemana : {};
+    return Object.keys(mapa)
+        .filter(k => _chaveVisita(k) && mapa[k] && typeof mapa[k] === 'object')
+        .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
+        .map(k => {
+            const e = mapa[k];
+            const perg = e.perguntaId ? perguntaVisitaPorId(e.perguntaId) : null;
+            return { inicio: k, nome: e.nome || '', texto: e.texto || '', pergunta: perg ? perg.texto : '', em: e.em || '' };
+        });
+}
+
+function tituloVisita(v) {
+    return v.nome ? v.nome : 'Semana de ' + _dataBRVisita(v.inicio).slice(0, 5);
+}
+
+// Texto simples (Markdown) só com o diário: nenhum dado de outras áreas do app.
+function montarTextoDiario(lista) {
+    const linhas = ['# Diário de semanas', '', 'Escrito por você, guardado só neste aparelho.', ''];
+    lista.forEach(v => {
+        linhas.push('## ' + tituloVisita(v));
+        linhas.push('Semana de ' + _dataBRVisita(v.inicio));
+        linhas.push('');
+        if (v.pergunta) { linhas.push('**' + v.pergunta + '**'); linhas.push(''); }
+        if (v.texto) { linhas.push(v.texto); linhas.push(''); }
+    });
+    return linhas.join('\n');
+}
+
+function renderizarDiario() {
+    const el = document.getElementById('diario-conteudo');
+    if (!el) return;
+    const lista = listarVisitas();
+    if (!lista.length) {
+        el.innerHTML = `${cabecalhoTelaSecundaria('Diário', 'O que você escreveu nas visitas')}
+            <div class="card" style="text-align:center; padding: 32px 20px;">
+                <p style="color: var(--secondary); font-size: 0.9rem; margin:0;">Ainda não há nada aqui. Quando você guardar algo na visita da semana, aparece neste lugar.</p>
+            </div>`;
+        return;
+    }
+    const cartoes = lista.map(v => `<div class="card" style="margin-bottom: 14px;">
+            <h3 style="margin:0 0 2px; font-size:1.1rem;">${_escHtmlObs(tituloVisita(v))}</h3>
+            <p style="margin:0 0 10px; font-size:0.85rem; color: var(--secondary);">Semana de ${_escHtmlObs(_dataBRVisita(v.inicio))}</p>
+            ${v.pergunta ? `<p style="margin:0 0 6px; font-size:0.9rem; color: var(--secondary);">${_escHtmlObs(v.pergunta)}</p>` : ''}
+            ${v.texto ? `<p style="margin:0 0 12px; white-space: pre-wrap;">${_escHtmlObs(v.texto)}</p>` : ''}
+            <button class="btn-option" style="justify-content:center;" onclick="apagarVisitaDoDiario('${v.inicio}')">Apagar</button>
+        </div>`).join('');
+    el.innerHTML = `${cabecalhoTelaSecundaria('Diário', 'O que você escreveu nas visitas')}
+        <p style="font-size:0.9rem; color: var(--secondary); line-height:1.45; margin: 0 0 16px;">Fica só neste aparelho. Você pode apagar quando quiser.</p>
+        ${cartoes}
+        <button class="btn-option" style="justify-content:center;" onclick="exportarDiarioTexto()">Baixar como texto</button>
+        <button class="btn-option" style="justify-content:center;" onclick="apagarTodasVisitasComConfirmacao()">Apagar tudo</button>`;
+}
+
+function abrirDiario() {
+    renderizarDiario();
+    goToScreen('screen-diario');
+}
+
+function apagarVisitaDoDiario(inicio) {
+    if (!obterVisitaSemana(inicio)) return;
+    if (!confirm('Apagar esta anotação? Isso não dá para desfazer.')) return;
+    apagarVisitaSemana(inicio);
+    renderizarDiario();
+}
+
+function exportarDiarioTexto() {
+    const lista = listarVisitas();
+    if (!lista.length) return;
+    const blob = new Blob([montarTextoDiario(lista)], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mochila-diario-' + new Date().toISOString().slice(0, 10) + '.md';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        try { URL.revokeObjectURL(url); } catch (e) { /* ok */ }
+        try { a.remove(); } catch (e) { /* ok */ }
+    }, 500);
+}
+
+// Relato do saldo da semana: só descreve. Sem percentual, sem cor de aprovação, sem "firme"/"por pouco".
+// "Zero ou quase" = menos de R$ 1,00 de diferença.
+function relatoSaldoSemana(dados) {
+    const { entrou, saiu, saldo, fmt } = dados;
+    const base = `Entrou ${fmt(entrou)} e saiu ${fmt(saiu)}.`;
+    if (Math.abs(saldo) < 1) return { tipo: 'zero', texto: `${base} A semana fechou no ponto.` };
+    if (saldo > 0) return { tipo: 'positivo', texto: `${base} Ficou ${fmt(saldo)} para a semana que vem.` };
+    return { tipo: 'negativo', texto: `${base} Faltou ${fmt(Math.abs(saldo))}, e isso segue para a próxima semana.` };
+}
+
+// Fala de caixa (Torres/Bela) na visita: descreve, não consola nem avalia.
+function relatoEstouroCaixa(nome, estouro, fmt) {
+    return estouro > 0
+        ? `${nome} passou ${fmt(estouro)} do planejado.`
+        : `${nome} ficou dentro do planejado.`;
+}
+
+// Fala do Zé no resumo: descreve o Futuro e, no máximo, devolve uma pergunta. Sem elogio, sem consolo, sem "sem culpa".
+function relatoFuturoSemana(d) {
+    const fmt = d.fmt;
+    if (d.obrigacoesVencidas.length > 0) {
+        return `${d.obrigacoesVencidas.join(', ')} venceu e não foi paga. O Plano de recuperação mostra o que cabe.`;
+    }
+    if (d.protegeuBase && d.atrasado > 0) {
+        return `A Base foi priorizada. O Futuro ficou ${fmt(d.atrasado)} abaixo do combinado; a gente retoma na próxima janela.`;
+    }
+    if (d.aceleracao > 0) return `O Futuro recebeu ${fmt(d.aceleracao)} a mais do que o combinado.`;
+    if (d.atrasado > 0) {
+        if (d.streak >= 3) {
+            return `O Futuro ficou abaixo do combinado há ${d.streak} semanas (${fmt(d.atrasado)}). A meta ainda faz sentido para o seu mês?`;
+        }
+        return `O Futuro ficou ${fmt(d.atrasado)} abaixo do combinado.`;
+    }
+    if (d.totalDivida > 0 || d.totalReserva > 0) {
+        return `O Futuro ficou no combinado: ${fmt(d.totalDivida)} para dívidas, ${fmt(d.totalReserva)} para reservas.`;
+    }
+    return `O Futuro ficou no combinado.`;
+}
+
+// === Visita da semana · camada 4: vocabulário e temas ===
+// RASCUNHO: o texto abaixo ainda não passou pela revisão da equipe de educação. Mudar para true só depois dela.
+const VOCAB_REVISADO = false;
+const VOCAB_NAO_MUDAR = 'Não mudar nada agora';
+
+const VOCAB_TEMAS = [
+    { id: 'familia', titulo: 'Família e dinheiro', intro: 'Como o dinheiro circula entre quem é da casa e da família.' },
+    { id: 'seguranca', titulo: 'Segurança e futuro', intro: 'Como cada pessoa lida com o que ainda vai vir.' },
+    { id: 'consumo', titulo: 'Consumo e desejos', intro: 'O que está por trás de algumas compras.' },
+    { id: 'controle', titulo: 'Controle e liberdade', intro: 'Quanto olhar, quanto soltar.' }
+];
+
+// gate 'quase': conceitos que cabem em semanas de aperto (nada que fale de guardar ou de comprar por vontade).
+const VOCAB_CONCEITOS = [
+    { id: 'solidariedade', tema: 'familia', gate: 'quase', termo: 'solidariedade financeira',
+      descricao: 'Dar ou emprestar dinheiro a quem é da família, muitas vezes sem combinar prazo.',
+      protege: 'o vínculo e o sentimento de pertencer.',
+      alternativas: ['Combinar com a pessoa um valor fixo por mês', 'Separar um valor só para isso, antes de saber quem vai pedir', VOCAB_NAO_MUDAR] },
+    { id: 'silencio', tema: 'familia', gate: 'quase', termo: 'silêncio sobre dinheiro',
+      descricao: 'Em algumas casas, falar de dinheiro é evitado.',
+      protege: 'a paz em casa e a dignidade de quem não quer expor o aperto.',
+      alternativas: ['Escolher uma pessoa de confiança para conversar', 'Conversar sobre um número de cada vez', VOCAB_NAO_MUDAR] },
+    { id: 'guardar-medo', tema: 'seguranca', termo: 'guardar por medo',
+      descricao: 'Guardar dinheiro mais para se sentir seguro do que para chegar a um objetivo.',
+      protege: 'a tranquilidade de saber que existe uma folga.',
+      alternativas: ['Dar um nome a essa reserva', 'Definir um valor que já seja suficiente para você', VOCAB_NAO_MUDAR] },
+    { id: 'presente', tema: 'seguranca', termo: 'peso do presente',
+      descricao: 'Dar mais peso ao que é agora do que ao que vem depois. É um jeito comum a muitas pessoas.',
+      protege: 'o bem-estar de hoje, que também conta.',
+      alternativas: ['Programar o valor para sair no dia em que o dinheiro entra', 'Escolher uma parte pequena, só como teste', VOCAB_NAO_MUDAR] },
+    { id: 'recompensa', tema: 'consumo', termo: 'compra de recompensa',
+      descricao: 'Comprar algo depois de um dia ou de uma semana difíceis, como um prêmio.',
+      protege: 'o descanso e o reconhecimento do esforço.',
+      alternativas: ['Ter uma recompensa que não custe dinheiro de vez em quando', 'Combinar um valor de recompensa por semana', VOCAB_NAO_MUDAR] },
+    { id: 'pertencimento', tema: 'consumo', termo: 'consumo de pertencimento',
+      descricao: 'Comprar algo para se sentir parte de um grupo ou para não ficar de fora.',
+      protege: 'a relação com amigos e colegas.',
+      alternativas: ['Notar com quais grupos isso aparece mais', 'Propor um programa que caiba no bolso', VOCAB_NAO_MUDAR] },
+    { id: 'evitar-olhar', tema: 'controle', gate: 'quase', termo: 'evitar olhar',
+      descricao: 'Não abrir o extrato ou o aplicativo do banco porque olhar dá desconforto.',
+      protege: 'o humor do dia.',
+      alternativas: ['Olhar um número só, em um horário fixo', 'Olhar com alguém de confiança por perto', VOCAB_NAO_MUDAR] },
+    { id: 'controle-rigido', tema: 'controle', gate: 'quase', termo: 'controle rígido',
+      descricao: 'Acompanhar cada centavo e se sentir mal quando algo foge do plano.',
+      protege: 'a sensação de estar no comando.',
+      alternativas: ['Reservar um valor livre, sem prestar contas', 'Rever a regra só no fim do mês', VOCAB_NAO_MUDAR] }
+];
+
+function vocabConceitoPorId(id) { return VOCAB_CONCEITOS.find(c => c.id === id) || null; }
+
+function _vocabMapa() {
+    const v = state && state.vocabulario;
+    return (v && typeof v === 'object' && v.respostas && typeof v.respostas === 'object') ? v.respostas : {};
+}
+
+function obterRespostaVocab(id) {
+    const m = _vocabMapa();
+    const r = Object.prototype.hasOwnProperty.call(m, id) ? m[id] : null;
+    return (r && typeof r === 'object') ? r : null;
+}
+
+// Palavras que a pessoa escreveu (as únicas "anotações" desta camada).
+function contarPalavrasVocab() {
+    const m = _vocabMapa();
+    return Object.keys(m).filter(k => m[k] && m[k].tipo === 'minha' && m[k].texto).length;
+}
+
+// tipo: 'ressoa' | 'nao' | 'minha'. Uma resposta por conceito; a mais recente vale.
+function registrarRespostaVocab(id, semana, tipo, texto) {
+    if (!vocabConceitoPorId(id) || !_chaveVisita(semana) || !state) return false;
+    if (['ressoa', 'nao', 'minha'].indexOf(tipo) < 0) return false;
+    const t = String(texto || '').trim();
+    if (tipo === 'minha' && !t) return false;
+    if (!state.vocabulario || typeof state.vocabulario !== 'object') state.vocabulario = { respostas: {} };
+    if (!state.vocabulario.respostas || typeof state.vocabulario.respostas !== 'object') state.vocabulario.respostas = {};
+    const r = { tipo: tipo, semana: semana, em: new Date().toISOString() };
+    if (tipo === 'minha') r.texto = t;
+    state.vocabulario.respostas[id] = r;
+    salvarEstado();
+    return true;
+}
+
+function apagarRespostaVocab(id) {
+    if (!obterRespostaVocab(id)) return false;
+    delete state.vocabulario.respostas[id];
+    if (Object.keys(state.vocabulario.respostas).length === 0) delete state.vocabulario;
+    salvarEstado();
+    return true;
+}
+
+function apagarVocabulario() {
+    if (!state || state.vocabulario === undefined) return 0;
+    const n = Object.keys(_vocabMapa()).length;
+    delete state.vocabulario;
+    salvarEstado();
+    return n;
+}
+
+// Escolhe o conceito oferecido na semana. Determinístico (número da semana), sem gravar o que mostrou.
+// - sobrevivência: nenhum. Aperto ('quase'): só os conceitos com gate 'quase'.
+// - o que a pessoa já marcou como "ressoa" ou "minha palavra" nesta semana continua sendo o da semana.
+// - o que ela marcou "não é meu" nesta semana não volta nesta semana.
+function escolherConceitoSemana(inicioISO, cuidado) {
+    if (cuidado === 'sobrevivencia') return null;
+    const k = _chaveVisita(inicioISO);
+    const n = numeroDaSemanaVisita(inicioISO);
+    if (!k || n === null) return null;
+    const fixado = VOCAB_CONCEITOS.find(c => { const r = obterRespostaVocab(c.id); return r && r.semana === k && r.tipo !== 'nao'; });
+    if (fixado) return fixado;
+    const lista = VOCAB_CONCEITOS.filter(c => {
+        if (cuidado === 'quase' && c.gate !== 'quase') return false;
+        const r = obterRespostaVocab(c.id);
+        return !(r && r.tipo === 'nao' && r.semana === k);
+    });
+    return lista.length ? lista[n % lista.length] : null;
+}
+
+function _vocabTema(c) { return VOCAB_TEMAS.find(t => t.id === c.tema) || null; }
+
+function _vocabFraseHipotese(c) {
+    return 'Às vezes isso é chamado de “' + c.termo + '”. Pode ser que não seja o seu caso.';
+}
+
+// Corpo comum à semana e à biblioteca: o que é, o que costuma proteger, caminhos sem ordem.
+function _htmlVocabCorpo(c) {
+    const alts = c.alternativas.map(a => `<li style="margin:2px 0;">${_escHtmlObs(a)}</li>`).join('');
+    return `<p style="margin:0 0 8px;">${_escHtmlObs(c.descricao)}</p>
+        <p style="margin:0 0 8px;">${_escHtmlObs(_vocabFraseHipotese(c))}</p>
+        <p style="margin:0 0 8px; color: var(--secondary);">Isso costuma proteger ${_escHtmlObs(c.protege)}</p>
+        <p style="margin:0 0 4px; color: var(--secondary); font-size:0.9rem;">Caminhos possíveis, sem ordem:</p>
+        <ul style="margin:0 0 12px; padding-left:20px;">${alts}</ul>`;
+}
+
+let _vocabCtx = null;   // { inicio, conceito } da semana aberta (só em memória)
+
+function _htmlVocabCard(ctx, modo) {
+    const c = ctx.conceito;
+    const r = obterRespostaVocab(c.id);
+    if (modo === 'convite') {
+        return `<p style="margin:0 0 10px; color: var(--secondary);">Se quiser, há uma palavra que algumas pessoas usam para dar nome ao que se vê numa semana.</p>
+            <button class="btn-option" style="justify-content:center;" onclick="abrirVocabSemana()">Ver uma palavra</button>`;
+    }
+    if (modo === 'recusado') return '<p style="margin:0; color: var(--secondary);">Certo. Ela não volta nesta semana.</p>';
+    if (modo === 'ressoou') {
+        return `<p style="margin:0 0 10px;">Anotado: “${_escHtmlObs(c.termo)}” ressoa.</p>
+            <button class="btn-option" style="justify-content:center;" onclick="desfazerVocab()">Tirar</button>`;
+    }
+    if (modo === 'minha') {
+        return `<p style="margin:0 0 6px;">Que palavra é sua para isso?</p>
+            <input id="vocab-minha" type="text" placeholder="Uma a três palavras" value="${_escHtmlObs(r && r.texto ? r.texto : '')}" style="width:100%; box-sizing:border-box; padding:10px; border:1px solid var(--border); border-radius:8px; font: inherit; background: var(--card-bg, transparent); color: inherit;">
+            <p style="margin:10px 0; font-size:0.85rem; color: var(--secondary);">Fica só neste aparelho. Você pode apagar quando quiser.</p>
+            <div style="display:flex; gap:8px;">
+                <button class="btn-option" style="justify-content:center; flex:1;" onclick="guardarMinhaPalavraVocab()">Guardar</button>
+                <button class="btn-option" style="justify-content:center; flex:1;" onclick="abrirVocabSemana()">Voltar</button>
+            </div>`;
+    }
+    if (modo === 'guardada') {
+        return `<p style="margin:0 0 10px;">Sua palavra: “${_escHtmlObs(r && r.texto ? r.texto : '')}”. Guardada neste aparelho.</p>
+            <div style="display:flex; gap:8px;">
+                <button class="btn-option" style="justify-content:center; flex:1;" onclick="editarMinhaPalavraVocab()">Editar</button>
+                <button class="btn-option" style="justify-content:center; flex:1;" onclick="desfazerVocab()">Apagar</button>
+            </div>`;
+    }
+    // 'aberto': a palavra da própria pessoa vem primeiro
+    const nome = obterVisitaSemana(ctx.inicio);
+    const primeiro = nome && nome.nome ? `<p style="margin:0 0 10px;">Você chamou esta semana de “${_escHtmlObs(nome.nome)}”.</p>` : '';
+    return `<p style="margin:0 0 6px; font-size:0.85rem; color: var(--secondary);">Uma palavra que algumas pessoas usam</p>
+        ${primeiro}${_htmlVocabCorpo(c)}
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn-option" style="justify-content:center; flex:1;" onclick="ressoaVocab()">Ressoa</button>
+            <button class="btn-option" style="justify-content:center; flex:1;" onclick="naoMeuVocab()">Não é meu</button>
+            <button class="btn-option" style="justify-content:center; flex:1;" onclick="minhaPalavraVocab()">Minha palavra</button>
+        </div>`;
+}
+
+function _modoVocabInicial(ctx) {
+    const r = obterRespostaVocab(ctx.conceito.id);
+    if (r && r.semana === ctx.inicio) {
+        if (r.tipo === 'ressoa') return 'ressoou';
+        if (r.tipo === 'minha') return 'guardada';
+    }
+    return 'convite';
+}
+
+function _montarContextoVocab(inicio, orc) {
+    const c = escolherConceitoSemana(inicio, nivelCuidadoVisita(orc));
+    return c ? { inicio: inicio, conceito: c } : null;
+}
+
+function _htmlVocabSemana(ctx) {
+    if (!ctx) return '';
+    return `<div class="card" style="margin-top:20px; border-left: 4px solid var(--border);"><div id="vocab-semana">${_htmlVocabCard(ctx, _modoVocabInicial(ctx))}</div>
+        ${VOCAB_REVISADO ? '' : '<p style="margin:10px 0 0; font-size:0.75rem; color: var(--secondary);">Texto em revisão.</p>'}</div>`;
+}
+
+function _pintarVocab(modo) {
+    const alvo = document.getElementById('vocab-semana');
+    if (alvo && _vocabCtx) alvo.innerHTML = _htmlVocabCard(_vocabCtx, modo);
+}
+
+function abrirVocabSemana() { _pintarVocab('aberto'); }
+function ressoaVocab() { if (_vocabCtx && registrarRespostaVocab(_vocabCtx.conceito.id, _vocabCtx.inicio, 'ressoa')) _pintarVocab('ressoou'); }
+function naoMeuVocab() { if (_vocabCtx && registrarRespostaVocab(_vocabCtx.conceito.id, _vocabCtx.inicio, 'nao')) _pintarVocab('recusado'); }
+function minhaPalavraVocab() { _pintarVocab('minha'); }
+function editarMinhaPalavraVocab() { _pintarVocab('minha'); }
+function guardarMinhaPalavraVocab() {
+    if (!_vocabCtx) return;
+    const el = document.getElementById('vocab-minha');
+    const ok = registrarRespostaVocab(_vocabCtx.conceito.id, _vocabCtx.inicio, 'minha', el ? el.value : '');
+    _pintarVocab(ok ? 'guardada' : 'convite');
+}
+function desfazerVocab() { if (_vocabCtx) { apagarRespostaVocab(_vocabCtx.conceito.id); _pintarVocab('convite'); } }
+
+// Biblioteca: consulta livre, sem perguntas e sem registrar nada.
+function renderizarVocabulario() {
+    const el = document.getElementById('vocabulario-conteudo');
+    if (!el) return;
+    const blocos = VOCAB_TEMAS.map(t => {
+        const itens = VOCAB_CONCEITOS.filter(c => c.tema === t.id).map(c => {
+            const r = obterRespostaVocab(c.id);
+            const minha = r && r.tipo === 'minha' && r.texto ? `<p style="margin:0 0 8px;">Sua palavra: “${_escHtmlObs(r.texto)}”.</p>` : '';
+            return `<details style="margin-bottom:8px;"><summary style="cursor:pointer; font-weight:600;">${_escHtmlObs(c.termo)}</summary>
+                <div style="padding-top:8px;">${minha}${_htmlVocabCorpo(c)}</div></details>`;
+        }).join('');
+        return `<div class="card" style="margin-bottom:14px;"><h3 style="margin:0 0 2px; font-size:1.05rem;">${_escHtmlObs(t.titulo)}</h3>
+            <p style="margin:0 0 10px; font-size:0.85rem; color: var(--secondary);">${_escHtmlObs(t.intro)}</p>${itens}</div>`;
+    }).join('');
+    el.innerHTML = `${cabecalhoTelaSecundaria('Palavras e temas', 'Para consultar quando quiser')}
+        <p style="font-size:0.9rem; color: var(--secondary); line-height:1.45; margin:0 0 16px;">São jeitos que algumas pessoas usam para dar nome ao que sentem com o dinheiro. Podem não ser o seu caso, e a sua palavra vale mais do que qualquer uma daqui.</p>
+        ${blocos}
+        ${VOCAB_REVISADO ? '' : '<p style="font-size:0.75rem; color: var(--secondary);">Texto em revisão.</p>'}`;
+}
+
+function abrirVocabulario() {
+    renderizarVocabulario();
+    goToScreen('screen-vocabulario');
+}
+
+// === Semanas passadas: abrir uma semana fechada (relato neutro + visita + palavra) ===
+function _resumoPorInicio(inicio) {
+    const lista = (state && state.orcamento && state.orcamento.resumos) || [];
+    return lista.find(r => r && r.inicio === inicio) || null;
+}
+
+function _htmlSemanaPassada(r, fmt) {
+    const rendaEst = r.rendaEstimada || 0;
+    const entrou = (typeof r.rendaEfetivaFechamento === 'number') ? r.rendaEfetivaFechamento
+        : ((typeof r.rendaReal === 'number') ? r.rendaReal : rendaEst);
+    const saiu = (typeof r.totalGasto === 'number') ? r.totalGasto
+        : ((r.base && r.base.gasto || 0) + (r.vida && r.vida.gasto || 0) + (r.futuro && r.futuro.gasto || 0));
+    const saldo = (typeof r.saldo === 'number') ? r.saldo : ((r.saldoAnterior || 0) + entrou - saiu);
+    const relato = relatoSaldoSemana({ entrou: entrou, saiu: saiu, saldo: saldo, fmt: fmt });
+    const fut = r.futuro || {};
+    const falaFuturo = relatoFuturoSemana({
+        obrigacoesVencidas: (fut.obrigacoesVencidas || []).map(o => o.nome), protegeuBase: !!r.futuroStreakProtegeuBase,
+        atrasado: fut.atrasado || 0, aceleracao: fut.aceleracao || 0, streak: r.futuroStreak || 0, totalDivida: 0, totalReserva: 0, fmt: fmt
+    });
+    const linhas = [
+        relatoEstouroCaixa('A Base', (r.base && r.base.estouro) || 0, fmt),
+        relatoEstouroCaixa('A Vida', (r.vida && r.vida.estouro) || 0, fmt),
+        falaFuturo
+    ].map(t => `<p style="margin:0 0 6px;">${_escHtmlObs(t)}</p>`).join('');
+    return `${cabecalhoTelaSecundaria('Semana passada', 'Uma semana que já fechou')}
+        <div style="margin-bottom: 20px;">
+            <h2 style="font-size:1.3rem; font-weight:700; color: var(--primary); margin:0;">${formatarData(r.inicio)} a ${formatarData(r.fim)}</h2>
+        </div>
+        <div class="card" style="border-left: 4px solid var(--border);">
+            <p style="margin:0 0 10px;">${_escHtmlObs(relato.texto)}</p>
+            ${linhas}
+        </div>
+        ${_htmlVisitaSemana(_visitaCtx)}
+        ${_htmlVocabSemana(_vocabCtx)}
+        <button class="btn-option" style="justify-content:center; margin-top:20px;" onclick="abrirVocabulario()">Ver todas as palavras</button>
+        ${contarVisitas() > 0 ? '<button class="btn-option" style="justify-content:center;" onclick="abrirDiario()">Abrir o diário</button>' : ''}`;
+}
+
+function abrirSemanaPassada(inicio) {
+    const r = _resumoPorInicio(inicio);
+    if (!r) return;
+    const orc = state.orcamento;
+    _visitaCtx = _montarContextoVisita(r, orc);
+    _vocabCtx = _montarContextoVocab(r.inicio, orc);
+    // um só "visita-semana" / "vocab-semana" no documento: esvazia o resumo da semana atual
+    const outro = document.getElementById('resumo-semanal-conteudo');
+    if (outro) outro.innerHTML = '';
+    const el = document.getElementById('semana-passada-conteudo');
+    if (!el) return;
+    el.innerHTML = _htmlSemanaPassada(r, formatarMoeda);
+    goToScreen('screen-semana-passada');
 }
 
 function abrirResumoSemanal() {
     goToScreen('screen-resumo-semanal');
+    { const _sp = document.getElementById('semana-passada-conteudo'); if (_sp) _sp.innerHTML = ''; }
     const container = document.getElementById('resumo-semanal-conteudo');
     const semana = state.orcamento.semanaAtual;
 
@@ -11155,40 +11918,13 @@ function abrirResumoSemanal() {
         ? { valor: semana.rendaEfetivaFechamento }
         : rendaEfetivaDaSemana(semana, state.orcamento);
     const saldo         = (semana.saldoAnterior || 0) + _ri.valor - totalGasto;
-    const percentualUsado = rendaReal > 0 ? Math.min((totalGasto / rendaReal) * 100, 100) : 0;
-    // Cor e fala do saldo
-    let corSaldo = 'barra-verde';
-    let falaSaldo = '';
-    let iconeSaldo = '';
-
-    if (saldo >= 0) {
-        if (percentualUsado < 70) {
-            corSaldo = 'barra-verde';
-            iconeSaldo = '🛡️';
-            falaSaldo = `Sobrou ${fmt(saldo)}. Você usou ${percentualUsado.toFixed(0)}% do que entrou. A base tá firme.`;
-        } else if (percentualUsado < 90) {
-            corSaldo = 'barra-amarela';
-            iconeSaldo = '🌿';
-            falaSaldo = `Sobrou ${fmt(saldo)}, mas você usou ${percentualUsado.toFixed(0)}% do que entrou. Tá no limite. Vale olhar com carinho.`;
-        } else {
-            corSaldo = 'barra-amarela';
-            iconeSaldo = '🌿';
-            falaSaldo = `Sobrou pouco: ${fmt(saldo)}. Você usou ${percentualUsado.toFixed(0)}% do que entrou. Foi por pouco.`;
-        }
-    } else {
-        corSaldo = 'barra-vermelha';
-        iconeSaldo = '🌿';
-        falaSaldo = `Você gastou ${fmt(Math.abs(saldo))} mais do que entrou. Acontece. Semana que vem a gente ajusta.`;
-    }
-
-    // Falas dos 3 avatares (caixinhas)
-    const falaTorres = baseEstouro > 0
-        ? `Sua base passou ${fmt(baseEstouro)} do planejado. Isso não é erro seu.`
-        : `Sua base ficou firme. Ninguém passou fome.`;
-
-    const falaBela = vidaEstouro > 0
-        ? `A Vida passou ${fmt(vidaEstouro)} do que você tinha planejado. Acontece.`
-        : `A Vida ficou no ritmo. Sem culpa, só consciência.`;
+    // Relato sem veredicto (Visita da semana, fatia 1): números e texto neutro, sem nota nem cor de aprovação.
+    _obsAtual = escolherObservacaoSemana(coletarDadosObservacao(semana, state.orcamento));
+    _obsResposta = null;
+    _visitaCtx = _montarContextoVisita(semana, state.orcamento);
+    const relato = relatoSaldoSemana({ entrou: _ri.valor, saiu: totalGasto, saldo: saldo, fmt: fmt });
+    const falaTorres = relatoEstouroCaixa('A Base', baseEstouro, fmt);
+    const falaBela = relatoEstouroCaixa('A Vida', vidaEstouro, fmt);
 
    const categoriasFuturo = (state.orcamento.categorias || []).filter(c => c.caixa === 'futuro');
 const totalDivida = categoriasFuturo
@@ -11203,26 +11939,10 @@ const futuroStreak = semana.futuroStreak != null ? semana.futuroStreak : (state.
 const protegeuBase = !!(semana.futuroStreakProtegeuBase || state.orcamento.futuroStreakProtegeuBase);
 
 const futuroObrig = (semana.futuro && semana.futuro.obrigacoesVencidas) || [];
-let falaZe;
-if (futuroObrig.length > 0) {
-    falaZe = `${futuroObrig.map(o => o.nome).join(', ')} venceu e não foi paga. Aqui não é só meta: é atraso de verdade. Vale abrir o Plano de recuperação e ver o que cabe.`;
-} else if (protegeuBase && futuroAtrasado > 0) {
-    falaZe = `Você protegeu a Base — tá certo. O Futuro ficou atrás do combinado em ${fmt(futuroAtrasado)}; a gente retoma na próxima janela.`;
-} else if (futuroAceleracao > 0) {
-    falaZe = `Você botou ${fmt(futuroAceleracao)} a mais no Futuro. O caminho encurtou.`;
-} else if (futuroAtrasado > 0) {
-    if (futuroStreak >= 4) {
-        falaZe = `Futuro atrás do combinado há ${futuroStreak} semanas (${fmt(futuroAtrasado)}). Se a meta tá sempre fora de alcance, talvez ela esteja alta.`;
-    } else if (futuroStreak >= 3) {
-        falaZe = `Futuro atrás do combinado há ${futuroStreak} semanas (${fmt(futuroAtrasado)}). A meta ainda faz sentido pro seu mês?`;
-    } else {
-        falaZe = `Futuro ficou atrás do combinado em ${fmt(futuroAtrasado)}. Sem culpa — um passo de cada vez.`;
-    }
-} else if (totalDivida > 0 || totalReserva > 0) {
-    falaZe = `Futuro no combinado. ${fmt(totalDivida)} para dívidas, ${fmt(totalReserva)} para reservas.`;
-} else {
-    falaZe = `O Futuro ficou no combinado. Um passo de cada vez.`;
-}
+const falaZe = relatoFuturoSemana({
+    obrigacoesVencidas: futuroObrig.map(o => o.nome), protegeuBase: protegeuBase, atrasado: futuroAtrasado,
+    aceleracao: futuroAceleracao, streak: futuroStreak, totalDivida: totalDivida, totalReserva: totalReserva, fmt: fmt
+});
 
     container.innerHTML = `
         ${cabecalhoTelaSecundaria('Resumo da semana', 'O que essa semana contou')}
@@ -11232,14 +11952,14 @@ if (futuroObrig.length > 0) {
         </div>
 
         <!-- SALDO DA SEMANA -->
-        <div class="card" style="border-left: 4px solid ${corSaldo === 'barra-verde' ? 'var(--success)' : corSaldo === 'barra-amarela' ? 'var(--warning)' : 'var(--danger)'}; margin-bottom: 25px;">
+        <div class="card" style="border-left: 4px solid var(--border); margin-bottom: 25px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <strong style="color: var(--primary); font-size: 0.9rem;">💰 Saldo da semana</strong>
             </div>
 
             <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px;">
                 <span style="color: var(--secondary);">Recebido</span>
-                <strong style="color: var(--success);">+ ${fmt(rendaReal)}</strong>
+                <strong style="color: var(--primary);">+ ${fmt(rendaReal)}</strong>
             </div>
 			
 			<div style="font-size: 0.9rem; color: var(--secondary); text-align: center; margin-top: 10px;">
@@ -11248,24 +11968,17 @@ if (futuroObrig.length > 0) {
 
             <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px;">
                 <span style="color: var(--secondary);">Saiu</span>
-                <strong style="color: var(--danger);">- ${fmt(totalGasto)}</strong>
+                <strong style="color: var(--primary);">- ${fmt(totalGasto)}</strong>
             </div>
 
             <div style="display: flex; justify-content: space-between; font-size: 0.9rem; padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--border);">
                 <span style="font-weight: bold; color: var(--primary);">${saldo >= 0 ? 'Sobrou' : 'Faltou'}</span>
-                <strong style="color: ${saldo >= 0 ? 'var(--success)' : 'var(--danger)'};">${fmt(Math.abs(saldo))}</strong>
+                <strong style="color: var(--primary);">${fmt(Math.abs(saldo))}</strong>
             </div>
 
-            <div class="barra-fundo" style="margin-top: 12px;">
-                <div class="barra-preenchida ${corSaldo}" style="width: ${percentualUsado}%"></div>
-            </div>
-            <div style="font-size: 0.9rem; color: var(--secondary); text-align: right; margin-top: 6px;">
-                ${percentualUsado.toFixed(0)}% usado
-            </div>
-
-            <div class="fala-avatar" style="border-left-color: ${corSaldo === 'barra-verde' ? 'var(--success)' : corSaldo === 'barra-amarela' ? 'var(--warning)' : 'var(--danger)'}; margin-top: 15px; margin-bottom: 0;">
-                <span class="icone">${iconeSaldo}</span>
-                <span class="texto">${falaSaldo}</span>
+            <div class="fala-avatar" style="border-left-color: var(--border); margin-top: 15px; margin-bottom: 0;">
+                <span class="icone">💰</span>
+                <span class="texto">${relato.texto}</span>
             </div>
         </div>
 
@@ -11288,8 +12001,10 @@ if (futuroObrig.length > 0) {
         </div>
         ${renderizarCaixinha('futuro', '🔭 Futuro', semana.futuro.gasto, semana.futuro.limite, { carrego: semana.futuro.carrego || 0, sobraAnterior: semana.futuro.sobraAnterior || 0 })}
 
+        ${_htmlObservacaoSemana(_obsAtual)}
+        ${_htmlVisitaSemana(_visitaCtx)}
         ${_htmlConviteFolga(semana)}
-        ${_htmlConviteCronico()}
+        <div id="convites-cronico">${_htmlConviteCronico(_modoConviteObservacao())}</div>
         <button class="btn-primary" style="margin-top: 30px;" onclick="fecharResumoEIniciarNovaSemana()">Começar nova semana</button>
     `;
 
@@ -11335,17 +12050,16 @@ const saldo = (typeof r.saldo === 'number') ? r.saldo : (rendaReal - totalGasto)
 
         let linhaSaldo = '';
         if (rendaReal > 0) {
-            linhaSaldo = saldo >= 0
-                ? `<span style="color: var(--success); font-weight: bold;">Sobrou ${fmt(saldo)}</span>`
-                : `<span style="color: var(--danger); font-weight: bold;">Faltou ${fmt(Math.abs(saldo))}</span>`;
+            // Sem verde nem vermelho: o saldo é um número, não uma nota.
+            linhaSaldo = `<span style="color: var(--primary); font-weight: bold;">${saldo >= 0 ? 'Sobrou' : 'Faltou'} ${fmt(Math.abs(saldo))}</span>`;
         }
 
         const resumoLinha = [];
         if (baseEstouro > 0) resumoLinha.push(`Base passou ${fmt(baseEstouro)}`);
-        else resumoLinha.push('Base firme');
+        else resumoLinha.push('Base dentro do planejado');
 
         if (vidaEstouro > 0) resumoLinha.push(`Vida passou ${fmt(vidaEstouro)}`);
-        else resumoLinha.push('Vida no ritmo');
+        else resumoLinha.push('Vida dentro do planejado');
 
         if (futuroAceleracao > 0) resumoLinha.push(`Futuro além do combinado ${fmt(futuroAceleracao)}`);
         else if (futuroAtrasado > 0) {
@@ -11354,7 +12068,7 @@ const saldo = (typeof r.saldo === 'number') ? r.saldo : (rendaReal - totalGasto)
         } else resumoLinha.push('Futuro no combinado');
 
         return `
-            <div class="card" style="margin-bottom: 12px; padding: 16px;">
+            <div class="card" role="button" tabindex="0" style="margin-bottom: 12px; padding: 16px; cursor: pointer;" ${_chaveVisita(r.inicio) ? `onclick="abrirSemanaPassada('${r.inicio}')"` : ''}>
                 <strong style="color: var(--primary); display: block; margin-bottom: 8px;">${formatarData(r.inicio)} a ${formatarData(r.fim)}</strong>
                 ${linhaSaldo ? `<div style="margin-bottom: 8px; font-size: 0.9rem;">${linhaSaldo}</div>` : ''}
                 <span style="font-size: 0.9rem; color: var(--secondary);">${resumoLinha.join(' · ')}</span>
@@ -15351,9 +16065,11 @@ function avaliarSistemaMulticriterio(orc) {
     // Regra de Ouro: Se o mínimo for crítico (score 1.0) e houver agravante, joga pro 4
     // A regra só é afirmada com os dados que a sustentam (Mínimo Existencial e Atrasos ou Fluxo com dado).
     const overrideAvaliavel = analisePesos ? analisePesos.overrideAvaliavel : true;
+    let sobrevivencia = false;
     if (ideCalculavel && overrideAvaliavel && scMin >= 0.99 && (scInad >= 0.99 || scFluxo > 0)) {
         degrau = 4; cor = 'var(--danger)'; bg = 'var(--danger-soft)'; icone = '🚨'; nome = 'Superendividamento'; 
         msg = 'Seu Mínimo Existencial está zerado e você tem atrasos ou aperto imediato. Vamos focar na sobrevivência.';
+        sobrevivencia = true;
     }
 
     // Ordena os indicadores pelos mais críticos (maior Score Ponderado)
@@ -15368,6 +16084,7 @@ function avaliarSistemaMulticriterio(orc) {
         ide,
         ideCalculavel,
         overrideAvaliavel,
+        sobrevivencia,
         degrau,
         classe: { degrau, nome, cor, bg, icone, msg },
         indicadores: indicadoresOrdenados,
@@ -18419,6 +19136,7 @@ function abrirTelaSimulador() {
     }
     
     _simuladorPickerAberto = false;
+    _simModoAtivo = 'datas';   // sempre abre em Datas, como antes
     goToScreen('screen-simulador');
     renderizarSimulador();
 }
@@ -18869,7 +19587,346 @@ function renderizarConexaoEnvelopes(orc, protegerSaldo) {
     return html;
 }
 
+// === Simulador: modo (Datas | Cenários) ===
+// Datas = simulador de datas original (_renderizarSimuladorDatasOriginal, intacto).
+// Cenários = entradas e saídas editáveis em dois cenários (A e B), comparados com o atual.
+// Tudo mora em state.orcamento.simulador (slot lazy, criado só quando a pessoa edita); nada toca o orçamento real.
+let _simModoAtivo = 'datas';     // 'datas' | 'cenarios'
+let _simAbaAtiva = 'comparar';   // 'atual' | 'A' | 'B' | 'comparar'
+let _simUidSeq = 0;
+const SIM_ICONE_CAIXA = { base: '🛡️', vida: '🌿', futuro: '🔭' };
+
+function _simNivelOk(orc) { return !!orc && (orc.nivel || 1) >= 3; }
+
 function renderizarSimulador() {
+    if (_simModoAtivo === 'cenarios' && _simNivelOk(state && state.orcamento)) {
+        _renderizarSimuladorCenarios();
+        return;
+    }
+    _simModoAtivo = 'datas';
+    _renderizarSimuladorDatasOriginal();
+    if (_simNivelOk(state && state.orcamento)) _simInserirTabs();   // abaixo do Nível 3 o simulador segue como antes, sem abas
+}
+
+function _simTabsHtml() {
+    return `
+        <div class="sim-abas sim-tabs-top">
+            <button type="button" class="sim-aba${_simModoAtivo === 'datas' ? ' ativa' : ''}" onclick="_simSetModo('datas')">📅 Datas</button>
+            <button type="button" class="sim-aba${_simModoAtivo === 'cenarios' ? ' ativa' : ''}" onclick="_simSetModo('cenarios')">✏️ Cenários</button>
+        </div>`;
+}
+
+function _simInserirTabs() {
+    const container = document.getElementById('simulador-conteudo');
+    if (!container) return;
+    if (container.querySelector('.sim-tabs-top')) return;
+    container.insertAdjacentHTML('afterbegin', _simTabsHtml());
+}
+
+function _simSetModo(modo) {
+    if (modo !== 'datas' && modo !== 'cenarios') return;
+    _simModoAtivo = modo;
+    renderizarSimulador();
+}
+
+// --- dados do "atual" (a mesma conta do Fôlego Financeiro, sem o corte de proteção de saldo) ---
+function _obterFolegoExtratoDados(orc) {
+    const o = orc || (state && state.orcamento) || {};
+    const fontes = (o.rendaDetalhe && o.rendaDetalhe.fontes) || [];
+    const cats = (o.categorias || []).filter(c => !_categoriaParcelasQuitada(c));
+    return {
+        entradas: fontes.filter(f => Number(f.valor) > 0).map(f => ({ nome: f.nome || 'Renda', valor: Number(f.valor) })),
+        saidas: cats.filter(c => Number(c.valor) > 0).map(c => ({
+            nome: c.nome || 'Categoria', valor: Number(c.valor), caixa: c.caixa || 'base', icone: SIM_ICONE_CAIXA[c.caixa] || SIM_ICONE_CAIXA.base
+        }))
+    };
+}
+
+function _simUid() { _simUidSeq++; return 'sim_' + Date.now() + '_' + _simUidSeq; }
+
+function _simK(k) { return (k === 'A' || k === 'B') ? k : null; }
+
+// Leitura sem criar nada no estado (renderizar não deixa rastro).
+function _simLer(orc) {
+    const sim = orc && orc.simulador && typeof orc.simulador === 'object' ? orc.simulador : null;
+    const um = k => {
+        const c = sim && sim.cenarios && typeof sim.cenarios === 'object' ? sim.cenarios[k] : null;
+        return { entradas: Array.isArray(c && c.entradas) ? c.entradas : [], saidas: Array.isArray(c && c.saidas) ? c.saidas : [] };
+    };
+    return { A: um('A'), B: um('B') };
+}
+
+// Só para quem vai editar: cria o slot e conserta o que estiver fora de forma.
+function _garantirSimulador(orc) {
+    if (!orc) return null;
+    if (!orc.simulador || typeof orc.simulador !== 'object') {
+        orc.simulador = { cenarios: {}, criadoEm: new Date().toISOString(), atualizadoEm: null };
+    }
+    if (!orc.simulador.cenarios || typeof orc.simulador.cenarios !== 'object') orc.simulador.cenarios = {};
+    ['A', 'B'].forEach(k => {
+        const c = orc.simulador.cenarios[k];
+        if (!c || typeof c !== 'object') orc.simulador.cenarios[k] = { entradas: [], saidas: [] };
+        else {
+            if (!Array.isArray(c.entradas)) c.entradas = [];
+            if (!Array.isArray(c.saidas)) c.saidas = [];
+        }
+    });
+    return orc.simulador;
+}
+
+function _simSnapshotAtual() {
+    const ex = _obterFolegoExtratoDados(state.orcamento);
+    return {
+        entradas: ex.entradas.map(e => ({ id: _simUid(), nome: e.nome, valor: e.valor })),
+        saidas: ex.saidas.map(x => ({ id: _simUid(), nome: x.nome, valor: x.valor, caixa: x.caixa, icone: x.icone }))
+    };
+}
+
+function _simSoma(lista) {
+    return (lista || []).reduce((acc, x) => acc + (Number(x && x.valor) || 0), 0);
+}
+
+function _simTotais(cenario) {
+    const totalEntradas = _simSoma(cenario && cenario.entradas);
+    const totalSaidas = _simSoma(cenario && cenario.saidas);
+    return { totalEntradas: totalEntradas, totalSaidas: totalSaidas, folego: totalEntradas - totalSaidas };
+}
+
+function _simSetAba(aba) {
+    if (['atual', 'A', 'B', 'comparar'].indexOf(aba) < 0) return;
+    _simAbaAtiva = aba;
+    _renderizarSimuladorCenarios();
+}
+
+function _simGravar(sim) {
+    sim.atualizadoEm = new Date().toISOString();
+    salvarEstado();
+}
+
+function _simCopiarDoAtual(k) {
+    if (!_simK(k)) return;
+    const sim = _garantirSimulador(state.orcamento);
+    if (!sim) return;
+    sim.cenarios[k] = _simSnapshotAtual();
+    _simGravar(sim);
+    _renderizarSimuladorCenarios();
+}
+
+function _simLimparCenario(k) {
+    if (!_simK(k)) return;
+    const sim = _garantirSimulador(state.orcamento);
+    if (!sim) return;
+    sim.cenarios[k] = { entradas: [], saidas: [] };
+    _simGravar(sim);
+    _renderizarSimuladorCenarios();
+}
+
+function _simListaDe(sim, k, tipo) {
+    if (!_simK(k) || !sim || !sim.cenarios[k]) return null;
+    return tipo === 'entrada' ? sim.cenarios[k].entradas : (tipo === 'saida' ? sim.cenarios[k].saidas : null);
+}
+
+function _simAtualizarComparacao() {
+    if (_simAbaAtiva !== 'comparar') return;
+    const compEl = document.getElementById('sim-comparacao-conteudo');
+    if (compEl) compEl.innerHTML = _simRenderComparacao();
+}
+
+function _simEditarValor(input) {
+    const k = input.dataset.cenario;
+    const idx = parseInt(input.dataset.idx, 10);
+    const sim = _garantirSimulador(state.orcamento);
+    const lista = _simListaDe(sim, k, input.dataset.tipo);
+    if (!lista || !lista[idx] || typeof lista[idx] !== 'object') return;
+    const n = parseFloat(String(input.value).replace(',', '.'));
+    lista[idx].valor = isFinite(n) && n > 0 ? n : 0;
+    _simGravar(sim);
+    const tEl = document.getElementById('sim-totais-' + k);
+    if (tEl) tEl.innerHTML = _simRenderTotais(_simTotais(sim.cenarios[k]));
+    _simAtualizarComparacao();
+}
+
+function _simEditarNome(input) {
+    const k = input.dataset.cenario;
+    const idx = parseInt(input.dataset.idx, 10);
+    const sim = _garantirSimulador(state.orcamento);
+    const lista = _simListaDe(sim, k, input.dataset.tipo);
+    if (!lista || !lista[idx] || typeof lista[idx] !== 'object') return;
+    lista[idx].nome = String(input.value);
+    _simGravar(sim);
+    _simAtualizarComparacao();
+}
+
+function _simAdicionar(k, tipo) {
+    const sim = _garantirSimulador(state.orcamento);
+    const lista = _simListaDe(sim, k, tipo);
+    if (!lista) return;
+    if (tipo === 'entrada') lista.push({ id: _simUid(), nome: 'Nova entrada', valor: 0 });
+    else lista.push({ id: _simUid(), nome: 'Nova saída', valor: 0, caixa: 'base', icone: SIM_ICONE_CAIXA.base });
+    _simGravar(sim);
+    _renderizarSimuladorCenarios();
+}
+
+function _simRemover(k, tipo, idx) {
+    const sim = _garantirSimulador(state.orcamento);
+    const lista = _simListaDe(sim, k, tipo);
+    if (!lista || !(idx >= 0 && idx < lista.length)) return;
+    lista.splice(idx, 1);
+    _simGravar(sim);
+    _renderizarSimuladorCenarios();
+}
+
+function _simRenderTotais(t) {
+    const fmt = formatarMoeda;
+    return `
+        <div class="sim-extrato-subtotal"><span>Total entrada</span><strong>${fmt(t.totalEntradas)}</strong></div>
+        <div class="sim-extrato-subtotal"><span>Total saída</span><strong>${fmt(t.totalSaidas)}</strong></div>
+        <div class="sim-extrato-folego"><strong>Total fôlego</strong><strong>${fmt(t.folego)}</strong></div>`;
+}
+
+function _simRenderAtual() {
+    const fmt = formatarMoeda;
+    const ex = _obterFolegoExtratoDados(state.orcamento);
+    const t = _simTotais(ex);
+    const linhas = (lista, comIcone) => lista.map(x =>
+        `<div class="sim-extrato-linha"><span>${comIcone ? (x.icone || '') + ' ' : ''}${_escHtmlObs(x.nome)}</span><strong>${fmt(x.valor)}</strong></div>`).join('')
+        || '<div class="sim-extrato-aviso">Nada cadastrado.</div>';
+    return `<div class="card" style="padding:18px 20px;">
+        <div class="sim-extrato-titulo">Entradas</div>${linhas(ex.entradas, false)}
+        <div class="sim-extrato-titulo" style="margin-top:16px;">Saídas</div>${linhas(ex.saidas, true)}
+        <div style="margin-top:16px;">${_simRenderTotais(t)}</div>
+    </div>`;
+}
+
+function _simRenderCenario(k) {
+    const c = _simLer(state.orcamento)[k];
+    const vazio = c.entradas.length === 0 && c.saidas.length === 0;
+    if (vazio) {
+        return `
+            <div class="card" style="padding:20px;text-align:center;">
+                <p style="font-size:0.9rem;color:var(--secondary);line-height:1.5;margin:0 0 14px;">Cenário ${k} está vazio. Copie o atual e edite, ou monte do zero.</p>
+                <button class="btn-primary" style="margin:0 0 8px;" onclick="_simCopiarDoAtual('${k}')">Copiar do atual</button>
+                <button type="button" class="btn-option" style="justify-content:center;margin:0;" onclick="_simAdicionar('${k}','entrada')">Montar do zero</button>
+            </div>`;
+    }
+    const campo = (item, tipo, idx) => {
+        const it = (item && typeof item === 'object') ? item : {};
+        return `<input type="text" class="sim-edit-nome" value="${_escHtmlObs(it.nome)}" data-cenario="${k}" data-tipo="${tipo}" data-idx="${idx}" onchange="_simEditarNome(this)">
+                <input type="number" step="0.01" min="0" class="sim-edit-valor" value="${Number(it.valor) || 0}" data-cenario="${k}" data-tipo="${tipo}" data-idx="${idx}" oninput="_simEditarValor(this)">
+                <button type="button" class="sim-edit-remover" aria-label="Remover" onclick="_simRemover('${k}','${tipo}',${idx})">&times;</button>`;
+    };
+    let html = `
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+            <button class="btn-sm" style="flex:1;background:var(--purple-light);color:var(--primary);" onclick="_simCopiarDoAtual('${k}')">Recopiar do atual</button>
+            <button class="btn-sm" style="flex:1;background:var(--danger-soft);color:var(--danger);" onclick="_simLimparCenario('${k}')">Limpar</button>
+        </div>
+        <div class="sim-extrato-titulo">Entradas</div>`;
+    c.entradas.forEach((e, idx) => { html += `<div class="sim-edit-linha">${campo(e, 'entrada', idx)}</div>`; });
+    html += `<button type="button" class="btn-option" style="justify-content:center;margin-top:8px;" onclick="_simAdicionar('${k}','entrada')">+ Adicionar entrada</button>`;
+    html += `<div class="sim-extrato-titulo" style="margin-top:18px;">Saídas</div>`;
+    c.saidas.forEach((x, idx) => {
+        html += `<div class="sim-edit-linha"><span class="sim-edit-icone">${_escHtmlObs((x && x.icone) || SIM_ICONE_CAIXA.base)}</span>${campo(x, 'saida', idx)}</div>`;
+    });
+    html += `<button type="button" class="btn-option" style="justify-content:center;margin-top:8px;" onclick="_simAdicionar('${k}','saida')">+ Adicionar saída</button>`;
+    html += `<div id="sim-totais-${k}" style="margin-top:18px;">${_simRenderTotais(_simTotais(c))}</div>`;
+    return html;
+}
+
+// Une as linhas pelo nome (sem diferenciar maiúscula nem espaços das pontas) e SOMA nomes repetidos,
+// para a coluna sempre fechar com o total do cenário.
+function _simUnirLinhas(atualList, aList, bList) {
+    const map = new Map();
+    const put = (list, col) => {
+        (list || []).forEach(item => {
+            if (!item || typeof item !== 'object') return;
+            const nome = String(item.nome == null ? '' : item.nome).trim() || '(sem nome)';
+            const key = nome.toLowerCase();
+            if (!map.has(key)) map.set(key, { nome: nome, atual: null, A: null, B: null, icone: item.icone || '' });
+            const obj = map.get(key);
+            obj[col] = (obj[col] == null ? 0 : obj[col]) + (Number(item.valor) || 0);
+            if (item.icone && !obj.icone) obj.icone = item.icone;
+        });
+    };
+    put(atualList, 'atual'); put(aList, 'A'); put(bList, 'B');
+    return Array.from(map.values());
+}
+
+function _simRenderComparacao() {
+    const fmt = formatarMoeda;
+    const atual = _obterFolegoExtratoDados(state.orcamento);
+    const cen = _simLer(state.orcamento);
+    const cA = cen.A, cB = cen.B;
+    const entradas = _simUnirLinhas(atual.entradas, cA.entradas, cB.entradas);
+    const saidas = _simUnirLinhas(atual.saidas, cA.saidas, cB.saidas);
+    const tAtual = _simTotais(atual), tA = _simTotais(cA), tB = _simTotais(cB);
+
+    const celula = v => v != null ? fmt(v) : '—';
+    const linha = (item, icone) => `
+        <div class="sim-comp-row">
+            <div class="sim-comp-item">${icone ? icone + ' ' : ''}${_escHtmlObs(item.nome)}</div>
+            <div class="sim-comp-val">${celula(item.atual)}</div>
+            <div class="sim-comp-val">${celula(item.A)}</div>
+            <div class="sim-comp-val">${celula(item.B)}</div>
+        </div>`;
+    const totalRow = (label, a, b, c) => `
+        <div class="sim-comp-row sim-comp-total">
+            <div class="sim-comp-item">${label}</div>
+            <div class="sim-comp-val">${fmt(a)}</div><div class="sim-comp-val">${fmt(b)}</div><div class="sim-comp-val">${fmt(c)}</div>
+        </div>`;
+    const sinal = v => v > 0 ? '+' : '';
+    // Cenário vazio não é "zero de verdade": a diferença só aparece quando ele tem algo.
+    const vazioA = cA.entradas.length === 0 && cA.saidas.length === 0;
+    const vazioB = cB.entradas.length === 0 && cB.saidas.length === 0;
+    const difer = (vazio, base, v) => vazio ? '—' : `${sinal(v - base)}${fmt(v - base)}`;
+    const delta = (base, a, b) => `
+        <div class="sim-comp-row sim-comp-delta">
+            <div class="sim-comp-item">Δ fôlego vs atual</div>
+            <div class="sim-comp-val">—</div>
+            <div class="sim-comp-val">${difer(vazioA, base, a)}</div>
+            <div class="sim-comp-val">${difer(vazioB, base, b)}</div>
+        </div>`;
+    return `
+        <div class="sim-comp-header">
+            <div class="sim-comp-item">Item</div><div class="sim-comp-val">Atual</div><div class="sim-comp-val">Cenário A</div><div class="sim-comp-val">Cenário B</div>
+        </div>
+        <div class="sim-comp-secao">Entradas</div>
+        ${entradas.map(it => linha(it, '')).join('') || '<div class="placeholder-info" style="padding:8px 4px;">Sem entradas.</div>'}
+        ${totalRow('Total entrada', tAtual.totalEntradas, tA.totalEntradas, tB.totalEntradas)}
+        <div class="sim-comp-secao">Saídas</div>
+        ${saidas.map(it => linha(it, it.icone)).join('') || '<div class="placeholder-info" style="padding:8px 4px;">Sem saídas.</div>'}
+        ${totalRow('Total saída', tAtual.totalSaidas, tA.totalSaidas, tB.totalSaidas)}
+        ${totalRow('Total fôlego', tAtual.folego, tA.folego, tB.folego)}
+        ${delta(tAtual.folego, tA.folego, tB.folego)}
+        ${(vazioA || vazioB) ? `<div class="sim-extrato-aviso">${vazioA ? 'Cenário A está vazio. ' : ''}${vazioB ? 'Cenário B está vazio. ' : ''}Abra a aba correspondente e toque em "Copiar do atual".</div>` : ''}`;
+}
+
+function _renderizarSimuladorCenarios() {
+    const container = document.getElementById('simulador-conteudo');
+    if (!container) return;
+    if (!state || !state.orcamento) {
+        container.innerHTML = _simTabsHtml() + '<div class="placeholder-info">Abra o orçamento primeiro.</div>';
+        return;
+    }
+    const subAbas = [{ id: 'atual', label: 'Atual' }, { id: 'A', label: 'Cenário A' }, { id: 'B', label: 'Cenário B' }, { id: 'comparar', label: 'Comparar' }];
+    const subHtml = '<div class="sim-abas">' + subAbas.map(a =>
+        `<button type="button" class="sim-aba${_simAbaAtiva === a.id ? ' ativa' : ''}" onclick="_simSetAba('${a.id}')">${a.label}</button>`).join('') + '</div>';
+    let conteudo;
+    if (_simAbaAtiva === 'atual') conteudo = _simRenderAtual();
+    else if (_simAbaAtiva === 'A' || _simAbaAtiva === 'B') conteudo = _simRenderCenario(_simAbaAtiva);
+    else conteudo = `<div class="card" style="padding:14px 12px;" id="sim-comparacao-conteudo">${_simRenderComparacao()}</div>`;
+    container.innerHTML = `
+        ${_simTabsHtml()}
+        ${cabecalhoTelaSecundaria('Simulador', 'Experimente cenários sem mexer no que é real')}
+        <div class="fala-avatar" style="margin-bottom:14px;">
+            <span class="icone">🔭</span>
+            <span class="texto">Copie o atual, edite à vontade e compare. Nada muda no seu orçamento de verdade.</span>
+        </div>
+        ${subHtml}
+        ${conteudo}
+        <button type="button" class="btn-option" style="justify-content:center;margin-top:16px;" onclick="voltarTela()">Voltar</button>`;
+}
+
+function _renderizarSimuladorDatasOriginal() {
     const container = document.getElementById('simulador-conteudo');
     if (!container) return;
 
