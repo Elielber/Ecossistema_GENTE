@@ -1,0 +1,1309 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Editor D+1 — PDF → edição → PDF</title>
+<style>
+  :root { --ink:#1a1a1a; --muted:#666; --line:#d0d0d0; --accent:#0b6b5b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: Georgia, 'Times New Roman', serif; color:var(--ink); background:#f3f1ec; }
+  .toolbar { position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; gap:6px; align-items:center;
+             padding:8px 12px; background:#fff; border-bottom:1px solid var(--line);
+             font-family: system-ui, sans-serif; font-size:13px; }
+  .toolbar button { font:inherit; padding:5px 9px; border:1px solid var(--line); background:#fafafa;
+                    border-radius:4px; cursor:pointer; min-height:28px; min-width:28px; }
+  .toolbar button:hover { background:#eef5f3; border-color:var(--accent); }
+  .toolbar select, .toolbar input[type=number] { font:inherit; padding:4px 6px; border:1px solid var(--line);
+                                                  border-radius:4px; background:#fafafa; }
+  .toolbar .sep { width:1px; height:22px; background:var(--line); }
+  .toolbar .group { display:flex; gap:2px; align-items:center; padding:0 4px; }
+  .toolbar .group label { display:flex; align-items:center; gap:4px; font-size:12px; color:#333; }
+  #status { color:var(--muted); margin-left:auto; font-size:12px; }
+  .hint { font-family:system-ui,sans-serif; font-size:12px; color:var(--muted);
+          padding:8px 18px 0; max-width:900px; margin:0 auto; }
+  .toolbar .break { flex-basis:100%; height:0; }
+  .toolbar input[type=text] { font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:4px; background:#fafafa; }
+  .toolbar input[type=color] { width:28px; height:26px; padding:0; border:1px solid var(--line); border-radius:4px; background:#fafafa; cursor:pointer; }
+  .toolbar .lbl { color:#666; font-size:12px; }
+  #tableTools { display:none; }
+  #tableTools.show { display:flex; }
+
+  /* ---- wrapper + cabeçalho/rodapé editáveis ---- */
+  .page-wrapper { max-width:860px; margin:16px auto 80px; }
+  .d1-header, .d1-footer {
+    background:#fff; padding:10px 56px;
+    font-family: system-ui, sans-serif; font-size:13px; color:#333;
+    border:1px dashed #ccc; border-radius:2px;
+    outline:none; min-height:26px; margin-bottom:6px;
+  }
+  .d1-footer { margin-top:6px; margin-bottom:0; }
+  .d1-header:empty::before, .d1-footer:empty::before {
+    content: attr(data-ph); color:#bbb; font-style:italic;
+  }
+
+  #editor { background:#fff; padding:48px 56px; min-height:60vh;
+            box-shadow:0 2px 14px rgba(0,0,0,.08);
+            line-height:1.55; font-size:16px; outline:none; }
+  #editor:empty::before { content:"Carregue um PDF ou comece a digitar…"; color:#bbb; }
+  #editor h1 { font-size:26px; margin:1.4em 0 .5em; }
+  #editor h2 { font-size:21px; margin:1.4em 0 .5em; }
+  #editor h3 { font-size:17px; margin:1.2em 0 .4em; }
+  #editor p { margin:0 0 .8em; }
+  #editor ul, #editor ol { margin:0 0 .9em 1.2em; padding:0; }
+  #editor li { margin-bottom:.3em; }
+  #editor table { border-collapse:collapse; width:100%; margin:1em 0 1.4em; font-size:14px; }
+  #editor th, #editor td { border:1px solid var(--line); padding:7px 9px; vertical-align:top; text-align:left; position:relative; }
+  #editor th { background:#f2f2ef; font-weight:700; }
+  #editor hr.page-sep { border:0; border-top:1px dashed #ccc; margin:2em 0; }
+
+  /* ---- capa ---- */
+  .d1-cover { position:relative; border:1px dashed var(--accent); padding:28px 32px; margin:0 0 18px;
+              min-height:48vh; background:#fcfffe; }
+  .d1-cover::before { content:"CAPA — sem cabeçalho, rodapé, marca d'água nem numeração"; position:absolute;
+              top:-9px; left:12px; background:#fff; padding:0 6px; font:11px system-ui,sans-serif; color:var(--accent); }
+
+  /* ---- marca d'água ---- */
+  #wm { position:fixed; inset:0; display:none; align-items:center; justify-content:center; pointer-events:none;
+        z-index:5; font:700 110px system-ui,sans-serif; color:rgba(0,0,0,.07); transform:rotate(-30deg);
+        white-space:nowrap; user-select:none; }
+
+  /* ---- alças de redimensionamento ---- */
+  .col-resize { position:absolute; top:0; right:-4px; bottom:0; width:8px;
+                cursor:col-resize; user-select:none; z-index:3; }
+  .col-resize::after { content:''; position:absolute; top:20%; bottom:20%;
+                       left:3px; width:2px; background:transparent; border-radius:1px; }
+  #editor table:hover .col-resize::after { background:#cfd8d5; }
+  .col-resize:hover::after { background:var(--accent) !important; }
+
+  /* ---- impressão ---- */
+  @media print {
+    body { background:#fff; }
+    .toolbar, .hint { display:none !important; }
+    .page-wrapper { max-width:none; margin:0; }
+    #editor { box-shadow:none; margin:0; padding:0; max-width:none; font-size:11.5pt; }
+    #editor hr.page-sep { display:none; }
+    table { page-break-inside:auto; }
+    tr, th, td { page-break-inside:avoid; }
+    thead { display:table-header-group; }
+    h1, h2, h3 { page-break-after:avoid; }
+
+    .d1-header, .d1-footer {
+      border:0; padding:0; background:transparent; min-height:0;
+      font-family: Georgia, serif; font-size:10pt; color:#444;
+    }
+    .d1-header:empty::before, .d1-footer:empty::before { content:''; }
+    .d1-header { position: fixed; top: 1cm;    left: 16mm; right: 16mm; display: block !important; }
+    .d1-footer { position: fixed; bottom: 1cm; left: 16mm; right: 16mm; display: block !important; }
+    .d1-header[data-off="1"], .d1-footer[data-off="1"] { display: none !important; }
+
+    .col-resize { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="wm"></div>
+
+<div class="toolbar">
+  <input type="file" id="file" accept="application/pdf">
+  <span class="sep"></span>
+  <button id="btnBlock">Marcar</button>
+  <button id="btnTable">Nova tabela</button>
+  <span class="sep"></span>
+
+  <div class="group">
+    <button id="cmdBold" onmousedown="event.preventDefault()"><b>B</b></button>
+    <button id="cmdItalic" onmousedown="event.preventDefault()"><i>I</i></button>
+    <button id="cmdUnderline" onmousedown="event.preventDefault()"><u>U</u></button>
+  </div>
+
+  <div class="group">
+    <select id="fontSize" title="Tamanho">
+      <option value="">Tam.</option>
+      <option value="10px">10</option><option value="11px">11</option>
+      <option value="12px">12</option><option value="13px">13</option>
+      <option value="14px">14</option><option value="16px">16</option>
+      <option value="18px">18</option><option value="20px">20</option>
+      <option value="24px">24</option><option value="28px">28</option>
+    </select>
+  </div>
+
+  <div class="group">
+    <button id="cmdLeft"    onmousedown="event.preventDefault()">◧</button>
+    <button id="cmdCenter"  onmousedown="event.preventDefault()">▣</button>
+    <button id="cmdRight"   onmousedown="event.preventDefault()">◨</button>
+    <button id="cmdJustify" onmousedown="event.preventDefault()">☰</button>
+  </div>
+
+  <div class="group">
+    <span style="color:#666;font-size:12px;">Parágrafo:</span>
+    <input type="number" id="indentPx"    min="0" step="1" placeholder="Recuo"  title="Recuo da 1ª linha (px)" style="width:58px;">
+    <input type="number" id="spaceBefore" min="0" step="1" placeholder="Antes"  title="Espaço antes (px)"     style="width:58px;">
+    <input type="number" id="spaceAfter"  min="0" step="1" placeholder="Depois" title="Espaço depois (px)"    style="width:58px;">
+    <button id="applyParagraph" title="Aplicar ao bloco atual">→</button>
+  </div>
+
+  <div class="group">
+    <label title="Aplica alinhamento, recuo, larguras e espaçamentos inferidos do PDF"><input type="checkbox" id="useLayout" checked> Reconstruir layout</label>
+    <select id="pageSize" title="Tamanho do papel"><option>A4</option><option>Letter</option><option>A3</option><option>Legal</option><option>A5</option></select>
+    <select id="pageOri" title="Orientação"><option value="p">Retrato</option><option value="l">Paisagem</option></select>
+    <label><input type="checkbox" id="pageNums"> Nº pág.</label>
+    <label><input type="checkbox" id="hdrOn"> Cabeçalho</label>
+    <label><input type="checkbox" id="ftrOn"> Rodapé</label>
+  </div>
+
+  <div class="group" id="tableTools">
+    <span class="lbl">Coluna:</span>
+    <input type="number" id="colW" min="5" max="100" step="1" placeholder="%" style="width:55px;">
+    <button id="applyCol">→</button>
+    <span class="lbl">Altura:</span>
+    <input type="number" id="rowH" min="10" step="1" placeholder="px" style="width:55px;">
+    <button id="applyRow">→</button>
+    <span class="sep"></span>
+    <button id="tRowUp" title="Inserir linha acima" onmousedown="event.preventDefault()">+Lin ↑</button>
+    <button id="tRowDown" title="Inserir linha abaixo" onmousedown="event.preventDefault()">+Lin ↓</button>
+    <button id="tColLeft" title="Inserir coluna à esquerda" onmousedown="event.preventDefault()">+Col ←</button>
+    <button id="tColRight" title="Inserir coluna à direita" onmousedown="event.preventDefault()">+Col →</button>
+    <button id="tDelRow" title="Excluir a linha" onmousedown="event.preventDefault()">−Lin</button>
+    <button id="tDelCol" title="Excluir a coluna" onmousedown="event.preventDefault()">−Col</button>
+    <span class="lbl">Fundo:</span>
+    <input type="color" id="cellBg" value="#f2f2ef" title="Cor de fundo da célula">
+    <button id="cellBgClear" title="Remover cor de fundo" onmousedown="event.preventDefault()">∅</button>
+  </div>
+
+  <div class="break"></div>
+
+  <div class="group">
+    <button id="cmdUndo" title="Desfazer" onmousedown="event.preventDefault()">↶</button>
+    <button id="cmdRedo" title="Refazer" onmousedown="event.preventDefault()">↷</button>
+  </div>
+
+  <div class="group">
+    <select id="blockStyle" title="Estilo do bloco">
+      <option value="">Estilo</option><option value="p">Parágrafo</option>
+      <option value="h1">Título 1</option><option value="h2">Título 2</option><option value="h3">Título 3</option>
+      <option value="blockquote">Citação</option>
+    </select>
+    <button id="cmdUL" title="Lista com marcadores" onmousedown="event.preventDefault()">• ≡</button>
+    <button id="cmdOL" title="Lista numerada" onmousedown="event.preventDefault()">1. ≡</button>
+    <button id="cmdOutdent" title="Diminuir recuo" onmousedown="event.preventDefault()">⇤</button>
+    <button id="cmdIndent" title="Aumentar recuo" onmousedown="event.preventDefault()">⇥</button>
+  </div>
+
+  <div class="group">
+    <span class="lbl">Capa:</span>
+    <button id="btnCoverNew" title="Insere uma capa em branco no início do documento">Inserir</button>
+    <button id="btnCoverMark" title="Transforma em capa a página (do PDF) onde está o cursor; sem cursor, a primeira página">Marcar página</button>
+    <button id="btnCoverDel" title="Desfaz a capa (mantém o conteúdo)">Remover</button>
+  </div>
+
+  <div class="group">
+    <span class="lbl">Margens mm:</span>
+    <input type="number" id="mT" min="0" max="80" step="1" title="Superior" style="width:50px;">
+    <input type="number" id="mR" min="0" max="80" step="1" title="Direita"   style="width:50px;">
+    <input type="number" id="mB" min="0" max="80" step="1" title="Inferior"  style="width:50px;">
+    <input type="number" id="mL" min="0" max="80" step="1" title="Esquerda"  style="width:50px;">
+    <span class="lbl" title="Superior, direita, inferior, esquerda">(S D I E)</span>
+  </div>
+
+  <div class="group">
+    <input type="text" id="wmText" placeholder="Marca d'água" title="Texto diagonal em todas as páginas, exceto a capa" style="width:120px;">
+  </div>
+
+  <button id="btnRestore" style="display:none" title="Recupera o último autosave deste navegador"></button>
+
+  <span class="sep"></span>
+  <button id="btnPrint"><b>Exportar PDF</b></button>
+  <button id="btnSave">Salvar HTML</button>
+  <button id="btnClear">Limpar</button>
+  <span id="status">pronto</span>
+</div>
+
+<p class="hint">
+  Fluxo: carregue o PDF → edite com a barra → <b>Exportar PDF</b> (escolha “Salvar como PDF”).
+  Marque <i>Cabeçalho</i>/<i>Rodapé</i> para editar essas faixas. Arraste a alça à direita de cada coluna para redimensioná-la.
+  Cabeçalho e rodapé saem em texto simples (sem formatação) nas margens de cada página; com rodapé ativo, o número vai para a direita.
+  <b>Capa:</b> use <i>Inserir</i> para um modelo ou clique numa página do PDF e use <i>Marcar página</i>; a capa sai sem cabeçalho, rodapé, marca d'água e número. Ela conta como página 1, então a seguinte mostra “2”.
+</p>
+
+<div class="page-wrapper">
+  <div class="d1-header" contenteditable="true" data-ph="Cabeçalho — clique para editar"></div>
+  <div id="editor" contenteditable="true" spellcheck="false"></div>
+  <div class="d1-footer" contenteditable="true" data-ph="Rodapé — clique para editar"></div>
+</div>
+
+<style id="dynamicPrintCSS">@page { size: A4; margin: 18mm 16mm; }</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const editor = document.getElementById('editor');
+const hdrEl  = document.querySelector('.d1-header');
+const ftrEl  = document.querySelector('.d1-footer');
+const statusEl = document.getElementById('status');
+const setStatus = t => statusEl.textContent = t;
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- utilidades ---------- */
+function selNode() {
+  const ae = document.activeElement;
+  if (ae && ae.closest && ae.closest('.toolbar') && typeof savedRange !== 'undefined' && savedRange)
+    return savedRange.startContainer;
+  const sel = window.getSelection();
+  return sel.rangeCount ? sel.anchorNode : null;
+}
+function getCurrentCell() {
+  let n = selNode();
+  if (!n) return null;
+  while (n && n !== editor) {
+    if (n.nodeName === 'TD' || n.nodeName === 'TH') return n;
+    n = n.parentNode;
+  }
+  return null;
+}
+function getCurrentBlock() {
+  let n = selNode();
+  if (!n) return null;
+  if (n.nodeType === 3) n = n.parentNode;
+  while (n && n !== editor) {
+    if (/^(P|H[1-6]|LI|BLOCKQUOTE|DIV|TD|TH)$/.test(n.nodeName)) return n;
+    n = n.parentNode;
+  }
+  return null;
+}
+document.addEventListener('selectionchange', () => {
+  const ae = document.activeElement;
+  if (ae && ae.closest && ae.closest('.toolbar')) return;   // mexendo na barra: mantém as ferramentas de tabela
+  document.getElementById('tableTools').classList.toggle('show', !!getCurrentCell());
+});
+
+/* ---------- salvamento de seleção ---------- */
+let savedRange = null;
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection();
+  if (sel.rangeCount && editor.contains(sel.anchorNode)) savedRange = sel.getRangeAt(0).cloneRange();
+});
+function restoreSelection() {
+  if (!savedRange) return;
+  editor.focus();
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(savedRange);
+}
+
+/* ---------- inserção ---------- */
+function insertHtmlAtCursor(html) {
+  editor.focus();
+  const sel = window.getSelection();
+  if (!sel.rangeCount) { editor.insertAdjacentHTML('beforeend', html); attachColumnHandles(); return; }
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const frag = document.createDocumentFragment();
+  let last = null;
+  while (tmp.firstChild) last = frag.appendChild(tmp.firstChild);
+  range.insertNode(frag);
+  if (last) {
+    const r = document.createRange();
+    r.setStartAfter(last); r.collapse(true);
+    sel.removeAllRanges(); sel.addRange(r);
+  }
+  attachColumnHandles();
+}
+
+/* ---------- formatação ---------- */
+function applyFontSize(px) {
+  editor.focus();
+  document.execCommand('fontSize', false, '7');
+  editor.querySelectorAll('font[size="7"]').forEach(el => {
+    const span = document.createElement('span');
+    span.style.fontSize = px;
+    while (el.firstChild) span.appendChild(el.firstChild);
+    el.replaceWith(span);
+  });
+}
+
+/* ---------- parágrafo ---------- */
+function applyParagraph() {
+  const block = getCurrentBlock();
+  if (!block) { setStatus('clique dentro de um parágrafo primeiro'); return; }
+  const ind = document.getElementById('indentPx').value;
+  const bef = document.getElementById('spaceBefore').value;
+  const aft = document.getElementById('spaceAfter').value;
+  if (ind !== '') block.style.textIndent  = ind + 'px';
+  if (bef !== '') block.style.marginTop   = bef + 'px';
+  if (aft !== '') block.style.marginBottom= aft + 'px';
+  setStatus('parágrafo atualizado');
+}
+
+/* ---------- tabela ---------- */
+function applyColWidth(pct) {
+  const cell = getCurrentCell(); if (!cell) return;
+  const table = cell.closest('table');
+  const idx = Array.from(cell.parentElement.children).indexOf(cell);
+  table.querySelectorAll('tr').forEach(tr => {
+    const c = tr.children[idx];
+    if (c) c.style.width = pct + '%';
+  });
+}
+function applyRowHeight(px) {
+  const cell = getCurrentCell(); if (!cell) return;
+  cell.parentElement.style.height = px + 'px';
+}
+
+/* ---------- redimensionamento por arraste ---------- */
+let resizeState = null;
+
+function attachColumnHandles() {
+  editor.querySelectorAll('table').forEach(table => {
+    const firstRow = table.querySelector('tr');
+    if (!firstRow) return;
+    Array.from(firstRow.children).forEach((cell, idx) => {
+      if (cell.querySelector(':scope > .col-resize')) return;
+      const handle = document.createElement('span');
+      handle.className = 'col-resize';
+      handle.contentEditable = 'false';
+      handle.title = 'Arraste para redimensionar';
+      handle.addEventListener('pointerdown', e => startColResize(e, cell, Array.from(cell.parentElement.children).filter(x => /^(TD|TH)$/.test(x.nodeName)).indexOf(cell)));
+      cell.appendChild(handle);
+    });
+  });
+}
+
+function startColResize(e, cell, colIdx) {
+  e.preventDefault();
+  e.stopPropagation();
+  const table = cell.closest('table');
+  const firstRow = table.querySelector('tr');
+  const cells = Array.from(firstRow.children);
+  const widths = cells.map(c => c.getBoundingClientRect().width);
+  table.style.tableLayout = 'fixed';
+  table.style.width = widths.reduce((a, b) => a + b, 0) + 'px';
+  table.querySelectorAll('tr').forEach(tr => {
+    Array.from(tr.children).forEach((c, i) => {
+      if (i < widths.length) c.style.width = widths[i] + 'px';
+    });
+  });
+  resizeState = { table, colIdx, startX: e.clientX, startWidth: widths[colIdx], widths };
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+  window.addEventListener('pointermove', onColResize);
+  window.addEventListener('pointerup', endColResize);
+}
+
+function onColResize(e) {
+  if (!resizeState) return;
+  const delta = e.clientX - resizeState.startX;
+  const newW = Math.max(40, resizeState.startWidth + delta);
+  const actualDelta = newW - resizeState.startWidth;
+
+  resizeState.table.querySelectorAll('tr').forEach(tr => {
+    const c = tr.children[resizeState.colIdx];
+    if (c) c.style.width = newW + 'px';
+  });
+
+  const nextIdx = resizeState.colIdx + 1;
+  if (nextIdx < resizeState.widths.length) {
+    const nextW = Math.max(40, resizeState.widths[nextIdx] - actualDelta);
+    resizeState.table.querySelectorAll('tr').forEach(tr => {
+      const c = tr.children[nextIdx];
+      if (c) c.style.width = nextW + 'px';
+    });
+  }
+
+  const firstRow = resizeState.table.querySelector('tr');
+  let total = 0;
+  Array.from(firstRow.children).forEach(c => total += parseFloat(c.style.width) || 0);
+  resizeState.table.style.width = total + 'px';
+}
+
+function endColResize() {
+  if (resizeState) {
+    const table = resizeState.table;
+    const firstRow = table.querySelector('tr');
+    const totalPx = Array.from(firstRow.children)
+      .reduce((s, c) => s + (parseFloat(c.style.width) || 0), 0);
+    if (totalPx > 0) {
+      const pct = Array.from(firstRow.children).map(c =>
+        (parseFloat(c.style.width) || 0) / totalPx * 100);
+      table.querySelectorAll('tr').forEach(tr => {
+        Array.from(tr.children).forEach((c, i) => {
+          if (i < pct.length) c.style.width = pct[i].toFixed(2) + '%';
+        });
+      });
+      table.style.width = '100%';
+    }
+  }
+  resizeState = null;
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+  window.removeEventListener('pointermove', onColResize);
+  window.removeEventListener('pointerup', endColResize);
+}
+
+/* ---------- cabeçalho/rodapé + numeração + capa ---------- */
+function updatePrintStyles() {
+  const q = id => document.getElementById(id);
+  const hdrOn = q('hdrOn').checked && hdrEl.textContent.trim() !== '';
+  const ftrOn = q('ftrOn').checked && ftrEl.textContent.trim() !== '';
+  const pageNums = q('pageNums').checked;
+
+  hdrEl.dataset.off = q('hdrOn').checked ? '0' : '1';
+  ftrEl.dataset.off = q('ftrOn').checked ? '0' : '1';
+  hdrEl.style.display = q('hdrOn').checked ? 'block' : 'none';
+  ftrEl.style.display = q('ftrOn').checked ? 'block' : 'none';
+
+  const cover = editor.querySelector('.d1-cover');
+  const pg = PAGE_SIZES[pageCfg.size] || PAGE_SIZES.A4;
+  const hMM = (pageCfg.landscape ? pg[0] : pg[1]) * PT_MM;
+  const sizeCss = pageCfg.size + (pageCfg.landscape ? ' landscape' : '');
+  const top = hdrOn ? Math.max(30, pageCfg.top) : pageCfg.top;
+  const bottom = ftrOn ? Math.max(30, pageCfg.bottom) : pageCfg.bottom;
+
+  // cabeçalho/rodapé/número vão para caixas de margem do @page: repetem em toda página e não existem na capa
+  const cssStr = t => '"' + t.replace(/\s+/g, ' ').trim().replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  const boxFont = 'font-family: Georgia, serif; font-size: 9pt; color: #555;';
+  const num = 'counter(page) " / " counter(pages)';
+  let boxes = '';
+  if (hdrOn) boxes += `@top-center { content: ${cssStr(hdrEl.textContent)}; ${boxFont} }\n`;
+  if (ftrOn) boxes += `@bottom-left { content: ${cssStr(ftrEl.textContent)}; ${boxFont} }\n`;
+  if (pageNums) boxes += `${ftrOn ? '@bottom-right' : '@bottom-center'} { content: ${num}; ${boxFont} }\n`;
+  let css = `@page { size: ${sizeCss}; margin: ${top}mm ${pageCfg.right}mm ${bottom}mm ${pageCfg.left}mm;\n${boxes}}\n`;
+  if (cover) {
+    css += `@page cover { size: ${sizeCss}; margin: 0; }\n`;
+    css += `@media print {
+  .d1-cover { page: cover; break-after: page; position: relative; z-index: 100; background: #fff; border: 0;
+              margin: 0; box-sizing: border-box; padding: 25mm 22mm; min-height: ${(hMM - 1).toFixed(1)}mm; }
+  .d1-cover::before { content: none !important; }
+}\n`;
+  }
+  css += '@media print { .d1-header, .d1-footer { display: none !important; } }\n';
+  q('dynamicPrintCSS').textContent = css;
+}
+
+[hdrEl, ftrEl].forEach(el => {
+  el.addEventListener('input', () => {
+    if (el.textContent.trim() === '') el.innerHTML = '';
+    updatePrintStyles();
+  });
+});
+
+/* ---------- utilidades de layout ---------- */
+const PT_MM = 25.4 / 72;
+const median = a => {
+  if (!a.length) return 0;
+  const s = [...a].sort((x, y) => x - y), m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+const pctile = (a, p) => {
+  if (!a.length) return 0;
+  const s = [...a].sort((x, y) => x - y);
+  return s[Math.min(s.length - 1, Math.floor(p * (s.length - 1)))];
+};
+const modeOf = (a, step = 0.5) => {
+  if (!a.length) return 0;
+  const m = new Map();
+  a.forEach(v => { const k = Math.round(v / step) * step; m.set(k, (m.get(k) || 0) + 1); });
+  let best = 0, bc = 0;
+  [...m.entries()].sort((x, y) => x[0] - y[0]).forEach(([k, c]) => { if (c > bc) { best = k; bc = c; } });
+  return best;
+};
+const pct = (v, ctx) => Math.max(-60, Math.min(60, v / ctx.W * 100)).toFixed(2) + '%';
+
+const PAGE_SIZES = { A4: [595.28, 841.89], Letter: [612, 792], A3: [841.89, 1190.55], Legal: [612, 1008], A5: [419.53, 595.28] };
+let pageCfg = { size: 'A4', landscape: false, left: 16, right: 16, top: 18, bottom: 18 };
+function detectPage(view) {
+  const w = view[2] - view[0], h = view[3] - view[1];
+  const land = w > h, a = land ? h : w, b = land ? w : h;
+  for (const [name, [pw, ph]] of Object.entries(PAGE_SIZES))
+    if (Math.abs(a - pw) < 8 && Math.abs(b - ph) < 8) return { size: name, landscape: land };
+  return { size: `${(w * PT_MM).toFixed(0)}mm ${(h * PT_MM).toFixed(0)}mm`, landscape: false };
+}
+
+/* ---------- extração (pdf.js) ---------- */
+async function fontFlags(page, names) {
+  const flags = {};
+  try { await page.getOperatorList(); } catch (e) { /* segue com heurística pelo nome interno */ }
+  names.forEach(n => {
+    try {
+      const f = page.commonObjs.get(n), nm = (f && f.name) || '';
+      flags[n] = {
+        bold: !!(f && f.bold) || /bold|black|heavy|semibold|demi/i.test(nm),
+        italic: !!(f && f.italic) || /italic|oblique/i.test(nm)
+      };
+    } catch (e) {
+      flags[n] = { bold: /bold/i.test(n), italic: /italic|oblique/i.test(n) };
+    }
+  });
+  return flags;
+}
+
+async function extract(buffer) {
+  if (!window.pdfjsLib) throw new Error('biblioteca pdf.js não carregou (verifique a conexão)');
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+  const pages = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    setStatus(`extraindo página ${p}/${pdf.numPages}…`);
+    const page = await pdf.getPage(p);
+    const view = page.view;
+    const tc = await page.getTextContent();
+    const flags = await fontFlags(page, [...new Set(tc.items.map(i => i.fontName).filter(Boolean))]);
+    const items = tc.items
+      .filter(i => i.str && i.str.trim() !== '')
+      .map(i => {
+        const f = flags[i.fontName] || {};
+        return {
+          str: i.str.trim(), lead: /^\s/.test(i.str), trail: /\s$/.test(i.str),
+          x: i.transform[4], y: i.transform[5], w: i.width || 0,
+          h: Math.abs(i.transform[3]) || i.height || 10,
+          bold: !!f.bold, italic: !!f.italic
+        };
+      });
+    if (!items.length) { pages.push({ rows: [], view }); continue; }
+
+    items.sort((a, b) => b.y - a.y || a.x - b.x);
+    const lines = [];
+    for (const it of items) {
+      let line = lines.find(l => Math.abs(l.y - it.y) < 2.5);
+      if (!line) { line = { y: it.y, items: [] }; lines.push(line); }
+      line.items.push(it);
+    }
+    lines.sort((a, b) => b.y - a.y);
+
+    const rows = lines.map(l => {
+      l.items.sort((a, b) => a.x - b.x);
+      const groups = []; let cur = [l.items[0]];
+      for (let i = 1; i < l.items.length; i++) {
+        const prev = l.items[i - 1];
+        if (l.items[i].x - (prev.x + prev.w) > 18) { groups.push(cur); cur = []; }
+        cur.push(l.items[i]);
+      }
+      groups.push(cur);
+      const cells = groups.map(g => ({
+        items: g, x0: g[0].x, x1: g[g.length - 1].x + g[g.length - 1].w,
+        h: Math.max(...g.map(x => x.h)), bold: g.every(x => x.bold)
+      }));
+      return { y: l.y, x0: cells[0].x0, x1: cells[cells.length - 1].x1, h: Math.max(...cells.map(c => c.h)), cells };
+    });
+    pages.push({ rows, view });
+  }
+  return pages;
+}
+
+/* ---------- texto das linhas (espaços, hífen, negrito/itálico) ---------- */
+function lineParts(lines) {
+  const parts = [];
+  lines.forEach((items, li) => {
+    items.forEach((it, i) => {
+      let sp = '';
+      if (i > 0) {
+        const p = items[i - 1];
+        if (p.trail || it.lead || it.x - (p.x + p.w) > it.h * 0.12) sp = ' ';
+      } else if (li > 0) {
+        const pl = lines[li - 1], last = pl[pl.length - 1];
+        sp = (/[A-Za-zÀ-ÿ]-$/.test(last.str) && /^[a-zà-ÿ]/.test(it.str)) ? '' : ' ';
+      }
+      parts.push({ sp, str: it.str, b: it.bold, i: it.italic });
+    });
+  });
+  return parts;
+}
+function partsHtml(parts, skipBold) {
+  let out = '', run = null;
+  const close = () => {
+    if (!run) return;
+    let s = esc(run.text);
+    if (run.i) s = `<em>${s}</em>`;
+    if (run.b && !skipBold) s = `<strong>${s}</strong>`;
+    out += s; run = null;
+  };
+  parts.forEach(p => {
+    if (run && run.b === p.b && run.i === p.i) run.text += p.sp + p.str;
+    else { close(); out += p.sp; run = { b: p.b, i: p.i, text: p.str }; }
+  });
+  close();
+  return out;
+}
+const plainText = items => lineParts([items]).map(p => p.sp + p.str).join('');
+
+/* ---------- contexto da página: margens, corpo, entrelinha ---------- */
+function buildCtx(pg) {
+  const rows = pg.rows, pageW = pg.view[2] - pg.view[0];
+  const singles = rows.filter(r => r.cells.length === 1);
+  const longs = singles.filter(r => r.cells[0].items.reduce((s, i) => s + i.str.length, 0) > 45);
+  const ref = longs.length >= 3 ? longs : rows;
+  let bodyLeft = pctile(ref.map(r => r.x0), 0.1), bodyRight = pctile(ref.map(r => r.x1), 0.9);
+  if (bodyRight - bodyLeft < pageW * 0.3) {
+    bodyLeft = Math.min(...rows.map(r => r.x0));
+    bodyRight = Math.max(...rows.map(r => r.x1));
+  }
+  const bodyH = modeOf(ref.map(r => r.h)) || 11;
+  const gaps = [];
+  for (let k = 1; k < singles.length; k++) {
+    const a = singles[k - 1], b = singles[k], g = a.y - b.y;
+    if (Math.abs(a.h - b.h) < 0.8 && g > 0.8 * b.h && g < 2.2 * b.h) gaps.push(g);
+  }
+  const leading = modeOf(gaps) || bodyH * 1.25;
+  return { W: Math.max(1, bodyRight - bodyLeft), bodyLeft, bodyRight, bodyH, leading, pageW };
+}
+
+/* ---------- alinhamento de um parágrafo ---------- */
+function classifyAlign(L, ctx) {
+  const W = ctx.W, tolC = 0.03 * W, tolE = 0.025 * W + 1;
+  const lg = l => l.x0 - ctx.bodyLeft, rg = l => ctx.bodyRight - l.x1;
+  const flushL = l => lg(l) < tolE, flushR = l => rg(l) < tolE;
+  if (L.length === 1) {
+    const l = L[0];
+    if (lg(l) > 0.06 * W && Math.abs(lg(l) - rg(l)) < tolC) return 'center';
+    if (rg(l) < tolE && lg(l) > 0.2 * W) return 'right';
+    return 'left';
+  }
+  if (L.every(l => Math.abs(lg(l) - rg(l)) < tolC) && L.some(l => lg(l) > 0.04 * W)) return 'center';
+  if (L.every(l => flushR(l)) && L.slice(1).every(l => flushL(l))) return 'justify';
+  const body = L.slice(0, -1);
+  const just = body.length >= 2 ? body.every(flushR) : rg(body[0]) < 0.012 * W + 1;
+  if (just && L.slice(1).every(l => lg(l) < 0.12 * W)) return 'justify';
+  if (L.every(flushR) && median(L.map(lg)) > 0.15 * W) return 'right';
+  return 'left';
+}
+const paraLeading = L => median(L.slice(1).map((l, i) => L[i].y - l.y));
+
+/* ---------- blocos: tabelas, parágrafos, listas, títulos ---------- */
+const BULLET_RE = /^([•▪◦●■□○·]|[-–—*]\s)\s*\S/;
+const OL_RE = /^(\d{1,3}[\.\)]|[a-z]\))\s+\S/;
+function stripMarker(items, re) {
+  const copy = items.map(i => ({ ...i })), first = copy[0];
+  const m = re.exec(first.str);
+  if (m) { first.str = first.str.slice(m[0].length); if (!first.str) copy.shift(); }
+  return copy;
+}
+
+function buildBlocks(rows, ctx) {
+  const { bodyH, leading, W } = ctx;
+  // linha com 2+ células, isolada e de margem a margem = texto justificado com espaço largo, não tabela
+  rows.forEach((r, k) => {
+    if (r.cells.length < 2) return;
+    const prevT = k > 0 && rows[k - 1].cells.length >= 2, nextT = k < rows.length - 1 && rows[k + 1].cells.length >= 2;
+    if (!prevT && !nextT && r.x0 - ctx.bodyLeft < 0.06 * W && ctx.bodyRight - r.x1 < 0.03 * W) {
+      const items = r.cells.flatMap(c => c.items);
+      r.cells = [{ items, x0: r.x0, x1: r.x1, h: r.h, bold: items.every(i => i.bold) }];
+    }
+  });
+
+  const out = []; let tbl = null, para = null;
+  const flushPara = () => { if (para) { out.push(para); para = null; } };
+  const flushTbl = () => { if (tbl) { out.push(tbl); tbl = null; } };
+  const isHead = k => /^h\d$/.test(k);
+
+  for (let k = 0; k < rows.length; k++) {
+    const r = rows[k], prev = rows[k - 1], next = rows[k + 1];
+    const gap = prev ? prev.y - r.y : 0;
+
+    if (r.cells.length >= 2) {
+      flushPara();
+      if (tbl && gap > 2.4 * leading) flushTbl();
+      if (!tbl) tbl = { type: 'table', rows: [] };
+      tbl.rows.push(r); continue;
+    }
+    // linha de uma célula entre duas linhas de tabela = linha com células vazias
+    if (tbl && next && next.cells.length >= 2 && gap <= 1.6 * leading && (r.y - next.y) <= 1.6 * leading) {
+      tbl.rows.push(r); continue;
+    }
+    flushTbl();
+
+    const c = r.cells[0], txt = plainText(c.items), ratio = c.h / bodyH;
+    let kind = 'p', listType = null, start = null, items = c.items;
+    if (ratio >= 1.7) kind = 'h1';
+    else if (ratio >= 1.35) kind = 'h2';
+    else if (ratio >= 1.1 && c.bold) kind = 'h3';
+    else if (/^\d+(\.\d+)+\s/.test(txt) && txt.length < 100) kind = 'h3';
+    else if (/^\d+(\.\d+)*[\.\s]/.test(txt) && txt.length < 120 && (c.bold || ratio >= 1.05)) kind = 'h3';
+    else if (BULLET_RE.test(txt)) { kind = 'li'; listType = 'ul'; items = stripMarker(c.items, /^([•▪◦●■□○·]|[-–—*]\s)\s*/); }
+    else if (OL_RE.test(txt)) {
+      kind = 'li'; listType = 'ol';
+      const n = parseInt(txt, 10); start = isNaN(n) ? null : n;
+      items = stripMarker(c.items, /^(\d{1,3}[\.\)]|[a-z]\))\s*/);
+    }
+
+    let merge = false;
+    if (para) {
+      const pl = para.lines[para.lines.length - 1], g = pl.y - r.y;
+      if (isHead(kind)) merge = para.kind === kind && g <= 1.6 * c.h;
+      else if (kind === 'p' && para.kind === 'p') {
+        const sameH = Math.abs(para.h - c.h) < 0.8;
+        const nearGap = g <= leading * 1.35 && g > 0.3 * c.h;
+        const sameCenter = Math.abs((r.x0 + r.x1) / 2 - (pl.x0 + pl.x1) / 2) < 5;
+        const indentNew = (r.x0 - pl.x0) > 8 && !sameCenter;
+        let shortEnd = false;
+        if (para.lines.length >= 2) {
+          const tol = 0.025 * W + 1.5;
+          shortEnd = para.lines.slice(0, -1).every(l => ctx.bodyRight - l.x1 < tol) && (ctx.bodyRight - pl.x1) >= tol;
+        }
+        merge = sameH && nearGap && !indentNew && !shortEnd;
+      } else if (kind === 'p' && para.kind === 'li') {
+        merge = r.x0 > para.lines[0].x0 + 2 && g <= leading * 1.35 && Math.abs(para.h - c.h) < 0.8;
+      }
+    }
+    if (merge) { para.lines.push(r); para.lineItems.push(items); }
+    else {
+      flushPara();
+      para = { type: 'para', kind, listType, start, h: c.h, lines: [r], lineItems: [items] };
+    }
+  }
+  flushPara(); flushTbl();
+  return out;
+}
+
+const firstY = b => b.type === 'table' ? b.rows[0].y : b.lines[0].y;
+const lastY = b => b.type === 'table' ? b.rows[b.rows.length - 1].y : b.lines[b.lines.length - 1].y;
+function gapStyle(b, next, step, h) {
+  if (!next) return null;
+  const extra = (lastY(b) - firstY(next)) - step;
+  return extra > 0.25 * h ? `margin-bottom:${(extra / h).toFixed(2)}em` : 'margin-bottom:0';
+}
+
+function paraHtml(b, ctx, S, next) {
+  const L = b.lines, h = b.h, st = [];
+  const al = classifyAlign(L, ctx);
+  const step = L.length > 1 ? paraLeading(L) : ctx.leading;
+  if (al !== 'left') st.push('text-align:' + al);
+  if (al === 'left' || al === 'justify') {
+    const restX0 = L.length > 1 ? median(L.slice(1).map(l => l.x0)) : L[0].x0;
+    const ml = restX0 - ctx.bodyLeft;
+    if (ml > 6) st.push('margin-left:' + pct(ml, ctx));
+    if (L.length > 1) {
+      const d = L[0].x0 - restX0;
+      if (Math.abs(d) > 4) st.push('text-indent:' + pct(d, ctx));
+    }
+    if (al === 'justify') {
+      const mr = ctx.bodyRight - median(L.slice(0, -1).map(l => l.x1));
+      if (mr > 8) st.push('margin-right:' + pct(mr, ctx));
+    }
+  }
+  if (b.kind === 'p') {
+    const ratio = h / ctx.bodyH;
+    if (Math.abs(ratio - 1) > 0.08) st.push(`font-size:${ratio.toFixed(2)}em`);
+  } else st.push('margin-top:0');
+  if (L.length > 1) {
+    const lh = Math.min(2.4, Math.max(1, step / h));
+    if (Math.abs(lh - 1.55) > 0.08) st.push('line-height:' + lh.toFixed(2));
+  }
+  const g = gapStyle(b, next, step, h); if (g) st.push(g);
+  const tag = b.kind;
+  return `<${tag}${S(st)}>${partsHtml(lineParts(b.lineItems), tag !== 'p')}</${tag}>`;
+}
+
+function listHtml(items, ctx, S, next) {
+  const first = items[0], tag = first.listType, st = [];
+  const ml = first.lines[0].x0 - ctx.bodyLeft;
+  if (ml > 6) st.push(`margin-left:calc(1.2em + ${pct(ml, ctx)})`);
+  const last = items[items.length - 1];
+  const g = gapStyle(last, next, ctx.leading, last.h); if (g) st.push(g);
+  const startAttr = tag === 'ol' && first.start && first.start !== 1 ? ` start="${first.start}"` : '';
+  const lis = items.map(it => {
+    const s = [];
+    if (it.lines.length > 1) {
+      const lh = Math.min(2.4, Math.max(1, paraLeading(it.lines) / it.h));
+      if (Math.abs(lh - 1.55) > 0.08) s.push('line-height:' + lh.toFixed(2));
+    }
+    return `<li${S(s)}>${partsHtml(lineParts(it.lineItems), false)}</li>`;
+  }).join('');
+  return `<${tag}${startAttr}${S(st)}>${lis}</${tag}>`;
+}
+
+/* ---------- tabela: colunas por projeção em x, colspan, alinhamento ---------- */
+function tableHtml(tb, ctx, S, next) {
+  const rows = tb.rows, all = rows.flatMap(r => r.cells);
+  const tLeft = Math.min(...all.map(c => c.x0)), tRight = Math.max(...all.map(c => c.x1));
+  const tW = Math.max(1, tRight - tLeft);
+
+  // 1) bandas = faixas de x ocupadas por texto (as lacunas entre elas são as divisões de coluna)
+  // grade de referência = linha com mais células; as demais só estendem a banda que tocam
+  let ref = rows[0];
+  rows.forEach(r => { if (r.cells.length > ref.cells.length) ref = r; });
+  const bands = ref.cells.map(c => ({ s: c.x0, e: c.x1 })).sort((p, q) => p.s - q.s);
+  for (let k = 1; k < bands.length; k++)
+    if (bands[k].s <= bands[k - 1].e) { bands[k - 1].e = Math.max(bands[k - 1].e, bands[k].e); bands.splice(k, 1); k--; }
+  rows.forEach(r => {
+    if (r === ref) return;
+    r.cells.forEach(c => {
+      const hit = bands.filter(bd => c.x1 >= bd.s - 1 && c.x0 <= bd.e + 1);
+      let bd = hit.length === 1 ? hit[0] : null;
+      if (!hit.length) {
+        const mid = (c.x0 + c.x1) / 2;
+        bd = bands.reduce((best, x) => Math.abs((x.s + x.e) / 2 - mid) < Math.abs((best.s + best.e) / 2 - mid) ? x : best, bands[0]);
+      }
+      if (bd) { bd.s = Math.min(bd.s, c.x0); bd.e = Math.max(bd.e, c.x1); }
+    });
+  });
+  const n = bands.length;
+  const edges = [tLeft];
+  for (let k = 1; k < n; k++) edges.push((bands[k - 1].e + bands[k].s) / 2);
+  edges.push(tRight);
+
+  // 2) cada célula ocupa as bandas que ela cobre
+  const model = rows.map(r => {
+    const cs = r.cells.map(c => {
+      let a = bands.findIndex(b => b.e >= c.x0 - 1); if (a < 0) a = n - 1;
+      let z = a; for (let k = a; k < n; k++) if (bands[k].s <= c.x1 + 1) z = k;
+      return { col: a, span: z - a + 1, lines: [c.items], x0: c.x0, x1: c.x1, h: c.h, bold: c.bold };
+    });
+    let ptr = 0;
+    const kept = [];
+    cs.forEach(c => {
+      if (c.col < ptr) { c.span = Math.max(1, c.span - (ptr - c.col)); c.col = ptr; }
+      if (c.col >= n) {                       // mais células que colunas: junta à anterior
+        const pc = kept[kept.length - 1];
+        if (pc) { pc.lines.push(...c.lines); pc.x1 = Math.max(pc.x1, c.x1); }
+        return;
+      }
+      c.span = Math.min(c.span, n - c.col);
+      ptr = c.col + c.span; kept.push(c);
+    });
+    return { y: r.y, cells: kept };
+  });
+
+  // 3) linhas de continuação (texto quebrado dentro da célula) são fundidas na linha anterior
+  const rg = []; for (let k = 1; k < model.length; k++) rg.push(model[k - 1].y - model[k].y);
+  const medGap = median(rg);
+  const merged = [];
+  model.forEach((m, k) => {
+    const pm = merged[merged.length - 1];
+    if (pm && model.length >= 3 && m.cells[0].col > 0 && (pm.y - m.y) <= 0.8 * medGap &&
+        m.cells.every(c => pm.cells.some(pc => pc.col === c.col))) {
+      m.cells.forEach(c => { const pc = pm.cells.find(x => x.col === c.col); pc.lines.push(c.lines[0]); pc.x1 = Math.max(pc.x1, c.x1); });
+      pm.y = m.y; return;
+    }
+    merged.push(m);
+  });
+
+  // 4) preenche colunas vazias
+  const full = merged.map(m => {
+    const res = []; let ptr = 0;
+    m.cells.forEach(c => {
+      while (ptr < c.col) { res.push({ col: ptr, span: 1, lines: [], empty: true }); ptr++; }
+      res.push(c); ptr = c.col + c.span;
+    });
+    while (ptr < n) { res.push({ col: ptr, span: 1, lines: [], empty: true }); ptr++; }
+    return res;
+  });
+
+  const useHead = full.length > 1 && full[0].every(c => c.empty || c.bold) && full[0].some(c => !c.empty);
+  const widthOf = c => ((edges[c.col + c.span] - edges[c.col]) / tW * 100).toFixed(2) + '%';
+  const alignOf = c => {
+    if (c.empty || !bands[c.col]) return null;
+    const cs = bands[c.col].s, ce = bands[Math.min(n - 1, c.col + c.span - 1)].e, w = ce - cs;
+    const lg = c.x0 - cs, rgap = ce - c.x1, tol = Math.max(0.05 * w, 4);
+    if (lg < tol && rgap < tol) return null;
+    if (Math.abs(lg - rgap) < tol && lg > tol * 1.5) return 'center';
+    if (rgap < tol && lg > tol * 1.5) return 'right';
+    return null;
+  };
+  const firstHasSpan = full[0].some(c => c.span > 1);
+
+  const cellHtml = (c, ri, th) => {
+    const s = [];
+    if (ri === 0 && !firstHasSpan) s.push('width:' + widthOf(c));
+    const al = alignOf(c); if (al) s.push('text-align:' + al);
+    const tag = th ? 'th' : 'td';
+    const span = c.span > 1 ? ` colspan="${c.span}"` : '';
+    return `<${tag}${span}${S(s)}>${c.empty ? '' : partsHtml(lineParts(c.lines), th)}</${tag}>`;
+  };
+  const rowHtml = (cells, ri, th) => '<tr>' + cells.map(c => cellHtml(c, ri, th)).join('') + '</tr>';
+
+  let html = '';
+  if (firstHasSpan) {
+    const widths = []; for (let k = 0; k < n; k++) widths.push(((edges[k + 1] - edges[k]) / tW * 100).toFixed(2) + '%');
+    if (S([1]) !== '') html += '<colgroup>' + widths.map(w => `<col style="width:${w}">`).join('') + '</colgroup>';
+  }
+  let bodyRows = full, bodyOffset = 0;
+  if (useHead) { html += '<thead>' + rowHtml(full[0], 0, true) + '</thead>'; bodyRows = full.slice(1); bodyOffset = 1; }
+  html += '<tbody>' + bodyRows.map((cells, i) => rowHtml(cells, i + bodyOffset, false)).join('') + '</tbody>';
+
+  const st = ['table-layout:fixed'];
+  const wPct = Math.min(100, tW / ctx.W * 100);
+  st.push(`width:${wPct.toFixed(1)}%`);
+  const offL = tLeft - ctx.bodyLeft, offR = ctx.bodyRight - tRight;
+  if (wPct < 97) {
+    if (offL > 0.03 * ctx.W && Math.abs(offL - offR) < 0.04 * ctx.W) { st.push('margin-left:auto'); st.push('margin-right:auto'); }
+    else if (offL > 0.03 * ctx.W) st.push('margin-left:' + pct(offL, ctx));
+  }
+  const tH = median(all.map(c => c.h)), ratio = tH / ctx.bodyH;
+  if (Math.abs(ratio - 0.875) > 0.05) st.push(`font-size:${ratio.toFixed(2)}em`);
+  st.push('margin-top:0');
+  const g = gapStyle(tb, next, medGap || ctx.leading, tH); if (g) st.push(g);
+  return `<table${S(st)}>${html}</table>`;
+}
+
+/* ---------- montagem do HTML de uma página ---------- */
+function pageToHtml(pg, useLayout) {
+  const rows = pg.rows.filter(r => r.cells.some(c => c.items.length));
+  if (!rows.length) return '';
+  const pgc = { rows, view: pg.view };
+  const ctx = buildCtx(pgc);
+  const blocks = buildBlocks(rows, ctx);
+  const S = a => (useLayout && a.length) ? ` style="${a.join(';')}"` : '';
+  const out = [];
+  let i = 0;
+  while (i < blocks.length) {
+    const b = blocks[i], next = blocks[i + 1];
+    if (b.type === 'table') { out.push(tableHtml(b, ctx, S, next)); i++; continue; }
+    if (b.kind === 'li') {
+      const group = [b]; let j = i + 1;
+      while (j < blocks.length && blocks[j].type === 'para' && blocks[j].kind === 'li' && blocks[j].listType === b.listType) { group.push(blocks[j]); j++; }
+      out.push(listHtml(group, ctx, S, blocks[j])); i = j; continue;
+    }
+    out.push(paraHtml(b, ctx, S, next)); i++;
+  }
+  return out.join('\n');
+}
+
+/* --------Marcar ---------- */
+const BLOCK_9X = `
+<h2>(VALIDAR ESTA INFORMAÇÃO)</h2>
+`;
+
+/* ---------- eventos ---------- */
+let lastPages = null;
+function renderPages() {
+  if (!lastPages) return;
+  const useLayout = document.getElementById('useLayout').checked;
+  editor.innerHTML = lastPages.map((pg, i) => (i ? '<hr class="page-sep">' : '') + pageToHtml(pg, useLayout)).join('\n');
+  attachColumnHandles();
+  updatePrintStyles();
+}
+function syncPageControls() {
+  document.getElementById('pageSize').value = PAGE_SIZES[pageCfg.size] ? pageCfg.size : 'A4';
+  document.getElementById('pageOri').value = pageCfg.landscape ? 'l' : 'p';
+  document.getElementById('mT').value = pageCfg.top;
+  document.getElementById('mR').value = pageCfg.right;
+  document.getElementById('mB').value = pageCfg.bottom;
+  document.getElementById('mL').value = pageCfg.left;
+}
+document.getElementById('file').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    lastPages = await extract(await f.arrayBuffer());
+    const det = detectPage(lastPages[0].view);
+    if (PAGE_SIZES[det.size]) { pageCfg.size = det.size; pageCfg.landscape = det.landscape; }
+    try {   // margens laterais pela área que o texto ocupa na 1ª página com conteúdo
+      const pg0 = lastPages.find(x => x.rows.length);
+      if (pg0) {
+        const c0 = buildCtx(pg0), v = pg0.view;
+        const clampMM = x => Math.round(Math.min(40, Math.max(8, x * PT_MM)));
+        pageCfg.left = clampMM(c0.bodyLeft - v[0]);
+        pageCfg.right = clampMM(v[2] - c0.bodyRight);
+      }
+    } catch (e2) { /* mantém as margens atuais */ }
+    syncPageControls(); updatePrintStyles();
+    renderPages();
+    setStatus(`ok — ${lastPages.length} páginas (${det.size}${det.landscape ? ' paisagem' : ''})`);
+  } catch (err) { console.error(err); setStatus('erro: ' + err.message); }
+});
+document.getElementById('useLayout').addEventListener('change', () => {
+  if (lastPages && confirm('Reaplicar a leitura do PDF? Edições manuais no editor serão substituídas.')) renderPages();
+  else document.getElementById('useLayout').checked = !document.getElementById('useLayout').checked;
+});
+document.getElementById('pageSize').addEventListener('change', e => { pageCfg.size = e.target.value; updatePrintStyles(); });
+document.getElementById('pageOri').addEventListener('change', e => { pageCfg.landscape = e.target.value === 'l'; updatePrintStyles(); });
+
+document.getElementById('btnBlock').addEventListener('click', () => insertHtmlAtCursor(BLOCK_9X));
+document.getElementById('btnTable').addEventListener('click', () => insertHtmlAtCursor(
+  '<table><thead><tr><th>Coluna A</th><th>Coluna B</th></tr></thead><tbody><tr><td>—</td><td>—</td></tr></tbody></table><p><br></p>'
+));
+
+document.getElementById('cmdBold').addEventListener('click', () => { editor.focus(); document.execCommand('bold'); });
+document.getElementById('cmdItalic').addEventListener('click', () => { editor.focus(); document.execCommand('italic'); });
+document.getElementById('cmdUnderline').addEventListener('click', () => { editor.focus(); document.execCommand('underline'); });
+document.getElementById('cmdLeft').addEventListener('click', () => { editor.focus(); document.execCommand('justifyLeft'); });
+document.getElementById('cmdCenter').addEventListener('click', () => { editor.focus(); document.execCommand('justifyCenter'); });
+document.getElementById('cmdRight').addEventListener('click', () => { editor.focus(); document.execCommand('justifyRight'); });
+document.getElementById('cmdJustify').addEventListener('click', () => { editor.focus(); document.execCommand('justifyFull'); });
+
+document.getElementById('fontSize').addEventListener('change', e => {
+  const px = e.target.value; if (!px) return;
+  restoreSelection(); applyFontSize(px); e.target.value = '';
+});
+
+document.getElementById('applyParagraph').addEventListener('click', applyParagraph);
+
+document.getElementById('applyCol').addEventListener('click', () => {
+  const v = parseFloat(document.getElementById('colW').value);
+  if (!isNaN(v) && v > 0 && v <= 100) applyColWidth(v);
+});
+document.getElementById('applyRow').addEventListener('click', () => {
+  const v = parseFloat(document.getElementById('rowH').value);
+  if (!isNaN(v) && v > 0) applyRowHeight(v);
+});
+
+['pageNums','hdrOn','ftrOn'].forEach(id =>
+  document.getElementById(id).addEventListener('change', updatePrintStyles));
+
+document.getElementById('btnPrint').addEventListener('click', () => { updatePrintStyles(); window.print(); });
+
+document.getElementById('btnSave').addEventListener('click', () => {
+  const clone = editor.cloneNode(true);
+  clone.querySelectorAll('.col-resize').forEach(el => el.remove());
+  const hdrHTML = hdrEl.style.display === 'none' ? '' : hdrEl.outerHTML;
+  const ftrHTML = ftrEl.style.display === 'none' ? '' : ftrEl.outerHTML;
+  const wmT = document.getElementById('wmText').value.trim();
+  const wmHTML = wmT ? `<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font:700 110px system-ui,sans-serif;color:rgba(0,0,0,.07);transform:rotate(-30deg);white-space:nowrap">${esc(wmT)}</div>` : '';
+  const html = `<!doctype html><meta charset="utf-8"><title>D+1 v3.10</title>
+    <style>${document.getElementById('dynamicPrintCSS').textContent}body{font-family:Georgia,serif;max-width:860px;margin:2em auto;line-height:1.55}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d0d0;padding:7px 9px;vertical-align:top}th{background:#f2f2ef}</style>
+    ${wmHTML}${hdrHTML}${clone.innerHTML}${ftrHTML}`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  a.download = 'D+1_v3.10_editado.html';
+  a.click();
+});
+
+document.getElementById('btnClear').addEventListener('click', () => {
+  if (confirm('Limpar o editor?')) {
+    editor.innerHTML = ''; hdrEl.innerHTML = ''; ftrEl.innerHTML = ''; lastPages = null;
+    try { localStorage.removeItem(AS_KEY); } catch (e) { /* ignora */ }
+    updatePrintStyles(); setStatus('pronto');
+  }
+});
+
+
+/* ---------- desfazer/refazer, estilos de bloco, listas ---------- */
+document.getElementById('cmdUndo').addEventListener('click', () => { editor.focus(); document.execCommand('undo'); });
+document.getElementById('cmdRedo').addEventListener('click', () => { editor.focus(); document.execCommand('redo'); });
+document.getElementById('cmdUL').addEventListener('click', () => { editor.focus(); document.execCommand('insertUnorderedList'); });
+document.getElementById('cmdOL').addEventListener('click', () => { editor.focus(); document.execCommand('insertOrderedList'); });
+document.getElementById('cmdIndent').addEventListener('click', () => { editor.focus(); document.execCommand('indent'); });
+document.getElementById('cmdOutdent').addEventListener('click', () => { editor.focus(); document.execCommand('outdent'); });
+document.getElementById('blockStyle').addEventListener('change', e => {
+  const v = e.target.value; if (!v) return;
+  restoreSelection();
+  document.execCommand('formatBlock', false, '<' + v + '>');
+  e.target.value = '';
+});
+
+/* ---------- tabela: linhas, colunas, cor de célula ---------- */
+const cellsOf = tr => Array.from(tr.children).filter(c => /^(TD|TH)$/.test(c.nodeName));
+const spanOf = c => c.colSpan || 1;
+function colStart(cell) {
+  let s = 0;
+  for (const c of cellsOf(cell.parentElement)) { if (c === cell) break; s += spanOf(c); }
+  return s;
+}
+function totalCols(table) {
+  let m = 0;
+  table.querySelectorAll('tr').forEach(tr => { m = Math.max(m, cellsOf(tr).reduce((a, c) => a + spanOf(c), 0)); });
+  return m;
+}
+function newCellFor(tr) {
+  const c = document.createElement(tr.parentElement.nodeName === 'THEAD' ? 'th' : 'td');
+  c.innerHTML = '<br>';
+  return c;
+}
+function fixColumnWidths(table) {
+  const cg = table.querySelector('colgroup');
+  let els = cg ? Array.from(cg.children) : null;
+  if (!els) { const fr = table.querySelector('tr'); els = fr ? cellsOf(fr) : []; }
+  if (!els.length) return;
+  const isPct = e => /%$/.test(e.style.width || '');
+  if (!els.some(isPct) && table.style.tableLayout !== 'fixed') return;   // layout automático: o navegador resolve
+  let ws = els.map(e => isPct(e) ? parseFloat(e.style.width) : NaN);
+  const known = ws.filter(w => !isNaN(w));
+  const avg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 100 / els.length;
+  ws = ws.map(w => isNaN(w) ? avg : w);
+  const tot = ws.reduce((a, b) => a + b, 0) || 100;
+  els.forEach((e, i) => { e.style.width = (ws[i] / tot * 100).toFixed(2) + '%'; });
+}
+function tblInsertCol(after) {
+  const cell = getCurrentCell(); if (!cell) { setStatus('clique numa célula primeiro'); return; }
+  const table = cell.closest('table');
+  const g = colStart(cell), t = after ? g + spanOf(cell) : g;
+  table.querySelectorAll('tr').forEach(tr => {
+    let pos = 0, done = false;
+    for (const c of cellsOf(tr)) {
+      const sp = spanOf(c);
+      if (t > pos && t < pos + sp) { c.colSpan = sp + 1; done = true; break; }
+      if (pos === t) { tr.insertBefore(newCellFor(tr), c); done = true; break; }
+      pos += sp;
+    }
+    if (!done) tr.appendChild(newCellFor(tr));
+  });
+  const cg = table.querySelector('colgroup');
+  if (cg) { const col = document.createElement('col'); if (t >= cg.children.length) cg.appendChild(col); else cg.insertBefore(col, cg.children[t]); }
+  fixColumnWidths(table); attachColumnHandles(); setStatus('coluna inserida');
+}
+function tblDelCol() {
+  const cell = getCurrentCell(); if (!cell) { setStatus('clique numa célula primeiro'); return; }
+  const table = cell.closest('table'), g = colStart(cell);
+  if (totalCols(table) <= 1) { table.remove(); setStatus('tabela removida'); return; }
+  table.querySelectorAll('tr').forEach(tr => {
+    let pos = 0;
+    for (const c of cellsOf(tr)) {
+      const sp = spanOf(c);
+      if (g >= pos && g < pos + sp) { if (sp > 1) c.colSpan = sp - 1; else c.remove(); break; }
+      pos += sp;
+    }
+  });
+  const cg = table.querySelector('colgroup');
+  if (cg && cg.children[g]) cg.children[g].remove();
+  fixColumnWidths(table); attachColumnHandles(); setStatus('coluna excluída');
+}
+function tblInsertRow(after) {
+  const cell = getCurrentCell(); if (!cell) { setStatus('clique numa célula primeiro'); return; }
+  const tr = cell.parentElement, table = cell.closest('table');
+  let parent = tr.parentElement, ref = after ? tr.nextSibling : tr, th = false;
+  if (parent.nodeName === 'THEAD') {
+    if (after) { parent = table.tBodies[0] || table.appendChild(document.createElement('tbody')); ref = parent.firstChild; }
+    else th = true;
+  }
+  const nr = document.createElement('tr');
+  cellsOf(tr).forEach(c => {
+    const n = document.createElement(th ? 'th' : 'td');
+    if (spanOf(c) > 1) n.colSpan = spanOf(c);
+    n.innerHTML = '<br>';
+    nr.appendChild(n);
+  });
+  parent.insertBefore(nr, ref);
+  attachColumnHandles(); setStatus('linha inserida');
+}
+function tblDelRow() {
+  const cell = getCurrentCell(); if (!cell) { setStatus('clique numa célula primeiro'); return; }
+  const tr = cell.parentElement, sect = tr.parentElement, table = cell.closest('table');
+  tr.remove();
+  if (!table.querySelector('tr')) table.remove();
+  else { if (!sect.children.length && sect !== table) sect.remove(); attachColumnHandles(); }
+  setStatus('linha excluída');
+}
+document.getElementById('tRowUp').addEventListener('click', () => tblInsertRow(false));
+document.getElementById('tRowDown').addEventListener('click', () => tblInsertRow(true));
+document.getElementById('tColLeft').addEventListener('click', () => tblInsertCol(false));
+document.getElementById('tColRight').addEventListener('click', () => tblInsertCol(true));
+document.getElementById('tDelRow').addEventListener('click', tblDelRow);
+document.getElementById('tDelCol').addEventListener('click', tblDelCol);
+document.getElementById('cellBg').addEventListener('input', e => {
+  const c = getCurrentCell(); if (c) c.style.backgroundColor = e.target.value; else setStatus('clique numa célula primeiro');
+});
+document.getElementById('cellBgClear').addEventListener('click', () => {
+  const c = getCurrentCell(); if (c) c.style.backgroundColor = '';
+});
+
+/* ---------- capa ---------- */
+const isSep = n => n && n.nodeType === 1 && n.matches('hr.page-sep');
+function coverTemplate() {
+  const d = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  return `<section class="d1-cover">
+<p style="margin-top:22%"><br></p>
+<h1 style="text-align:center;font-size:2.4em">Título do documento</h1>
+<p style="text-align:center;font-size:1.25em">Subtítulo ou descrição</p>
+<p style="margin-top:30%"><br></p>
+<p style="text-align:center">Autor · Organização</p>
+<p style="text-align:center">${esc(d)}</p>
+</section>`;
+}
+function insertCover() {
+  if (editor.querySelector('.d1-cover')) { setStatus('já existe uma capa — remova antes de inserir outra'); return; }
+  editor.insertAdjacentHTML('afterbegin', coverTemplate());
+  const h = editor.querySelector('.d1-cover h1');
+  if (h) { const r = document.createRange(); r.selectNodeContents(h); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); editor.focus(); }
+  updatePrintStyles(); setStatus('capa inserida — edite o título');
+}
+function markCover() {
+  if (editor.querySelector('.d1-cover')) { setStatus('já existe uma capa — remova antes de marcar outra'); return; }
+  let n = null;
+  if (savedRange && editor.contains(savedRange.startContainer)) n = savedRange.startContainer;
+  if (!n || n === editor) n = Array.from(editor.childNodes).find(x => !isSep(x)) || null;
+  if (!n) { setStatus('não há conteúdo para marcar'); return; }
+  while (n.parentNode !== editor) n = n.parentNode;
+  let start = n, end = n;
+  while (start.previousSibling && !isSep(start.previousSibling)) start = start.previousSibling;
+  while (end.nextSibling && !isSep(end.nextSibling)) end = end.nextSibling;
+  const sec = document.createElement('section');
+  sec.className = 'd1-cover';
+  const before = start.previousSibling;                 // separador antes do bloco (se houver)
+  editor.insertBefore(sec, start);
+  let cur = start;
+  while (cur) { const nx = cur === end ? null : cur.nextSibling; sec.appendChild(cur); cur = nx; }
+  if (isSep(sec.nextSibling)) sec.nextSibling.remove();  // o fim da capa já quebra a página
+  if (before && isSep(before)) before.remove();
+  if (sec !== editor.firstChild) editor.insertBefore(sec, editor.firstChild);   // a capa vai para o início
+  attachColumnHandles(); updatePrintStyles(); setStatus('página marcada como capa');
+}
+function removeCover() {
+  const sec = editor.querySelector('.d1-cover');
+  if (!sec) { setStatus('não há capa'); return; }
+  const frag = document.createDocumentFragment();
+  while (sec.firstChild) frag.appendChild(sec.firstChild);
+  const hasMore = !!sec.nextSibling;
+  sec.replaceWith(frag);
+  updatePrintStyles(); setStatus('capa removida (conteúdo mantido)');
+}
+document.getElementById('btnCoverNew').addEventListener('click', insertCover);
+document.getElementById('btnCoverMark').addEventListener('click', markCover);
+document.getElementById('btnCoverDel').addEventListener('click', removeCover);
+
+/* ---------- margens e marca d'água ---------- */
+[['mT', 'top'], ['mR', 'right'], ['mB', 'bottom'], ['mL', 'left']].forEach(([id, key]) =>
+  document.getElementById(id).addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    if (!isNaN(v) && v >= 0 && v <= 80) { pageCfg[key] = v; updatePrintStyles(); }
+  }));
+function updateWatermark() {
+  const wm = document.getElementById('wm'), t = document.getElementById('wmText').value.trim();
+  wm.textContent = t; wm.style.display = t ? 'flex' : 'none';
+}
+document.getElementById('wmText').addEventListener('input', updateWatermark);
+
+/* ---------- autosave ---------- */
+const AS_KEY = 'd1pdf_autosave_v1';
+const OPT_IDS = ['pageNums', 'hdrOn', 'ftrOn', 'useLayout'];
+function snapshot() {
+  const clone = editor.cloneNode(true);
+  clone.querySelectorAll('.col-resize').forEach(el => el.remove());
+  const opts = {}; OPT_IDS.forEach(id => opts[id] = document.getElementById(id).checked);
+  return { html: clone.innerHTML, hdr: hdrEl.innerHTML, ftr: ftrEl.innerHTML, cfg: pageCfg,
+           wm: document.getElementById('wmText').value, opts, t: Date.now() };
+}
+let asTimer = null;
+function scheduleSave() {
+  clearTimeout(asTimer);
+  asTimer = setTimeout(() => {
+    if (!editor.textContent.trim() && !editor.querySelector('table,img')) return;   // nunca sobrescreve com vazio
+    try {
+      localStorage.setItem(AS_KEY, JSON.stringify(snapshot()));
+      setStatus('autosave ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+    } catch (e) { /* armazenamento indisponível ou cheio */ }
+  }, 1500);
+}
+function loadSnapshot(d) {
+  editor.innerHTML = d.html || '';
+  hdrEl.innerHTML = d.hdr || ''; ftrEl.innerHTML = d.ftr || '';
+  Object.assign(pageCfg, d.cfg || {});
+  OPT_IDS.forEach(id => { if (d.opts && id in d.opts) document.getElementById(id).checked = !!d.opts[id]; });
+  document.getElementById('wmText').value = d.wm || '';
+  lastPages = null;
+  syncPageControls(); attachColumnHandles(); updatePrintStyles(); updateWatermark();
+}
+new MutationObserver(scheduleSave).observe(editor, { childList: true, subtree: true, characterData: true, attributes: true });
+new MutationObserver(() => updatePrintStyles()).observe(editor, { childList: true });   // capa apagada à mão
+[hdrEl, ftrEl].forEach(el => el.addEventListener('input', scheduleSave));
+['pageSize', 'pageOri', 'wmText', 'mT', 'mR', 'mB', 'mL', ...OPT_IDS].forEach(id =>
+  document.getElementById(id).addEventListener('change', scheduleSave));
+document.getElementById('wmText').addEventListener('input', scheduleSave);
+(function offerRestore() {
+  try {
+    const raw = localStorage.getItem(AS_KEY); if (!raw) return;
+    const d = JSON.parse(raw), btn = document.getElementById('btnRestore');
+    btn.textContent = 'Recuperar autosave (' + new Date(d.t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ')';
+    btn.style.display = '';
+    btn.addEventListener('click', () => { loadSnapshot(d); btn.style.display = 'none'; setStatus('autosave recuperado'); });
+  } catch (e) { /* ignora */ }
+})();
+
+/* inicializa */
+syncPageControls();
+updatePrintStyles();
+updateWatermark();
+</script>
+</body>
+</html>
