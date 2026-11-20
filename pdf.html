@@ -2,8 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>PDF → edição → PDF</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📕</text></svg>">
+<title>Editor D+1 — PDF → edição → PDF</title>
 <style>
   :root { --ink:#1a1a1a; --muted:#666; --line:#d0d0d0; --accent:#0b6b5b; }
   * { box-sizing: border-box; }
@@ -57,6 +56,14 @@
   #editor th { background:#f2f2ef; font-weight:700; }
   #editor hr.page-sep { border:0; border-top:1px dashed #ccc; margin:2em 0; }
 
+  /* ---- imagens ---- */
+  #editor img { max-width:100%; height:auto; vertical-align:middle; }
+  #editor img.d1-sel { outline:2px solid var(--accent); outline-offset:2px; }
+  #imgHandle { position:absolute; width:14px; height:14px; background:var(--accent); border:2px solid #fff;
+               border-radius:3px; cursor:nwse-resize; z-index:30; display:none; touch-action:none;
+               box-shadow:0 0 0 1px var(--accent); }
+  @media print { #editor img { max-width:100%; break-inside:avoid; } #editor img.d1-sel { outline:0 !important; } #imgHandle { display:none !important; } }
+
   /* ---- capa ---- */
   .d1-cover { position:relative; border:1px dashed var(--accent); padding:28px 32px; margin:0 0 18px;
               min-height:48vh; background:#fcfffe; }
@@ -104,6 +111,7 @@
 <body>
 
 <div id="wm"></div>
+<div id="imgHandle" contenteditable="false" title="Arraste para redimensionar a imagem"></div>
 
 <div class="toolbar">
   <input type="file" id="file" accept="application/pdf">
@@ -146,6 +154,7 @@
 
   <div class="group">
     <label title="Aplica alinhamento, recuo, larguras e espaçamentos inferidos do PDF"><input type="checkbox" id="useLayout" checked> Reconstruir layout</label>
+    <label title="Importa as imagens do PDF (ignora ícones minúsculos, fundos de página e logos repetidos em todas as páginas)"><input type="checkbox" id="useImages" checked> Imagens</label>
     <select id="pageSize" title="Tamanho do papel"><option>A4</option><option>Letter</option><option>A3</option><option>Legal</option><option>A5</option></select>
     <select id="pageOri" title="Orientação"><option value="p">Retrato</option><option value="l">Paisagem</option></select>
     <label><input type="checkbox" id="pageNums"> Nº pág.</label>
@@ -199,6 +208,17 @@
   </div>
 
   <div class="group">
+    <span class="lbl">Imagem:</span>
+    <button id="btnImg" title="Inserir imagem de um arquivo (também dá para colar ou arrastar para o texto)">Inserir</button>
+    <input type="file" id="imgFile" accept="image/*" multiple style="display:none">
+    <span id="imgTools" style="display:none;align-items:center;gap:3px">
+      <input type="number" id="imgW" min="5" max="100" step="1" title="Largura (% do bloco)" style="width:55px;">
+      <span class="lbl">%</span>
+      <button id="imgDel" title="Excluir a imagem selecionada" onmousedown="event.preventDefault()">Excluir</button>
+    </span>
+  </div>
+
+  <div class="group">
     <span class="lbl">Margens mm:</span>
     <input type="number" id="mT" min="0" max="80" step="1" title="Superior" style="width:50px;">
     <input type="number" id="mR" min="0" max="80" step="1" title="Direita"   style="width:50px;">
@@ -224,7 +244,7 @@
   Fluxo: carregue o PDF → edite com a barra → <b>Exportar PDF</b> (escolha “Salvar como PDF”).
   Marque <i>Cabeçalho</i>/<i>Rodapé</i> para editar essas faixas. Arraste a alça à direita de cada coluna para redimensioná-la.
   Cabeçalho e rodapé saem em texto simples (sem formatação) nas margens de cada página; com rodapé ativo, o número vai para a direita.
-  <b>Capa:</b> use <i>Inserir</i> para um modelo ou clique numa página do PDF e use <i>Marcar página</i>; a capa sai sem cabeçalho, rodapé, marca d'água e número. Ela conta como página 1, então a seguinte mostra “2”.
+  <b>Imagens:</b> as do PDF são importadas na posição original; para incluir outras, use <i>Imagem → Inserir</i>, cole (Ctrl+V) ou arraste um arquivo; clique na imagem para redimensionar pela alça. <b>Capa:</b> use <i>Inserir</i> para um modelo ou clique numa página do PDF e use <i>Marcar página</i>; a capa sai sem cabeçalho, rodapé, marca d'água e número. Ela conta como página 1, então a seguinte mostra “2”.
 </p>
 
 <div class="page-wrapper">
@@ -524,10 +544,105 @@ function detectPage(view) {
   return { size: `${(w * PT_MM).toFixed(0)}mm ${(h * PT_MM).toFixed(0)}mm`, landscape: false };
 }
 
+/* ---------- imagens do PDF ---------- */
+const mulM = (a, b) => [a[0]*b[0]+a[2]*b[1], a[1]*b[0]+a[3]*b[1], a[0]*b[2]+a[2]*b[3], a[1]*b[2]+a[3]*b[3],
+                        a[0]*b[4]+a[2]*b[5]+a[4], a[1]*b[4]+a[3]*b[5]+a[5]];
+
+function imageGetObj(page, id) {
+  return new Promise(res => {
+    let done = false;
+    const fin = v => { if (!done) { done = true; clearTimeout(t); res(v); } };
+    const t = setTimeout(() => fin(null), 4000);
+    try { (/^g_/.test(id) ? page.commonObjs : page.objs).get(id, fin); } catch (e) { fin(null); }
+  });
+}
+
+function imgDataToUrl(img) {
+  if (!img) return null;
+  const W = img.width || (img.bitmap && img.bitmap.width), H = img.height || (img.bitmap && img.bitmap.height);
+  if (!W || !H) return null;
+  const sc = Math.min(1, 1600 / Math.max(W, H));
+  const cw = Math.max(1, Math.round(W * sc)), ch = Math.max(1, Math.round(H * sc));
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const cx = cv.getContext('2d');
+  let alpha = false;
+  if (img.bitmap) {
+    cx.drawImage(img.bitmap, 0, 0, cw, ch);
+    const px = cx.getImageData(0, 0, cw, ch).data;       // só usa PNG se houver transparência de fato
+    for (let k = 3; k < px.length; k += 4) if (px[k] < 250) { alpha = true; break; }
+  }
+  else if (img.data) {
+    const src = document.createElement('canvas'); src.width = W; src.height = H;
+    const sx = src.getContext('2d'), id = sx.createImageData(W, H), d = id.data, a = img.data, n = W * H;
+    if (img.kind === 3 || a.length === n * 4) {
+      d.set(a.length === d.length ? a : a.subarray(0, d.length));
+      for (let k = 3; k < d.length; k += 4) if (d[k] < 250) { alpha = true; break; }
+    } else if (img.kind === 2 || a.length === n * 3) {
+      for (let k = 0, j = 0; k < n; k++, j += 3) { d[k*4] = a[j]; d[k*4+1] = a[j+1]; d[k*4+2] = a[j+2]; d[k*4+3] = 255; }
+    } else if (img.kind === 1) {                       // 1 bit por pixel, linhas alinhadas a byte
+      const rb = (W + 7) >> 3;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const v = (a[y * rb + (x >> 3)] >> (7 - (x & 7))) & 1 ? 255 : 0, k = (y * W + x) * 4;
+        d[k] = d[k+1] = d[k+2] = v; d[k+3] = 255;
+      }
+    } else return null;
+    sx.putImageData(id, 0, 0);
+    cx.drawImage(src, 0, 0, cw, ch);
+  } else return null;
+  return cv.toDataURL(alpha ? 'image/png' : 'image/jpeg', 0.9);
+}
+
+async function pageImages(page, ops, view, hasText) {
+  if (!ops || !window.pdfjsLib || !pdfjsLib.OPS) return [];
+  const O = pdfjsLib.OPS, found = [], st = [];
+  let ctm = [1, 0, 0, 1, 0, 0];
+  for (let i = 0; i < ops.fnArray.length; i++) {
+    const fn = ops.fnArray[i], args = ops.argsArray[i];
+    if (fn === O.save) st.push(ctm);
+    else if (fn === O.restore) { if (st.length) ctm = st.pop(); }
+    else if (fn === O.transform) ctm = mulM(ctm, args);
+    else if (fn === O.paintFormXObjectBegin) { st.push(ctm); if (args && args[0]) ctm = mulM(ctm, args[0]); }
+    else if (fn === O.paintFormXObjectEnd) { if (st.length) ctm = st.pop(); }
+    else if (fn === O.paintImageXObject || (O.paintJpegXObject !== undefined && fn === O.paintJpegXObject))
+      found.push({ id: args[0], m: ctm });
+    else if (fn === O.paintInlineImageXObject) found.push({ inline: true, data: args[0], m: ctm, id: 'inl' + i });
+  }
+  const pageArea = (view[2] - view[0]) * (view[3] - view[1]), cache = new Map(), out = [];
+  for (const f of found) {
+    const xs = [], ys = [];
+    [[0, 0], [1, 0], [0, 1], [1, 1]].forEach(([u, v]) => {
+      xs.push(f.m[0]*u + f.m[2]*v + f.m[4]); ys.push(f.m[1]*u + f.m[3]*v + f.m[5]);
+    });
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), bottom = Math.min(...ys), top = Math.max(...ys);
+    const w = x1 - x0, h = top - bottom;
+    if (w < 14 || h < 14) continue;                                        // ícones, filetes e pontos
+    if (hasText && w * h > 0.85 * pageArea) continue;                      // fundo de página (em página escaneada, mantém)
+    if (x1 < view[0] || x0 > view[2] || top < view[1] || bottom > view[3]) continue;
+    let src = cache.get(f.id);
+    if (src === undefined) { src = imgDataToUrl(f.inline ? f.data : await imageGetObj(page, f.id)); cache.set(f.id, src); }
+    if (!src) continue;
+    out.push({ src, x0, x1, top, bottom, key: f.id + '@' + [x0, top, w, h].map(v => Math.round(v / 4)).join(',') });
+  }
+  return out;
+}
+
+// mesma imagem, mesma posição e tamanho em 3+ páginas = logo/marca de cabeçalho ou rodapé: mantém só a 1ª
+function dropRepeatedImages(pages) {
+  const count = new Map();
+  pages.forEach(pg => (pg.images || []).forEach(im => count.set(im.key, (count.get(im.key) || 0) + 1)));
+  const seen = new Set();
+  pages.forEach(pg => {
+    pg.images = (pg.images || []).filter(im => {
+      if ((count.get(im.key) || 0) < 3) return true;
+      if (seen.has(im.key)) return false;
+      seen.add(im.key); return true;
+    });
+  });
+}
+
 /* ---------- extração (pdf.js) ---------- */
 async function fontFlags(page, names) {
   const flags = {};
-  try { await page.getOperatorList(); } catch (e) { /* segue com heurística pelo nome interno */ }
   names.forEach(n => {
     try {
       const f = page.commonObjs.get(n), nm = (f && f.name) || '';
@@ -550,6 +665,8 @@ async function extract(buffer) {
     setStatus(`extraindo página ${p}/${pdf.numPages}…`);
     const page = await pdf.getPage(p);
     const view = page.view;
+    let ops = null;
+    try { ops = await page.getOperatorList(); } catch (e) { /* segue sem imagens e com heurística de fontes pelo nome */ }
     const tc = await page.getTextContent();
     const flags = await fontFlags(page, [...new Set(tc.items.map(i => i.fontName).filter(Boolean))]);
     const items = tc.items
@@ -563,7 +680,9 @@ async function extract(buffer) {
           bold: !!f.bold, italic: !!f.italic
         };
       });
-    if (!items.length) { pages.push({ rows: [], view }); continue; }
+    let images = [];
+    try { images = await pageImages(page, ops, view, items.length > 0); } catch (e) { console.warn('imagens da pág. ' + p, e); }
+    if (!items.length) { pages.push({ rows: [], view, images }); continue; }
 
     items.sort((a, b) => b.y - a.y || a.x - b.x);
     const lines = [];
@@ -589,8 +708,9 @@ async function extract(buffer) {
       }));
       return { y: l.y, x0: cells[0].x0, x1: cells[cells.length - 1].x1, h: Math.max(...cells.map(c => c.h)), cells };
     });
-    pages.push({ rows, view });
+    pages.push({ rows, view, images });
   }
+  dropRepeatedImages(pages);
   return pages;
 }
 
@@ -758,8 +878,8 @@ function buildBlocks(rows, ctx) {
   return out;
 }
 
-const firstY = b => b.type === 'table' ? b.rows[0].y : b.lines[0].y;
-const lastY = b => b.type === 'table' ? b.rows[b.rows.length - 1].y : b.lines[b.lines.length - 1].y;
+const firstY = b => b.type === 'image' ? b.top : b.type === 'table' ? b.rows[0].y : b.lines[0].y;
+const lastY = b => b.type === 'image' ? b.bottom : b.type === 'table' ? b.rows[b.rows.length - 1].y : b.lines[b.lines.length - 1].y;
 function gapStyle(b, next, step, h) {
   if (!next) return null;
   const extra = (lastY(b) - firstY(next)) - step;
@@ -939,18 +1059,39 @@ function tableHtml(tb, ctx, S, next) {
   return `<table${S(st)}>${html}</table>`;
 }
 
+function imageHtml(b, ctx, S, next) {
+  const W = ctx.W, wp = Math.min(100, (b.x1 - b.x0) / W * 100);
+  const lg = b.x0 - ctx.bodyLeft, rg = ctx.bodyRight - b.x1, tol = 0.04 * W, st = ['margin-top:0'];
+  if (Math.abs(lg - rg) < tol && lg > tol) st.push('text-align:center');
+  else if (rg < tol && lg > tol * 1.5) st.push('text-align:right');
+  else if (lg > tol) st.push('margin-left:' + pct(lg, ctx));
+  const g = gapStyle(b, next, ctx.leading, ctx.bodyH); if (g) st.push(g);
+  return `<p${S(st)}><img src="${b.src}" alt="" style="width:${wp.toFixed(1)}%;height:auto"></p>`;
+}
+
+function fallbackCtx(view) {        // página sem texto (escaneada): margens de 10% e corpo padrão
+  const pageW = view[2] - view[0];
+  return { W: pageW * 0.8, bodyLeft: view[0] + pageW * 0.1, bodyRight: view[2] - pageW * 0.1, bodyH: 11, leading: 14, pageW };
+}
+
 /* ---------- montagem do HTML de uma página ---------- */
-function pageToHtml(pg, useLayout) {
+function pageToHtml(pg, useLayout, useImages) {
   const rows = pg.rows.filter(r => r.cells.some(c => c.items.length));
-  if (!rows.length) return '';
-  const pgc = { rows, view: pg.view };
-  const ctx = buildCtx(pgc);
-  const blocks = buildBlocks(rows, ctx);
+  const imgs = useImages === false ? [] : (pg.images || []);
+  if (!rows.length && !imgs.length) return '';
+  const ctx = rows.length ? buildCtx({ rows, view: pg.view }) : fallbackCtx(pg.view);
+  const blocks = rows.length ? buildBlocks(rows, ctx) : [];
+  imgs.slice().sort((a, b) => b.top - a.top).forEach(im => {
+    const blk = { type: 'image', ...im };
+    const k = blocks.findIndex(b => firstY(b) < im.top - 1);
+    if (k < 0) blocks.push(blk); else blocks.splice(k, 0, blk);
+  });
   const S = a => (useLayout && a.length) ? ` style="${a.join(';')}"` : '';
   const out = [];
   let i = 0;
   while (i < blocks.length) {
     const b = blocks[i], next = blocks[i + 1];
+    if (b.type === 'image') { out.push(imageHtml(b, ctx, S, next)); i++; continue; }
     if (b.type === 'table') { out.push(tableHtml(b, ctx, S, next)); i++; continue; }
     if (b.kind === 'li') {
       const group = [b]; let j = i + 1;
@@ -971,8 +1112,9 @@ const BLOCK_9X = `
 let lastPages = null;
 function renderPages() {
   if (!lastPages) return;
-  const useLayout = document.getElementById('useLayout').checked;
-  editor.innerHTML = lastPages.map((pg, i) => (i ? '<hr class="page-sep">' : '') + pageToHtml(pg, useLayout)).join('\n');
+  const useLayout = document.getElementById('useLayout').checked, useImages = document.getElementById('useImages').checked;
+  editor.innerHTML = lastPages.map((pg, i) => (i ? '<hr class="page-sep">' : '') + pageToHtml(pg, useLayout, useImages)).join('\n');
+  setSelImg(null);
   attachColumnHandles();
   updatePrintStyles();
 }
@@ -1004,10 +1146,11 @@ document.getElementById('file').addEventListener('change', async e => {
     setStatus(`ok — ${lastPages.length} páginas (${det.size}${det.landscape ? ' paisagem' : ''})`);
   } catch (err) { console.error(err); setStatus('erro: ' + err.message); }
 });
-document.getElementById('useLayout').addEventListener('change', () => {
+['useLayout', 'useImages'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+  const el = document.getElementById(id);
   if (lastPages && confirm('Reaplicar a leitura do PDF? Edições manuais no editor serão substituídas.')) renderPages();
-  else document.getElementById('useLayout').checked = !document.getElementById('useLayout').checked;
-});
+  else if (lastPages) el.checked = !el.checked;
+}));
 document.getElementById('pageSize').addEventListener('change', e => { pageCfg.size = e.target.value; updatePrintStyles(); });
 document.getElementById('pageOri').addEventListener('change', e => { pageCfg.landscape = e.target.value === 'l'; updatePrintStyles(); });
 
@@ -1043,17 +1186,18 @@ document.getElementById('applyRow').addEventListener('click', () => {
 ['pageNums','hdrOn','ftrOn'].forEach(id =>
   document.getElementById(id).addEventListener('change', updatePrintStyles));
 
-document.getElementById('btnPrint').addEventListener('click', () => { updatePrintStyles(); window.print(); });
+document.getElementById('btnPrint').addEventListener('click', () => { if (typeof setSelImg === 'function') setSelImg(null); updatePrintStyles(); window.print(); });
 
 document.getElementById('btnSave').addEventListener('click', () => {
   const clone = editor.cloneNode(true);
   clone.querySelectorAll('.col-resize').forEach(el => el.remove());
+  clone.querySelectorAll('.d1-sel').forEach(el => el.classList.remove('d1-sel'));
   const hdrHTML = hdrEl.style.display === 'none' ? '' : hdrEl.outerHTML;
   const ftrHTML = ftrEl.style.display === 'none' ? '' : ftrEl.outerHTML;
   const wmT = document.getElementById('wmText').value.trim();
   const wmHTML = wmT ? `<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font:700 110px system-ui,sans-serif;color:rgba(0,0,0,.07);transform:rotate(-30deg);white-space:nowrap">${esc(wmT)}</div>` : '';
   const html = `<!doctype html><meta charset="utf-8"><title>D+1 v3.10</title>
-    <style>${document.getElementById('dynamicPrintCSS').textContent}body{font-family:Georgia,serif;max-width:860px;margin:2em auto;line-height:1.55}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d0d0;padding:7px 9px;vertical-align:top}th{background:#f2f2ef}</style>
+    <style>${document.getElementById('dynamicPrintCSS').textContent}body{font-family:Georgia,serif;max-width:860px;margin:2em auto;line-height:1.55}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d0d0d0;padding:7px 9px;vertical-align:top}th{background:#f2f2ef}img{max-width:100%;height:auto}</style>
     ${wmHTML}${hdrHTML}${clone.innerHTML}${ftrHTML}`;
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
@@ -1257,10 +1401,11 @@ document.getElementById('wmText').addEventListener('input', updateWatermark);
 
 /* ---------- autosave ---------- */
 const AS_KEY = 'd1pdf_autosave_v1';
-const OPT_IDS = ['pageNums', 'hdrOn', 'ftrOn', 'useLayout'];
+const OPT_IDS = ['pageNums', 'hdrOn', 'ftrOn', 'useLayout', 'useImages'];
 function snapshot() {
   const clone = editor.cloneNode(true);
   clone.querySelectorAll('.col-resize').forEach(el => el.remove());
+  clone.querySelectorAll('.d1-sel').forEach(el => el.classList.remove('d1-sel'));
   const opts = {}; OPT_IDS.forEach(id => opts[id] = document.getElementById(id).checked);
   return { html: clone.innerHTML, hdr: hdrEl.innerHTML, ftr: ftrEl.innerHTML, cfg: pageCfg,
            wm: document.getElementById('wmText').value, opts, t: Date.now() };
@@ -1273,7 +1418,7 @@ function scheduleSave() {
     try {
       localStorage.setItem(AS_KEY, JSON.stringify(snapshot()));
       setStatus('autosave ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
-    } catch (e) { /* armazenamento indisponível ou cheio */ }
+    } catch (e) { setStatus('autosave indisponível (espaço do navegador cheio, por causa das imagens) — use Salvar HTML'); }
   }, 1500);
 }
 function loadSnapshot(d) {
@@ -1300,6 +1445,152 @@ document.getElementById('wmText').addEventListener('input', scheduleSave);
     btn.addEventListener('click', () => { loadSnapshot(d); btn.style.display = 'none'; setStatus('autosave recuperado'); });
   } catch (e) { /* ignora */ }
 })();
+
+
+/* ---------- imagens: inserir, colar, arrastar, redimensionar ---------- */
+let selImg = null;
+const imgHandle = document.getElementById('imgHandle');
+function baseW(img) {                     // largura de referência do % = área útil do bloco que contém a imagem
+  const par = img.parentElement || editor, cs = getComputedStyle(par);
+  return Math.max(1, par.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+}
+function placeHandle() {
+  if (!selImg || !document.body.contains(selImg)) { imgHandle.style.display = 'none'; return; }
+  const r = selImg.getBoundingClientRect();
+  imgHandle.style.display = 'block';
+  imgHandle.style.left = (r.right + window.scrollX - 9) + 'px';
+  imgHandle.style.top = (r.bottom + window.scrollY - 9) + 'px';
+}
+function syncImgW() {
+  if (selImg) document.getElementById('imgW').value = Math.round(selImg.getBoundingClientRect().width / baseW(selImg) * 100);
+}
+function setSelImg(img) {
+  if (selImg && selImg !== img) selImg.classList.remove('d1-sel');
+  selImg = img || null;
+  document.getElementById('imgTools').style.display = selImg ? 'inline-flex' : 'none';
+  if (selImg) { selImg.classList.add('d1-sel'); syncImgW(); }
+  placeHandle();
+}
+editor.addEventListener('click', e => {
+  if (e.target.tagName === 'IMG') {
+    const r = document.createRange(); r.selectNode(e.target);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    setSelImg(e.target);
+  } else setSelImg(null);
+});
+document.addEventListener('selectionchange', () => {
+  if (!selImg) return;
+  const ae = document.activeElement;
+  if (ae && ae.closest && ae.closest('.toolbar')) return;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.getRangeAt(0).intersectsNode(selImg)) setSelImg(null);
+});
+new MutationObserver(placeHandle).observe(editor, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'src'] });
+window.addEventListener('resize', placeHandle);
+
+imgHandle.addEventListener('pointerdown', e => {
+  if (!selImg) return;
+  e.preventDefault();
+  const img = selImg, x0 = e.clientX, w0 = img.getBoundingClientRect().width, base = baseW(img);
+  imgHandle.setPointerCapture(e.pointerId);
+  const mv = ev => {
+    const px = Math.max(24, w0 + (ev.clientX - x0));
+    img.style.width = Math.min(100, px / base * 100).toFixed(1) + '%'; img.style.height = 'auto';
+    placeHandle(); syncImgW();
+  };
+  const up = () => { imgHandle.removeEventListener('pointermove', mv); imgHandle.removeEventListener('pointerup', up); };
+  imgHandle.addEventListener('pointermove', mv); imgHandle.addEventListener('pointerup', up);
+});
+document.getElementById('imgW').addEventListener('input', e => {
+  const v = parseFloat(e.target.value);
+  if (selImg && !isNaN(v) && v >= 5 && v <= 100) { selImg.style.width = v + '%'; selImg.style.height = 'auto'; placeHandle(); }
+});
+function deleteSelImg() {
+  if (!selImg) return;
+  const par = selImg.parentElement;
+  selImg.remove(); setSelImg(null);
+  if (par && par !== editor && /^(P|DIV)$/.test(par.nodeName) && !par.textContent.trim() && !par.querySelector('img,table')) par.remove();
+}
+document.getElementById('imgDel').addEventListener('click', deleteSelImg);
+editor.addEventListener('keydown', e => {
+  if (selImg && (e.key === 'Delete' || e.key === 'Backspace')) { e.preventDefault(); deleteSelImg(); }
+});
+
+function shrinkDataUrl(file, url) {       // reduz imagens grandes para caber no autosave e no HTML salvo
+  return new Promise(res => {
+    if (/svg/.test(file.type)) return res(url);
+    const im = new Image();
+    im.onload = () => {
+      const W = im.naturalWidth, H = im.naturalHeight, sc = Math.min(1, 1600 / Math.max(W, H));
+      if (sc === 1 && file.size < 400 * 1024) return res(url);
+      const cv = document.createElement('canvas'); cv.width = Math.round(W * sc); cv.height = Math.round(H * sc);
+      const cx = cv.getContext('2d'), keepAlpha = /png|gif|webp/.test(file.type);
+      if (!keepAlpha) { cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); }
+      cx.drawImage(im, 0, 0, cv.width, cv.height);
+      res(cv.toDataURL(keepAlpha ? 'image/png' : 'image/jpeg', 0.88));
+    };
+    im.onerror = () => res(url);
+    im.src = url;
+  });
+}
+function insertImageSrc(src) {
+  return new Promise(res => {
+    const probe = new Image();
+    probe.onerror = () => { setStatus('não foi possível ler a imagem'); res(); };
+    probe.onload = () => {
+      const blk = getCurrentBlock(), cell = blk && blk.closest('td,th');
+      const img = document.createElement('img'); img.src = src; img.alt = '';
+      if (cell) {
+        const host = blk === cell ? cell : blk, cs = getComputedStyle(cell);
+        const base = Math.max(1, cell.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+        img.style.width = Math.min(100, probe.naturalWidth / base * 100).toFixed(1) + '%'; img.style.height = 'auto';
+        host.appendChild(img);
+      } else {
+        const p = document.createElement('p'); p.style.textAlign = 'center';
+        img.style.width = Math.min(100, probe.naturalWidth / editorInnerWidth() * 100).toFixed(1) + '%'; img.style.height = 'auto';
+        p.appendChild(img);
+        let ref = blk;
+        if (ref) { while (ref.parentNode !== editor && !(ref.parentNode.classList && ref.parentNode.classList.contains('d1-cover'))) ref = ref.parentNode; ref.after(p); }
+        else editor.appendChild(p);
+      }
+      setSelImg(img); res();
+    };
+    probe.src = src;
+  });
+}
+function editorInnerWidth() {
+  const cs = getComputedStyle(editor);
+  return Math.max(1, editor.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+}
+async function insertImageFiles(files) {
+  const list = Array.from(files).filter(f => /^image\//.test(f.type));
+  if (!list.length) return false;
+  for (const f of list) {
+    const url = await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = no; fr.readAsDataURL(f); });
+    await insertImageSrc(await shrinkDataUrl(f, url));
+  }
+  setStatus(list.length + (list.length > 1 ? ' imagens inseridas' : ' imagem inserida'));
+  return true;
+}
+document.getElementById('btnImg').addEventListener('click', () => document.getElementById('imgFile').click());
+document.getElementById('imgFile').addEventListener('change', async e => { await insertImageFiles(e.target.files); e.target.value = ''; });
+editor.addEventListener('paste', e => {
+  const fs = e.clipboardData ? Array.from(e.clipboardData.files || []).filter(f => /^image\//.test(f.type)) : [];
+  if (fs.length) { e.preventDefault(); insertImageFiles(fs); }
+});
+editor.addEventListener('dragover', e => {
+  if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')) e.preventDefault();
+});
+editor.addEventListener('drop', e => {
+  const fs = e.dataTransfer ? Array.from(e.dataTransfer.files || []).filter(f => /^image\//.test(f.type)) : [];
+  if (!fs.length) return;
+  e.preventDefault();
+  try {
+    const r = document.caretRangeFromPoint ? document.caretRangeFromPoint(e.clientX, e.clientY) : null;
+    if (r) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+  } catch (err) { /* insere pelo cursor atual */ }
+  insertImageFiles(fs);
+});
 
 /* inicializa */
 syncPageControls();
