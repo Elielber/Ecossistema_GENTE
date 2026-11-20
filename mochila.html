@@ -401,6 +401,9 @@
         .envelope-bar .ok { background: var(--primary); }
         .envelope-bar .warn { background: var(--warning); }
         .envelope-bar .bad { background: var(--progress); }
+        /* Estouro: cinza; só os textos orientam (sem alarme de cor) */
+        .envelope-bar .neutra { background: var(--secondary); }
+        .envelope-gasto.neutro { color: var(--text-main); }
 
         .caixinha { margin-bottom: 20px; cursor: pointer; transition: 0.15s; }
         .caixinha:active { transform: scale(0.98); }
@@ -459,6 +462,7 @@
         .barra-verde { background: var(--success); }
         .barra-amarela { background: var(--warning); }
         .barra-vermelha { background: var(--progress); }
+        .barra-neutra { background: var(--secondary); }
         
         /* Fase 2 — feedback flutuante inferior esquerdo (alinhado ao +) */
         
@@ -726,6 +730,24 @@
             margin-left: 10px;
             line-height: 1;
         }
+
+        /* Futuro: dívidas/reservas em acordeão (comprimido: nome + % de quitação) */
+        .fut-acordeao { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; overflow: hidden; }
+        .fut-acordeao-cab { display: block; width: 100%; text-align: left; background: none; border: none; font: inherit; color: inherit; padding: 12px 16px; cursor: pointer; }
+        .fut-acordeao-linha { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .fut-acordeao-nome { font-weight: 600; color: var(--primary); font-size: 0.9rem; min-width: 0; overflow-wrap: anywhere; }
+        .fut-acordeao-dir { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .fut-acordeao-pct { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
+        .fut-acordeao-pct.ok { color: var(--success); }
+        .fut-acordeao-sem { font-size: 0.85rem; color: var(--secondary); }
+        .fut-acordeao-seta { color: var(--secondary); transition: transform 0.15s ease; display: inline-block; }
+        .fut-acordeao.aberto .fut-acordeao-seta { transform: rotate(90deg); }
+        .fut-acordeao-trilha { height: 6px; background: var(--border); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+        .fut-acordeao-fill { height: 100%; border-radius: 4px; background: var(--primary); }
+        .fut-acordeao-fill.ok { background: var(--success); }
+        .fut-acordeao-corpo { padding: 0 8px 8px; }
+        .fut-acordeao-corpo[hidden] { display: none; }
+        .fut-acordeao-corpo .categoria-item { margin-bottom: 0; border: none; background: transparent; padding: 6px 8px 8px; }
 
         .totalizador {
             background: var(--purple-light);
@@ -2589,7 +2611,7 @@ function renderizarPreviaSemana() {
         const limiteSeg = limite > 0 ? limite : 0;
         const pct = limiteSeg > 0 ? Math.min((gasto / limiteSeg) * 100, 100) : 0;
         let cor = 'barra-verde';
-        if (limiteSeg > 0 && gasto > limiteSeg) cor = 'barra-vermelha';
+        if (limiteSeg > 0 && gasto > limiteSeg) cor = 'barra-neutra';
         else if (limiteSeg > 0 && pct >= 80) cor = 'barra-amarela';
         return `
             <div style="margin-bottom: 10px;">
@@ -5805,12 +5827,12 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         }
     } else if (limiteSeguro === 0) {
         if (gastoSeguro > 0 || carrego > 0) {
-            cor = 'barra-vermelha';
-            aviso = '<div style="font-size: 0.9rem; color: var(--danger); margin-top: 6px;">Sem orçamento definido. Todo gasto aqui é acima do planejado.</div>';
+            cor = 'barra-neutra';
+            aviso = '<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 6px;">Sem orçamento definido. Todo gasto aqui é acima do planejado.</div>';
         }
     } else {
         if (consumidoReal > limiteSeguro + 0.05) {
-            cor = 'barra-vermelha';
+            cor = 'barra-neutra';
         } else if (consumidoReal >= limiteSeguro - 0.05) {
             cor = 'barra-verde';
         } else if (percentual >= 80) {
@@ -5822,9 +5844,9 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         // Dívida com vencimento passado e sem pagamento = obrigação em atraso (não é "meta mínima")
         const obrig = _obrigacoesFuturoVencidas(state.orcamento);
         if (obrig.length > 0) {
-            cor = 'barra-vermelha';
+            cor = 'barra-neutra';
             const lista = obrig.map(o => `${o.nome} (venceu dia ${o.vencimento}, R$ ${fmt(o.valor)})`).join('; ');
-            aviso = `<div style="font-size: 0.9rem; color: var(--danger); margin-top: 6px; line-height: 1.35;">
+            aviso = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 6px; line-height: 1.35;">
                 <strong>Vencida e não paga:</strong> ${lista}. Isso é atraso de verdade, não só meta. Veja o Plano de recuperação.
             </div>` + (aviso || '');
         }
@@ -5850,7 +5872,7 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
             realTxt = `combinado atingido exatamente`;
         }
 
-        linhaReal = `<div style="font-size: 0.9rem; color: ${disponivelReal < -0.05 ? 'var(--danger)' : 'var(--secondary)'}; margin-top: 6px; line-height: 1.35;">
+        linhaReal = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 6px; line-height: 1.35;">
             <strong>Total:</strong> ${realTxt}${bits.length ? ' · ' + bits.join(' · ') : ''}
         </div>`;
     }
@@ -5865,7 +5887,7 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
     const desc = descMap[key] || '';
     const icon = iconMap[key] || '📦';
     let barClass = 'ok';
-    if (cor === 'barra-vermelha') barClass = 'bad';
+    if (cor === 'barra-neutra') barClass = 'neutra';
     else if (cor === 'barra-amarela') barClass = 'warn';
 
     // Item 5: plano (limite) × capacidade (proteção) — dois números, plano intacto
@@ -5894,7 +5916,7 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
                     </div>
                 </div>
                 <div class="envelope-values">
-                    <div class="envelope-gasto">R$ ${fmt(gastoSeguro)}</div>
+                    <div class="envelope-gasto${barClass === 'neutra' ? ' neutro' : ''}">R$ ${fmt(gastoSeguro)}</div>
                     <div class="envelope-limite">/ R$ ${fmt(limiteSeguro)}</div>
                 </div>
             </div>
@@ -9375,7 +9397,7 @@ if (typeof atualizarTotaisEnvelopes === 'function') atualizarTotaisEnvelopes();
 const pctMes = cat.valor > 0 ? (gastoMes / cat.valor) * 100 : 0;
             
             const metaSem = calcularLimiteCategoriaSemana(cat, state.orcamento.semanaAtual); 
-            const barraHtml = renderizarBarraCategoria(gastoSem, metaSem, cat.id);
+            const barraHtml = renderizarBarraCategoria(gastoSem, metaSem, cat.id, { mensal: { gasto: gastoMes, orcado: cat.valor || 0 } });
             htmlCategorias += `
    <div class="categoria-item" style="cursor: pointer; display: block;" onclick="abrirFormularioCategoria('${cat.id}')">
                 
@@ -10081,6 +10103,53 @@ function abrirDetalheFuturo(subtipo) {
 }
 let caixaFuturoAtiva = 'divida'; // 'divida' ou 'reserva'
 
+// Futuro · dívidas/reservas em acordeão: comprimido mostra nome + % de quitação; ao abrir, o card de sempre.
+// O estado aberto/fechado vive só em memória (não vai para o backup nem para o estado do app).
+let _futAcordeaoAbertos = new Set();
+
+/** % de quitação a partir das parcelas. Sem parcelamento → pct nulo (não inventa percentual). */
+function _quitacaoFuturo(cat) {
+    const total = Number(cat && cat.parcelasTotais);
+    const pagas = Math.max(0, Number(cat && cat.parcelasPagas) || 0);
+    if (!(total > 0)) return { total: 0, pagas, pct: null, quitada: false };
+    const pct = Math.min((pagas / total) * 100, 100);
+    return { total, pagas: Math.min(pagas, total), pct, quitada: pagas >= total };
+}
+
+function _htmlAcordeaoFuturo(cat, subtipo, corpoHtml) {
+    const id = cat.id;
+    const q = _quitacaoFuturo(cat);
+    const aberto = _futAcordeaoAbertos.has(id);
+    let dir;
+    if (q.quitada) dir = '<span class="fut-acordeao-pct ok">✓ Quitada</span>';
+    else if (q.pct != null) dir = `<span class="fut-acordeao-pct">${q.pct.toFixed(0)}% ${subtipo === 'divida' ? 'quitado' : 'da meta'}</span>`;
+    else dir = '<span class="fut-acordeao-sem">sem parcelamento</span>';
+    const trilha = q.pct != null
+        ? `<div class="fut-acordeao-trilha"><div class="fut-acordeao-fill${q.quitada ? ' ok' : ''}" style="width:${Number(q.pct.toFixed(1))}%"></div></div>`
+        : '';
+    return `<div class="fut-acordeao${aberto ? ' aberto' : ''}" data-cat="${id}" id="fut-acordeao-${id}">
+        <button type="button" class="fut-acordeao-cab" id="fut-cab-${id}" aria-expanded="${aberto ? 'true' : 'false'}" onclick="_alternarAcordeaoFuturo('${id}')">
+            <span class="fut-acordeao-linha">
+                <span class="fut-acordeao-nome">${_escHtmlObs(cat.nome)}</span>
+                <span class="fut-acordeao-dir">${dir}<span class="fut-acordeao-seta" aria-hidden="true">›</span></span>
+            </span>
+            ${trilha}
+        </button>
+        <div class="fut-acordeao-corpo"${aberto ? '' : ' hidden'} id="fut-corpo-${id}">${corpoHtml}</div>
+    </div><!--fim-acordeao ${id}-->`;
+}
+
+function _alternarAcordeaoFuturo(id) {
+    const abrir = !_futAcordeaoAbertos.has(id);
+    if (abrir) _futAcordeaoAbertos.add(id); else _futAcordeaoAbertos.delete(id);
+    const raiz = document.getElementById('fut-acordeao-' + id);
+    const cab = document.getElementById('fut-cab-' + id);
+    const corpo = document.getElementById('fut-corpo-' + id);
+    if (raiz) raiz.classList.toggle('aberto', abrir);
+    if (cab) cab.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+    if (corpo) corpo.hidden = !abrir;
+}
+
 function renderizarDetalheFuturo() {
     const container = document.getElementById('divida-detalhe-conteudo');
     const subtipo = caixaFuturoAtiva;
@@ -10171,7 +10240,7 @@ function renderizarDetalheFuturo() {
             const metaSemFut = calcularLimiteCategoriaSemana(cat, state.orcamento.semanaAtual);
             const barraSemFut = renderizarBarraCategoria(gastoSemFut, metaSemFut, cat.id);
 
-            htmlCategorias += `
+            const corpoHtml = `
                 <div class="categoria-item" style="display: block; cursor: pointer;" onclick="abrirListaRegistrosCategoria('${cat.id}', '${(cat.nome || '').replace(/'/g, "\\'")}')">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
@@ -10217,6 +10286,7 @@ function renderizarDetalheFuturo() {
                     ` : '')}
                 </div>
             `;
+            htmlCategorias += _htmlAcordeaoFuturo(cat, subtipo, corpoHtml);
         });
     }
 
@@ -22261,7 +22331,15 @@ function gastoCategoriaNoMes(categoriaId, categoriaNome) {
         .reduce((s, r) => s + (Number(r.valor) || 0), 0);
 }
 
-function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
+/**
+ * Barra de uma categoria.
+ * Sem `opcoes.mensal`: barra semanal (gasto da semana × combinado da semana) — renda e Futuro.
+ * Com `opcoes.mensal = { gasto, orcado }` (categorias de Base/Vida): a barra mede o MÊS
+ * (gasto do mês × orçado do mês); o combinado da semana fica como anotação. Passar do orçado
+ * deixa a barra cinza (sem vermelho); só os textos orientam.
+ */
+function renderizarBarraCategoria(gasto, limite, categoriaId = null, opcoes = {}) {
+    const mensal = (opcoes && opcoes.mensal) ? opcoes.mensal : null;
     const limitePlano = (limite && limite > 0) ? limite : 0;
     const gastoSeguro = Number(gasto) || 0;
     
@@ -22283,6 +22361,18 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
     else if (percentual >= 100) cor = 'barra-vermelha';
     else if (percentual >= 80) cor = 'barra-amarela';
 
+    // Modo mensal: a largura e a cor vêm do mês, não da semana
+    let percentualBarra = percentual, corBarra = cor;
+    let gastoMes = 0, orcadoMes = 0;
+    if (mensal) {
+        gastoMes = Math.max(0, Number(mensal.gasto) || 0);
+        orcadoMes = Math.max(0, Number(mensal.orcado) || 0);
+        percentualBarra = orcadoMes > 0 ? Math.min((gastoMes / orcadoMes) * 100, 100) : (gastoMes > 0 ? 100 : 0);
+        corBarra = 'barra-verde';
+        if (gastoMes > orcadoMes + 0.05) corBarra = 'barra-neutra';
+        else if (percentualBarra >= 80) corBarra = 'barra-amarela';
+    }
+
     const sobraAnt = sobraHerdada;
     // O disponível real usa o consumidoReal que já inclui o carrego
     const disponivelReal = limiteSeguro - consumidoReal;
@@ -22295,7 +22385,7 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
         const bits = [];
         if (carrego > 0) bits.push(`acima do combinado anterior ${_fmtBRL(carrego)}`);
         if (sobraAnt > 0) bits.push(ehBoletoBarra ? `inclui boleto em aberto ${_fmtBRL(sobraAnt)}` : `inclui folga herdada ${_fmtBRL(sobraAnt)}`);
-        linhaReal = `<div style="font-size: 0.9rem; color: ${disponivelReal < 0 ? 'var(--danger)' : 'var(--secondary)'}; margin-top: 4px; line-height: 1.35;">
+        linhaReal = `<div style="font-size: 0.9rem; color: ${(disponivelReal < 0 && !mensal) ? 'var(--danger)' : 'var(--secondary)'}; margin-top: 4px; line-height: 1.35;">
             <strong>Nesta categoria:</strong> ${realTxt}${bits.length ? ' · ' + bits.join(' · ') : ''}
         </div>`;
     }
@@ -22340,15 +22430,26 @@ function renderizarBarraCategoria(gasto, limite, categoriaId = null) {
         }
     }
 
-    return `
-        <div class="barra-cat">
-            <div style="display: flex; justify-content: space-between; font-size: 0.9rem; color: var(--secondary); margin-bottom: 4px;">
+    const cabecalhoBarra = mensal
+        ? `<div style="display: flex; justify-content: space-between; font-size: 0.9rem; color: var(--secondary); margin-bottom: 4px;">
+                <span>No mês: ${_fmtBRL(gastoMes)}</span>
+                <span>Orçado no mês: ${_fmtBRL(orcadoMes)}</span>
+            </div>`
+        : `<div style="display: flex; justify-content: space-between; font-size: 0.9rem; color: var(--secondary); margin-bottom: 4px;">
                 <span>Nesta semana: ${_fmtBRL(gastoSeguro)}</span>
                 <span>Combinado: ${_fmtBRL(limiteSeguro)}</span>
-            </div>
+            </div>`;
+    const anotacaoSemana = mensal
+        ? `<div style="font-size: 0.85rem; color: var(--secondary); margin-top: 4px; line-height: 1.35;">Combinado da semana: ${_fmtBRL(limiteSeguro)} · nesta semana: ${_fmtBRL(gastoSeguro)}</div>`
+        : '';
+
+    return `
+        <div class="barra-cat">
+            ${cabecalhoBarra}
             <div class="barra-fundo" style="height: 6px;">
-                <div class="barra-preenchida ${cor}" style="width: ${percentual}%;"></div>
+                <div class="barra-preenchida ${corBarra}" style="width: ${percentualBarra}%;"></div>
             </div>
+            ${anotacaoSemana}
             ${linhaReal}
             ${notasExtra}
             ${avisoProtecao}
