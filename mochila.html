@@ -15489,8 +15489,6 @@ function _renderizarAgendaMes() {
             <p style="font-size: 0.9rem; color: var(--primary); line-height: 1.5;">
                 💡 Se uma conta vence num dia que não tem dinheiro, o app vai te avisar no resumo da semana.
             </p>
-            <button class="btn-option" style="margin:0; padding:14px 10px; flex-direction:column; align-items:center; text-align:center; gap:8px;" onclick="abrirTelaFluxoCaixa()">
-                <span style="font-size:1.5rem;">🧭</span><span style="font-size:0.85rem; font-weight:700; color:var(--text-main);">Fluxo de Caixa</span>
         </div>
     `;
 }
@@ -15541,13 +15539,32 @@ function _arred2(v) { return Math.round((Number(v) || 0) * 100) / 100; }
 // vale o último plano visto naquele mês. Guarda os últimos 24 meses.
 const PLANO_MESES_MAX = 24;
 
-function _planoVivo(orc) {
+/** Houve saída (gasto, pagamento de dívida, aporte) ligada a esta categoria no mês? */
+function _categoriaTeveSaidaNoMes(orc, cat, mes) {
+    const regs = (orc && Array.isArray(orc.historicoRegistros)) ? orc.historicoRegistros : [];
+    return regs.some(r => r && !r.anulado && OC_TIPOS_SAIDA.indexOf(r.tipo) >= 0 && _ocChaveMesRegistro(r) === mes &&
+        ((r.categoriaId && r.categoriaId === cat.id) || (!r.categoriaId && r.categoria && r.categoria === cat.nome)));
+}
+
+/**
+ * Dívida quitada continua no plano do mês em que foi paga (ou que já a trazia gravada).
+ * Fica fora do plano só nos meses seguintes. Sem parcela cadastrada (valor 0) não há o que orçar.
+ */
+function _quitadaPertenceAoMes(orc, cat, mes) {
+    if (!cat || !_categoriaParcelasQuitada(cat) || !(Number(cat.valor) > 0)) return false;
+    const gravado = orc && orc.planoMeses && orc.planoMeses[mes];
+    if (gravado && Array.isArray(gravado.saidas) && gravado.saidas.some(x => x && x.id && x.id === cat.id)) return true;
+    return _categoriaTeveSaidaNoMes(orc, cat, mes);
+}
+
+function _planoVivo(orc, mes) {
     const o = orc || {};
+    const m = mes || _mesAtualYYYYMM();
     const fontes = (o.rendaDetalhe && Array.isArray(o.rendaDetalhe.fontes)) ? o.rendaDetalhe.fontes : [];
     const cats = Array.isArray(o.categorias) ? o.categorias : [];
     return {
         entradas: fontes.filter(f => f && Number(f.valor) > 0).map(f => ({ id: f.id || null, nome: f.nome || 'Renda', valor: Number(f.valor) })),
-        saidas: cats.filter(c => c && !_categoriaParcelasQuitada(c) && Number(c.valor) > 0)
+        saidas: cats.filter(c => c && Number(c.valor) > 0 && (!_categoriaParcelasQuitada(c) || _quitadaPertenceAoMes(o, c, m)))
             .map(c => ({ id: c.id || null, nome: c.nome || 'Categoria', caixa: c.caixa || 'base', valor: Number(c.valor) }))
     };
 }
@@ -15574,7 +15591,7 @@ function _planoParaMes(orc, mes) {
     if (valido(mes)) return { origem: 'gravado', mesFonte: mes, plano: gravados[mes] };
     const antes = Object.keys(gravados).filter(k => /^\d{4}-\d{2}$/.test(k) && k < mes && valido(k)).sort();
     if (antes.length) { const k = antes[antes.length - 1]; return { origem: 'herdado', mesFonte: k, plano: gravados[k] }; }
-    return { origem: 'hoje', mesFonte: _mesAtualYYYYMM(), plano: _planoVivo(o) };
+    return { origem: 'hoje', mesFonte: _mesAtualYYYYMM(), plano: _planoVivo(o, mes) };
 }
 
 function _obterOrcadoRealizadoMes(orc, chave) {
@@ -15597,6 +15614,13 @@ function _obterOrcadoRealizadoMes(orc, chave) {
         id: c.id, nomeCat: c.nome || '', nome: c.nome || 'Categoria', caixa: c.caixa || 'base',
         icone: SIM_ICONE_CAIXA[c.caixa] || SIM_ICONE_CAIXA.base, orcado: posNum(c.valor), realizado: 0
     }));
+    // Dívida quitada neste mês que o plano (gravado antes da quitação) não traz: entra com a parcela cadastrada
+    catsVivas.forEach(c => {
+        if (sai.some(x => x.id && x.id === c.id)) return;
+        if (!_quitadaPertenceAoMes(o, c, mes)) return;
+        sai.push({ id: c.id, nomeCat: c.nome || '', nome: c.nome || 'Categoria', caixa: c.caixa || 'base',
+            icone: SIM_ICONE_CAIXA[c.caixa] || SIM_ICONE_CAIXA.base, orcado: posNum(c.valor), realizado: 0 });
+    });
     catsVivas.forEach(c => {
         if (sai.some(x => x.id && x.id === c.id)) return;
         sai.push({ id: c.id, nomeCat: c.nome || '', nome: c.nome || 'Categoria', caixa: c.caixa || 'base',
