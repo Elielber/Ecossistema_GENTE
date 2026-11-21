@@ -1287,6 +1287,13 @@
     </div>
 </div>
 
+<div id="modal-plano-mes" class="modal-registro">
+    <div class="modal-registro-conteudo" style="max-height: 92vh; overflow-y: auto; padding-top: 28px;">
+        <button type="button" onclick="_planoFecharModal()" style="position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer; z-index: 2;" aria-label="Fechar">&times;</button>
+        <div id="modal-plano-mes-conteudo"></div>
+    </div>
+</div>
+
 <!-- Modal Contas (atalho Home N3) — visão "Onde o dinheiro está"; click no gráfico → ajuste -->
 <div id="modal-contas" class="modal-registro">
     <div class="modal-registro-conteudo" style="max-height: 88vh; overflow-y: auto; padding-top: 28px;">
@@ -4913,6 +4920,7 @@ function renderizarOrcamentoCompleto(container, orc) {
 
         ${renderizarAvisoCarregoVirada(semana)}
         ${renderizarAvisoViradaMes(semana)}
+        ${renderizarAvisoPlanoMes()}
 
         <div class="home-section-title">Seus envelopes</div>
         <div class="home-section-sub">Organize seu dinheiro com propósito</div>
@@ -13057,6 +13065,30 @@ function renderizarCustodias() {
 let finalidadeCustodiaForm = 'operacional'; // módulo
 let custodiaEditandoId = null;   // usado por _atualizarTelasAposRegistro
 
+/** Bloco do formulário da carteira: cheque especial (só conta corrente operacional). Tudo opcional. */
+function _chequeFormHtml(custodia, tipoAtual, finalidadeAtual) {
+    const ce = (custodia && custodia.chequeEspecial && typeof custodia.chequeEspecial === 'object') ? custodia.chequeEspecial : {};
+    const v = x => (x == null ? '' : x);
+    const visivel = tipoAtual === 'conta_corrente' && finalidadeAtual !== 'reserva';
+    return `
+        <div id="bloco-cheque" style="display: ${visivel ? 'block' : 'none'};">
+            <div class="fala-avatar">
+                <span class="icone">🏦</span>
+                <span class="texto">Essa conta tem cheque especial? (opcional — o Simulador usa para mostrar o custo de ficar no negativo)</span>
+            </div>
+            <div style="font-size:0.9rem;color:var(--secondary);margin:0 0 6px;">Limite do cheque especial</div>
+            <div class="input-com-prefixo">
+                <span class="prefixo">R$</span>
+                <input type="number" id="cust-cheque-limite" class="input-padrao" placeholder="0.00" step="0.01" min="0" value="${v(ce.limite)}">
+            </div>
+            <div style="font-size:0.9rem;color:var(--secondary);margin:10px 0 6px;">Taxa de juros (% ao mês) — está no extrato ou no contrato do banco</div>
+            <input type="number" id="cust-cheque-taxa" class="input-padrao" placeholder="Ex: 8" step="0.01" min="0" max="100" value="${v(ce.taxaMes)}">
+            <div style="font-size:0.9rem;color:var(--secondary);margin:10px 0 6px;">Qual o dia em que o banco debita os juros?</div>
+            <input type="number" id="cust-cheque-dia" class="input-padrao" placeholder="Ex: 10" min="1" max="31" value="${v(ce.diaDebito)}">
+            <div style="font-size:0.85rem;color:var(--secondary);margin-top:6px;line-height:1.4;">O cálculo usa só a taxa que você informar e não inclui IOF nem tarifas.</div>
+        </div>`;
+}
+
 function abrirFormularioCustodia(id, opcoes) {
     custodiaEditandoId = id || null;
     opcoes = opcoes || {};
@@ -13126,6 +13158,8 @@ function abrirFormularioCustodia(id, opcoes) {
             </div>
             ${editando ? '' : dicaSaldo}
         </div>
+
+        ${_chequeFormHtml(custodia, tipoAtual, finalidadeAtual)}
 
                 <div id="bloco-fatura" style="display: ${tipoAtual === 'cartao_credito' ? 'block' : 'none'};">
             <div class="fala-avatar">
@@ -13204,6 +13238,8 @@ function selecionarTipoCustodia(el) {
     const blocoFatura = document.getElementById('bloco-fatura');
     if (blocoSaldo) blocoSaldo.style.display = info.temSaldo ? 'block' : 'none';
     if (blocoFatura) blocoFatura.style.display = info.temFatura ? 'block' : 'none';
+    const blocoCheque = document.getElementById('bloco-cheque');
+    if (blocoCheque) blocoCheque.style.display = (tipoCustodiaSelecionado === 'conta_corrente' && finalidadeCustodiaForm !== 'reserva') ? 'block' : 'none';
 
     // Na criação, reaplica sugestão ao escolher tipo com saldo
     const inputSaldo = document.getElementById('cust-saldo');
@@ -13237,6 +13273,15 @@ function salvarCustodia(id) {
         ? (parseFloat(document.getElementById('cust-saldo').value) || 0)
         : 0;
 
+    // Cheque especial (só conta corrente operacional): valida antes de gravar qualquer coisa
+    let chequeCfg = null;
+    if (tipo === 'conta_corrente' && finalidadeCustodiaForm !== 'reserva') {
+        const lerCampo = idCampo => { const el = document.getElementById(idCampo); return el ? el.value : ''; };
+        const lido = _parseChequeEspecial({ limite: lerCampo('cust-cheque-limite'), taxa: lerCampo('cust-cheque-taxa'), dia: lerCampo('cust-cheque-dia') });
+        if (lido.erro) { alert(lido.erro); return; }
+        chequeCfg = lido.cfg;
+    }
+
     let diaFechamento = null;
     let diaVencimento = null;
 
@@ -13263,6 +13308,7 @@ function salvarCustodia(id) {
         custodia.finalidade = finalidadeCustodiaForm;
         custodia.saldoInicial = saldoInicial;
         custodia.saldoAtual = saldoInicial; // re-baseline
+        if (chequeCfg) custodia.chequeEspecial = chequeCfg; else delete custodia.chequeEspecial;
               if (info.temFatura) {
             custodia.diaFechamento = diaFechamento;
             custodia.diaVencimento = diaVencimento;
@@ -13282,6 +13328,7 @@ function salvarCustodia(id) {
             criadaEm: new Date().toISOString(),
             faturaAcumulada: 0
         };
+        if (chequeCfg) nova.chequeEspecial = chequeCfg;
               if (info.temFatura) {
             nova.diaFechamento = diaFechamento;
             nova.diaVencimento = diaVencimento;
@@ -15489,9 +15536,6 @@ function _renderizarAgendaMes() {
             <p style="font-size: 0.9rem; color: var(--primary); line-height: 1.5;">
                 💡 Se uma conta vence num dia que não tem dinheiro, o app vai te avisar no resumo da semana.
             </p>
-            <button class="btn-option" style="margin:0; padding:14px 10px; flex-direction:column; align-items:center; text-align:center; gap:8px;" onclick="abrirTelaFluxoCaixa()">
-                <span style="font-size:1.5rem;">🧭</span><span style="font-size:0.85rem; font-weight:700; color:var(--text-main);">Fluxo de Caixa</span>
-            </button>
         </div>
     `;
 }
@@ -20123,9 +20167,9 @@ function _obterFolegoExtratoDados(orc) {
     const fontes = (o.rendaDetalhe && o.rendaDetalhe.fontes) || [];
     const cats = (o.categorias || []).filter(c => !_categoriaParcelasQuitada(c));
     return {
-        entradas: fontes.filter(f => Number(f.valor) > 0).map(f => ({ nome: f.nome || 'Renda', valor: Number(f.valor) })),
+        entradas: fontes.filter(f => Number(f.valor) > 0).map(f => ({ refId: f.id || null, nome: f.nome || 'Renda', valor: Number(f.valor) })),
         saidas: cats.filter(c => Number(c.valor) > 0).map(c => ({
-            nome: c.nome || 'Categoria', valor: Number(c.valor), caixa: c.caixa || 'base', icone: SIM_ICONE_CAIXA[c.caixa] || SIM_ICONE_CAIXA.base
+            refId: c.id || null, nome: c.nome || 'Categoria', valor: Number(c.valor), caixa: c.caixa || 'base', icone: SIM_ICONE_CAIXA[c.caixa] || SIM_ICONE_CAIXA.base
         }))
     };
 }
@@ -20165,8 +20209,8 @@ function _garantirSimulador(orc) {
 function _simSnapshotAtual() {
     const ex = _obterFolegoExtratoDados(state.orcamento);
     return {
-        entradas: ex.entradas.map(e => ({ id: _simUid(), nome: e.nome, valor: e.valor })),
-        saidas: ex.saidas.map(x => ({ id: _simUid(), nome: x.nome, valor: x.valor, caixa: x.caixa, icone: x.icone }))
+        entradas: ex.entradas.map(e => ({ id: _simUid(), refId: e.refId || null, nome: e.nome, valor: e.valor })),
+        saidas: ex.saidas.map(x => ({ id: _simUid(), refId: x.refId || null, nome: x.nome, valor: x.valor, caixa: x.caixa, icone: x.icone }))
     };
 }
 
@@ -20264,6 +20308,545 @@ function _simRemover(k, tipo, idx) {
     _renderizarSimuladorCenarios();
 }
 
+// ===== Gravar para o próximo mês (plano planejado) =====
+// O cenário só PROPÕE. A gravação guarda um plano para o próximo mês em orcamento.planoPlanejado
+// (slot preguiçoso, sem migrador) e NÃO toca em categorias/fontes. Só a confirmação na virada aplica.
+const PLANO_FREQS = ['mensal', 'quinzenal', 'semanal', 'imprevisivel'];
+const PLANO_NATUREZAS = ['estavel', 'contratual', 'variavel'];
+const PLANO_PERIODICIDADES = ['anual', 'semestral', 'trimestral', 'mensal'];
+const PLANO_TIPOS_CREDITO = ['cartao_credito', 'cheque_especial', 'consignado', 'financiamento', 'emprestimo', 'outro'];
+
+function _planoProxMes(ref) {
+    const d = (ref && typeof ref.getFullYear === 'function') ? ref : new Date();
+    const m0 = d.getMonth() + 1; // 0-based do próximo mês (pode ser 12)
+    const ano = d.getFullYear() + Math.floor(m0 / 12);
+    return ano + '-' + String((m0 % 12) + 1).padStart(2, '0');
+}
+
+function _planoNorm(s) {
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Compara o cenário com o orçamento vivo e devolve o que mudaria (sem gravar nada).
+function _planoDiffCenario(orc, k) {
+    const cen = _simLer(orc)[k];
+    if (!cen || (!cen.entradas.length && !cen.saidas.length)) return [];
+    const fontes = ((orc && orc.rendaDetalhe && orc.rendaDetalhe.fontes) || []).filter(f => f && Number(f.valor) > 0);
+    const cats = ((orc && orc.categorias) || []).filter(c => c && Number(c.valor) > 0 && !_categoriaParcelasQuitada(c));
+    const itens = [];
+    const processa = (tipo, vivos, linhas) => {
+        const tomados = new Set();
+        linhas.forEach(l => {
+            if (!l || typeof l !== 'object') return;
+            const nome = String(l.nome || '').trim();
+            const valor = Number(l.valor) || 0;
+            let ref = l.refId ? vivos.find(v => v.id === l.refId && !tomados.has(v.id)) : null;
+            if (!ref && !l.refId) {
+                const cand = vivos.filter(v => !tomados.has(v.id) && _planoNorm(v.nome) === _planoNorm(nome));
+                if (cand.length === 1) ref = cand[0];
+            }
+            if (ref) {
+                tomados.add(ref.id);
+                const base = { tipo, refId: ref.id, linhaId: l.id || null, nomeAtual: ref.nome, valorAtual: Number(ref.valor) || 0, caixa: ref.caixa || null };
+                if (valor <= 0) itens.push(Object.assign(base, { acao: 'encerrar', nome: ref.nome, valor: 0 }));
+                else if (Math.abs(valor - base.valorAtual) > 0.005 || (nome && nome !== String(ref.nome || '').trim())) {
+                    itens.push(Object.assign(base, { acao: 'alterar', nome: nome || ref.nome, valor }));
+                }
+            } else if (valor > 0) {
+                itens.push({ tipo, acao: 'criar', refId: null, linhaId: l.id || null, nome: nome || (tipo === 'entrada' ? 'Nova entrada' : 'Nova saída'), valor, caixa: tipo === 'saida' ? (l.caixa || 'base') : null });
+            }
+        });
+        vivos.forEach(v => {
+            if (!tomados.has(v.id)) itens.push({ tipo, acao: 'encerrar', refId: v.id, linhaId: null, nomeAtual: v.nome, valorAtual: Number(v.valor) || 0, nome: v.nome, valor: 0, caixa: v.caixa || null });
+        });
+    };
+    processa('entrada', fontes, cen.entradas);
+    processa('saida', cats, cen.saidas);
+    return itens;
+}
+
+function _planoDiaOk(v) { return Number.isInteger(v) && v >= 1 && v <= 31; }
+function _planoNumOpc(v) {
+    if (v === null || v === undefined || String(v).trim() === '') return null;
+    const n = parseFloat(String(v).replace(',', '.'));
+    return isFinite(n) ? n : NaN;
+}
+
+// Valida o que o modal coletou. modelo: alterar_saida | alterar_entrada | criar_saida | criar_entrada
+// Devolve { ok:true, campos } (já normalizados) ou { ok:false, erro }.
+function _planoValidarCampos(modelo, c) {
+    c = c || {};
+    const nome = String(c.nome == null ? '' : c.nome).trim();
+    const valor = _planoNumOpc(c.valor);
+    const err = m => ({ ok: false, erro: m });
+    if (!(valor > 0)) return err('Informe um valor maior que zero.');
+    const venc = (tipo) => {
+        const v = c.vencimento === null || c.vencimento === undefined || String(c.vencimento).trim() === '' ? null : Number(c.vencimento);
+        if (tipo === 'conta') { if (!_planoDiaOk(v)) return { erro: 'Conta precisa de um dia de vencimento entre 1 e 31.' }; return { v }; }
+        if (v !== null && !_planoDiaOk(v)) return { erro: 'O dia precisa estar entre 1 e 31.' };
+        return { v };
+    };
+    const dias = (freq) => {
+        const l = (x) => (x === null || x === undefined || String(x).trim() === '') ? null : Number(x);
+        if (freq === 'mensal') { const d = l(c.dia1); if (d !== null && !_planoDiaOk(d)) return { erro: 'O dia precisa estar entre 1 e 31.' }; return { v: d }; }
+        if (freq === 'quinzenal') {
+            const a = l(c.dia1), b = l(c.dia2);
+            if (a === null && b === null) return { v: null };
+            if (a === null || b === null) return { erro: 'Preencha os dois dias ou deixe em branco.' };
+            if (!_planoDiaOk(a) || !_planoDiaOk(b)) return { erro: 'Os dias precisam estar entre 1 e 31.' };
+            return { v: [a, b] };
+        }
+        return { v: null };
+    };
+    const cust = c.custodiaPadraoId || null;
+    if (modelo === 'alterar_saida') {
+        const out = { valor, custodiaPadraoId: cust };
+        if (nome) out.nome = nome;
+        if (c.vencimento !== undefined) { const r = venc(c.tipoConta || 'consumo-opcional'); if (r.erro) return err(r.erro); out.vencimento = r.v; }
+        return { ok: true, campos: out };
+    }
+    if (modelo === 'alterar_entrada') {
+        const out = { valor };
+        if (nome) out.nome = nome;
+        if (c.frequencia) {
+            if (!PLANO_FREQS.includes(c.frequencia)) return err('Escolha como a renda cai.');
+            const r = dias(c.frequencia); if (r.erro) return err(r.erro);
+            out.frequencia = c.frequencia; out.diaRecebimento = r.v;
+        }
+        if (c.custodiaPadraoId !== undefined) out.custodiaPadraoId = cust;
+        return { ok: true, campos: out };
+    }
+    if (modelo === 'criar_entrada') {
+        if (!nome) return err('Diga o nome da fonte.');
+        if (!PLANO_FREQS.includes(c.frequencia)) return err('Escolha como a renda cai.');
+        const r = dias(c.frequencia); if (r.erro) return err(r.erro);
+        const nat = c.natureza || null;
+        if (nat && !PLANO_NATUREZAS.includes(nat)) return err('Natureza da renda inválida.');
+        return { ok: true, campos: { nome, valor, frequencia: c.frequencia, diaRecebimento: r.v, natureza: nat, custodiaPadraoId: cust } };
+    }
+    if (modelo === 'criar_saida') {
+        if (!nome) return err('Diga o nome do gasto.');
+        const caixa = c.caixa;
+        if (!['base', 'vida', 'futuro'].includes(caixa)) return err('Escolha o envelope (Base, Vida ou Futuro).');
+        if (caixa === 'futuro') {
+            const subtipo = c.subtipo;
+            if (!['divida', 'reserva'].includes(subtipo)) return err('Escolha se é dívida ou reserva.');
+            if (!['conta', 'aporte'].includes(c.tipo)) return err('Escolha se é conta ou aporte.');
+            const r = venc(c.tipo); if (r.erro) return err(r.erro);
+            const out = { nome, valor, caixa, subtipo, tipo: c.tipo, vencimento: r.v, custodiaPadraoId: subtipo === 'reserva' ? cust : null,
+                parcelasTotais: null, saldoDevedor: null, taxaJuros: null, dataVencimentoReal: null, tipoCredito: null };
+            if (subtipo === 'divida') {
+                const p = _planoNumOpc(c.parcelasTotais);
+                if (Number.isNaN(p) || (p !== null && !(Number.isInteger(p) && p >= 1))) return err('Parcelas: informe um número inteiro a partir de 1, ou deixe em branco.');
+                const s = _planoNumOpc(c.saldoDevedor);
+                if (Number.isNaN(s) || (s !== null && s < 0)) return err('Saldo devedor inválido.');
+                const t = _planoNumOpc(c.taxaJuros);
+                if (Number.isNaN(t) || (t !== null && t < 0)) return err('Taxa de juros inválida (ao mês).');
+                if (c.dataVencimentoReal && !/^\d{4}-\d{2}-\d{2}$/.test(String(c.dataVencimentoReal))) return err('Data de vencimento inválida.');
+                if (c.tipoCredito && !PLANO_TIPOS_CREDITO.includes(c.tipoCredito)) return err('Tipo de crédito inválido.');
+                out.parcelasTotais = p; out.saldoDevedor = s; out.taxaJuros = t;
+                out.dataVencimentoReal = c.dataVencimentoReal || null; out.tipoCredito = c.tipoCredito || null;
+            }
+            return { ok: true, campos: out };
+        }
+        if (!['conta', 'consumo'].includes(c.tipo)) return err('Escolha se é conta ou consumo.');
+        const r = venc(c.tipo); if (r.erro) return err(r.erro);
+        const out = { nome, valor, caixa, tipo: c.tipo, vencimento: c.tipo === 'conta' ? r.v : null, custodiaPadraoId: cust,
+            provisionar: !!c.provisionar, valorProvisaoTotal: null, periodicidadeProvisao: null };
+        if (c.provisionar) {
+            const t = _planoNumOpc(c.valorProvisaoTotal);
+            if (!(t > 0)) return err('Informe o valor total a provisionar (maior que zero).');
+            const per = c.periodicidadeProvisao || 'anual';
+            if (!PLANO_PERIODICIDADES.includes(per)) return err('Periodicidade da provisão inválida.');
+            out.valorProvisaoTotal = t; out.periodicidadeProvisao = per;
+        }
+        return { ok: true, campos: out };
+    }
+    return err('Modelo desconhecido.');
+}
+
+// Grava o plano do próximo mês. NÃO altera categorias nem fontes.
+// alteracoes: [{ tipo:'entrada'|'saida', acao:'alterar'|'criar'|'encerrar', refId, nome, campos }]
+function _planoGravar(orc, k, mes, alteracoes, agoraISO) {
+    if (!orc) return { ok: false, erro: 'Sem orçamento.' };
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(mes))) return { ok: false, erro: 'Mês inválido.' };
+    const lista = Array.isArray(alteracoes) ? alteracoes : [];
+    const limpas = [];
+    for (const a of lista) {
+        if (!a || !['entrada', 'saida'].includes(a.tipo) || !['alterar', 'criar', 'encerrar'].includes(a.acao)) return { ok: false, erro: 'Alteração inválida.' };
+        if (a.acao !== 'criar' && !a.refId) return { ok: false, erro: 'Alteração sem referência.' };
+        if (a.acao !== 'encerrar' && !(Number(a.campos && a.campos.valor) > 0)) return { ok: false, erro: 'Alteração sem valor.' };
+        limpas.push({ tipo: a.tipo, acao: a.acao, refId: a.refId || null, nome: String(a.nome || (a.campos && a.campos.nome) || ''), campos: a.acao === 'encerrar' ? {} : JSON.parse(JSON.stringify(a.campos)) });
+    }
+    if (!limpas.length) return { ok: false, erro: 'Nada para gravar.' };
+    orc.planoPlanejado = { mes: String(mes), origemCenario: k || null, criadoEm: agoraISO || new Date().toISOString(), aplicadoEm: null, descartadoEm: null, alteracoes: limpas };
+    return { ok: true, plano: orc.planoPlanejado };
+}
+
+// Plano esperando confirmação: existe, não foi aplicado/descartado e o mês dele já chegou.
+function _planoPendente(orc, mesHoje) {
+    const p = orc && orc.planoPlanejado;
+    if (!p || typeof p !== 'object' || p.aplicadoEm || p.descartadoEm || !Array.isArray(p.alteracoes)) return null;
+    return String(mesHoje) >= String(p.mes) ? p : null;
+}
+
+function _planoNovoId(prefixo, usados) {
+    let n = Date.now();
+    while (usados.has(prefixo + n)) n++;
+    usados.add(prefixo + n);
+    return prefixo + n;
+}
+
+// Aplica o plano às categorias/fontes (puro sobre o orçamento; os recálculos ficam com quem chama).
+function _planoAplicar(orc, agoraISO) {
+    const p = orc && orc.planoPlanejado;
+    const res = { aplicado: false, alteradas: 0, criadas: 0, encerradas: 0, ignoradas: 0 };
+    if (!p || p.aplicadoEm || p.descartadoEm || !Array.isArray(p.alteracoes)) return res;
+    if (!orc.categorias) orc.categorias = [];
+    if (!orc.rendaDetalhe) orc.rendaDetalhe = { fontes: [] };
+    if (!orc.rendaDetalhe.fontes) orc.rendaDetalhe.fontes = [];
+    const usados = new Set();
+    p.alteracoes.forEach(a => {
+        const c = a.campos || {};
+        if (a.tipo === 'saida') {
+            const cat = a.refId ? orc.categorias.find(x => x.id === a.refId) : null;
+            if (a.acao === 'criar') {
+                const base = { id: _planoNovoId('cat_', usados), nome: c.nome, valor: c.valor, tipo: c.tipo, vencimento: c.vencimento, caixa: c.caixa, custodiaPadraoId: c.custodiaPadraoId || null, pagamentoConfirmadoMes: null };
+                if (c.caixa === 'futuro') {
+                    let saldo = null;
+                    if (c.subtipo === 'divida') saldo = c.saldoDevedor !== null && c.saldoDevedor !== undefined ? c.saldoDevedor : (c.parcelasTotais ? c.valor * c.parcelasTotais : null);
+                    Object.assign(base, { subtipo: c.subtipo, parcelasPagas: 0, parcelasTotais: c.parcelasTotais || null, valorTotal: c.parcelasTotais ? c.valor * c.parcelasTotais : null,
+                        saldoDevedor: saldo, saldoDevedorEstimado: (c.subtipo === 'divida' && saldo !== null && (c.saldoDevedor === null || c.saldoDevedor === undefined)),
+                        taxaJuros: c.subtipo === 'divida' ? (c.taxaJuros === undefined ? null : c.taxaJuros) : null,
+                        dataVencimentoReal: c.subtipo === 'divida' ? (c.dataVencimentoReal || null) : null, tipoCredito: c.subtipo === 'divida' ? (c.tipoCredito || null) : null });
+                } else {
+                    Object.assign(base, { provisionar: !!c.provisionar, valorProvisaoTotal: c.provisionar ? c.valorProvisaoTotal : null, periodicidadeProvisao: c.provisionar ? c.periodicidadeProvisao : null });
+                }
+                orc.categorias.push(base); res.criadas++;
+            } else if (!cat) { res.ignoradas++; }
+            else if (a.acao === 'alterar') {
+                if (c.nome) cat.nome = c.nome;
+                cat.valor = c.valor;
+                if (Object.prototype.hasOwnProperty.call(c, 'vencimento') && cat.tipo === 'conta' && _planoDiaOk(c.vencimento)) cat.vencimento = c.vencimento;
+                if (Object.prototype.hasOwnProperty.call(c, 'custodiaPadraoId')) cat.custodiaPadraoId = c.custodiaPadraoId || null;
+                res.alteradas++;
+            } else {
+                if (cat.caixa === 'futuro' && Number(cat.saldoDevedor) > 0) cat.valor = 0; // dívida aberta não some: só deixa de ser planejada
+                else orc.categorias = orc.categorias.filter(x => x.id !== cat.id);
+                res.encerradas++;
+            }
+        } else {
+            const fontes = orc.rendaDetalhe.fontes;
+            const f = a.refId ? fontes.find(x => x.id === a.refId) : null;
+            if (a.acao === 'criar') {
+                fontes.push({ id: _planoNovoId('fonte_', usados), nome: c.nome, valor: c.valor, origem: 'plano', frequencia: c.frequencia, natureza: c.natureza || null, diaRecebimento: c.diaRecebimento === undefined ? null : c.diaRecebimento, custodiaPadraoId: c.custodiaPadraoId || null });
+                res.criadas++;
+            } else if (!f) { res.ignoradas++; }
+            else if (a.acao === 'alterar') {
+                if (c.nome) f.nome = c.nome;
+                f.valor = c.valor;
+                if (c.frequencia) { f.frequencia = c.frequencia; f.diaRecebimento = c.diaRecebimento === undefined ? null : c.diaRecebimento; }
+                if (Object.prototype.hasOwnProperty.call(c, 'custodiaPadraoId')) f.custodiaPadraoId = c.custodiaPadraoId || null;
+                res.alteradas++;
+            } else {
+                orc.rendaDetalhe.fontes = fontes.filter(x => x.id !== f.id); res.encerradas++;
+            }
+        }
+    });
+    p.aplicadoEm = agoraISO || new Date().toISOString();
+    res.aplicado = true;
+    return res;
+}
+
+// ----- Gravar para o próximo mês: interface -----
+const PLANO_MESES_NOMES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+function _planoMesRotulo(mes) {
+    const m = /^(\d{4})-(\d{2})$/.exec(String(mes));
+    return m ? PLANO_MESES_NOMES[parseInt(m[2], 10) - 1] + ' de ' + m[1] : String(mes);
+}
+
+// Texto de uma alteração (usado no resumo do modal e na tela de confirmação da virada).
+function _planoDescreverAlteracao(a, orc) {
+    const fmt = formatarMoeda;
+    const c = a.campos || {};
+    if (a.acao === 'criar') {
+        const onde = a.tipo === 'entrada' ? 'Nova renda' : 'Novo gasto (' + ({ base: 'Base', vida: 'Vida', futuro: 'Futuro' }[c.caixa] || '') + ')';
+        return `${onde}: ${a.nome || c.nome} — ${fmt(c.valor)}`;
+    }
+    const lista = a.tipo === 'entrada' ? ((orc && orc.rendaDetalhe && orc.rendaDetalhe.fontes) || []) : ((orc && orc.categorias) || []);
+    const ref = lista.find(x => x.id === a.refId);
+    const nomeAtual = ref ? ref.nome : (a.nome || 'item removido');
+    if (a.acao === 'encerrar') {
+        const aberta = ref && ref.caixa === 'futuro' && Number(ref.saldoDevedor) > 0;
+        return `Encerrar: ${nomeAtual}${ref ? ' (hoje ' + fmt(ref.valor) + ')' : ''}${aberta ? ' — a dívida segue aberta com o saldo; só deixa de ser planejada' : ''}`;
+    }
+    const de = ref ? fmt(ref.valor) : '—';
+    const nomeNovo = c.nome && c.nome !== nomeAtual ? ` (renomeia para ${c.nome})` : '';
+    return `${nomeAtual}${nomeNovo}: ${de} → ${fmt(c.valor)}`;
+}
+
+function _planoAbrirModal(html) {
+    const m = document.getElementById('modal-plano-mes'), c = document.getElementById('modal-plano-mes-conteudo');
+    if (!m || !c) return;
+    c.innerHTML = html;
+    m.classList.add('ativo');
+}
+function _planoFecharModal() {
+    const m = document.getElementById('modal-plano-mes');
+    if (m) m.classList.remove('ativo');
+    _planoWiz = null;
+}
+
+// Aviso no cenário: já há plano gravado? e botão de gravar.
+function _planoBotaoCenario(k) {
+    const orc = state.orcamento;
+    const mes = _planoProxMes(new Date());
+    const itens = _planoDiffCenario(orc, k);
+    const p = orc && orc.planoPlanejado;
+    const jaTem = p && !p.aplicadoEm && !p.descartadoEm
+        ? `<div style="font-size:0.82rem;color:var(--secondary);margin-top:8px;line-height:1.4;">Já existe um plano gravado para ${_planoMesRotulo(p.mes)} (${p.alteracoes.length} mudança${p.alteracoes.length === 1 ? '' : 's'}). Gravar de novo substitui.</div>` : '';
+    if (!itens.length) {
+        return `<div class="card" style="margin-top:18px;padding:14px 16px;"><div style="font-size:0.88rem;color:var(--secondary);line-height:1.45;">Quando este cenário diferir do orçamento atual, você poderá gravá-lo como plano de ${_planoMesRotulo(mes)}.</div>${jaTem}</div>`;
+    }
+    return `<div class="card" style="margin-top:18px;padding:14px 16px;">
+        <div style="font-size:0.9rem;line-height:1.45;margin-bottom:10px;"><strong>${itens.length} diferença${itens.length === 1 ? '' : 's'}</strong> em relação ao orçamento atual. Gravar vale só para <strong>${_planoMesRotulo(mes)}</strong>; este mês não muda, e na virada você confirma antes de aplicar.</div>
+        <button type="button" class="btn-primary" style="margin:0;" onclick="_planoAbrirWizard('${k}')">Gravar para ${_planoMesRotulo(mes)}</button>${jaTem}</div>`;
+}
+
+let _planoWiz = null;
+
+function _planoAbrirWizard(k) {
+    const itens = _planoDiffCenario(state.orcamento, k);
+    if (!itens.length) return;
+    _planoWiz = { k, itens, i: 0, resp: [], rascunho: null };
+    _planoRenderPasso();
+}
+
+function _planoOpcoesCarteira(atual, soReserva) {
+    const orc = state.orcamento;
+    const lista = (orc && orc.custodias) || [];
+    return '<option value="">Sem carteira preferencial</option>' + lista.map(c => `<option value="${_escHtmlObs(c.id)}"${c.id === atual ? ' selected' : ''}>${_escHtmlObs(c.nome || 'Carteira')}</option>`).join('');
+}
+function _planoSel(id, opcoes, atual, onchange) {
+    return `<select id="${id}" class="input-padrao"${onchange ? ` onchange="${onchange}"` : ''}>${opcoes.map(o => `<option value="${o[0]}"${String(o[0]) === String(atual == null ? '' : atual) ? ' selected' : ''}>${_escHtmlObs(o[1])}</option>`).join('')}</select>`;
+}
+function _planoCampo(rotulo, html, dica) {
+    return `<div style="margin-bottom:12px;"><label style="display:block;font-size:0.82rem;font-weight:600;margin-bottom:4px;">${rotulo}</label>${html}${dica ? `<div style="font-size:0.76rem;color:var(--secondary);margin-top:3px;">${dica}</div>` : ''}</div>`;
+}
+function _planoInput(id, tipo, valor, extra) {
+    return `<input id="${id}" type="${tipo}" class="input-padrao" value="${_escHtmlObs(valor == null ? '' : valor)}" ${extra || ''}>`;
+}
+const _PLANO_FREQ_ROTULOS = [['mensal', 'Todo mês, mesmo dia'], ['quinzenal', 'Duas vezes por mês'], ['semanal', 'Toda semana'], ['imprevisivel', 'Varia muito']];
+
+function _planoModeloDe(item) {
+    return (item.acao === 'criar' ? 'criar_' : 'alterar_') + item.tipo;
+}
+
+function _planoLerCampos() {
+    const g = id => { const e = document.getElementById(id); return e ? e.value : undefined; };
+    const chk = id => { const e = document.getElementById(id); return e ? !!e.checked : undefined; };
+    const out = {};
+    ['nome', 'valor', 'caixa', 'tipo', 'subtipo', 'frequencia', 'natureza'].forEach(f => { const v = g('pw-' + f); if (v !== undefined) out[f] = v; });
+    const m = { vencimento: 'pw-venc', custodiaPadraoId: 'pw-cust', valorProvisaoTotal: 'pw-prov-total', periodicidadeProvisao: 'pw-prov-per', parcelasTotais: 'pw-parc', saldoDevedor: 'pw-saldo', taxaJuros: 'pw-taxa', dataVencimentoReal: 'pw-datareal', tipoCredito: 'pw-credito', dia1: 'pw-dia1', dia2: 'pw-dia2' };
+    Object.keys(m).forEach(f => { const v = g(m[f]); if (v !== undefined) out[f] = v; });
+    const p = chk('pw-prov'); if (p !== undefined) out.provisionar = p;
+    return out;
+}
+
+function _planoFormHtml(item, r) {
+    const orc = state.orcamento;
+    const v = (campo, padrao) => (r && r[campo] !== undefined) ? r[campo] : padrao;
+    const nomeCampo = _planoCampo('Nome', _planoInput('pw-nome', 'text', v('nome', item.nome)));
+    const valorCampo = _planoCampo('Valor por mês', _planoInput('pw-valor', 'number', v('valor', item.valor), 'step="0.01" min="0"'));
+    const diasHtml = (freq) => {
+        if (freq === 'mensal') return _planoCampo('Dia do recebimento (opcional)', _planoInput('pw-dia1', 'number', v('dia1', ''), 'min="1" max="31"'));
+        if (freq === 'quinzenal') return _planoCampo('Dias do recebimento (opcional)', `<div style="display:flex;gap:8px;">${_planoInput('pw-dia1', 'number', v('dia1', ''), 'min="1" max="31"')}${_planoInput('pw-dia2', 'number', v('dia2', ''), 'min="1" max="31"')}</div>`, 'Preencha os dois ou deixe em branco.');
+        return '';
+    };
+    if (item.acao === 'alterar' && item.tipo === 'saida') {
+        const cat = (orc.categorias || []).find(c => c.id === item.refId) || {};
+        const venc = cat.tipo === 'conta' ? _planoCampo('Dia do vencimento', _planoInput('pw-venc', 'number', v('vencimento', cat.vencimento), 'min="1" max="31"')) : '';
+        return nomeCampo + valorCampo + venc + _planoCampo('Carteira para débito', `<select id="pw-cust" class="input-padrao">${_planoOpcoesCarteira(v('custodiaPadraoId', cat.custodiaPadraoId))}</select>`);
+    }
+    if (item.acao === 'alterar' && item.tipo === 'entrada') {
+        const f = (orc.rendaDetalhe.fontes || []).find(x => x.id === item.refId) || {};
+        const freq = v('frequencia', f.frequencia || 'mensal');
+        let d1 = '', d2 = '';
+        if (Array.isArray(f.diaRecebimento)) { d1 = f.diaRecebimento[0]; d2 = f.diaRecebimento[1]; } else if (f.diaRecebimento) d1 = f.diaRecebimento;
+        const rr = Object.assign({ dia1: d1, dia2: d2 }, r || {});
+        const vv = (c, p) => rr[c] !== undefined ? rr[c] : p;
+        const dias = freq === 'mensal' ? _planoCampo('Dia do recebimento (opcional)', _planoInput('pw-dia1', 'number', vv('dia1', ''), 'min="1" max="31"'))
+            : freq === 'quinzenal' ? _planoCampo('Dias do recebimento (opcional)', `<div style="display:flex;gap:8px;">${_planoInput('pw-dia1', 'number', vv('dia1', ''), 'min="1" max="31"')}${_planoInput('pw-dia2', 'number', vv('dia2', ''), 'min="1" max="31"')}</div>`) : '';
+        return nomeCampo + valorCampo + _planoCampo('Como cai', _planoSel('pw-frequencia', _PLANO_FREQ_ROTULOS, freq, '_planoRefresh()')) + dias
+            + _planoCampo('Carteira de recebimento', `<select id="pw-cust" class="input-padrao">${_planoOpcoesCarteira(v('custodiaPadraoId', f.custodiaPadraoId))}</select>`);
+    }
+    if (item.acao === 'criar' && item.tipo === 'entrada') {
+        const freq = v('frequencia', 'mensal');
+        return nomeCampo + valorCampo + _planoCampo('Como cai', _planoSel('pw-frequencia', _PLANO_FREQ_ROTULOS, freq, '_planoRefresh()')) + diasHtml(freq)
+            + _planoCampo('Natureza da renda', _planoSel('pw-natureza', [['', 'Não informar'], ['estavel', 'Estável (CLT, aposentadoria)'], ['contratual', 'Contratual (aluguel)'], ['variavel', 'Variável (autônomo)']], v('natureza', '')))
+            + _planoCampo('Carteira de recebimento', `<select id="pw-cust" class="input-padrao">${_planoOpcoesCarteira(v('custodiaPadraoId', ''))}</select>`);
+    }
+    // criar saída
+    const caixa = v('caixa', item.caixa || 'base');
+    const envelope = _planoCampo('Envelope', _planoSel('pw-caixa', [['base', '🛡️ Base'], ['vida', '🌿 Vida'], ['futuro', '🔭 Futuro (dívida ou reserva)']], caixa, '_planoRefresh()'));
+    if (caixa === 'futuro') {
+        const sub = v('subtipo', 'divida'), tipo = v('tipo', 'conta');
+        let h = nomeCampo.replace('Nome', 'Nome') + envelope + _planoCampo('É dívida ou reserva?', _planoSel('pw-subtipo', [['divida', 'Dívida'], ['reserva', 'Reserva']], sub, '_planoRefresh()')) + valorCampo
+            + _planoCampo('Tipo', _planoSel('pw-tipo', [['conta', 'Conta (tem vencimento)'], ['aporte', 'Aporte']], tipo, '_planoRefresh()'));
+        if (tipo === 'conta') h += _planoCampo('Dia do vencimento', _planoInput('pw-venc', 'number', v('vencimento', ''), 'min="1" max="31"'));
+        if (sub === 'divida') {
+            h += _planoCampo('Parcelas totais (opcional)', _planoInput('pw-parc', 'number', v('parcelasTotais', ''), 'min="1" step="1"'))
+              + _planoCampo('Saldo devedor (opcional)', _planoInput('pw-saldo', 'number', v('saldoDevedor', ''), 'min="0" step="0.01"'), 'Em branco: o app estima pelas parcelas.')
+              + _planoCampo('Taxa de juros ao mês, % (opcional)', _planoInput('pw-taxa', 'number', v('taxaJuros', ''), 'min="0" step="0.01"'), 'Em branco: "não sei".')
+              + _planoCampo('Data do último vencimento (opcional)', _planoInput('pw-datareal', 'date', v('dataVencimentoReal', '')))
+              + _planoCampo('Tipo de crédito (opcional)', _planoSel('pw-credito', [['', 'Não sei'], ['cartao_credito', 'Cartão de crédito'], ['cheque_especial', 'Cheque especial'], ['consignado', 'Consignado'], ['financiamento', 'Financiamento'], ['emprestimo', 'Empréstimo'], ['outro', 'Outro']], v('tipoCredito', '')));
+        } else {
+            h += _planoCampo('Carteira da reserva', `<select id="pw-cust" class="input-padrao">${_planoOpcoesCarteira(v('custodiaPadraoId', ''))}</select>`);
+        }
+        return h;
+    }
+    const tipo = v('tipo', 'consumo');
+    const prov = !!v('provisionar', false);
+    let h = nomeCampo + envelope + valorCampo + _planoCampo('Tipo', _planoSel('pw-tipo', [['consumo', 'Consumo (sem vencimento)'], ['conta', 'Conta (tem vencimento)']], tipo, '_planoRefresh()'));
+    if (tipo === 'conta') h += _planoCampo('Dia do vencimento', _planoInput('pw-venc', 'number', v('vencimento', ''), 'min="1" max="31"'));
+    h += _planoCampo('Carteira para débito', `<select id="pw-cust" class="input-padrao">${_planoOpcoesCarteira(v('custodiaPadraoId', ''))}</select>`);
+    h += `<div style="margin-bottom:12px;"><label style="font-size:0.85rem;"><input type="checkbox" id="pw-prov"${prov ? ' checked' : ''} onchange="_planoRefresh()"> Provisionar (guardar aos poucos para um gasto grande)</label></div>`;
+    if (prov) h += _planoCampo('Valor total a provisionar', _planoInput('pw-prov-total', 'number', v('valorProvisaoTotal', ''), 'min="0" step="0.01"'))
+        + _planoCampo('Em quanto tempo', _planoSel('pw-prov-per', [['anual', 'Em 12 meses'], ['semestral', 'Em 6 meses'], ['trimestral', 'Em 3 meses'], ['mensal', 'Todo mês']], v('periodicidadeProvisao', 'anual')));
+    return h;
+}
+
+function _planoRefresh() {
+    if (!_planoWiz) return;
+    _planoWiz.rascunho = _planoLerCampos();
+    _planoRenderPasso(true);
+}
+
+function _planoRenderPasso(manterRascunho) {
+    const w = _planoWiz; if (!w) return;
+    if (!manterRascunho) w.rascunho = null;
+    const mes = _planoProxMes(new Date());
+    if (w.i >= w.itens.length) return _planoRenderResumo();
+    const item = w.itens[w.i];
+    const prog = `<div style="font-size:0.78rem;color:var(--secondary);margin-bottom:6px;">Linha ${w.i + 1} de ${w.itens.length} · plano de ${_planoMesRotulo(mes)}</div>`;
+    const voltar = w.i > 0 ? `<button type="button" class="btn-option" style="justify-content:center;margin:8px 0 0;" onclick="_planoVoltar()">Voltar</button>` : '';
+    if (item.acao === 'encerrar') {
+        const lista = item.tipo === 'entrada' ? ((state.orcamento.rendaDetalhe || {}).fontes || []) : (state.orcamento.categorias || []);
+        const ref = lista.find(x => x.id === item.refId);
+        const aberta = ref && ref.caixa === 'futuro' && Number(ref.saldoDevedor) > 0;
+        _planoAbrirModal(`${prog}<div class="home-section-title" style="margin-bottom:6px;">Encerrar "${_escHtmlObs(item.nomeAtual)}"?</div>
+            <div style="font-size:0.9rem;line-height:1.5;margin-bottom:14px;">Hoje ${formatarMoeda(item.valorAtual)}. O cenário não tem mais esta linha. Encerrar a partir de ${_planoMesRotulo(mes)}?${aberta ? ' A dívida segue aberta com o saldo; ela só deixa de ser planejada.' : ''}</div>
+            <button type="button" class="btn-primary" style="margin:0 0 8px;" onclick="_planoResponderEncerrar(true)">Encerrar a partir de ${_planoMesRotulo(mes)}</button>
+            <button type="button" class="btn-option" style="justify-content:center;margin:0;" onclick="_planoResponderEncerrar(false)">Manter como está</button>${voltar}`);
+        return;
+    }
+    const titulo = item.acao === 'criar'
+        ? `Nova ${item.tipo === 'entrada' ? 'renda' : 'saída'}: "${_escHtmlObs(item.nome)}"`
+        : `Confirmar "${_escHtmlObs(item.nomeAtual)}"`;
+    const sub = item.acao === 'criar' ? 'Preencha os mesmos dados do cadastro.' : `Hoje ${formatarMoeda(item.valorAtual)}; no cenário ${formatarMoeda(item.valor)}. Confira e complete o que for preciso.`;
+    _planoAbrirModal(`${prog}<div class="home-section-title" style="margin-bottom:4px;">${titulo}</div>
+        <div style="font-size:0.85rem;color:var(--secondary);margin-bottom:14px;line-height:1.45;">${sub}</div>
+        ${_planoFormHtml(item, w.rascunho)}
+        <div id="pw-erro" style="color:var(--text-main);font-size:0.85rem;margin-bottom:8px;"></div>
+        <button type="button" class="btn-primary" style="margin:0 0 8px;" onclick="_planoResponderForm()">Próxima</button>
+        <button type="button" class="btn-option" style="justify-content:center;margin:0;" onclick="_planoPular()">Não gravar esta linha</button>${voltar}`);
+}
+
+function _planoResponderForm() {
+    const w = _planoWiz; if (!w) return;
+    const item = w.itens[w.i];
+    const raw = _planoLerCampos();
+    if (item.acao === 'alterar' && item.tipo === 'saida') {
+        const cat = (state.orcamento.categorias || []).find(c => c.id === item.refId) || {};
+        raw.tipoConta = cat.tipo;
+    }
+    if (item.acao === 'criar' && item.tipo === 'saida' && raw.caixa === 'futuro' && raw.subtipo === 'reserva') raw.tipo = raw.tipo || 'aporte';
+    const r = _planoValidarCampos(_planoModeloDe(item), raw);
+    if (!r.ok) { const e = document.getElementById('pw-erro'); if (e) e.textContent = r.erro; w.rascunho = raw; return; }
+    const campos = r.campos;
+    if (item.acao === 'criar' && !campos.nome) campos.nome = item.nome;
+    w.resp = w.resp.filter(x => x.__i !== w.i);
+    w.resp.push({ __i: w.i, tipo: item.tipo, acao: item.acao, refId: item.refId, nome: campos.nome || item.nome, campos });
+    w.i++; _planoRenderPasso();
+}
+function _planoResponderEncerrar(sim) {
+    const w = _planoWiz; if (!w) return;
+    const item = w.itens[w.i];
+    w.resp = w.resp.filter(x => x.__i !== w.i);
+    if (sim) w.resp.push({ __i: w.i, tipo: item.tipo, acao: 'encerrar', refId: item.refId, nome: item.nomeAtual, campos: {} });
+    w.i++; _planoRenderPasso();
+}
+function _planoPular() { const w = _planoWiz; if (!w) return; w.resp = w.resp.filter(x => x.__i !== w.i); w.i++; _planoRenderPasso(); }
+function _planoVoltar() { const w = _planoWiz; if (!w || w.i <= 0) return; w.i--; _planoRenderPasso(); }
+
+function _planoRenderResumo() {
+    const w = _planoWiz; if (!w) return;
+    const mes = _planoProxMes(new Date());
+    if (!w.resp.length) {
+        _planoAbrirModal(`<div class="home-section-title">Nada a gravar</div><div style="font-size:0.9rem;margin:8px 0 14px;">Você não escolheu nenhuma linha. O orçamento segue como está.</div>
+            <button type="button" class="btn-option" style="justify-content:center;margin:0;" onclick="_planoFecharModal()">Fechar</button>`);
+        return;
+    }
+    const itens = w.resp.map(a => `<li style="margin-bottom:6px;">${_escHtmlObs(_planoDescreverAlteracao(a, state.orcamento))}</li>`).join('');
+    _planoAbrirModal(`<div class="home-section-title" style="margin-bottom:6px;">Gravar para ${_planoMesRotulo(mes)}</div>
+        <ul style="font-size:0.9rem;line-height:1.45;padding-left:18px;margin:0 0 12px;">${itens}</ul>
+        <div style="font-size:0.82rem;color:var(--secondary);margin-bottom:14px;line-height:1.45;">Este mês não muda. Na virada, o app mostra estas diferenças e só aplica se você confirmar.</div>
+        <button type="button" class="btn-primary" style="margin:0 0 8px;" onclick="_planoConfirmarGravar()">Gravar</button>
+        <button type="button" class="btn-option" style="justify-content:center;margin:0;" onclick="_planoVoltar()">Voltar</button>`);
+}
+
+function _planoConfirmarGravar() {
+    const w = _planoWiz; if (!w) return;
+    const alts = w.resp.map(a => ({ tipo: a.tipo, acao: a.acao, refId: a.refId, nome: a.nome, campos: a.campos }));
+    const r = _planoGravar(state.orcamento, w.k, _planoProxMes(new Date()), alts);
+    if (!r.ok) { alert(r.erro); return; }
+    salvarEstado();
+    _planoFecharModal();
+    _renderizarSimuladorCenarios();
+}
+
+// Virada: aviso na Home e tela de confirmação.
+function renderizarAvisoPlanoMes() {
+    const orc = state && state.orcamento;
+    const p = _planoPendente(orc, _mesAtualYYYYMM());
+    if (!p) return '';
+    return `<div class="card" style="border-left:4px solid var(--primary);background:var(--info-soft);margin-bottom:16px;padding:14px 16px;">
+        <div style="font-size:0.9rem;color:var(--primary);line-height:1.45;"><strong>Plano de ${_planoMesRotulo(p.mes)} pronto.</strong> Você gravou ${p.alteracoes.length} mudança${p.alteracoes.length === 1 ? '' : 's'} pelo Simulador. Nada foi aplicado ainda.</div>
+        <button type="button" class="btn-option" style="justify-content:center;border-color:var(--primary);color:var(--primary);font-size:0.9rem;margin-top:8px;" onclick="_planoAbrirConfirmacao()">Revisar e aplicar</button></div>`;
+}
+
+function _planoAbrirConfirmacao() {
+    const orc = state.orcamento;
+    const p = _planoPendente(orc, _mesAtualYYYYMM());
+    if (!p) return;
+    const itens = p.alteracoes.map(a => `<li style="margin-bottom:6px;">${_escHtmlObs(_planoDescreverAlteracao(a, orc))}</li>`).join('');
+    _planoAbrirModal(`<div class="home-section-title" style="margin-bottom:6px;">Aplicar o plano de ${_planoMesRotulo(p.mes)}?</div>
+        <ul style="font-size:0.9rem;line-height:1.45;padding-left:18px;margin:0 0 12px;">${itens}</ul>
+        <div style="font-size:0.82rem;color:var(--secondary);margin-bottom:12px;line-height:1.45;">Ao aplicar, o orçamento passa a ter estes valores daqui para frente. Os meses anteriores não mudam. Antes de aplicar, vale guardar um backup.</div>
+        <button type="button" class="btn-option" style="justify-content:center;margin:0 0 8px;" onclick="exportarEstadoCompleto()">Guardar backup agora</button>
+        <button type="button" class="btn-primary" style="margin:0 0 8px;" onclick="_planoAplicarUI()">Aplicar</button>
+        <button type="button" class="btn-option" style="justify-content:center;margin:0 0 8px;" onclick="_planoFecharModal()">Agora não</button>
+        <button type="button" class="btn-option" style="justify-content:center;margin:0;" onclick="_planoDescartarUI()">Descartar o plano</button>`);
+}
+
+function _planoAplicarUI() {
+    const orc = state.orcamento;
+    if (!_planoPendente(orc, _mesAtualYYYYMM())) { _planoFecharModal(); return; }
+    _planoAplicar(orc, new Date().toISOString());
+    try { atualizarTotaisEnvelopes(); } catch (e) { console.warn('[plano]', e); }
+    try { recalcularTotalFuturo(); } catch (e) { console.warn('[plano]', e); }
+    try { sincronizarRendaBase(); } catch (e) { console.warn('[plano]', e); }
+    salvarEstado();
+    _planoFecharModal();
+    try { renderizarOrcamentoInicio(); } catch (e) { console.warn('[plano]', e); }
+}
+function _planoDescartarUI() {
+    const p = state.orcamento && state.orcamento.planoPlanejado;
+    if (p && !p.aplicadoEm) { p.descartadoEm = new Date().toISOString(); salvarEstado(); }
+    _planoFecharModal();
+    try { renderizarOrcamentoInicio(); } catch (e) { console.warn('[plano]', e); }
+}
+
 function _simRenderTotais(t) {
     const fmt = formatarMoeda;
     return `
@@ -20317,6 +20900,7 @@ function _simRenderCenario(k) {
     });
     html += `<button type="button" class="btn-option" style="justify-content:center;margin-top:8px;" onclick="_simAdicionar('${k}','saida')">+ Adicionar saída</button>`;
     html += `<div id="sim-totais-${k}" style="margin-top:18px;">${_simRenderTotais(_simTotais(c))}</div>`;
+    try { html += _planoBotaoCenario(k); } catch (e) { console.warn('[plano]', e); }
     return html;
 }
 
@@ -20460,6 +21044,7 @@ function _renderizarSimuladorDatasOriginal() {
     const projAtual = construirProjecaoDiaria(orc, fluxoAtual, { protegerSaldo: protegerSaldoSim });
 
     let projSimulado = null;
+    let simCustodias = null;
     const temSimulacao = cen.ativo && (
         (cen.ajustes && cen.ajustes.length > 0) ||
         (cen.reducaoRendaPercentual || 0) > 0 ||
@@ -20474,6 +21059,7 @@ function _renderizarSimuladorDatasOriginal() {
             protegerSaldo: protegerSaldoSim
         });
         projSimulado = construirProjecaoDiaria(orc, sim.fluxo, { protegerSaldo: protegerSaldoSim });
+        simCustodias = sim.custodias;
     }
 
     const dados = { historico, projAtual, projSimulado, cenarioAplicado: cen };
@@ -20531,6 +21117,7 @@ function _renderizarSimuladorDatasOriginal() {
         </div>
     `;
     const conexaoCard = renderizarConexaoEnvelopes(orc, protegerSaldoSim);
+    const chequeCard = renderizarCardChequeEspecial(orc, simCustodias);
 
     const ajustes = cen.ajustes || [];
 
@@ -20549,6 +21136,7 @@ function _renderizarSimuladorDatasOriginal() {
                 ${chartCard}
                 ${folegoCard}
                 ${conexaoCard}
+                ${chequeCard}
                 <div class="card" style="padding:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
                     <p style="font-size:0.9rem;color:var(--secondary);line-height:1.45;margin:0 0 12px;">
                         Para testar uma nova data, preciso de pelo menos uma conta com vencimento ou uma fonte de renda com dia declarado.
@@ -20573,6 +21161,7 @@ function _renderizarSimuladorDatasOriginal() {
             ${chartCard}
             ${folegoCard}
             ${conexaoCard}
+            ${chequeCard}
             
             ${(() => {
                 const fontesRenda = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
@@ -20741,6 +21330,7 @@ function _renderizarSimuladorDatasOriginal() {
         ${chartCard}
         ${folegoCard}
         ${conexaoCard}
+        ${chequeCard}
         ${ajustesHtml}
         ${pickerHtml}
         ${addBtnHtml}
@@ -20948,6 +21538,230 @@ function projetarCustodia(orc, custodiaId, opcoes) {
         saldoInicial: saldoInicial, faturaInicial: faturaInicial, pontos: pontos,
         saldoFinal: saldo, faturaFinal: fatura, eventos: eventosLigados
     };
+}
+
+// =============================================================================
+// CHEQUE ESPECIAL (carteira conta corrente) — cadastro e projeção no Simulador
+// Só o que o usuário informou: limite (R$), taxa (% a.m.) e dia em que o banco debita os juros.
+// O cálculo NÃO inclui IOF nem tarifas. Slot preguiçoso: custodia.chequeEspecial (sem migrador).
+// =============================================================================
+
+/** Taxa diária equivalente: composta pro-rata sobre 30 dias. */
+function _chequeTaxaDia(taxaMes) {
+    return Math.pow(1 + (Number(taxaMes) || 0) / 100, 1 / 30) - 1;
+}
+
+/** Config válida do cheque especial de uma conta corrente operacional, ou null. Nunca inventa valor. */
+function _chequeNormalizar(cust) {
+    if (!cust || cust.tipo !== 'conta_corrente' || _custodiaEhReserva(cust)) return null;
+    const ce = cust.chequeEspecial;
+    if (!ce || typeof ce !== 'object') return null;
+    const limite = (typeof ce.limite === 'number' && isFinite(ce.limite) && ce.limite > 0) ? ce.limite : null;
+    const taxaMes = (typeof ce.taxaMes === 'number' && isFinite(ce.taxaMes) && ce.taxaMes >= 0) ? ce.taxaMes : null;
+    const diaDebito = (Number.isInteger(ce.diaDebito) && ce.diaDebito >= 1 && ce.diaDebito <= 31) ? ce.diaDebito : null;
+    if (limite === null && taxaMes === null && diaDebito === null) return null;
+    return { limite: limite, taxaMes: taxaMes, diaDebito: diaDebito };
+}
+
+/** Lê os três campos do formulário (texto) → { cfg } (cfg nulo se tudo vazio) ou { erro }. */
+function _parseChequeEspecial(raw) {
+    raw = raw || {};
+    const txt = v => String(v == null ? '' : v).trim().replace(',', '.');
+    const num = t => /^\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
+    const l = txt(raw.limite), t = txt(raw.taxa), d = String(raw.dia == null ? '' : raw.dia).trim();
+    let limite = null, taxaMes = null, diaDebito = null;
+    if (l !== '') {
+        const n = num(l);
+        if (!isFinite(n)) return { erro: 'O limite do cheque especial precisa ser um valor positivo.' };
+        limite = n > 0 ? n : null;
+    }
+    if (t !== '') {
+        const n = num(t);
+        if (!isFinite(n) || n > 100) return { erro: 'A taxa do cheque especial precisa estar entre 0 e 100% ao mês.' };
+        taxaMes = n;
+    }
+    if (d !== '') {
+        if (!/^\d+$/.test(d) || Number(d) < 1 || Number(d) > 31) return { erro: 'O dia do débito dos juros precisa estar entre 1 e 31.' };
+        diaDebito = Number(d);
+    }
+    if (limite === null && taxaMes === null && diaDebito === null) return { cfg: null };
+    return { cfg: { limite: limite, taxaMes: taxaMes, diaDebito: diaDebito } };
+}
+
+/**
+ * Dias no negativo e juros do cheque especial numa janela (padrão 30 dias a partir de hoje).
+ * proj = { saldoInicial, pontos: [{ data, saldo }] } — o mesmo formato de projetarCustodia (saldo acumulado após cada data).
+ * Cada dia com saldo negativo usa o cheque (limitado ao limite informado); o juro do dia é uso × taxa diária.
+ * No dia de débito o banco debita os juros acumulados: eles entram no saldo e aumentam o uso dos dias seguintes.
+ * Sem taxa informada, conta os dias mas não calcula juros (nulo). Não inclui IOF nem tarifas.
+ */
+function calcularChequeEspecial(cfg, proj, opcoes) {
+    if (!cfg || !proj) return null;
+    opcoes = opcoes || {};
+    let dias = Math.floor(Number(opcoes.dias));
+    if (!(dias > 0)) dias = 30;
+    const inicioIso = /^\d{4}-\d{2}-\d{2}$/.test(String(opcoes.inicio || '')) ? opcoes.inicio : _chaveDataLocal(new Date());
+    const ip = inicioIso.split('-').map(Number);
+    const pontos = (proj.pontos || []).filter(p => p && typeof p.data === 'string')
+        .slice().sort((x, y) => x.data < y.data ? -1 : (x.data > y.data ? 1 : 0));
+    const taxa = (typeof cfg.taxaMes === 'number' && isFinite(cfg.taxaMes) && cfg.taxaMes >= 0) ? cfg.taxaMes : null;
+    const td = taxa === null ? null : _chequeTaxaDia(taxa);
+    const limite = (typeof cfg.limite === 'number' && cfg.limite > 0) ? cfg.limite : null;
+    const diaDeb = (Number.isInteger(cfg.diaDebito) && cfg.diaDebito >= 1 && cfg.diaDebito <= 31) ? cfg.diaDebito : null;
+
+    let saldoBase = Number(proj.saldoInicial) || 0, idx = 0, debitado = 0, acumulado = 0, jurosTotal = 0;
+    let diasNeg = 0, diasAcima = 0, usoMax = 0, excMax = 0, saldoMin = Infinity, dataMin = null, diasCiclo = 0;
+    let proximoDebito = null;
+    const debitos = [];
+    for (let k = 0; k < dias; k++) {
+        const dt = new Date(ip[0], ip[1] - 1, ip[2] + k);
+        dt.setHours(0, 0, 0, 0);
+        const iso = _chaveDataLocal(dt);
+        while (idx < pontos.length && pontos[idx].data <= iso) { saldoBase = Number(pontos[idx].saldo) || 0; idx++; }
+        const saldo = saldoBase - debitado;
+        if (saldo < saldoMin) { saldoMin = saldo; dataMin = iso; }
+        const uso = saldo < 0 ? -saldo : 0;
+        let usoJuros = uso;
+        if (uso > 0) {
+            diasNeg++; diasCiclo++;
+            if (uso > usoMax) usoMax = uso;
+            if (limite !== null && uso > limite) {
+                usoJuros = limite; diasAcima++;
+                if (uso - limite > excMax) excMax = uso - limite;
+            }
+        }
+        if (td !== null && usoJuros > 0) { const j = usoJuros * td; acumulado += j; jurosTotal += j; }
+        if (diaDeb !== null && dt.getDate() === _dataNoMes(dt.getFullYear(), dt.getMonth(), diaDeb).getDate()) {
+            if (proximoDebito === null) proximoDebito = iso;
+            if (td !== null) {
+                if (acumulado > 0) { debitos.push({ data: iso, valor: acumulado, dias: diasCiclo }); debitado += acumulado; }
+                acumulado = 0; diasCiclo = 0;
+            }
+        }
+    }
+    if (diaDeb !== null && proximoDebito === null) {
+        // a janela termina antes do débito: informa o próximo dia de débito (hoje em diante)
+        let a = ip[0], m = ip[1] - 1;
+        for (let n = 0; n < 3 && proximoDebito === null; n++) {
+            const cand = _chaveDataLocal(_dataNoMes(a, m, diaDeb));
+            if (cand >= inicioIso) proximoDebito = cand;
+            m++; if (m > 11) { m = 0; a++; }
+        }
+    }
+    return {
+        janelaDias: dias, inicio: inicioIso, diasNegativos: diasNeg, diasAcimaLimite: diasAcima, excedenteMaximo: excMax,
+        usoMaximo: usoMax, saldoMinimo: saldoMin, dataMinimo: dataMin,
+        jurosTotal: td === null ? null : jurosTotal, jurosPendentes: td === null ? null : acumulado,
+        debitos: debitos, proximoDebito: proximoDebito,
+        semTaxa: td === null, semLimite: limite === null, semDiaDebito: diaDeb === null,
+        limite: limite, taxaMes: taxa, diaDebito: diaDeb
+    };
+}
+
+/**
+ * Para cada conta corrente operacional: projeção de dias negativos e juros (se houver cheque informado)
+ * ou convite para informar (se a conta vai ao negativo e não há cheque cadastrado).
+ * projPorCustodia (opcional): projeções do cenário simulado, por id de conta; senão usa a projeção atual.
+ */
+function _chequeDadosSimulador(orc, projPorCustodia, opcoes) {
+    const o = orc || {};
+    opcoes = opcoes || {};
+    const dias = (Number(opcoes.dias) > 0) ? Number(opcoes.dias) : 30;
+    const calcOp = { dias: dias };
+    if (opcoes.inicio) calcOp.inicio = opcoes.inicio;
+    const saida = [];
+    (Array.isArray(o.custodias) ? o.custodias : []).forEach(c => {
+        if (!c || c.tipo !== 'conta_corrente' || _custodiaEhReserva(c)) return;
+        const p = (projPorCustodia && projPorCustodia[c.id]) || projetarCustodia(o, c.id, { dias: dias });
+        if (!p) return;
+        const cfg = _chequeNormalizar(c);
+        if (cfg) {
+            saida.push({ custodiaId: c.id, nome: c.nome || 'Conta', semCadastro: false, cfg: cfg, calculo: calcularChequeEspecial(cfg, p, calcOp) });
+            return;
+        }
+        const base = calcularChequeEspecial({ limite: null, taxaMes: null, diaDebito: null }, p, calcOp);
+        if (base && base.diasNegativos > 0) {
+            saida.push({ custodiaId: c.id, nome: c.nome || 'Conta', semCadastro: true, cfg: null, calculo: null,
+                saldoMinimo: base.saldoMinimo, dataMinimo: base.dataMinimo, diasNegativos: base.diasNegativos });
+        }
+    });
+    return saida;
+}
+
+/** Cartão do Simulador: dias no negativo e juros do cheque especial por conta. Neutro, sem cor de alarme. */
+function renderizarCardChequeEspecial(orc, simCustodias) {
+    try {
+        const fmt = formatarMoeda;
+        const dd = iso => { const q = String(iso || '').split('-'); return q.length === 3 ? q[2] + '/' + q[1] : ''; };
+        const taxaTxt = v => v.toFixed(2).replace('.', ',');
+        const itens = _chequeDadosSimulador(orc, null, { dias: 30 });
+        if (!itens.length) return '';
+        const sim = simCustodias ? _chequeDadosSimulador(orc, simCustodias, { dias: 30 }) : null;
+        const btn = id => `<button type="button" class="btn-option" style="justify-content:center;border-color:var(--primary);color:var(--primary);margin:8px 0 0;" onclick="abrirTelaCustodias();abrirFormularioCustodia('${id}')">Abrir o cadastro desta conta</button>`;
+        const resumo = c => c.diasNegativos === 0
+            ? 'nenhum dia no negativo'
+            : `${c.diasNegativos} de ${c.janelaDias} dias no negativo${c.semTaxa ? '' : ' · juros ' + fmt(c.jurosTotal)}`;
+        const linha = (t, extra) => `<div style="font-size:0.9rem;color:var(--text-main);margin-top:4px;line-height:1.4;${extra || ''}">${t}</div>`;
+        const miudo = t => `<div style="font-size:0.85rem;color:var(--secondary);margin-top:4px;line-height:1.4;">${t}</div>`;
+        let corpo = '';
+        itens.forEach(it => {
+            const nome = _escHtmlObs(it.nome);
+            corpo += `<div style="padding:10px 0;border-top:1px solid var(--border);">`;
+            corpo += `<div style="font-weight:700;color:var(--primary);">${nome}</div>`;
+            if (it.semCadastro) {
+                corpo += linha(`A projeção indica que “${nome}” pode ficar negativa em ${dd(it.dataMinimo)} (ponto mais baixo ${fmt(it.saldoMinimo)}).`);
+                corpo += miudo('Informe a taxa do cheque especial no cadastro da conta para calcular o custo.');
+                corpo += btn(it.custodiaId) + '</div>';
+                return;
+            }
+            const c = it.calculo;
+            const bits = [
+                c.semTaxa ? 'taxa não informada' : 'taxa ' + taxaTxt(c.taxaMes) + '% a.m.',
+                c.semLimite ? 'limite não informado' : 'limite ' + fmt(c.limite),
+                c.semDiaDebito ? 'dia do débito não informado' : 'juros debitados no dia ' + c.diaDebito
+            ];
+            corpo += miudo(bits.join(' · '));
+            if (c.semTaxa) { corpo += linha('Informe a taxa do cheque especial no cadastro desta conta para ver o custo.') + btn(it.custodiaId); }
+            const simIt = sim ? sim.find(x => x.custodiaId === it.custodiaId && !x.semCadastro) : null;
+            if (simIt && simIt.calculo) {
+                corpo += linha('Sem a simulação: ' + resumo(c) + '.');
+                corpo += linha('Com a simulação: ' + resumo(simIt.calculo) + '.');
+                if (c.jurosTotal !== null && simIt.calculo.jurosTotal !== null) {
+                    const dif = simIt.calculo.jurosTotal - c.jurosTotal;
+                    corpo += linha('Diferença nos juros: ' + (dif >= 0 ? '+' : '−') + fmt(Math.abs(dif)));
+                }
+            } else if (c.diasNegativos === 0) {
+                corpo += linha(`Nenhum dia no negativo nos próximos ${c.janelaDias} dias, pelas datas declaradas.`);
+            } else {
+                corpo += linha(`${c.diasNegativos} de ${c.janelaDias} dias no negativo`);
+                corpo += linha(`Ponto mais baixo: ${fmt(c.saldoMinimo)} em ${dd(c.dataMinimo)}`);
+                if (!c.semTaxa) corpo += linha(`Juros projetados em ${c.janelaDias} dias: ${fmt(c.jurosTotal)}`);
+                (c.debitos || []).forEach(d => { corpo += miudo(`Débito dos juros em ${dd(d.data)}: ${fmt(d.valor)} (${d.dias} dia${d.dias === 1 ? '' : 's'} no negativo)`); });
+                if (!c.semTaxa && c.jurosPendentes > 0.005) {
+                    corpo += miudo(`Juros ainda não debitados ao fim do período: ${fmt(c.jurosPendentes)}` + (c.proximoDebito ? ` (serão debitados em ${dd(c.proximoDebito)})` : ''));
+                } else if (c.semDiaDebito && !c.semTaxa) {
+                    corpo += miudo('Informe o dia do débito para saber quando os juros caem na conta.');
+                }
+                if (c.semLimite) corpo += miudo('Limite não informado: calculei sobre todo o saldo negativo.');
+                if (c.diasAcimaLimite > 0) {
+                    corpo += miudo(`Em ${c.diasAcimaLimite} dia${c.diasAcimaLimite === 1 ? '' : 's'} o saldo fica acima do limite informado (até ${fmt(c.excedenteMaximo)} acima dele); não calculo juros sobre o que passa do limite.`);
+                }
+            }
+            corpo += '</div>';
+        });
+        return `
+        <div class="card" style="padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--secondary);background:var(--bg-color);">
+            <div style="font-size:0.9rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">🏦 Cheque especial · próximos 30 dias</div>
+            ${corpo}
+            <div style="font-size:0.8rem;color:var(--secondary);margin-top:8px;line-height:1.4;">
+                Só entram recebimentos e vencimentos com dia declarado; juros já acumulados antes de hoje não entram.
+                O cálculo usa a taxa que você informou e não inclui IOF nem tarifas.
+            </div>
+        </div>`;
+    } catch (e) {
+        console.warn('[cheque especial] não foi possível projetar', e);
+        return '';
+    }
 }
 
 function _cloneOrcParaSimulacao(orc) {
