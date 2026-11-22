@@ -403,6 +403,9 @@
         .envelope-bar .bad { background: var(--progress); }
         /* Estouro: cinza; só os textos orientam (sem alarme de cor) */
         .envelope-bar .neutra { background: var(--secondary); }
+        .env-detalhe-bloco { margin-bottom: 14px; padding: 12px 14px; border-radius: 12px; background: var(--purple-light); font-size: 0.88rem; line-height: 1.45; color: var(--secondary); }
+        .env-det-linha { margin-top: 6px; }
+        .env-det-linha:first-child { margin-top: 0; }
         .envelope-gasto.neutro { color: var(--text-main); }
 
         .caixinha { margin-bottom: 20px; cursor: pointer; transition: 0.15s; }
@@ -5743,6 +5746,9 @@ function renderizarNotaHierarquiaCarrego(semana, orc) {
     `;
 }
 
+// Detalhes de cada envelope (base/vida/futuro), preenchidos a cada render do card e mostrados no modal ao tocar.
+let _detalheEnvelope = {};
+
 function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
     const limitePlano = (limite && limite > 0) ? limite : 0;
     let limiteSeguro = limitePlano;
@@ -5780,6 +5786,7 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
     let aviso = '';
     const fmt = formatarNumero;
     let linhaReal = '';
+    let extraDetalhe = '';   // textos que saem do card e vão para o modal do envelope
 
     if (isFuturo) {
         // Meta mínima: acima do plano = progresso (barra 100%, verde);
@@ -5792,14 +5799,15 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         if (limiteSeguro === 0) {
             if (gastoSeguro > 0) {
                 cor = 'barra-verde';
-                linhaReal = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 6px;">Progresso no Futuro (sem meta semanal definida).</div>`;
+                extraDetalhe += `<div class="env-det-linha">Progresso no Futuro (sem meta semanal definida).</div>`;
             }
         } else if (!atrasado) {
             cor = 'barra-verde';
             if (excedente) {
                 linhaReal = `<div style="font-size: 0.9rem; color: var(--success); margin-top: 6px; line-height: 1.35;">
-                    <strong>Combinado cumprido</strong> · progresso além do plano R$ ${fmt(gastoSeguro - limiteSeguro)}
+                    <strong>Combinado cumprido</strong>
                 </div>`;
+                extraDetalhe += `<div class="env-det-linha">Progresso além do plano: R$ ${fmt(gastoSeguro - limiteSeguro)}.</div>`;
             } else if (gastoSeguro >= limiteSeguro - 0.05) {
                 linhaReal = `<div style="font-size: 0.9rem; color: var(--success); margin-top: 6px;">Combinado cumprido.</div>`;
             }
@@ -5825,8 +5833,9 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
                 cor = 'barra-verde'; // neutro — só o número
             }
             linhaReal = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 6px; line-height: 1.35;">
-                <strong>Atrás do combinado</strong> em R$ ${fmt(falta)}${streak >= 1 ? ` · há ${streak} semana${streak > 1 ? 's' : ''}` : ''}
+                <strong>Atrás do combinado</strong> em R$ ${fmt(falta)}
             </div>`;
+            if (streak >= 1) extraDetalhe += `<div class="env-det-linha">Atrás do combinado há ${streak} semana${streak > 1 ? 's' : ''}.</div>`;
             if (protegeuBase) {
                 aviso = `<div style="font-size: 0.9rem; color: var(--primary); margin-top: 6px; line-height: 1.35;">
                     Você protegeu a Base — tá certo. O Futuro espera a próxima janela.
@@ -5881,8 +5890,9 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         }
 
         linhaReal = `<div style="font-size: 0.9rem; color: var(--secondary); margin-top: 6px; line-height: 1.35;">
-            <strong>Total:</strong> ${realTxt}${bits.length ? ' · ' + bits.join(' · ') : ''}
+            <strong>Total:</strong> ${realTxt}
         </div>`;
+        if (bits.length) extraDetalhe += `<div class="env-det-linha"><strong>Como o total se forma:</strong> ${bits.join(' · ')}.</div>`;
     }
     const onclickAttr = id ? `onclick="abrirListaRegistros('${id}')"` : '';
     const descMap = {
@@ -5912,6 +5922,17 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
         }
     }
 
+    // Tudo além do essencial vai para o modal que abre ao tocar no card.
+    const detalheHtml = [
+        extraDetalhe,
+        linhaCapacidade,
+        (!isFuturo && id) ? _notaAntecipacaoCaixa(id, state.orcamento && state.orcamento.semanaAtual) : '',
+        aberto.total > 0.5 ? `<div style="font-size:0.85rem;color:var(--secondary);margin-top:8px;line-height:1.4;">R$ ${fmt(aberto.total)} deste total estão reservados para boleto em aberto (${aberto.itens.map(i => i.nome + ' R$ ' + fmt(i.valor)).join('; ')}). Livre: R$ ${fmt(Math.max(0, disponivelReal - aberto.total))}.</div>` : '',
+        aviso
+    ].join('');
+    const folgaBotao = (folgaLivre > 0.5 && id) ? `<button type="button" class="btn-option" style="margin-top:10px;justify-content:center;border-color:var(--primary);color:var(--primary);font-size:0.9rem;" onclick="event.stopPropagation();fecharModalListaRegistros();abrirDestinoSobra('${id}')">Dar destino à folga</button>` : '';
+    if (id) _detalheEnvelope[id] = detalheHtml + folgaBotao;
+
     // Layout novo (Fatia A): envelope-card compacto
     return `
         <div class="envelope-card" ${onclickAttr} role="button" tabindex="0">
@@ -5930,11 +5951,6 @@ function renderizarCaixinha(id, nome, gasto, limite, opcoes = {}) {
             </div>
             <div class="envelope-bar"><div class="${barClass}" style="width:${percentual}%"></div></div>
             ${linhaReal}
-            ${linhaCapacidade}
-            ${(!isFuturo && id) ? _notaAntecipacaoCaixa(id, state.orcamento && state.orcamento.semanaAtual) : ''}
-            ${aberto.total > 0.5 ? `<div style="font-size:0.8rem;color:var(--secondary);margin-top:6px;line-height:1.35;">R$ ${fmt(aberto.total)} deste total estão reservados para boleto em aberto (${aberto.itens.map(i => i.nome + ' R$ ' + fmt(i.valor)).join('; ')}). Livre: R$ ${fmt(Math.max(0, disponivelReal - aberto.total))}.</div>` : ''}
-            ${folgaLivre > 0.5 && id ? `<button type="button" class="btn-option" style="margin-top:8px;justify-content:center;border-color:var(--primary);color:var(--primary);font-size:0.9rem;" onclick="event.stopPropagation();abrirDestinoSobra('${id}')">Dar destino à folga</button>` : ''}
-            ${aviso}
         </div>
     `;
 }
@@ -22202,6 +22218,8 @@ function renderizarModalListaRegistros() {
         subEl.textContent = 'Lançamentos desta caixinha na semana atual.';
     }
 
+    const blocoDetalhe = (ctx.modo === 'caixa' && _detalheEnvelope[ctx.caixa])
+        ? `<div class="env-detalhe-bloco">${_detalheEnvelope[ctx.caixa]}</div>` : '';
     const regs = _filtrarRegistrosLista(ctx).slice().sort((a, b) => {
         const da = a.data || '';
         const db = b.data || '';
@@ -22209,7 +22227,7 @@ function renderizarModalListaRegistros() {
     });
 
     if (regs.length === 0) {
-        cont.innerHTML = `
+        cont.innerHTML = blocoDetalhe + `
             <div class="card" style="text-align:center;padding:28px 16px;border-style:dashed;">
                 <div style="font-size:1.6rem;margin-bottom:8px;">📝</div>
                 <div style="font-size:0.9rem;color:var(--secondary);line-height:1.4;">Nenhum registro ainda nesta lista.</div>
@@ -22217,7 +22235,7 @@ function renderizarModalListaRegistros() {
         `;
     } else {
         const total = regs.reduce((s, r) => s + (r.tipo === 'resgate_evento' ? -(r.valor || 0) : (r.valor || 0)), 0);
-        cont.innerHTML = `
+        cont.innerHTML = blocoDetalhe + `
             <div class="home-pill" style="margin-bottom:14px;cursor:default;">
                 ${regs.length} registro${regs.length > 1 ? 's' : ''} · ${_fmtBRL(total)}
             </div>
