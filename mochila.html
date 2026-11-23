@@ -2474,6 +2474,238 @@ function migrarEstado() {
     }
 }
 
+// ===== Selos de atividade (tudo ou nada) =====
+// Uma atividade é só um nome. O selo liga uma fonte de renda ou uma categoria a ela:
+// item.selo = { atividadeId, parte: 100 }.  "parte" fica guardada para um rateio futuro; hoje só vale 100.
+// orcamento.atividades = [{ id, nome }]  (slot preguiçoso, sem migrador). Não muda nenhum cálculo existente.
+const SELO_NOME_MAX = 40;
+
+function _seloNorm(s) {
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+function atividadesDe(orc) {
+    return (orc && Array.isArray(orc.atividades)) ? orc.atividades.filter(a => a && a.id && a.nome) : [];
+}
+function atividadeNome(orc, id) {
+    const a = atividadesDe(orc).find(x => x.id === id);
+    return a ? a.nome : null;
+}
+/** Acha pelo nome (sem acento, sem diferença de maiúscula) ou cria. Devolve o id, ou null se o nome for vazio. */
+function atividadeGarantir(orc, nome) {
+    if (!orc) return null;
+    const limpo = String(nome == null ? '' : nome).replace(/\s+/g, ' ').trim().slice(0, SELO_NOME_MAX);
+    if (!limpo) return null;
+    const ja = atividadesDe(orc).find(a => _seloNorm(a.nome) === _seloNorm(limpo));
+    if (ja) return ja.id;
+    if (!Array.isArray(orc.atividades)) orc.atividades = [];
+    let id = 'ativ_' + Date.now().toString(36), n = 0;
+    while (orc.atividades.some(a => a && a.id === id)) id = 'ativ_' + Date.now().toString(36) + (++n);
+    orc.atividades.push({ id: id, nome: limpo });
+    return id;
+}
+function atividadeRenomear(orc, id, nome) {
+    const a = atividadesDe(orc).find(x => x.id === id);
+    const limpo = String(nome == null ? '' : nome).replace(/\s+/g, ' ').trim().slice(0, SELO_NOME_MAX);
+    if (!a || !limpo) return false;
+    if (atividadesDe(orc).some(x => x.id !== id && _seloNorm(x.nome) === _seloNorm(limpo))) return false;
+    a.nome = limpo;
+    return true;
+}
+/** Remove a atividade e solta o selo de quem a usava. Nada mais muda. */
+function atividadeRemover(orc, id) {
+    if (!orc || !Array.isArray(orc.atividades)) return false;
+    const antes = orc.atividades.length;
+    orc.atividades = orc.atividades.filter(a => !(a && a.id === id));
+    if (orc.atividades.length === antes) return false;
+    const solta = it => { if (it && it.selo && it.selo.atividadeId === id) delete it.selo; };
+    ((orc.rendaDetalhe && orc.rendaDetalhe.fontes) || []).forEach(solta);
+    (orc.categorias || []).forEach(solta);
+    return true;
+}
+/** id da atividade do item, só se ela ainda existir. */
+function seloDe(orc, item) {
+    const id = item && item.selo && item.selo.atividadeId;
+    return (id && atividadesDe(orc).some(a => a.id === id)) ? id : null;
+}
+function seloAplicar(item, atividadeId) {
+    if (!item) return;
+    if (atividadeId) item.selo = { atividadeId: atividadeId, parte: 100 };
+    else delete item.selo;
+}
+/** { id do item: id da atividade ou null } de todas as fontes e categorias; vazio se ninguém tem selo. */
+function seloMapa(orc) {
+    const itens = [].concat((orc && orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [], (orc && orc.categorias) || []).filter(x => x && x.id);
+    if (!itens.some(x => seloDe(orc, x))) return null;
+    const m = {};
+    itens.forEach(x => { m[x.id] = seloDe(orc, x); });
+    return m;
+}
+
+/**
+ * Margem por atividade no mês, lida do Orçado × Realizado (mesmas linhas, agrupadas pelo selo).
+ * Meses fechados usam o mapa de selos gravado com o plano daquele mês; sem mapa, vale o selo de hoje.
+ * Não altera nada e não entra no IDE.
+ */
+function calcularMargemAtividades(orc, mes) {
+    const vazio = { temSelo: false, mes: null, atividades: [], casa: null, total: null };
+    try {
+        const ativs = atividadesDe(orc);
+        if (!ativs.length) return vazio;
+        const d = _obterOrcadoRealizadoMes(orc, mes);
+        const pm = _planoParaMes(orc, d.mes);
+        const mapa = (pm && pm.plano && pm.plano.selos && typeof pm.plano.selos === 'object') ? pm.plano.selos : null;
+        const vivo = seloMapa(orc) || {};
+        const idDe = l => {
+            if (!l.id) return null;
+            const v = (mapa && Object.prototype.hasOwnProperty.call(mapa, l.id)) ? mapa[l.id] : vivo[l.id];
+            return (v && ativs.some(a => a.id === v)) ? v : null;
+        };
+        const novo = () => ({ entradas: { orcado: 0, realizado: 0 }, saidas: { orcado: 0, realizado: 0 }, custos: [] });
+        const grupos = {}, casa = novo();
+        ativs.forEach(a => { grupos[a.id] = novo(); });
+        d.entradas.forEach(l => { const g = grupos[idDe(l)] || casa; g.entradas.orcado += l.orcado; g.entradas.realizado += l.realizado; });
+        d.saidas.forEach(l => {
+            const g = grupos[idDe(l)] || casa;
+            g.saidas.orcado += l.orcado; g.saidas.realizado += l.realizado;
+            if (l.realizado > 0) g.custos.push({ nome: l.nome, realizado: l.realizado });
+        });
+        const a2 = v => Math.round((Number(v) || 0) * 100) / 100;
+        const fecha = g => {
+            const e = g.entradas, s = g.saidas;
+            const margem = { orcado: a2(e.orcado - s.orcado), realizado: a2(e.realizado - s.realizado) };
+            return { entradas: { orcado: a2(e.orcado), realizado: a2(e.realizado) }, saidas: { orcado: a2(s.orcado), realizado: a2(s.realizado) }, margem: margem,
+                margemPct: e.realizado > 0 ? Math.round(margem.realizado / e.realizado * 1000) / 10 : null,
+                custos: g.custos.sort((x, y) => y.realizado - x.realizado).slice(0, 5) };
+        };
+        const atividades = ativs.map(a => Object.assign({ id: a.id, nome: a.nome }, fecha(grupos[a.id])))
+            .filter(a => a.entradas.orcado > 0 || a.entradas.realizado > 0 || a.saidas.orcado > 0 || a.saidas.realizado > 0);
+        const todos = novo();
+        [casa].concat(ativs.map(a => grupos[a.id])).forEach(g => { ['entradas', 'saidas'].forEach(k => { todos[k].orcado += g[k].orcado; todos[k].realizado += g[k].realizado; }); });
+        return { temSelo: atividades.length > 0, mes: d.mes, atividades: atividades, casa: fecha(casa), total: fecha(todos) };
+    } catch (_) { return vazio; }
+}
+
+
+// --- Suas atividades: renomear e remover (tela Sua renda) ---
+let _atividadeEditando = null;   // só na memória da tela
+function seloContarUso(orc, id) {
+    const itens = [].concat((orc && orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [], (orc && orc.categorias) || []);
+    return itens.filter(x => x && x.selo && x.selo.atividadeId === id).length;
+}
+function htmlSuasAtividades(orc) {
+    const lista = atividadesDe(orc);
+    if (!lista.length) return '';
+    const esc = _escHtmlObs;
+    const linhas = lista.map(a => {
+        const n = seloContarUso(orc, a.id);
+        const uso = n === 0 ? 'nenhum item com este selo' : (n === 1 ? '1 item com este selo' : n + ' itens com este selo');
+        if (_atividadeEditando === a.id) {
+            return `<div class="categoria-item" style="display:block;">
+                <input type="text" id="ativ-nome-edicao" class="input-padrao" maxlength="${SELO_NOME_MAX}" value="${esc(a.nome)}" onkeydown="if(event.key==='Enter')atividadeSalvarNome('${esc(a.id)}')">
+                <div style="display:flex;gap:8px;">
+                    <button type="button" class="btn-primary" style="flex:1;margin:0;" onclick="atividadeSalvarNome('${esc(a.id)}')">Salvar nome</button>
+                    <button type="button" class="btn-option" style="flex:1;justify-content:center;margin:0;" onclick="atividadeEditar(null)">Cancelar</button>
+                </div></div>`;
+        }
+        return `<div class="categoria-item" style="display:block;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div><div class="nome-cat">🏷️ ${esc(a.nome)}</div><div class="meta-cat">${uso}</div></div>
+                <div style="display:flex;gap:8px;">
+                    <button type="button" class="btn-reg editar" onclick="atividadeEditar('${esc(a.id)}')">Renomear</button>
+                    <button type="button" class="btn-remover" aria-label="Remover atividade" onclick="atividadeExcluirUI('${esc(a.id)}')">&times;</button>
+                </div>
+            </div></div>`;
+    }).join('');
+    return `<div class="card" style="margin-top:16px;">
+        <div style="font-size:0.9rem;font-weight:700;color:var(--primary);margin-bottom:4px;">Suas atividades</div>
+        <p style="font-size:0.85rem;color:var(--secondary);margin-bottom:10px;line-height:1.4;">O selo mostra, nas rendas e nos gastos, o que faz parte de cada atividade. Ele não muda nenhum cálculo do plano.</p>
+        ${linhas}</div>`;
+}
+function atividadeEditar(id) {
+    _atividadeEditando = id || null;
+    renderizarDetalheRenda();
+    if (id) setTimeout(() => { const i = document.getElementById('ativ-nome-edicao'); if (i) { i.focus(); i.select(); } }, 30);
+}
+function atividadeSalvarNome(id) {
+    const i = document.getElementById('ativ-nome-edicao');
+    const nome = i ? i.value : '';
+    if (!String(nome).trim()) { alert('Dê um nome para a atividade.'); return; }
+    if (!atividadeRenomear(state.orcamento, id, nome)) { alert('Já existe uma atividade com esse nome.'); return; }
+    _atividadeEditando = null;
+    salvarEstado();
+    renderizarDetalheRenda();
+}
+function atividadeExcluirUI(id) {
+    const nome = atividadeNome(state.orcamento, id);
+    if (!nome) return;
+    const n = seloContarUso(state.orcamento, id);
+    const txt = n > 0
+        ? (n === 1
+            ? `Remover a atividade "${nome}"?\n\nO item continua no orçamento, só perde o selo. Nada é apagado.`
+            : `Remover a atividade "${nome}"?\n\nOs ${n} itens continuam no orçamento, só perdem o selo. Nada é apagado.`)
+        : `Remover a atividade "${nome}"?`;
+    if (!confirm(txt)) return;
+    atividadeRemover(state.orcamento, id);
+    _atividadeEditando = null;
+    salvarEstado();
+    renderizarDetalheRenda();
+}
+
+// --- Formulários: escolha do selo (a atividade só é criada ao salvar) ---
+let _seloForm = { atividadeId: null, novoNome: '' };
+function seloIniciarForm(item) { _seloForm = { atividadeId: seloDe(state.orcamento, item), novoNome: '' }; }
+/** Chamar ao salvar: devolve o id escolhido (criando a atividade nova, se foi digitada) ou null. */
+function seloResolverForm(orc) {
+    const id = _seloForm.novoNome ? atividadeGarantir(orc, _seloForm.novoNome) : (_seloForm.atividadeId || null);
+    _seloForm = { atividadeId: null, novoNome: '' };
+    return id;
+}
+function _seloTemFonteFragil(orc) {
+    return ((orc && orc.rendaDetalhe && orc.rendaDetalhe.fontes) || []).some(f => f && (f.natureza === 'contratual' || f.natureza === 'variavel'));
+}
+/** Oferece o selo a quem tem motivo: já usa, já criou atividade, ou tem renda contratual/variável. */
+function seloDeveOferecer(orc, natureza) {
+    if (_seloForm.atividadeId || atividadesDe(orc).length) return true;
+    return natureza === 'contratual' || natureza === 'variavel' || _seloTemFonteFragil(orc);
+}
+function htmlSeloAtividade(orc, contexto) {
+    const esc = _escHtmlObs;
+    const fala = contexto === 'renda' ? 'Essa renda vem de uma atividade sua, com custos para você receber? (opcional)' : 'Esse gasto é de alguma atividade sua? (opcional)';
+    const sel = id => (!_seloForm.novoNome && (_seloForm.atividadeId || '') === id) ? ' selecionado' : '';
+    let chips = `<div class="chip${sel('')}" data-selo="" onclick="seloEscolher('')">Não</div>`;
+    atividadesDe(orc).forEach(a => { chips += `<div class="chip${sel(a.id)}" data-selo="${esc(a.id)}" onclick="seloEscolher(this.dataset.selo)">🏷️ ${esc(a.nome)}</div>`; });
+    chips += `<div class="chip${_seloForm.novoNome ? ' selecionado' : ''}" data-selo="__nova" onclick="seloNova()">＋ Nova atividade</div>`;
+    return `<div id="bloco-selo">
+        <div class="fala-avatar"><span class="icone">🌿</span><span class="texto">${esc(fala)}</span></div>
+        <div class="chip-container" id="chips-selo">${chips}</div>
+        <input type="text" id="selo-novo-nome" class="input-padrao" maxlength="${SELO_NOME_MAX}" placeholder="Nome da atividade. Ex.: Salão, Aluguel da casa" value="${esc(_seloForm.novoNome)}"
+            style="display:${_seloForm.novoNome ? 'block' : 'none'};" oninput="seloDigitarNome(this.value)">
+    </div>`;
+}
+function _seloMarcarChip(valor) {
+    document.querySelectorAll('#chips-selo .chip').forEach(c => c.classList.toggle('selecionado', c.getAttribute('data-selo') === valor));
+}
+function seloEscolher(id) {
+    _seloForm.atividadeId = id || null; _seloForm.novoNome = '';
+    const inp = document.getElementById('selo-novo-nome'); if (inp) { inp.style.display = 'none'; inp.value = ''; }
+    _seloMarcarChip(id || '');
+}
+function seloNova() {
+    _seloForm.atividadeId = null;
+    const inp = document.getElementById('selo-novo-nome');
+    if (inp) { inp.style.display = 'block'; inp.focus(); }
+    _seloMarcarChip('__nova');
+}
+function seloDigitarNome(v) {
+    _seloForm.novoNome = String(v || '').trim();
+    _seloMarcarChip(_seloForm.novoNome ? '__nova' : '');
+}
+/** Pequena etiqueta para os cards. */
+function seloEtiqueta(orc, item) {
+    const id = seloDe(orc, item);
+    return id ? '🏷️ ' + atividadeNome(orc, id) : '';
+}
+
 // ===== Conversar com o Mochila =====
 // Conversa guiada: NÃO é IA nem conversa online. O usuário digita e a lista de perguntas prontas vai filtrando;
 // as respostas são montadas no aparelho. Fatia 1: dúvidas de operação do app.
@@ -2496,6 +2728,11 @@ const CONVERSA_CATALOGO = [
       palavras: ['categoria', 'conta', 'fixa', 'aluguel', 'mercado', 'base', 'vida', 'vencimento', 'envelope', 'cadastrar', 'valor'],
       passos: ['Abra o menu ☰ e toque em "Editar plano".', 'Escolha Base ou Vida.', 'Toque em adicionar para criar, ou numa categoria para editar. Informe nome, valor e, se for conta, o dia do vencimento.'],
       acao: { id: 'editar-plano', rotulo: 'Abrir Editar plano' } },
+    { id: 'op-atividade', tipo: 'app', tema: 'Plano', telas: ['screen-renda-detalhe', 'screen-editar-plano', 'screen-orcamento-inicio'], nivelMin: 2,
+      perguntas: ['Como marco uma renda ou gasto como da minha atividade?', 'Como crio uma atividade?', 'Como renomeio ou removo uma atividade?'],
+      palavras: ['atividade', 'selo', 'negocio', 'salao', 'imovel', 'marcar', 'renomear', 'remover', 'etiqueta', 'custos'],
+      passos: ['Abra o cadastro da renda (ou da categoria de gasto) e escolha "＋ Nova atividade" na pergunta sobre atividade. O selo aparece como uma etiqueta no card.', 'Para os próximos itens, é só escolher a mesma atividade na lista.', 'Para renomear ou remover, abra a tela Sua renda: a lista "Suas atividades" fica logo abaixo das fontes. Remover só solta o selo; nada é apagado.'],
+      acao: { id: 'renda', rotulo: 'Abrir Renda' } },
     { id: 'op-renda', tipo: 'app', tema: 'Plano', telas: ['screen-editar-plano', 'screen-renda-detalhe', 'screen-orcamento-inicio'], nivelMin: 2,
       perguntas: ['Como cadastro minha renda?', 'Como adiciono uma fonte de renda?', 'Como mudo o dia em que o salário cai?'],
       palavras: ['renda', 'salario', 'fonte', 'recebimento', 'dia', 'quinzenal', 'freela', 'cadastrar'],
@@ -2771,6 +3008,7 @@ function conversaFatos(orc) {
     t('cheque', () => _chequeDadosSimulador(orc, null, { dias: 30 }));
     t('dividas', () => (orc.categorias || []).filter(c => c && c.caixa === 'futuro' && c.subtipo === 'divida' && !_categoriaParcelasQuitada(c))
         .map(c => ({ nome: c.nome, valor: Number(c.valor) || 0, saldo: (() => { const v = _saldoDevedorEfetivo(c); return (v === null || v === undefined || !isFinite(Number(v))) ? null : Number(v); })(),
+            atividadeId: seloDe(orc, c), atividadeNome: seloDe(orc, c) ? atividadeNome(orc, seloDe(orc, c)) : null,
             parcelasTotais: Number(c.parcelasTotais) || null, parcelasPagas: Number(c.parcelasPagas) || 0, taxa: (c.taxaJuros === null || c.taxaJuros === undefined) ? null : Number(c.taxaJuros) }))
         .sort((a, b) => b.valor - a.valor));
     t('planoMes', () => {
@@ -2797,6 +3035,7 @@ function conversaFatos(orc) {
     t('cronico', () => detectarEstouroCronico(orc.resumos));
     t('conciliacoes', () => (orc.historicoRegistros || []).filter(r => r && !r.anulado && r.tipo === 'ajuste_conciliacao' && _pertenceMesAtual(r.data))
         .map(r => ({ data: String(r.data).slice(0, 10), nome: r.custodiaNome || 'Carteira', campo: r.campo, de: Number(r.valorAnterior) || 0, para: Number(r.valorNovo) || 0, delta: Number(r.delta) || 0 })));
+    t('atividades', () => calcularMargemAtividades(orc));
     t('temContaCorrente', () => (orc.custodias || []).some(c => c && c.tipo === 'conta_corrente' && !_custodiaEhReserva(c)));
     t('categoriasMes', () => (orc.categorias || []).filter(c => c && (c.caixa === 'base' || c.caixa === 'vida')).map(c => {
         const d = obterDadosMesCategoria(orc, c.id);
@@ -3168,6 +3407,51 @@ const CONVERSA_DADOS = [
           b.push(`Efeito líquido no mês: ${liq >= 0 ? '+' : '−'}${_convMoeda(Math.abs(liq))}.`);
           b.push('Essas diferenças costumam vir de movimentos que ainda não tinham sido registrados no app.');
           return { bolhas: b, fonte: 'Conciliações de saldo feitas nas carteiras neste mês.', acao: { id: 'carteiras', rotulo: 'Abrir Carteiras' } };
+      } },
+    // ===== "Sua atividade" (selos): margem, custos e dívida da atividade =====
+    { id: 'd-atividade-lucro', tipo: 'dado', personagem: 'bela', tema: 'Sua atividade', popular: true, telas: ['screen-renda-detalhe', 'screen-orcamento-inicio', 'screen-mapa-mes'], nivelMin: 2,
+      perguntas: ['Minha atividade dá lucro?', 'Quanto sobra da minha atividade?', 'Quem está pagando quem: a atividade ou a casa?', 'O que sobra depois dos custos do meu negócio?'],
+      palavras: ['atividade', 'lucro', 'sobra', 'margem', 'negocio', 'salao', 'imovel', 'aluguel', 'custos', 'casa', 'resultado'],
+      quando: f => !!(f.atividades && f.atividades.temSelo),
+      responder: f => {
+          const A = f.atividades, b = [];
+          A.atividades.forEach(a => {
+              const m = a.margem.realizado;
+              b.push(`${a.nome}: entrou ${_convMoeda(a.entradas.realizado)}, saiu ${_convMoeda(a.saidas.realizado)}, ${m >= 0 ? 'sobrou' : 'faltou'} ${_convMoeda(Math.abs(m))}` + (a.margemPct !== null ? ` (${_convPct(a.margemPct)} do que entrou).` : '.'));
+          });
+          const c = A.casa;
+          b.push(`Fora das atividades (a casa): entrou ${_convMoeda(c.entradas.realizado)}, saiu ${_convMoeda(c.saidas.realizado)}, ${c.margem.realizado >= 0 ? 'sobrou' : 'faltou'} ${_convMoeda(Math.abs(c.margem.realizado))}.`);
+          const sobra = A.atividades.reduce((s, a) => s + Math.max(0, a.margem.realizado), 0);
+          if (c.margem.realizado < -0.005 && sobra > 0.005) b.push(`A casa está ${_convMoeda(-c.margem.realizado)} no vermelho e as atividades sobraram ${_convMoeda(sobra)}. Esse é o valor que elas têm para ajudar a cobrir a diferença.`);
+          b.push('Só entra na conta o que tem selo de atividade. O que ficou sem selo conta como casa.');
+          return { bolhas: b, fonte: 'Orçado × Realizado do mês, agrupado pelos selos de atividade.', acao: { id: 'orcado', rotulo: 'Ver linha a linha (Orçado × Realizado)' } };
+      } },
+    { id: 'd-atividade-custos', tipo: 'dado', personagem: 'bela', tema: 'Sua atividade', telas: ['screen-renda-detalhe', 'screen-gastos-detalhe'], nivelMin: 2,
+      perguntas: ['Quais são os custos da minha atividade?', 'O que mais pesa na minha atividade?', 'Quanto gasto para receber essa renda?'],
+      palavras: ['atividade', 'custos', 'custo', 'pesa', 'gasto', 'negocio', 'produtos', 'iptu', 'obra', 'manutencao'],
+      quando: f => !!(f.atividades && f.atividades.atividades.some(a => a.custos.length > 0)),
+      responder: f => {
+          const b = [];
+          f.atividades.atividades.filter(a => a.custos.length > 0).forEach(a => {
+              b.push(`${a.nome}: o que mais pesou neste mês foi ` + a.custos.slice(0, 3).map(c => `${c.nome} (${_convMoeda(c.realizado)})`).join(', ') + `. No total, ${_convMoeda(a.saidas.realizado)} em custos.`);
+          });
+          b.push('Se algum custo da atividade ainda está sem selo, ele não aparece aqui. Dá para marcar no cadastro de cada categoria.');
+          return { bolhas: b, fonte: 'Gastos do mês das categorias com selo de atividade.', acao: { id: 'editar-plano', rotulo: 'Abrir Editar plano' } };
+      } },
+    { id: 'd-atividade-divida', tipo: 'dado', personagem: 'ze', tema: 'Sua atividade', telas: ['screen-divida-detalhe', 'screen-renda-detalhe'], nivelMin: 2,
+      perguntas: ['Quanto da minha dívida é da atividade?', 'Que parte das dívidas vem do meu negócio?', 'Posso negociar a dívida da atividade separada?'],
+      palavras: ['divida', 'dividas', 'atividade', 'negocio', 'parte', 'cartao', 'negociar', 'separar', 'saldo'],
+      quando: f => Array.isArray(f.dividas) && f.dividas.some(d => d.atividadeId) && f.dividas.some(d => d.saldo !== null && d.atividadeId),
+      responder: f => {
+          const com = f.dividas.filter(d => d.atividadeId && d.saldo !== null), sem = f.dividas.filter(d => !d.atividadeId && d.saldo !== null);
+          const soma = l => l.reduce((s, d) => s + d.saldo, 0), tot = soma(com) + soma(sem);
+          const por = {}; com.forEach(d => { por[d.atividadeNome] = (por[d.atividadeNome] || 0) + d.saldo; });
+          const b = [`Do saldo devedor que o app conhece (${_convMoeda(tot)}), ${_convMoeda(soma(com))} (${_convPct(tot > 0 ? soma(com) / tot * 100 : 0)}) está em dívidas marcadas como de atividade e ${_convMoeda(soma(sem))} em dívidas da casa.`];
+          Object.keys(por).forEach(n => b.push(`${n}: ${_convMoeda(por[n])}`));
+          const semSaldo = f.dividas.filter(d => d.saldo === null).length;
+          if (semSaldo > 0) b.push(`${_convPlural(semSaldo, 'dívida está', 'dívidas estão')} sem saldo devedor informado e ficou de fora da conta.`);
+          b.push('A separação ajuda a ver qual lado gerou cada dívida. Negociar é uma decisão sua; o app só mostra os números.');
+          return { bolhas: b, fonte: 'Saldo devedor das dívidas do Futuro, agrupado pelo selo.', acao: { id: 'futuro', rotulo: 'Abrir Dívidas' } };
       } }
 ];
 
@@ -9535,6 +9819,7 @@ fontes.forEach(f => {
         metaFonte += ` · ${NATUREZAS_RENDA[f.natureza].icone} ${NATUREZAS_RENDA[f.natureza].label}`;
     }
     metaFonte += ` · ${pctFonte.toFixed(0)}% da renda`;
+    { const et = seloEtiqueta(state.orcamento, f); if (et) metaFonte += ` · ${_escHtmlObs(et)}`; }
     const descDia = descreverDiaRecebimento(f.diaRecebimento);
     if (descDia) metaFonte += ` · ${descDia}`;
     if (f.custodiaPadraoId) {
@@ -9642,6 +9927,7 @@ const linkContas = nivel >= 3
         Total das fontes: <strong>R$ ${totalFontes.toFixed(2).replace('.', ',')}</strong>
     </div>
 
+    ${htmlSuasAtividades(state.orcamento)}
     ${linkContas}
 
     <button class="btn-primary" style="margin-top: 20px; background: var(--accent);" onclick="abrirFormularioFonteRenda()">
@@ -9698,6 +9984,7 @@ function responderOrigemRenda(origem) {
     diaRecebimentoTemp = null;
     custodiaRendaSelecionada = null;
     fonteRendaEditandoId = null;
+    seloIniciarForm(null);
 
     let htmlCustodia = '';
     const custodias = (state.orcamento.nivel >= 3) ? (state.orcamento.custodias || []) : [];
@@ -9755,6 +10042,7 @@ function responderOrigemRenda(origem) {
             <div class="chip" onclick="selecionarNaturezaRenda(this, 'contratual')">📄 Contratual (aluguel)</div>
             <div class="chip" onclick="selecionarNaturezaRenda(this, 'variavel')">🎨 Variável (autônomo)</div>
         </div>
+        <div id="bloco-selo-renda">${seloDeveOferecer(state.orcamento, null) ? htmlSeloAtividade(state.orcamento, 'renda') : ''}</div>
 
         <!-- O botão Salvar é injetado dinamicamente por mostrarBotaoSalvarFonte() -->
     `;
@@ -9775,6 +10063,12 @@ function selecionarNaturezaRenda(el, nat) {
     document.querySelectorAll('#chips-natureza .chip').forEach(c => c.classList.remove('selecionado'));
     el.classList.add('selecionado');
     naturezaRendaSelecionada = nat;
+    _seloAtualizarBlocoRenda();
+}
+function _seloAtualizarBlocoRenda() {
+    const c = document.getElementById('bloco-selo-renda');
+    if (!c) return;
+    c.innerHTML = seloDeveOferecer(state.orcamento, naturezaRendaSelecionada) ? htmlSeloAtividade(state.orcamento, 'renda') : '';
 }
 
 function responderFrequenciaRenda(el, freq) {
@@ -9937,6 +10231,7 @@ function salvarFonteRenda(origem, temGenerica) { const nome = document.getElemen
             fonte.diaRecebimento = diaRecebimento;
             fonte.custodiaPadraoId = custodiaRendaSelecionada || null;
             fonte.natureza = naturezaRendaSelecionada || fonte.natureza || null;
+            seloAplicar(fonte, seloResolverForm(state.orcamento));
         }
         fonteRendaEditandoId = null;
     } else {
@@ -9968,6 +10263,7 @@ function salvarFonteRenda(origem, temGenerica) { const nome = document.getElemen
             diaRecebimento: diaRecebimento,
             custodiaPadraoId: custodiaRendaSelecionada || null
         });
+        seloAplicar(state.orcamento.rendaDetalhe.fontes[state.orcamento.rendaDetalhe.fontes.length - 1], seloResolverForm(state.orcamento));
     }
 
     if (typeof _tickOnboardingNivel2AposFonte === "function") _tickOnboardingNivel2AposFonte();
@@ -10038,6 +10334,7 @@ function editarFonteRenda(id) {
     frequenciaRendaSelecionada = fonte.frequencia;
     naturezaRendaSelecionada = fonte.natureza || null;
     custodiaRendaSelecionada = fonte.custodiaPadraoId || null;
+    seloIniciarForm(fonte);
 
     const container = document.getElementById('renda-detalhe-conteudo');
     const custodias = (state.orcamento.nivel >= 3) ? (state.orcamento.custodias || []) : [];
@@ -10113,6 +10410,7 @@ function editarFonteRenda(id) {
             <div class="chip${fonte.natureza === 'contratual' ? ' selecionado' : ''}" onclick="selecionarNaturezaRenda(this, 'contratual')">📄 Contratual</div>
             <div class="chip${fonte.natureza === 'variavel' ? ' selecionado' : ''}" onclick="selecionarNaturezaRenda(this, 'variavel')">🎨 Variável</div>
         </div>
+        <div id="bloco-selo-renda">${seloDeveOferecer(state.orcamento, fonte.natureza) ? htmlSeloAtividade(state.orcamento, 'renda') : ''}</div>
 
         <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 16px;" onclick="fonteRendaEditandoId=null; renderizarDetalheRenda()">
             Cancelar
@@ -10183,6 +10481,7 @@ if (typeof atualizarTotaisEnvelopes === 'function') atualizarTotaisEnvelopes();
             } else {
                 metaExtra = 'consumo';
             }
+            { const et = seloEtiqueta(state.orcamento, cat); if (et) metaExtra += ' · ' + _escHtmlObs(et); }
             
             if (cat.provisionar && provisaoSemanalCategoria(cat) > 0) {
                 metaExtra += ' · provisionar ' + provisaoSemanalCategoria(cat).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) + '/sem';
@@ -10402,6 +10701,7 @@ function abrirFormularioCategoria(idExistente) {
         ? (state.orcamento.categorias || []).find(c => c.id === idExistente)
         : null;
     categoriaEditandoId = catExistente ? catExistente.id : null;
+    seloIniciarForm(catExistente);
 
     if (catExistente && catExistente.caixa) {
         caixaGastosAtiva = catExistente.caixa;
@@ -10638,6 +10938,7 @@ function abrirFormularioCategoria(idExistente) {
                 </div>
             </div>
         </div>
+        ${seloDeveOferecer(state.orcamento, null) ? htmlSeloAtividade(state.orcamento, 'categoria') : ''}
         <button class="btn-primary" onclick="salvarCategoria()">${btnSalvar}</button>
         <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="categoriaEditandoId=null;renderizarDetalheGastos()">
             Cancelar
@@ -10826,6 +11127,7 @@ if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
         cat.provisionar = !!provisao.provisionar;
         cat.valorProvisaoTotal = provisao.provisionar ? provisao.valorProvisaoTotal : null;
         cat.periodicidadeProvisao = provisao.provisionar ? provisao.periodicidadeProvisao : null;
+        seloAplicar(cat, seloResolverForm(state.orcamento));
         
         categoriaEditandoId = null;
     } else {
@@ -10843,6 +11145,7 @@ if (tipoCategoriaSelecionado === 'conta' && !vencimento) {
             periodicidadeProvisao: provisao.provisionar ? provisao.periodicidadeProvisao : null,
             pagamentoConfirmadoMes: pagamentoConfirmadoMes
         });
+        seloAplicar(state.orcamento.categorias[state.orcamento.categorias.length - 1], seloResolverForm(state.orcamento));
     }
 
     tipoCategoriaSelecionado = null;
@@ -11048,7 +11351,7 @@ function renderizarDetalheFuturo() {
                         <div>
                                       
                             <div class="nome-cat">${cat.nome}</div>
-                            <div class="meta-cat">${cat.tipo === 'conta' ? 'conta' : 'aporte'}${cat.vencimento ? ' · vence dia ' + cat.vencimento : ''}${
+                            <div class="meta-cat">${cat.tipo === 'conta' ? 'conta' : 'aporte'}${(subtipo === 'divida' && seloEtiqueta(state.orcamento, cat)) ? ' · ' + _escHtmlObs(seloEtiqueta(state.orcamento, cat)) : ''}${cat.vencimento ? ' · vence dia ' + cat.vencimento : ''}${
                                 (subtipo === 'divida' && cat.taxaJuros != null)
                                     ? (cat.taxaJuros === 0 ? ' · sem juros' : ' · ' + Number(cat.taxaJuros).toFixed(2).replace('.', ',') + '% a.m.')
                                     : (subtipo === 'divida' ? ' · juros: não sei' : '')
@@ -11456,6 +11759,7 @@ function abrirFormularioCategoriaFuturo(idExistente) {
         ? (state.orcamento.categorias || []).find(c => c.id === idExistente)
         : null;
     categoriaEditandoId = catExistente ? catExistente.id : null;
+    seloIniciarForm(catExistente);
 
     const chipsD = [
         '💳 Cartão', '🏦 Empréstimo', '👤 Devendo pra alguém',
@@ -11618,6 +11922,7 @@ container.innerHTML = `
         ` : ''}
 
         ${htmlCustodiaReserva}
+        ${(subtipo === 'divida' && seloDeveOferecer(state.orcamento, null)) ? htmlSeloAtividade(state.orcamento, 'categoria') : ''}
         <button class="btn-primary" onclick="salvarCategoriaFuturo()">${btnSalvar}</button>
         <button class="btn-option" style="justify-content: center; border-color: var(--secondary); margin-top: 10px;" onclick="categoriaEditandoId=null; renderizarDetalheFuturo()">
             Cancelar
@@ -11827,6 +12132,7 @@ function salvarCategoriaFuturo() {
             // taxa: null = não sei; 0 = sem juros; número = % a.m.
             if (taxaJurosSelecionada) cat.taxaJuros = taxaJurosForm;            cat.dataVencimentoReal = dataVencRealForm;
             cat.tipoCredito = tipoCreditoForm;
+            seloAplicar(cat, seloResolverForm(state.orcamento));
         }
 
         categoriaEditandoId = null;
@@ -11872,6 +12178,7 @@ function salvarCategoriaFuturo() {
         pagamentoConfirmadoMes: pagamentoConfirmadoMes,
         custodiaPadraoId: (subtipo === 'reserva') ? (custodiaReservaFuturoSelecionada || null) : null
     });
+    if (subtipo === 'divida') seloAplicar(state.orcamento.categorias[state.orcamento.categorias.length - 1], seloResolverForm(state.orcamento));
     taxaJurosSelecionada = null;
 
     recalcularTotalFuturo();
@@ -16406,11 +16713,14 @@ function _planoVivo(orc, mes) {
     const m = mes || _mesAtualYYYYMM();
     const fontes = (o.rendaDetalhe && Array.isArray(o.rendaDetalhe.fontes)) ? o.rendaDetalhe.fontes : [];
     const cats = Array.isArray(o.categorias) ? o.categorias : [];
-    return {
+    const plano = {
         entradas: fontes.filter(f => f && Number(f.valor) > 0).map(f => ({ id: f.id || null, nome: f.nome || 'Renda', valor: Number(f.valor) })),
         saidas: cats.filter(c => c && Number(c.valor) > 0 && (!_categoriaParcelasQuitada(c) || _quitadaPertenceAoMes(o, c, m)))
             .map(c => ({ id: c.id || null, nome: c.nome || 'Categoria', caixa: c.caixa || 'base', valor: Number(c.valor) }))
     };
+    // selos de atividade do mês: só existe se alguém tem selo (planos antigos e sem selo ficam idênticos)
+    try { const sm = seloMapa(o); if (sm) plano.selos = sm; } catch (_) {}
+    return plano;
 }
 
 function _gravarPlanoDoMes(orc) {
