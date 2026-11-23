@@ -2622,6 +2622,7 @@ const CONVERSA_ACOES = {
     avisos: () => abrirTelaNotificacoes(),
     diagnostico: () => abrirTelaDiagnostico(),
     fluxo: () => abrirTelaFluxoCaixa(),
+    orcado: () => abrirTelaMapaMes(),
     recuperacao: () => abrirPlanoRecuperacao(),
     ajuda: () => abrirTelaAjuda(),
 };
@@ -2779,6 +2780,23 @@ function conversaFatos(orc) {
         r.total = r.base + r.vida + r.futuro;
         return r;
     });
+    t('hoje', () => _chaveDataLocal(new Date()));
+    t('mes', () => { const m = _obterOrcadoRealizadoMes(orc); return { entradas: m.entradas, saidas: m.saidas, totais: m.totais }; });
+    const fluxoCheio = (() => { try { return projetarFluxo(orc, { dias: 30 }); } catch (e) { return null; } })();
+    t('fluxo', () => fluxoCheio && ({
+        totais: fluxoCheio.totais, lacunas: fluxoCheio.lacunas,
+        eventos: fluxoCheio.eventos.map(e => ({ tipo: e.tipo, data: e.data, nome: e.nome, valor: Number(e.valor) || 0, subtipo: e.subtipo || null }))
+    }));
+    t('proj', () => {
+        const p = fluxoCheio && projetarSaldoDiarioCompleto(orc, fluxoCheio);
+        return p ? { saldoInicial: p.saldoInicial, dias: p.diasCompletos.map(d => ({ data: d.dataKey, saldo: d.saldoCorrido })) } : null;
+    });
+    t('contas', () => (orc.categorias || []).filter(c => c && c.tipo === 'conta' && !_categoriaParcelasQuitada(c) && Number(c.valor) > 0)
+        .map(c => ({ nome: c.nome, valor: Number(c.valor), caixa: c.caixa })).sort((a, b) => b.valor - a.valor));
+    t('nResumos', () => (orc.resumos || []).length);
+    t('cronico', () => detectarEstouroCronico(orc.resumos));
+    t('conciliacoes', () => (orc.historicoRegistros || []).filter(r => r && !r.anulado && r.tipo === 'ajuste_conciliacao' && _pertenceMesAtual(r.data))
+        .map(r => ({ data: String(r.data).slice(0, 10), nome: r.custodiaNome || 'Carteira', campo: r.campo, de: Number(r.valorAnterior) || 0, para: Number(r.valorNovo) || 0, delta: Number(r.delta) || 0 })));
     t('temContaCorrente', () => (orc.custodias || []).some(c => c && c.tipo === 'conta_corrente' && !_custodiaEhReserva(c)));
     t('categoriasMes', () => (orc.categorias || []).filter(c => c && (c.caixa === 'base' || c.caixa === 'vida')).map(c => {
         const d = obterDadosMesCategoria(orc, c.id);
@@ -3012,6 +3030,145 @@ const CONVERSA_DADOS = [
       quando: () => true,
       responder: () => ({ bolhas: ['No Simulador você copia o seu orçamento atual, muda valores à vontade e compara com o atual. Nada muda no orçamento de verdade.', 'Quando gostar de um cenário, pode gravá-lo como plano do próximo mês.'],
           fonte: 'Cenários A e B do Simulador.', acao: { id: 'simulador', rotulo: 'Abrir o Simulador' } }) },
+    // ===== "Montar": juntam vários fatos numa explicação (fatia 3) =====
+    { id: 'd-onde-foi', tipo: 'dado', personagem: 'torres', tema: 'Saldo e caixa', popular: true, telas: ['screen-orcamento-inicio', 'screen-custodias', 'screen-mapa-mes'], nivelMin: 2,
+      perguntas: ['Por que meu saldo está baixo ou negativo hoje?', 'Para onde foi meu dinheiro?', 'Por que a conta está no vermelho?', 'Entrou dinheiro, por que não sobrou?'],
+      palavras: ['saldo', 'negativo', 'baixo', 'vermelho', 'foi', 'dinheiro', 'sumiu', 'conta', 'mes', 'entrou', 'saiu'],
+      quando: f => !!(f.mes && f.mes.totais && (f.mes.totais.entradas.realizado > 0 || f.mes.totais.saidas.realizado > 0)),
+      responder: f => {
+          const E = f.mes.totais.entradas, S = f.mes.totais.saidas, b = [];
+          if (f.disponivel && f.disponivel.origem === 'estoque') b.push(`Hoje você tem ${_convMoeda(f.disponivel.valor)} nas carteiras.`);
+          b.push(`Neste mês entraram ${_convMoeda(E.realizado)} (o plano esperava ${_convMoeda(E.orcado)}) e saíram ${_convMoeda(S.realizado)} (o plano previa ${_convMoeda(S.orcado)}).`);
+          const liq = E.realizado - S.realizado;
+          b.push(liq < -0.005 ? `Já saiu ${_convMoeda(-liq)} a mais do que entrou neste mês.` : `Até agora entrou ${_convMoeda(liq)} a mais do que saiu neste mês.`);
+          const falta = E.orcado - E.realizado;
+          if (falta > 0.5) {
+              const prox = ((f.fluxo && f.fluxo.eventos) || []).find(e => e.tipo === 'recebimento' && f.hoje && e.data >= f.hoje);
+              b.push(`Ainda falta receber ${_convMoeda(falta)} do que você cadastrou como renda.` + (prox ? ` O próximo recebimento previsto é ${prox.nome}, em ${_convDdMm(prox.data)} (${_convMoeda(prox.valor)}).` : ''));
+          }
+          const maiores = (f.mes.saidas || []).filter(l => l.realizado > 0 && !l.semOrcamento).sort((x, y) => y.realizado - x.realizado).slice(0, 3);
+          if (maiores.length) b.push('Onde mais saiu: ' + maiores.map(l => `${l.nome} (${_convMoeda(l.realizado)})`).join(', ') + '.');
+          const fora = (f.mes.saidas || []).find(l => l.semOrcamento);
+          if (fora && fora.realizado > 0.5) b.push(`${_convMoeda(fora.realizado)} saíram em lançamentos que não estão em nenhuma categoria do plano ("Outras saídas").`);
+          if (f.carrego && (f.carrego.base > 0.005 || f.carrego.vida > 0.005)) b.push(`Além disso, a semana começou com ${_convMoeda(f.carrego.base + f.carrego.vida)} que vieram de semanas anteriores.`);
+          return { bolhas: b, fonte: 'Orçado × Realizado do mês, saldo das carteiras e previsão de recebimentos.', acao: { id: 'orcado', rotulo: 'Ver linha a linha (Orçado × Realizado)' } };
+      } },
+    { id: 'd-sobrou-faltou', tipo: 'dado', personagem: 'bela', tema: 'Saldo e caixa', popular: true, telas: ['screen-orcamento-inicio', 'screen-mapa-mes', 'screen-gastos-detalhe'], nivelMin: 2,
+      perguntas: ['Por que sobrou no envelope e faltou na conta?', 'Gastei menos que o combinado, por que a conta zerou?', 'O envelope mostra sobra mas o saldo está baixo'],
+      palavras: ['sobrou', 'faltou', 'envelope', 'conta', 'combinado', 'gastei', 'menos', 'zerou', 'sobra', 'saldo'],
+      quando: f => !!(f.mes && (f.mes.saidas || []).some(l => (l.caixa === 'base' || l.caixa === 'vida') && l.orcado > 0)),
+      responder: f => {
+          const L = f.mes.saidas || [], soma = (cxs, k) => L.filter(l => cxs.includes(l.caixa) && !l.semOrcamento).reduce((s, l) => s + l[k], 0);
+          const orc = soma(['base', 'vida'], 'orcado'), real = soma(['base', 'vida'], 'realizado'), fut = soma(['futuro'], 'realizado');
+          const E = f.mes.totais.entradas, b = [];
+          b.push(real <= orc ? `Em Base e Vida você usou ${_convMoeda(real)} dos ${_convMoeda(orc)} planejados no mês: sobraram ${_convMoeda(orc - real)}.` : `Em Base e Vida você usou ${_convMoeda(real)} dos ${_convMoeda(orc)} planejados no mês: passou ${_convMoeda(real - orc)}.`);
+          if (fut > 0.5) b.push(`Mas a conta também paga o Futuro: neste mês já saíram ${_convMoeda(fut)} em dívidas e reservas, que não aparecem nos envelopes de Base e Vida.`);
+          if (E.orcado - E.realizado > 0.5) b.push(`E da renda esperada, ainda não entraram ${_convMoeda(E.orcado - E.realizado)}.`);
+          b.push('O envelope mostra só um pedaço das saídas e não mostra o que ainda vai entrar. Por isso ele pode ter sobra enquanto a conta está apertada.');
+          return { bolhas: b, fonte: 'Orçado × Realizado do mês, separado por envelope.', acao: { id: 'orcado', rotulo: 'Ver linha a linha (Orçado × Realizado)' } };
+      } },
+    { id: 'd-dia-apertado', tipo: 'dado', personagem: 'torres', tema: 'Saldo e caixa', telas: ['screen-fluxo-caixa', 'screen-orcamento-inicio'], nivelMin: 2,
+      perguntas: ['Qual é o dia mais apertado do mês?', 'Qual o menor saldo previsto?', 'Quando meu saldo fica mais baixo?'],
+      palavras: ['apertado', 'menor', 'saldo', 'previsto', 'baixo', 'dia', 'pior', 'minimo'],
+      quando: f => !!(f.proj && f.proj.dias && f.proj.dias.length),
+      responder: f => {
+          const m = f.proj.dias.reduce((a, d) => d.saldo < a.saldo ? d : a, f.proj.dias[0]), b = [];
+          b.push(`Nos próximos ${f.proj.dias.length} dias, o dia mais apertado é ${_convDdMm(m.data)}, com saldo previsto de ${_convMoeda(m.saldo)}.`);
+          if (m.saldo < -0.005) b.push('Nesse dia o saldo previsto fica negativo.');
+          b.push(`Hoje o saldo de partida da previsão é ${_convMoeda(f.proj.saldoInicial)}.`);
+          b.push('A previsão usa as entradas, os vencimentos e as faturas que você cadastrou. O que não está cadastrado não entra.');
+          return { bolhas: b, fonte: 'Projeção diária do Fluxo de Caixa (30 dias).', acao: { id: 'fluxo', rotulo: 'Abrir o Fluxo de Caixa' } };
+      } },
+    { id: 'd-ate-receber', tipo: 'dado', personagem: 'torres', tema: 'Saldo e caixa', telas: ['screen-fluxo-caixa', 'screen-orcamento-inicio'], nivelMin: 2,
+      perguntas: ['Vou chegar até o próximo recebimento?', 'Quanto me falta até o dia do salário?', 'O dinheiro dura até a próxima entrada?'],
+      palavras: ['chegar', 'proximo', 'recebimento', 'salario', 'entrada', 'dura', 'ate', 'falta'],
+      quando: f => !!(f.proj && f.proj.dias && f.fluxo && f.hoje && (f.fluxo.eventos || []).some(e => e.tipo === 'recebimento' && e.data > f.hoje)),
+      responder: f => {
+          const ev = f.fluxo.eventos.filter(e => e.tipo === 'recebimento' && e.data > f.hoje).sort((a, c) => a.data < c.data ? -1 : 1)[0];
+          const ate = f.proj.dias.filter(d => d.data < ev.data);
+          const b = [`O próximo recebimento previsto é ${ev.nome}, em ${_convDdMm(ev.data)} (${_convMoeda(ev.valor)}).`];
+          if (!ate.length) { b.push('Ele cai amanhã, então não há dias no meio.'); return { bolhas: b, fonte: 'Previsão de recebimentos e saldo diário do Fluxo de Caixa.', acao: { id: 'fluxo', rotulo: 'Abrir o Fluxo de Caixa' } }; }
+          const m = ate.reduce((a, d) => d.saldo < a.saldo ? d : a, ate[0]);
+          b.push(m.saldo < -0.005 ? `Até lá o saldo previsto fica negativo: o ponto mais baixo é ${_convMoeda(m.saldo)} em ${_convDdMm(m.data)}, faltando ${_convMoeda(-m.saldo)} para chegar.` : `Até lá o saldo previsto não fica negativo. O ponto mais baixo é ${_convMoeda(m.saldo)} em ${_convDdMm(m.data)}.`);
+          return { bolhas: b, fonte: 'Previsão de recebimentos e saldo diário do Fluxo de Caixa.', acao: { id: 'fluxo', rotulo: 'Abrir o Fluxo de Caixa' } };
+      } },
+    { id: 'd-entra-sai', tipo: 'dado', personagem: 'torres', tema: 'Entradas', telas: ['screen-fluxo-caixa', 'screen-renda-detalhe'], nivelMin: 2,
+      perguntas: ['Quando o dinheiro entra e quando sai neste mês?', 'Como é o meu mês dia a dia?', 'Quais são as próximas entradas e saídas?'],
+      palavras: ['entra', 'sai', 'mes', 'dia', 'calendario', 'vencimentos', 'recebimentos', 'datas', 'proximas'],
+      quando: f => !!(f.fluxo && (f.fluxo.eventos || []).length > 0),
+      responder: f => {
+          const ev = f.fluxo.eventos, b = [];
+          b.push(`Nos próximos 30 dias, a previsão é de ${_convMoeda(f.fluxo.totais.entradas)} de entradas e ${_convMoeda(f.fluxo.totais.saidas)} de saídas com data marcada.`);
+          const ent = ev.filter(e => e.tipo === 'recebimento').slice(0, 5);
+          if (ent.length) b.push('Entradas: ' + ent.map(e => `${_convDdMm(e.data)} ${e.nome} (${_convMoeda(e.valor)})`).join('; ') + '.');
+          const sai = ev.filter(e => e.tipo !== 'recebimento').sort((x, y) => y.valor - x.valor).slice(0, 5).sort((x, y) => x.data < y.data ? -1 : 1);
+          if (sai.length) b.push('Maiores saídas: ' + sai.map(e => `${_convDdMm(e.data)} ${e.nome} (${_convMoeda(e.valor)})`).join('; ') + '.');
+          const l = f.fluxo.lacunas || {};
+          if (l.fontesSemDia > 0) b.push(`${_convPlural(l.fontesSemDia, 'fonte de renda está', 'fontes de renda estão')} sem dia de recebimento e não ${l.fontesSemDia === 1 ? 'entra' : 'entram'} nessa previsão.`);
+          if (l.categoriasSemVencimento > 0) b.push(`${_convPlural(l.categoriasSemVencimento, 'categoria sem vencimento é tratada', 'categorias sem vencimento são tratadas')} como gasto do dia a dia, não como data marcada.`);
+          return { bolhas: b, fonte: 'Recebimentos, vencimentos e faturas com data declarada, nos próximos 30 dias.', acao: { id: 'fluxo', rotulo: 'Abrir o Fluxo de Caixa' } };
+      } },
+    { id: 'd-contas-fixas', tipo: 'dado', personagem: 'torres', tema: 'Plano', telas: ['screen-editar-plano', 'screen-orcamento-inicio', 'screen-gastos-detalhe'], nivelMin: 1,
+      perguntas: ['Quais contas fixas pesam mais?', 'O que mais consome meu mês?', 'Quais são minhas maiores contas?'],
+      palavras: ['contas', 'fixas', 'pesam', 'consome', 'maiores', 'boletos', 'mes', 'valor', 'aluguel'],
+      quando: f => Array.isArray(f.contas) && f.contas.length > 0,
+      responder: f => {
+          const tot = f.contas.reduce((s, c) => s + c.valor, 0);
+          const top = f.contas.slice(0, 5).map(c => `${c.nome}: ${_convMoeda(c.valor)}${f.renda > 0 ? ' (' + _convPct(c.valor / f.renda * 100) + ' da renda)' : ''}`);
+          const b = ['As contas com vencimento que mais pesam no mês:'].concat(top);
+          b.push(`Juntas, as ${f.contas.length} contas somam ${_convMoeda(tot)}${f.renda > 0 ? ', ' + _convPct(tot / f.renda * 100) + ' da renda cadastrada' : ''}.`);
+          return { bolhas: b, fonte: 'Categorias do tipo conta ainda não quitadas, ordenadas pelo valor.', acao: { id: 'editar-plano', rotulo: 'Abrir Editar plano' } };
+      } },
+    { id: 'd-realista', tipo: 'dado', personagem: 'bela', tema: 'Dia a dia', telas: ['screen-gastos-detalhe', 'screen-semana-passada', 'screen-orcamento-inicio'], nivelMin: 2,
+      perguntas: ['Meu orçamento é realista?', 'Sempre estouro as mesmas categorias?', 'Qual categoria passa toda semana?'],
+      palavras: ['realista', 'estouro', 'sempre', 'mesmas', 'categorias', 'toda', 'semana', 'repete', 'combinado'],
+      quando: f => Array.isArray(f.cronico) && (f.nResumos || 0) >= 3,
+      responder: f => {
+          const n = Math.min(f.nResumos, 4);
+          if (!f.cronico.length) return { bolhas: [`Nas últimas ${n} semanas fechadas, nenhuma categoria passou do combinado em 3 ou mais semanas.`], fonte: 'Resumos das semanas fechadas.' };
+          const b = [`Estas categorias passaram do combinado em 3 ou mais das últimas ${n} semanas:`];
+          f.cronico.slice(0, 4).forEach(c => b.push(`${c.nome}: passou em ${c.semanasAcima} de ${c.janela} semanas, em média ${_convMoeda(c.excessoMedio)} por semana.`));
+          b.push('Quando a mesma categoria passa várias semanas seguidas, o valor combinado talvez esteja abaixo do uso real. Quem decide é você; o Simulador ajuda a testar um valor novo.');
+          return { bolhas: b, fonte: 'Resumos das últimas semanas fechadas: gasto da semana contra o combinado da categoria.', acao: { id: 'simulador', rotulo: 'Testar no Simulador', nivelMin: 3 } };
+      } },
+    { id: 'd-custo-credito', tipo: 'dado', personagem: 'ze', tema: 'Dívidas e crédito', telas: ['screen-divida-detalhe', 'screen-simulador', 'screen-orcamento-inicio'], nivelMin: 3,
+      perguntas: ['Quanto me custa usar crédito?', 'Quanto pago de juros?', 'Quanto de juros estou pagando por mês?'],
+      palavras: ['custa', 'custo', 'credito', 'juros', 'paga', 'pago', 'mes', 'taxa', 'divida'],
+      quando: f => (Array.isArray(f.dividas) && f.dividas.length > 0) || f.temContaCorrente === true,
+      responder: f => {
+          const linhas = []; let tot = 0;
+          (f.cheque || []).forEach(c => { const j = c.calculo && c.calculo.jurosTotal; if (typeof j === 'number' && j > 0.005) { linhas.push(`Cheque especial (${c.nome}), próximos 30 dias: ${_convMoeda(j)}`); tot += j; } });
+          (f.dividas || []).filter(d => d.taxa !== null && d.taxa > 0 && d.saldo !== null && d.saldo > 0).forEach(d => { const j = d.saldo * d.taxa / 100; linhas.push(`${d.nome}: cerca de ${_convMoeda(j)} por mês (${_convPct(d.taxa)} sobre o saldo devedor)`); tot += j; });
+          const semTaxa = (f.dividas || []).filter(d => d.taxa === null).length;
+          if (!linhas.length) return { bolhas: ['Ainda não dá para estimar o custo do seu crédito: falta informar a taxa de juros nas dívidas e no cheque especial.', 'O app só calcula juros com a taxa que você informa.'], fonte: 'Taxas informadas nas dívidas e nas carteiras.', acao: { id: 'futuro', rotulo: 'Abrir Dívidas' } };
+          const b = ['Estimativa do custo de crédito:'].concat(linhas, [`Total estimado: ${_convMoeda(tot)}.`]);
+          if (semTaxa > 0) b.push(`${_convPlural(semTaxa, 'dívida está', 'dívidas estão')} sem taxa informada e ${semTaxa === 1 ? 'ficou' : 'ficaram'} de fora da conta.`);
+          b.push('É uma estimativa com a taxa que você informou: não inclui IOF nem tarifas.');
+          return { bolhas: b, fonte: 'Saldo devedor × taxa mensal informada, mais a projeção do cheque especial.', acao: { id: 'futuro', rotulo: 'Abrir Dívidas' } };
+      } },
+    { id: 'd-subir-degrau', tipo: 'dado', personagem: 'torres', tema: 'Diagnóstico', telas: ['screen-diagnostico'], nivelMin: 2,
+      perguntas: ['O que falta para eu subir de degrau?', 'O que o diagnóstico pede de mim?', 'Quais são as metas dos indicadores?'],
+      palavras: ['falta', 'subir', 'degrau', 'meta', 'metas', 'indicadores', 'melhorar', 'diagnostico', 'pede'],
+      quando: f => !!(f.ide && f.ide.degrau !== null && f.ide.degrau !== undefined && f.ide.degrau > 0 && (f.ide.indicadores || []).some(x => x.ativo && x.score > 0 && x.meta)),
+      responder: f => {
+          const lista = f.ide.indicadores.filter(x => x.ativo && x.score > 0 && x.meta).slice(0, 3);
+          const b = ['Os indicadores que mais pesam hoje, com o que cada um pede:'];
+          lista.forEach(x => b.push(`${x.nome}: hoje ${String(x.sub).replace(/(\d)\.(\d) meses/, '$1,$2 meses')}. Meta: ${x.meta}.`));
+          b.push('O degrau vem da soma ponderada de todos os indicadores. Cumprir uma meta ajuda, mas o app não promete que ela sozinha mude o degrau.');
+          return { bolhas: b, fonte: 'Indicadores do diagnóstico, ordenados pelo peso na classificação.', acao: { id: 'diagnostico', rotulo: 'Ver os indicadores' } };
+      } },
+    { id: 'd-conciliacao', tipo: 'dado', personagem: 'torres', tema: 'Confiar nos dados', telas: ['screen-custodias', 'screen-orcamento-inicio', 'screen-diagnostico'], nivelMin: 3,
+      perguntas: ['O que o app corrigiu no meu saldo?', 'Por que tem lançamento de conciliação?', 'Por que o saldo do app é diferente do meu banco?', 'O app errou?'],
+      palavras: ['corrigiu', 'conciliacao', 'ajuste', 'saldo', 'banco', 'diferente', 'errou', 'conta', 'carteira', 'atualizei'],
+      quando: f => Array.isArray(f.conciliacoes) && f.conciliacoes.length > 0,
+      responder: f => {
+          const c = f.conciliacoes, liq = c.reduce((s, x) => s + x.delta, 0), b = [];
+          b.push(`Neste mês você atualizou o saldo de carteiras ${_convPlural(c.length, 'vez', 'vezes')}. Cada atualização leva o saldo do app ao valor que você informou, e a diferença fica registrada como conciliação. As de maior valor:`);
+          c.slice().sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta)).slice(0, 5).forEach(x => b.push(`${_convDdMm(x.data)} · ${x.nome}: de ${_convMoeda(x.de)} para ${_convMoeda(x.para)} (${x.delta >= 0 ? '+' : '−'}${_convMoeda(Math.abs(x.delta))})`));
+          b.push(`Efeito líquido no mês: ${liq >= 0 ? '+' : '−'}${_convMoeda(Math.abs(liq))}.`);
+          b.push('Essas diferenças costumam vir de movimentos que ainda não tinham sido registrados no app.');
+          return { bolhas: b, fonte: 'Conciliações de saldo feitas nas carteiras neste mês.', acao: { id: 'carteiras', rotulo: 'Abrir Carteiras' } };
+      } }
 ];
 
 let _conversaFatosAtual = null;   // calculados ao abrir a conversa; só na memória
