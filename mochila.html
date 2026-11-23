@@ -490,6 +490,25 @@
         }
         
         .btn-flutuante-feedback:active { transform: scale(0.95); }
+        .conversa-conteudo { display: flex; flex-direction: column; height: 92vh; max-height: 92vh; padding-top: 28px; }
+        .conv-aviso { font-size: 0.8rem; color: var(--secondary); line-height: 1.4; margin-bottom: 10px; padding: 8px 10px; border-radius: 10px; background: var(--purple-light); }
+        .conv-fio { flex: 1; overflow-y: auto; min-height: 80px; }
+        .conv-bolha { max-width: 90%; padding: 10px 12px; border-radius: 14px; font-size: 0.9rem; line-height: 1.45; margin: 8px 0; }
+        .conv-app { background: var(--purple-light); color: var(--text-main); border-bottom-left-radius: 4px; }
+        .conv-eu { margin-left: auto; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+        .conv-passos { margin: 0 0 6px; padding-left: 20px; }
+        .conv-passos li { margin-bottom: 6px; }
+        .conv-nota { font-size: 0.82rem; color: var(--secondary); margin: 6px 0; }
+        .conv-quem { font-size: 0.8rem; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
+        .conv-p { margin: 4px 0; }
+        .conv-fonte { font-size: 0.82rem; color: var(--secondary); margin: 6px 0; }
+        .conv-fonte summary { cursor: pointer; }
+        .conv-acao { margin: 8px 0 0; font-size: 0.9rem; }
+        .conv-sugestoes { max-height: 30vh; overflow-y: auto; margin-top: 8px; }
+        .conv-vazio { font-size: 0.82rem; color: var(--secondary); margin: 6px 0; }
+        .conv-sug { display: block; width: 100%; text-align: left; padding: 10px 12px; margin: 0 0 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg, #fff); color: var(--text-main); font-size: 0.9rem; cursor: pointer; }
+        .conv-sug.conv-dev { border-style: dashed; color: var(--primary); }
+        .conv-entrada { margin-top: 8px; }
         
         .btn-flutuante-feedback.visivel { display: flex; }
 
@@ -1187,7 +1206,7 @@
 	
 </div>
 <!-- BOTÃO FLUTUANTE: Canal de Feedback (Ciclo 4.0) -->
-<button id="btn-feedback" class="btn-flutuante-feedback" onclick="abrirModalFeedback()" aria-label="Enviar feedback">💬</button>
+<button id="btn-feedback" class="btn-flutuante-feedback" onclick="abrirModalFale()" aria-label="Conversar com o Mochila ou enviar mensagem aos desenvolvedores">💬</button>
 <!-- MODAL: Registro — Ciclo 4.1 Fatia C (conversacional) -->
 <div id="modal-registro" class="modal-registro">
     <div class="modal-registro-conteudo" style="max-height: 92vh; overflow-y: auto; padding-top: 28px;">
@@ -1310,6 +1329,37 @@
     <div class="modal-registro-conteudo" style="max-height: 88vh; overflow-y: auto; padding-top: 28px;">
         <button type="button" onclick="fecharModalIndicador()" style="position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer; z-index: 2;">&times;</button>
         <div id="modal-indicador-conteudo"></div>
+    </div>
+</div>
+
+<div id="modal-fale" class="modal-registro">
+    <div class="modal-registro-conteudo" style="padding-top: 28px;">
+        <button type="button" onclick="fecharModalFale()" style="position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer; z-index: 2;" aria-label="Fechar">&times;</button>
+        <div class="home-brand" style="margin-bottom: 4px; font-size: 0.9rem;">🎒 <span>Mochila</span></div>
+        <h3 class="home-section-title" style="margin-bottom: 4px;">Como posso ajudar?</h3>
+        <p class="home-section-sub" style="margin-bottom: 18px;">Escolha o que você quer fazer.</p>
+        <button type="button" class="btn-option" style="justify-content: flex-start;" onclick="abrirConversa()">
+            <span style="font-size: 1.5rem;">💬</span>
+            <span>Conversar com o Mochila<br><small style="color: var(--secondary); font-weight: 400;">Perguntas prontas sobre o app e sobre o seu dinheiro</small></span>
+        </button>
+        <button type="button" class="btn-option" style="justify-content: flex-start;" onclick="falarComDesenvolvedores()">
+            <span style="font-size: 1.5rem;">📨</span>
+            <span>Enviar mensagem anônima para os desenvolvedores<br><small style="color: var(--secondary); font-weight: 400;">Dúvida, reclamação ou sugestão</small></span>
+        </button>
+    </div>
+</div>
+
+<div id="modal-conversa" class="modal-registro">
+    <div class="modal-registro-conteudo conversa-conteudo">
+        <button type="button" onclick="fecharConversa()" style="position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 1.8rem; color: var(--secondary); cursor: pointer; z-index: 2;" aria-label="Fechar">&times;</button>
+        <div class="home-brand" style="margin-bottom: 4px; font-size: 0.9rem;">🎒 <span>Mochila</span></div>
+        <h3 class="home-section-title" style="margin-bottom: 4px;">Conversar com o Mochila</h3>
+        <div class="conv-aviso">Aqui não há inteligência artificial nem conversa online. São respostas prontas, que o app monta no seu aparelho.</div>
+        <div id="conversa-fio" class="conv-fio"></div>
+        <div id="conversa-sugestoes" class="conv-sugestoes"></div>
+        <div class="conv-entrada">
+            <input type="text" id="conversa-input" class="input-padrao" autocomplete="off" placeholder="Pergunte sobre o app ou sobre o seu dinheiro" oninput="conversaFiltrar()" onkeydown="if(event.key==='Enter'){event.preventDefault();conversaEnter();}">
+        </div>
     </div>
 </div>
 
@@ -2424,6 +2474,575 @@ function migrarEstado() {
     }
 }
 
+// ===== Conversar com o Mochila =====
+// Conversa guiada: NÃO é IA nem conversa online. O usuário digita e a lista de perguntas prontas vai filtrando;
+// as respostas são montadas no aparelho. Fatia 1: dúvidas de operação do app.
+const CONVERSA_STOP = new Set(['a', 'o', 'as', 'os', 'um', 'uma', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas', 'e', 'ou', 'que', 'como', 'eu', 'me', 'meu', 'minha', 'meus', 'minhas', 'para', 'pra', 'por', 'com', 'se', 'ao', 'aos', 'qual', 'quais', 'onde', 'posso', 'devo', 'faco', 'fazer', 'esta', 'esse', 'essa']);
+
+// acao.id aponta para CONVERSA_ACOES; telas são ids de .screen (o mesmo mapeamento do botão de feedback).
+const CONVERSA_CATALOGO = [
+    { id: 'op-registrar', tipo: 'app', popular: true, tema: 'Registrar', telas: ['screen-orcamento-inicio', 'screen-gastos-detalhe', 'screen-diario'], nivelMin: 1,
+      perguntas: ['Como registro um gasto?', 'Como lançar uma despesa?', 'Como registrar um recebimento?', 'Como anotar um movimento?'],
+      palavras: ['lancar', 'anotar', 'adicionar', 'despesa', 'entrada', 'salario', 'movimento', 'compra', 'pix', 'cartao'],
+      passos: ['Na tela inicial, toque em "＋ Registrar movimento".', 'Responda às perguntas: tipo, categoria, valor, data e carteira.', 'Confirme. O envelope e o saldo da carteira se atualizam na hora.'],
+      acao: { id: 'registro', rotulo: 'Abrir o registro' } },
+    { id: 'op-corrigir', tipo: 'app', popular: true, tema: 'Registrar', telas: ['screen-orcamento-inicio', 'screen-gastos-detalhe', 'screen-semana-passada'], nivelMin: 1,
+      perguntas: ['Como corrijo um lançamento errado?', 'Como excluir um gasto?', 'Como editar um registro?', 'Lancei o valor errado, e agora?'],
+      palavras: ['editar', 'excluir', 'apagar', 'errado', 'erro', 'ajustar', 'anular', 'desfazer', 'registro', 'lancamento'],
+      passos: ['Na tela inicial, toque no card do envelope (Base, Vida ou Futuro). Abre a lista de registros da semana.', 'Em cada registro há "Editar" e "Excluir".', 'Se a semana já foi fechada, os botões viram "Ajustar" e "Anular": o histórico fechado é preservado e o ajuste fica registrado.'],
+      acao: { id: 'inicio', rotulo: 'Ir para a tela inicial' } },
+    { id: 'op-categoria', tipo: 'app', tema: 'Plano', telas: ['screen-editar-plano', 'screen-gastos-detalhe', 'screen-orcamento-inicio'], nivelMin: 2,
+      perguntas: ['Como cadastro uma categoria de gasto?', 'Como adiciono uma conta fixa?', 'Como mudo o valor de uma categoria?'],
+      palavras: ['categoria', 'conta', 'fixa', 'aluguel', 'mercado', 'base', 'vida', 'vencimento', 'envelope', 'cadastrar', 'valor'],
+      passos: ['Abra o menu ☰ e toque em "Editar plano".', 'Escolha Base ou Vida.', 'Toque em adicionar para criar, ou numa categoria para editar. Informe nome, valor e, se for conta, o dia do vencimento.'],
+      acao: { id: 'editar-plano', rotulo: 'Abrir Editar plano' } },
+    { id: 'op-renda', tipo: 'app', tema: 'Plano', telas: ['screen-editar-plano', 'screen-renda-detalhe', 'screen-orcamento-inicio'], nivelMin: 2,
+      perguntas: ['Como cadastro minha renda?', 'Como adiciono uma fonte de renda?', 'Como mudo o dia em que o salário cai?'],
+      palavras: ['renda', 'salario', 'fonte', 'recebimento', 'dia', 'quinzenal', 'freela', 'cadastrar'],
+      passos: ['Abra o menu ☰ e toque em "Editar plano".', 'Toque em "Renda".', 'Adicione ou edite a fonte: nome, valor, como cai (mensal, quinzenal…) e o dia do recebimento.'],
+      acao: { id: 'renda', rotulo: 'Abrir Renda' } },
+    { id: 'op-divida', tipo: 'app', tema: 'Plano', telas: ['screen-editar-plano', 'screen-divida-detalhe', 'screen-orcamento-inicio'], nivelMin: 2,
+      perguntas: ['Como cadastro uma dívida?', 'Como cadastro uma reserva?', 'Como informo parcelas e juros?'],
+      palavras: ['divida', 'reserva', 'futuro', 'parcela', 'juros', 'financiamento', 'emprestimo', 'consignado', 'cartao', 'saldo', 'devedor'],
+      passos: ['Abra o menu ☰ e toque em "Editar plano".', 'Toque em "Futuro".', 'Adicione a dívida ou a reserva. Quanto mais você informar (parcelas, saldo devedor, taxa), melhor o app consegue explicar o que acontece.'],
+      acao: { id: 'futuro', rotulo: 'Abrir Futuro' } },
+    { id: 'op-carteira', tipo: 'app', tema: 'Carteiras', telas: ['screen-custodias', 'screen-editar-plano', 'screen-orcamento-inicio'], nivelMin: 3,
+      perguntas: ['Como cadastro uma carteira?', 'Como informo o cheque especial?', 'Como atualizo o saldo da conta?'],
+      palavras: ['carteira', 'conta', 'banco', 'saldo', 'cheque', 'especial', 'limite', 'taxa', 'conciliar', 'conciliacao', 'cartao'],
+      passos: ['Na tela inicial, toque em "🏦 Carteiras" (ou, no menu ☰, "Editar plano" > "Carteiras").', 'Adicione a carteira ou toque numa existente para atualizar o saldo.', 'Em conta corrente há o bloco do cheque especial: limite, taxa ao mês e dia do débito dos juros.'],
+      acao: { id: 'carteiras', rotulo: 'Abrir Carteiras' } },
+    { id: 'op-simulador', tipo: 'app', popular: true, tema: 'Simular', telas: ['screen-simulador', 'screen-orcamento-inicio', 'screen-editar-plano'], nivelMin: 3,
+      perguntas: ['Como uso o Simulador?', 'Como gravo um cenário para o próximo mês?', 'Como testo um orçamento diferente?'],
+      palavras: ['simular', 'simulador', 'cenario', 'proximo', 'mes', 'gravar', 'testar', 'orcamento', 'plano', 'e', 'se'],
+      passos: ['Na tela inicial, toque em "🧪 Simular".', 'Abra o Cenário A ou B, toque em "Copiar do atual" e edite os valores à vontade. Nada muda no orçamento de verdade.', 'Quando gostar do resultado, toque em "Gravar para <próximo mês>". O app pergunta os dados de cada linha alterada e guarda o plano. Ele só é aplicado na virada do mês, depois da sua confirmação.'],
+      acao: { id: 'simulador', rotulo: 'Abrir o Simulador' } },
+    { id: 'op-backup', tipo: 'app', popular: true, tema: 'Segurança', telas: ['screen-ajustes', 'screen-orcamento-inicio'], nivelMin: 1,
+      perguntas: ['Como faço uma cópia de segurança?', 'Como restauro meus dados?', 'Como não perder meus dados?'],
+      palavras: ['backup', 'copia', 'seguranca', 'restaurar', 'arquivo', 'perder', 'celular', 'trocar', 'dados', 'baixar'],
+      passos: ['Abra o menu ☰ e toque em "Ajustes".', 'Toque em "Baixar cópia de segurança". Guarde o arquivo em lugar seguro: quem o tiver consegue ler seus dados.', 'Para voltar, use "Restaurar a partir de arquivo" e escolha o arquivo baixado.'],
+      acao: { id: 'ajustes', rotulo: 'Abrir Ajustes' } },
+    { id: 'op-semana', tipo: 'app', tema: 'Ajustes', telas: ['screen-ajustes', 'screen-orcamento-inicio'], nivelMin: 1,
+      perguntas: ['Como mudo o dia em que a semana começa?', 'Como altero o ciclo da semana?'],
+      palavras: ['semana', 'ciclo', 'inicio', 'comeca', 'dia', 'mudar', 'alterar'],
+      passos: ['Abra o menu ☰ e toque em "Ajustes".', 'Toque em "🗓️ Ciclo da semana" e escolha o dia.'],
+      acao: { id: 'ciclo', rotulo: 'Abrir Ciclo da semana' } },
+    { id: 'op-avisos', tipo: 'app', tema: 'Navegação', telas: ['screen-orcamento-inicio', 'screen-notificacoes'], nivelMin: 1,
+      perguntas: ['Onde vejo os avisos?', 'Para que serve o sino?'],
+      palavras: ['aviso', 'avisos', 'sino', 'notificacao', 'notificacoes', 'alerta'],
+      passos: ['No topo da tela, toque no sino 🔔.', 'A lista reúne os avisos do app, como contas perto do vencimento.'],
+      acao: { id: 'avisos', rotulo: 'Abrir Avisos' } },
+    { id: 'op-diagnostico', tipo: 'app', tema: 'Navegação', telas: ['screen-orcamento-inicio', 'screen-diagnostico'], nivelMin: 2,
+      perguntas: ['Onde vejo meu diagnóstico?', 'O que é o diagnóstico?'],
+      palavras: ['diagnostico', 'indicador', 'indicadores', 'ide', 'degrau', 'classificacao', 'situacao'],
+      passos: ['Na tela inicial, toque em "✨ Diagnóstico ›".', 'Ali ficam a sua classificação e os indicadores que a sustentam. Toque num indicador para entender o que ele mede.'],
+      acao: { id: 'diagnostico', rotulo: 'Abrir o Diagnóstico' } },
+    { id: 'op-ajuda', tipo: 'app', tema: 'Navegação', telas: ['screen-ajuda', 'screen-orcamento-inicio'], nivelMin: 1,
+      perguntas: ['Onde estão os tutoriais?', 'Como vejo o passo a passo de novo?', 'Onde fica a ajuda?'],
+      palavras: ['tutorial', 'tutoriais', 'ajuda', 'guiado', 'passo', 'vocabulario', 'palavras', 'temas'],
+      passos: ['Abra o menu ☰ e toque em "Ajuda" para os tutoriais de cada nível e para rever o passo a passo guiado.', 'Em "Palavras e temas" ficam os termos explicados com calma.'],
+      acao: { id: 'ajuda', rotulo: 'Abrir a Ajuda' } },
+];
+
+function _conversaNorm(s) {
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+function _conversaTokens(s, manterTodas) {
+    const t = _conversaNorm(s).split(' ').filter(Boolean);
+    if (manterTodas) return t;
+    const f = t.filter(x => !CONVERSA_STOP.has(x));
+    return f.length ? f : t;
+}
+
+// Filtro tipo "lista suspensa do Excel": todas as palavras digitadas precisam casar (a última por prefixo).
+// Sem texto, mostra as perguntas mais úteis para a tela atual. Sem casamento total, devolve aproximadas (aproximado:true).
+function conversaBuscar(texto, opc) {
+    opc = opc || {};
+    const max = opc.max || 6, tela = opc.tela || null;
+    const cat = opc.catalogo || CONVERSA_CATALOGO;
+    const q = _conversaTokens(texto);
+    const bonusTela = e => (tela && (e.telas || []).includes(tela)) ? 1 : 0;
+    if (!_conversaNorm(texto)) {
+        const base = cat.map((e, i) => ({ e, i, s: bonusTela(e) * 2 + (e.popular ? 1 : 0) }));
+        base.sort((a, b) => b.s - a.s || a.i - b.i);
+        return base.slice(0, max).map(x => ({ id: x.e.id, pergunta: x.e.perguntas[0], aproximado: false }));
+    }
+    const pontuar = (tok, toksPerg, toksKw) => {
+        if (toksPerg.includes(tok)) return 4;
+        if (tok.length >= 2 && toksPerg.some(t => t.startsWith(tok))) return 3;
+        if (toksKw.includes(tok)) return 3;
+        if (tok.length >= 2 && toksKw.some(t => t.startsWith(tok))) return 2;
+        return 0;
+    };
+    const res = [];
+    cat.forEach((e, i) => {
+        const vars = e.perguntas.map(p => ({ txt: p, toks: _conversaTokens(p, true) }));
+        const toksPerg = [].concat(...vars.map(v => v.toks));
+        const toksKw = [].concat(...(e.palavras || []).map(p => _conversaTokens(p, true)));
+        const pts = q.map(t => pontuar(t, toksPerg, toksKw));
+        const casadas = pts.filter(p => p > 0).length;
+        if (!casadas) return;
+        const total = pts.reduce((a, b) => a + b, 0) + bonusTela(e);
+        // variação exibida: a que mais casa com o que foi digitado
+        let melhor = vars[0], mel = -1;
+        vars.forEach(v => { const sc = q.reduce((a, t) => a + pontuar(t, v.toks, []), 0); if (sc > mel) { mel = sc; melhor = v; } });
+        res.push({ id: e.id, pergunta: melhor.txt, aproximado: casadas < q.length, casadas, total, i });
+    });
+    const exatas = res.filter(r => !r.aproximado).sort((a, b) => b.total - a.total || a.i - b.i);
+    if (exatas.length) return exatas.slice(0, max).map(r => ({ id: r.id, pergunta: r.pergunta, aproximado: false }));
+    return res.filter(r => r.casadas * 2 >= q.length).sort((a, b) => b.casadas - a.casadas || b.total - a.total || a.i - b.i)
+        .slice(0, max).map(r => ({ id: r.id, pergunta: r.pergunta, aproximado: true }));
+}
+
+function _conversaEntrada(id) { return CONVERSA_CATALOGO.find(e => e.id === id) || (typeof CONVERSA_DADOS !== 'undefined' ? CONVERSA_DADOS.find(e => e.id === id) : null) || null; }
+
+// Respostas de operação: passos curtos, nota de nível quando o recurso ainda não está disponível.
+function conversaMontarResposta(entrada, nivel) {
+    const esc = _escHtmlObs;
+    const lista = '<ol class="conv-passos">' + entrada.passos.map(p => '<li>' + esc(p) + '</li>').join('') + '</ol>';
+    const bloqueado = (entrada.nivelMin || 1) > (nivel || 1);
+    const nota = bloqueado ? `<div class="conv-nota">Este recurso aparece a partir do Nível ${entrada.nivelMin}. Quando você chegar lá, é por este caminho.</div>` : '';
+    const botao = (!bloqueado && entrada.acao) ? `<button type="button" class="btn-primary conv-acao" onclick="conversaIrPara('${entrada.acao.id}')">${esc(entrada.acao.rotulo)}</button>` : '';
+    return lista + nota + botao;
+}
+
+let _conversaFio = [];       // só na memória da tela; nada é gravado
+let _conversaTela = null;
+let _conversaUltimaSemResposta = '';
+
+const CONVERSA_ACOES = {
+    registro: () => abrirModalRegistro(),
+    inicio: () => goToScreen('screen-orcamento-inicio'),
+    'editar-plano': () => abrirTelaEditarPlano(),
+    renda: () => abrirDetalheRenda(),
+    futuro: () => abrirDetalheFuturo('divida'),
+    carteiras: () => abrirTelaCustodias(),
+    simulador: () => abrirTelaSimulador(),
+    ajustes: () => abrirTelaAjustes(),
+    ciclo: () => abrirConfigCicloSemana(),
+    avisos: () => abrirTelaNotificacoes(),
+    diagnostico: () => abrirTelaDiagnostico(),
+    fluxo: () => abrirTelaFluxoCaixa(),
+    recuperacao: () => abrirPlanoRecuperacao(),
+    ajuda: () => abrirTelaAjuda(),
+};
+
+function abrirModalFale() {
+    _conversaTela = document.querySelector('.screen.active')?.id || null;
+    document.getElementById('modal-fale').classList.add('ativo');
+    atualizarBotaoFeedback(_conversaTela);
+}
+function fecharModalFale() {
+    document.getElementById('modal-fale').classList.remove('ativo');
+    atualizarBotaoFeedback(document.querySelector('.screen.active')?.id || 'screen-orcamento-inicio');
+}
+function falarComDesenvolvedores() { fecharModalFale(); abrirModalFeedback(); }
+
+function abrirConversa() {
+    const tela = _conversaTela || document.querySelector('.screen.active')?.id || null;
+    _conversaTela = tela;
+    document.getElementById('modal-fale').classList.remove('ativo');
+    _conversaFio = [];
+    try { _conversaFatosAtual = conversaFatos(state.orcamento); } catch (_) { _conversaFatosAtual = {}; }
+    document.getElementById('modal-conversa').classList.add('ativo');
+    const inp = document.getElementById('conversa-input');
+    if (inp) inp.value = '';
+    conversaRenderFio();
+    conversaFiltrar();
+    atualizarBotaoFeedback(tela);
+    setTimeout(() => { const i = document.getElementById('conversa-input'); if (i) i.focus(); }, 60);
+}
+function fecharConversa() {
+    document.getElementById('modal-conversa').classList.remove('ativo');
+    _conversaFio = [];
+    atualizarBotaoFeedback(document.querySelector('.screen.active')?.id || 'screen-orcamento-inicio');
+}
+function conversaIrPara(acaoId) {
+    const fn = CONVERSA_ACOES[acaoId];
+    fecharConversa();
+    if (fn) { try { fn(); } catch (e) { console.warn('[conversa]', e); } }
+}
+
+function conversaRenderFio() {
+    const el = document.getElementById('conversa-fio');
+    if (!el) return;
+    if (!_conversaFio.length) {
+        el.innerHTML = '<div class="conv-bolha conv-app">Oi! Escolha uma pergunta abaixo ou comece a digitar. Eu filtro as que sei responder.</div>';
+        return;
+    }
+    el.innerHTML = _conversaFio.map(m => m.de === 'eu'
+        ? `<div class="conv-bolha conv-eu">${_escHtmlObs(m.texto)}</div>`
+        : `<div class="conv-bolha conv-app">${m.html}</div>`).join('');
+    // vai ao fim; se a última resposta for mais alta que a área, mostra o começo dela (nome do personagem)
+    const ir = () => {
+        el.scrollTop = el.scrollHeight;
+        try {
+            const u = el.lastElementChild;
+            if (u && u.classList.contains('conv-app') && u.offsetHeight > el.clientHeight - 16) {
+                el.scrollTop += u.getBoundingClientRect().top - el.getBoundingClientRect().top - 8;
+            }
+        } catch (_) {}
+    };
+    ir();
+    setTimeout(ir, 30);
+}
+
+function conversaFiltrar() {
+    const inp = document.getElementById('conversa-input');
+    const box = document.getElementById('conversa-sugestoes');
+    if (!box) return;
+    const texto = inp ? inp.value : '';
+    // sem texto, não repete o que já foi respondido nesta conversa
+    const feitas = new Set(_conversaFio.filter(m => m.de === 'eu' && m.id).map(m => m.id));
+    const cat = conversaCatalogoVisivel().filter(e => _conversaNorm(texto) || !feitas.has(e.id));
+    const r = conversaBuscar(texto, { tela: _conversaTela, max: _conversaFio.length ? 4 : 6, catalogo: cat });
+    let h = '';
+    if (_conversaNorm(texto)) {
+        if (!r.length) h += '<div class="conv-vazio">Ainda não sei responder isso.</div>';
+        else if (r[0].aproximado) h += '<div class="conv-vazio">Não achei exatamente isso. Talvez ajude:</div>';
+    } else h += '<div class="conv-vazio">Perguntas mais comuns nesta tela</div>';
+    h += r.map(x => `<button type="button" class="conv-sug" onclick="conversaEscolher('${x.id}', this.dataset.p)" data-p="${_escHtmlObs(x.pergunta)}">${_escHtmlObs(x.pergunta)}</button>`).join('');
+    if (_conversaNorm(texto) && (!r.length || r[0].aproximado)) {
+        h += '<button type="button" class="conv-sug conv-dev" onclick="conversaEnviarDev()">📨 Enviar esta pergunta aos desenvolvedores</button>';
+    }
+    box.innerHTML = h;
+}
+
+function conversaEscolher(id, pergunta) {
+    const e = _conversaEntrada(id);
+    if (!e) return;
+    const nivel = (state.orcamento && state.orcamento.nivel) || 1;
+    _conversaFio.push({ de: 'eu', texto: pergunta || e.perguntas[0], id: id });
+    _conversaFio.push({ de: 'app', html: e.tipo === 'dado' ? conversaMontarRespostaDado(e, _conversaFatosAtual, nivel) : conversaMontarResposta(e, nivel) });
+    const inp = document.getElementById('conversa-input');
+    if (inp) inp.value = '';
+    conversaRenderFio();
+    conversaFiltrar();
+}
+
+function conversaEnter() {
+    const inp = document.getElementById('conversa-input');
+    const texto = inp ? inp.value.trim() : '';
+    if (!texto) return;
+    const r = conversaBuscar(texto, { tela: _conversaTela, max: 1, catalogo: conversaCatalogoVisivel() });
+    if (r.length && !r[0].aproximado) { conversaEscolher(r[0].id, r[0].pergunta); return; }
+    _conversaUltimaSemResposta = texto;
+    _conversaFio.push({ de: 'eu', texto });
+    _conversaFio.push({ de: 'app', html: 'Ainda não sei responder isso. Eu só respondo perguntas prontas. Se quiser, envie a pergunta aos desenvolvedores, de forma anônima, para que ela entre na lista.<button type="button" class="btn-option conv-acao" onclick="conversaEnviarDev()">📨 Enviar aos desenvolvedores</button>' });
+    if (inp) inp.value = '';
+    conversaRenderFio();
+    conversaFiltrar();
+}
+
+// Leva o texto digitado ao canal anônimo de feedback (como "Dúvida"). Só envia se a pessoa confirmar lá.
+function conversaEnviarDev() {
+    const inp = document.getElementById('conversa-input');
+    const texto = ((inp && inp.value.trim()) || _conversaUltimaSemResposta || '').trim();
+    fecharConversa();
+    abrirModalFeedback();
+    escolherTipoFeedback('Dúvida');
+    setTimeout(() => {
+        const ta = document.getElementById('feedback-texto');
+        if (ta && texto) { ta.value = texto.slice(0, FEEDBACK_MAX); try { atualizarContadorFeedback(); } catch (_) {} }
+    }, 80);
+}
+
+// ----- Conversa: perguntas sobre o dinheiro do usuário (fatia 2) -----
+// Camada de fatos: cada número é calculado UMA vez por abertura da conversa, pelas mesmas funções das telas.
+// Se um cálculo falhar, o fato vira null e as perguntas que dependem dele simplesmente não aparecem.
+function conversaFatos(orc) {
+    const f = {};
+    const t = (k, fn) => { try { f[k] = fn(); } catch (e) { f[k] = null; } };
+    if (!orc) return f;
+    const fontes = (orc.rendaDetalhe && orc.rendaDetalhe.fontes) || [];
+    t('renda', () => fontes.reduce((s, x) => s + (Number(x.valor) || 0), 0));
+    t('fontesSemNatureza', () => fontes.filter(x => !x.natureza && Number(x.valor) > 0).length);
+    t('disponivel', () => calcularDisponivelAgora(orc));
+    t('caixa', () => diagnosticarInsuficienciaCaixa(orc, { dias: 14 }));
+    t('fragil', () => calcularRendaFragil(orc));
+    t('folego', () => calcularFolegoFinanceiro(orc, { protegerSaldo: false }));
+    t('aloc', () => calcularAlocacaoPlanejada(orc));
+    t('comprom', () => calcularComprometimentoRenda(orc));
+    t('atraso', () => calcularInadimplencia(orc));
+    t('reserva', () => calcularTempoReserva(orc));
+    t('minimo', () => calcularMinimoExistencial(orc));
+    t('ide', () => avaliarSistemaMulticriterio(orc));
+    t('serieIde', () => _serieIDE(orc.resumos));
+    t('cheque', () => _chequeDadosSimulador(orc, null, { dias: 30 }));
+    t('dividas', () => (orc.categorias || []).filter(c => c && c.caixa === 'futuro' && c.subtipo === 'divida' && !_categoriaParcelasQuitada(c))
+        .map(c => ({ nome: c.nome, valor: Number(c.valor) || 0, saldo: (() => { const v = _saldoDevedorEfetivo(c); return (v === null || v === undefined || !isFinite(Number(v))) ? null : Number(v); })(),
+            parcelasTotais: Number(c.parcelasTotais) || null, parcelasPagas: Number(c.parcelasPagas) || 0, taxa: (c.taxaJuros === null || c.taxaJuros === undefined) ? null : Number(c.taxaJuros) }))
+        .sort((a, b) => b.valor - a.valor));
+    t('planoMes', () => {
+        const pv = _planoVivo(orc);
+        const soma = cx => pv.saidas.filter(x => x.caixa === cx).reduce((s, x) => s + x.valor, 0);
+        const r = { renda: pv.entradas.reduce((s, x) => s + x.valor, 0), base: soma('base'), vida: soma('vida'), futuro: soma('futuro') };
+        r.total = r.base + r.vida + r.futuro;
+        return r;
+    });
+    t('temContaCorrente', () => (orc.custodias || []).some(c => c && c.tipo === 'conta_corrente' && !_custodiaEhReserva(c)));
+    t('categoriasMes', () => (orc.categorias || []).filter(c => c && (c.caixa === 'base' || c.caixa === 'vida')).map(c => {
+        const d = obterDadosMesCategoria(orc, c.id);
+        return d ? { nome: c.nome, caixa: c.caixa, gasto: Number(d.gastoMes) || 0, meta: Number(d.metaMes) || 0 } : null;
+    }).filter(Boolean));
+    t('carrego', () => {
+        const s = orc.semanaAtual || {};
+        return { base: Number(s.base && s.base.carrego) || 0, vida: Number(s.vida && s.vida.carrego) || 0 };
+    });
+    return f;
+}
+
+function _convMoeda(v) { return formatarMoeda(Number(v) || 0); }
+function _convPct(v) { return (Math.round((Number(v) || 0) * 10) / 10).toString().replace('.', ',') + '%'; }
+function _convDdMm(iso) { const m = /^\d{4}-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? m[2] + '/' + m[1] : ''; }
+function _convPlural(n, s, p) { return n + ' ' + (n === 1 ? s : p); }
+
+const CONVERSA_DADOS = [
+    { id: 'd-disponivel', tipo: 'dado', personagem: 'torres', tema: 'Saldo e caixa', popular: true, telas: ['screen-orcamento-inicio', 'screen-custodias'], nivelMin: 1,
+      perguntas: ['Quanto tenho disponível agora de verdade?', 'Posso gastar hoje?', 'Quanto tenho nas carteiras?'],
+      palavras: ['disponivel', 'saldo', 'gastar', 'dinheiro', 'carteira', 'tenho', 'agora'],
+      quando: f => !!(f.disponivel && f.disponivel.origem !== 'vazio'),
+      responder: f => ({ bolhas: [`${f.disponivel.rotulo}: ${_convMoeda(f.disponivel.valor)}.`, f.disponivel.sub],
+          fonte: 'Mesmo número do card de abertura da tela inicial.' }) },
+    { id: 'd-negativo', tipo: 'dado', personagem: 'torres', tema: 'Saldo e caixa', popular: true, telas: ['screen-orcamento-inicio', 'screen-fluxo-caixa'], nivelMin: 2,
+      perguntas: ['Vou ficar no negativo? Quando?', 'Até quando o dinheiro dura?', 'Em que dia a conta zera?'],
+      palavras: ['negativo', 'vermelho', 'zerar', 'zera', 'saldo', 'acabar', 'faltar', 'projecao', 'fluxo'],
+      quando: f => !!f.caixa,
+      responder: f => {
+          const c = f.caixa;
+          const b = [];
+          if (c.insuficiente) {
+              b.push(`Pela previsão dos próximos ${c.dias} dias, o saldo fica negativo${c.primeiroDiaNegativo ? ' a partir de ' + _convDdMm(c.primeiroDiaNegativo) : ''}. O ponto mais baixo é ${_convMoeda(c.disponivel)}; faltam ${_convMoeda(c.falta)} para não ficar no vermelho.`);
+          } else {
+              b.push(`Pela previsão dos próximos ${c.dias} dias, o saldo não fica negativo. O ponto mais baixo previsto é ${_convMoeda(c.disponivel)}.`);
+          }
+          b.push('A previsão usa as entradas, os vencimentos e as faturas que você cadastrou. O que não está cadastrado não entra.');
+          return { bolhas: b, fonte: 'Projeção diária do Fluxo de Caixa (14 dias).', acao: { id: 'fluxo', rotulo: 'Abrir o Fluxo de Caixa' } };
+      } },
+    { id: 'd-renda-instavel', tipo: 'dado', personagem: 'torres', tema: 'Entradas', telas: ['screen-renda-detalhe', 'screen-diagnostico'], nivelMin: 2,
+      perguntas: ['Quanto da minha renda é instável?', 'Posso contar com toda a minha renda?', 'Minha renda é frágil?'],
+      palavras: ['renda', 'instavel', 'fragil', 'variavel', 'contrato', 'freela', 'irregular', 'autonomo'],
+      quando: f => !!(f.fragil && f.renda > 0),
+      responder: f => {
+          const b = [f.fragil.valor > 0
+              ? `${_convPct(f.fragil.porcentagem)} da sua renda (${_convMoeda(f.fragil.valor)} de ${_convMoeda(f.renda)}) vem de fontes contratuais ou variáveis.`
+              : 'Nenhuma das suas fontes está marcada como contratual ou variável.'];
+          if (f.fontesSemNatureza > 0) b.push(`${_convPlural(f.fontesSemNatureza, 'fonte está', 'fontes estão')} sem a natureza informada, e o app não sabe classificá-${f.fontesSemNatureza === 1 ? 'la' : 'las'}.`);
+          return { bolhas: b, fonte: 'Fontes de renda cadastradas e a natureza de cada uma (estável, contratual ou variável).', acao: { id: 'renda', rotulo: 'Abrir Renda' } };
+      } },
+    { id: 'd-renda-cobre', tipo: 'dado', personagem: 'torres', tema: 'Entradas', telas: ['screen-diagnostico', 'screen-orcamento-inicio'], nivelMin: 2,
+      perguntas: ['Minha renda cobre o plano do mês?', 'Quanto falta ou sobra por mês?', 'Ganho o suficiente para o que planejei?'],
+      palavras: ['renda', 'cobre', 'sobra', 'falta', 'folego', 'mensal', 'plano', 'gastos'],
+      quando: f => !!(f.folego && f.folego.rendaBase > 0),
+      responder: f => {
+          const o = f.folego, m = o.margemBase;
+          return { bolhas: [m >= 0
+              ? `Sua renda cadastrada (${_convMoeda(o.rendaBase)}) cobre os gastos planejados do mês (${_convMoeda(o.gastosMes)}), com sobra de ${_convMoeda(m)}.`
+              : `Sua renda cadastrada (${_convMoeda(o.rendaBase)}) não cobre os gastos planejados do mês (${_convMoeda(o.gastosMes)}): faltam ${_convMoeda(-m)} por mês.`,
+              'Não entram nessa conta as parcelas já quitadas.'],
+              fonte: 'Fôlego financeiro: renda cadastrada menos os gastos planejados do mês.', acao: { id: 'diagnostico', rotulo: 'Abrir o Diagnóstico' } };
+      } },
+    { id: 'd-plano-cabe', tipo: 'dado', personagem: 'torres', tema: 'Plano', popular: true, telas: ['screen-editar-plano', 'screen-orcamento-inicio', 'screen-gastos-detalhe'], nivelMin: 1,
+      perguntas: ['Meu plano cabe na minha renda?', 'Estou planejando mais do que ganho?', 'Os envelopes passam da renda?'],
+      palavras: ['plano', 'cabe', 'renda', 'envelopes', 'planejando', 'ganho', 'teto', 'soma'],
+      quando: f => !!(f.planoMes && f.planoMes.total > 0 && f.planoMes.renda > 0),
+      responder: f => {
+          const p = f.planoMes, dif = p.renda - p.total;
+          return { bolhas: [`O plano deste mês soma ${_convMoeda(p.total)} (Base, Vida e Futuro, incluindo o que foi quitado neste mês) e a renda cadastrada é ${_convMoeda(p.renda)}.`,
+              dif >= 0 ? `O plano cabe na renda, com ${_convMoeda(dif)} de folga.` : `O plano passa da renda em ${_convMoeda(-dif)}. Isso significa que, mesmo cumprindo tudo, o dinheiro do mês não chega para todas as linhas.`],
+              fonte: 'Plano vivo do mês (mesmo da tela Orçado × Realizado) contra a renda cadastrada.', acao: { id: 'simulador', rotulo: 'Testar ajustes no Simulador', nivelMin: 3 } };
+      } },
+    { id: 'd-divisao', tipo: 'dado', personagem: 'torres', tema: 'Plano', telas: ['screen-orcamento-inicio', 'screen-editar-plano'], nivelMin: 1,
+      perguntas: ['Como minha renda está dividida?', 'Quanto vai para Base, Vida e Futuro?', 'Qual a proporção dos meus envelopes?'],
+      palavras: ['divisao', 'dividida', 'base', 'vida', 'futuro', 'proporcao', 'percentual', 'envelopes', 'distribuicao'],
+      quando: f => !!(f.planoMes && f.planoMes.total > 0),
+      responder: f => {
+          const p = f.planoMes, pc = v => _convPct(v / p.total * 100);
+          return { bolhas: [`Do plano deste mês (${_convMoeda(p.total)}): Base ${_convMoeda(p.base)} (${pc(p.base)}), Vida ${_convMoeda(p.vida)} (${pc(p.vida)}) e Futuro ${_convMoeda(p.futuro)} (${pc(p.futuro)}).`,
+              'Base é o essencial, Vida é o presente e Futuro é o que constrói o amanhã, como dívidas e reservas.'],
+              fonte: 'Plano vivo do mês, somado por envelope.' };
+      } },
+    { id: 'd-estouro-mes', tipo: 'dado', personagem: 'bela', tema: 'Dia a dia', popular: true, telas: ['screen-orcamento-inicio', 'screen-gastos-detalhe'], nivelMin: 2,
+      perguntas: ['Onde passei do combinado este mês?', 'Qual categoria estourou?', 'Em que gastei mais do que planejei?'],
+      palavras: ['passei', 'estourou', 'estouro', 'combinado', 'categoria', 'gastei', 'mais', 'acima', 'orcado'],
+      quando: f => Array.isArray(f.categoriasMes) && f.categoriasMes.length > 0,
+      responder: f => {
+          const acima = f.categoriasMes.filter(c => c.gasto > c.meta + 0.05).map(c => Object.assign({ exc: c.gasto - c.meta }, c)).sort((a, b) => b.exc - a.exc);
+          if (!acima.length) return { bolhas: ['Até agora, nenhuma categoria de Base ou Vida passou do orçado do mês.'], fonte: 'Gasto do mês contra o orçado do mês, por categoria.' };
+          const top = acima.slice(0, 4).map(c => `${c.nome}: gastou ${_convMoeda(c.gasto)} de ${_convMoeda(c.meta)} (${_convMoeda(c.exc)} acima)`);
+          const b = [`${_convPlural(acima.length, 'categoria passou', 'categorias passaram')} do orçado do mês:`].concat(top);
+          b.push('Se foi um gasto fora do comum, vale marcá-lo como evento. Se se repete, talvez o valor combinado precise ser revisto.');
+          return { bolhas: b, fonte: 'Gasto do mês contra o orçado do mês, por categoria (Base e Vida).' };
+      } },
+    { id: 'd-carrego', tipo: 'dado', personagem: 'bela', tema: 'Dia a dia', telas: ['screen-orcamento-inicio', 'screen-gastos-detalhe'], nivelMin: 2,
+      perguntas: ['Por que meu envelope está negativo?', 'O que é o adiantamento da semana passada?', 'Por que começo a semana devendo?'],
+      palavras: ['negativo', 'adiantamento', 'carrego', 'semana', 'passada', 'devendo', 'envelope', 'estouro', 'vida', 'base'],
+      quando: f => !!f.carrego,
+      responder: f => {
+          const itens = [];
+          if (f.carrego.base > 0.005) itens.push(`Base: ${_convMoeda(f.carrego.base)}`);
+          if (f.carrego.vida > 0.005) itens.push(`Vida: ${_convMoeda(f.carrego.vida)}`);
+          if (!itens.length) return { bolhas: ['Nenhum envelope está carregando valor de semanas anteriores. Esta semana começou limpa.'], fonte: 'Carrego das caixinhas na semana aberta.' };
+          return { bolhas: ['Você começou esta semana com valores que vieram de semanas anteriores: ' + itens.join(' · ') + '.',
+              'Isso acontece quando um envelope gasta mais do que o combinado: a diferença é descontada da semana seguinte, e por isso a barra já abre cheia.',
+              'Não é uma dívida nova. É a conta das semanas passadas aparecendo onde ela aconteceu.'],
+              fonte: 'Carrego das caixinhas Base e Vida na semana aberta.' };
+      } },
+    { id: 'd-dividas-renda', tipo: 'dado', personagem: 'ze', tema: 'Dívidas e crédito', popular: true, telas: ['screen-divida-detalhe', 'screen-diagnostico', 'screen-orcamento-inicio'], nivelMin: 2,
+      perguntas: ['Quanto da minha renda vai para dívidas?', 'Estou muito endividado?', 'Qual o peso das minhas dívidas?'],
+      palavras: ['divida', 'dividas', 'renda', 'peso', 'endividado', 'comprometimento', 'parcelas', 'percentual'],
+      quando: f => !!(f.comprom && f.comprom.status !== 'sem_dados'),
+      responder: f => {
+          const c = f.comprom;
+          const b = [`${_convPct(c.porcentagem)} da sua renda (${_convMoeda(c.valor)} de ${_convMoeda(f.renda)}) vai para parcelas de dívidas e compromissos.`];
+          b.push(c.status === 'critico' ? 'Pelos limites usados no diagnóstico (30% pede atenção, 50% é crítico), esse peso está na faixa crítica.'
+              : c.status === 'atencao' ? 'Pelos limites usados no diagnóstico (30% pede atenção, 50% é crítico), esse peso está na faixa de atenção.'
+              : 'Pelos limites usados no diagnóstico (30% pede atenção, 50% é crítico), esse peso está abaixo da faixa de atenção.');
+          return { bolhas: b, fonte: 'Parcelas de dívidas do Futuro e compromissos parcelados ativos, sobre a renda cadastrada.', acao: { id: 'futuro', rotulo: 'Abrir Dívidas' } };
+      } },
+    { id: 'd-divida-maior', tipo: 'dado', personagem: 'ze', tema: 'Dívidas e crédito', telas: ['screen-divida-detalhe', 'screen-plano-recuperacao'], nivelMin: 2,
+      perguntas: ['Qual dívida pesa mais?', 'Qual é a minha maior parcela?', 'Por qual dívida começo?'],
+      palavras: ['divida', 'maior', 'pesa', 'parcela', 'comecar', 'primeiro', 'prioridade', 'pagar'],
+      quando: f => Array.isArray(f.dividas) && f.dividas.length > 0,
+      responder: f => {
+          const top = f.dividas.slice(0, 3).map(d => `${d.nome}: ${_convMoeda(d.valor)} por mês${d.saldo !== null ? ' (saldo devedor ' + _convMoeda(d.saldo) + ')' : ''}${d.taxa !== null && d.taxa > 0 ? ', juros de ' + _convPct(d.taxa) + ' ao mês' : ''}`);
+          const b = ['As que mais pesam no seu mês, pelo valor da parcela:'].concat(top);
+          if (f.dividas.some(d => d.taxa === null)) b.push('Em algumas dívidas a taxa de juros não foi informada. Com a taxa, dá para olhar também o custo de cada uma, não só o tamanho da parcela.');
+          return { bolhas: b, fonte: 'Dívidas do Futuro ordenadas pelo valor mensal.', acao: { id: 'futuro', rotulo: 'Abrir Dívidas' } };
+      } },
+    { id: 'd-divida-falta', tipo: 'dado', personagem: 'ze', tema: 'Dívidas e crédito', telas: ['screen-divida-detalhe'], nivelMin: 2,
+      perguntas: ['Quanto falta para quitar cada dívida?', 'Quando termino de pagar?', 'Quantas parcelas faltam?'],
+      palavras: ['quitar', 'falta', 'parcelas', 'terminar', 'saldo', 'devedor', 'restante', 'divida'],
+      quando: f => Array.isArray(f.dividas) && f.dividas.length > 0,
+      responder: f => {
+          const linhas = f.dividas.slice(0, 6).map(d => {
+              const partes = [];
+              if (d.parcelasTotais) partes.push(`faltam ${_convPlural(Math.max(0, d.parcelasTotais - d.parcelasPagas), 'parcela', 'parcelas')} de ${d.parcelasTotais}`);
+              if (d.saldo !== null) partes.push(`saldo devedor ${_convMoeda(d.saldo)}`);
+              return `${d.nome}: ${partes.length ? partes.join(' · ') : 'sem parcelas nem saldo informados'}`;
+          });
+          return { bolhas: linhas.concat(['Quanto mais você informar (parcelas, saldo, taxa), mais preciso o app consegue ser.']), fonte: 'Parcelas e saldo devedor informados em cada dívida.', acao: { id: 'futuro', rotulo: 'Abrir Dívidas' } };
+      } },
+    { id: 'd-cheque', tipo: 'dado', personagem: 'ze', tema: 'Dívidas e crédito', popular: true, telas: ['screen-custodias', 'screen-simulador', 'screen-orcamento-inicio'], nivelMin: 3,
+      perguntas: ['Estou usando o cheque especial? Quanto custa?', 'Quanto pago de juros no negativo?', 'A conta vai ficar no vermelho?'],
+      palavras: ['cheque', 'especial', 'juros', 'negativo', 'custo', 'conta', 'vermelho', 'limite'],
+      quando: f => Array.isArray(f.cheque) && (f.cheque.length > 0 || f.temContaCorrente === true),
+      responder: f => {
+          if (!f.cheque.length) return { bolhas: ['Pela previsão dos próximos 30 dias, nenhuma conta corrente fica no negativo.'], fonte: 'Projeção diária das contas correntes, pelas datas declaradas.' };
+          const b = [];
+          f.cheque.forEach(c => {
+              if (c.semCadastro) { b.push(`${c.nome}: pode ficar negativa por ${_convPlural(c.diasNegativos, 'dia', 'dias')} (ponto mais baixo ${_convMoeda(c.saldoMinimo)}). Informe a taxa do cheque especial no cadastro da carteira para eu calcular o custo.`); return; }
+              const k = c.calculo || {};
+              if (!(k.diasNegativos > 0)) { b.push(`${c.nome}: nenhum dia no negativo nos próximos ${k.janelaDias || 30} dias.`); return; }
+              let t = `${c.nome}: ${_convPlural(k.diasNegativos, 'dia', 'dias')} no negativo nos próximos ${k.janelaDias || 30} dias, uso máximo de ${_convMoeda(k.usoMaximo)}`;
+              if (k.semTaxa) t += '. A taxa não foi informada, então não calculo o custo';
+              else t += `, juros projetados de ${_convMoeda(k.jurosTotal)}`;
+              b.push(t + '.');
+          });
+          b.push('O cálculo usa só a taxa que você informou e não inclui IOF nem tarifas.');
+          return { bolhas: b, fonte: 'Projeção diária de cada conta corrente e a taxa informada no cadastro.', acao: { id: 'simulador', rotulo: 'Ver no Simulador', nivelMin: 3 } };
+      } },
+    { id: 'd-atraso', tipo: 'dado', personagem: 'ze', tema: 'Dívidas e crédito', telas: ['screen-divida-detalhe', 'screen-plano-recuperacao', 'screen-orcamento-inicio'], nivelMin: 2,
+      perguntas: ['Tenho dívida vencida e não paga?', 'Estou em atraso?', 'Tenho conta atrasada?'],
+      palavras: ['atraso', 'atrasada', 'vencida', 'vencido', 'inadimplente', 'inadimplencia', 'paga', 'divida'],
+      quando: f => !!f.atraso,
+      responder: f => {
+          const a = f.atraso;
+          if (!a.temAtraso) return { bolhas: ['Não encontrei contas vencidas e não pagas.'], fonte: 'Contas e obrigações vencidas sem pagamento registrado.' };
+          return { bolhas: [`Sim: há ${_convMoeda(a.valor)} em contas vencidas e não pagas, a mais antiga com ${_convPlural(a.dias, 'dia', 'dias')} de atraso.`,
+              'Se já pagou, falta só registrar o pagamento. Se não, o Plano de recuperação ajuda a decidir por onde começar.'],
+              fonte: 'Contas e obrigações vencidas sem pagamento registrado.', acao: { id: 'recuperacao', rotulo: 'Abrir o Plano de recuperação' } };
+      } },
+    { id: 'd-reserva', tipo: 'dado', personagem: 'torres', tema: 'Reserva', telas: ['screen-diagnostico', 'screen-custodias'], nivelMin: 3,
+      perguntas: ['Quanto tempo minha reserva me sustenta?', 'E se eu perder a renda?', 'Tenho reserva de emergência?'],
+      palavras: ['reserva', 'emergencia', 'meses', 'sustenta', 'perder', 'renda', 'poupanca'],
+      quando: f => !!(f.reserva && f.reserva.status !== 'sem_dados'),
+      responder: f => {
+          const r = f.reserva;
+          const m = Math.round(r.meses * 10) / 10, dias = Math.round(r.meses * 30);
+          const txt = r.meses >= 1 ? `Sua reserva cobre cerca de ${String(m).replace('.', ',')} ${m === 1 ? 'mês' : 'meses'} dos gastos de Base e Vida.`
+              : dias >= 1 ? `Sua reserva cobre cerca de ${_convPlural(dias, 'dia', 'dias')} dos gastos de Base e Vida.`
+              : 'Hoje não há saldo em carteiras de reserva.';
+          return { bolhas: [txt,
+              'No diagnóstico, 3 meses ou mais é considerado confortável.'],
+              fonte: 'Saldo das carteiras de reserva dividido pelo gasto mensal de Base e Vida.', acao: { id: 'carteiras', rotulo: 'Abrir Carteiras' } };
+      } },
+    { id: 'd-minimo', tipo: 'dado', personagem: 'torres', tema: 'Reserva', telas: ['screen-diagnostico'], nivelMin: 2,
+      perguntas: ['O que sobra depois dos boletos?', 'Tenho o mínimo para viver?', 'O que é o mínimo existencial?'],
+      palavras: ['sobra', 'boletos', 'minimo', 'existencial', 'viver', 'contas', 'dividas', 'piso'],
+      quando: f => !!(f.minimo && f.minimo.rendaTotal > 0),
+      responder: f => {
+          const m = f.minimo;
+          return { bolhas: [`Sua renda (${_convMoeda(m.rendaTotal)}) menos as contas da Base (${_convMoeda(m.boletosBase)}) e as dívidas (${_convMoeda(m.dividas)}) deixa ${_convMoeda(m.valor)} para viver.`,
+              m.preservado ? `Isso está acima do piso de referência de ${_convMoeda(m.pisoLegal)} para ${_convPlural(m.totalPessoas, 'pessoa', 'pessoas')}.`
+                  : `Isso fica abaixo do piso de referência de ${_convMoeda(m.pisoLegal)} para ${_convPlural(m.totalPessoas, 'pessoa', 'pessoas')} (R$ 600 por pessoa).`],
+              fonte: 'Renda cadastrada, contas da Base, parcelas de dívidas e o piso de R$ 600 por pessoa.', acao: { id: 'diagnostico', rotulo: 'Abrir o Diagnóstico' } };
+      } },
+    { id: 'd-degrau', tipo: 'dado', personagem: 'torres', tema: 'Diagnóstico', popular: true, telas: ['screen-diagnostico', 'screen-orcamento-inicio'], nivelMin: 2,
+      perguntas: ['Por que meu degrau é este?', 'O que significa a minha classificação?', 'Como o diagnóstico chegou a esse resultado?'],
+      palavras: ['degrau', 'classificacao', 'diagnostico', 'ide', 'indicadores', 'situacao', 'resultado'],
+      quando: f => !!(f.ide && f.ide.classe),
+      responder: f => {
+          const i = f.ide;
+          if (i.degrau === null || i.degrau === undefined) return { bolhas: [i.classe.msg], fonte: 'Indicadores do diagnóstico.', acao: { id: 'diagnostico', rotulo: 'Abrir o Diagnóstico' } };
+          const pesam = (i.indicadores || []).filter(x => x.ativo && x.score > 0).slice(0, 3).map(x => `${x.nome} (${String(x.sub).replace(/(\d)\.(\d) meses/, '$1,$2 meses')})`);
+          const b = [`Hoje o seu degrau é "${i.classe.nome}". ${i.classe.msg}`];
+          if (pesam.length) b.push('Os indicadores que mais pesam nessa classificação são: ' + pesam.join('; ') + '.');
+          b.push('O IDE mede a distância até o equilíbrio: quanto menor, melhor.');
+          return { bolhas: b, fonte: 'Indicadores do diagnóstico, cada um com o seu peso.', acao: { id: 'diagnostico', rotulo: 'Ver os indicadores' } };
+      } },
+    { id: 'd-ide-evolucao', tipo: 'dado', personagem: 'torres', tema: 'Diagnóstico', telas: ['screen-diagnostico'], nivelMin: 2,
+      perguntas: ['Como meu IDE mudou nas últimas semanas?', 'Qual a evolução do meu diagnóstico?', 'Meu IDE subiu ou desceu?'],
+      palavras: ['ide', 'evolucao', 'semanas', 'melhorando', 'historico', 'mudou', 'tendencia', 'diagnostico'],
+      quando: f => Array.isArray(f.serieIde) && f.serieIde.filter(p => p.calculavel).length >= 2,
+      responder: f => {
+          const pts = f.serieIde.filter(p => p.calculavel).slice(-6);
+          const n = v => String(v).replace('.', ',');
+          const linhas = pts.map(p => `${_convDdMm(p.inicio)}: IDE ${n(p.ide)}`);
+          const ult = pts[pts.length - 1], a = pts[0].ide, z = ult.ide;
+          const b = ['Pontos das últimas semanas fechadas:'].concat(linhas);
+          if (!(ult.sobrevivencia || (ult.degrau !== null && ult.degrau >= 4))) {
+              b.push(z !== a ? `Do primeiro ao último ponto, o IDE foi de ${n(a)} para ${n(z)}.` : `O IDE ficou em ${n(z)} do primeiro ao último ponto.`);
+          }
+          b.push('Quanto menor, mais perto do equilíbrio. O app não faz previsão a partir desses pontos.');
+          return { bolhas: b, fonte: 'Foto do IDE gravada no fechamento de cada semana.', acao: { id: 'diagnostico', rotulo: 'Abrir o Diagnóstico' } };
+      } },
+    { id: 'd-simular', tipo: 'dado', personagem: 'torres', tema: 'Decisão', telas: ['screen-simulador', 'screen-diagnostico'], nivelMin: 3,
+      perguntas: ['E se eu cortar uma despesa ou ganhar mais?', 'Como testo uma mudança antes de fazer?', 'O que acontece se eu reduzir um gasto?'],
+      palavras: ['simular', 'cortar', 'reduzir', 'despesa', 'ganhar', 'mais', 'testar', 'cenario', 'mudanca', 'se'],
+      quando: () => true,
+      responder: () => ({ bolhas: ['No Simulador você copia o seu orçamento atual, muda valores à vontade e compara com o atual. Nada muda no orçamento de verdade.', 'Quando gostar de um cenário, pode gravá-lo como plano do próximo mês.'],
+          fonte: 'Cenários A e B do Simulador.', acao: { id: 'simulador', rotulo: 'Abrir o Simulador' } }) },
+];
+
+let _conversaFatosAtual = null;   // calculados ao abrir a conversa; só na memória
+
+// Montagem da resposta de dados: personagem, texto, marca "Texto em revisão", origem do número e atalho.
+function conversaMontarRespostaDado(entrada, fatos, nivel) {
+    const esc = _escHtmlObs;
+    let r = null;
+    try { r = entrada.responder(fatos || {}, { nivel: nivel || 1 }); } catch (e) { r = null; }
+    if (!r || !Array.isArray(r.bolhas) || !r.bolhas.length) return 'Não consegui montar esta resposta agora com os seus dados.';
+    const p = PERSONAGENS_DIALOGO[entrada.personagem] || PERSONAGENS_DIALOGO.torres;
+    let h = `<div class="conv-quem">${p.icone} ${esc(p.nome)}</div>`;
+    h += r.bolhas.filter(Boolean).map(b => `<p class="conv-p">${esc(b)}</p>`).join('');
+    h += '<div class="conv-nota">Texto em revisão</div>';
+    if (r.fonte) h += `<details class="conv-fonte"><summary>De onde vem isso?</summary><div>${esc(r.fonte)}</div></details>`;
+    if (r.acao && (nivel || 1) >= (r.acao.nivelMin || 1)) h += `<button type="button" class="btn-primary conv-acao" onclick="conversaIrPara('${r.acao.id}')">${esc(r.acao.rotulo)}</button>`;
+    return h;
+}
+
+// Catálogo visível agora: operação sempre; dados só se o nível já chegou e os números existem.
+function conversaCatalogoVisivel() {
+    const nivel = (state.orcamento && state.orcamento.nivel) || 1;
+    const fatos = _conversaFatosAtual || {};
+    const dados = CONVERSA_DADOS.filter(e => {
+        if ((e.nivelMin || 1) > nivel) return false;
+        try { return !!e.quando(fatos); } catch (_) { return false; }
+    });
+    return CONVERSA_CATALOGO.concat(dados);
+}
+
+
 // CICLO 4.0 — BOTÃO DE FEEDBACK (visibilidade)
 
 // Telas onde o botão NÃO aparece
@@ -2436,6 +3055,8 @@ function atualizarBotaoFeedback(screenId) {
     const modalAberto = document.getElementById('modal-registro').classList.contains('ativo')
                      || document.getElementById('modal-qrcode').classList.contains('ativo')
                      || (document.getElementById('modal-feedback') && document.getElementById('modal-feedback').classList.contains('ativo'))
+                     || (document.getElementById('modal-fale') && document.getElementById('modal-fale').classList.contains('ativo'))
+                     || (document.getElementById('modal-conversa') && document.getElementById('modal-conversa').classList.contains('ativo'))
                      || (document.getElementById('modal-lista-registros') && document.getElementById('modal-lista-registros').classList.contains('ativo'));
 
     const telaBloqueada = TELAS_SEM_FEEDBACK.includes(screenId);
