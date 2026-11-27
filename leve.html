@@ -2687,12 +2687,12 @@ function _seloMarcarChip(valor) {
 }
 function seloEscolher(id) {
     _seloForm.atividadeId = id || null; _seloForm.novoNome = '';
-    const inp = document.getElementById('selo-novo-nome'); if (inp) { inp.style.display = 'none'; inp.value = ''; }
+    const inp = _elForm('selo-novo-nome'); if (inp) { inp.style.display = 'none'; inp.value = ''; }
     _seloMarcarChip(id || '');
 }
 function seloNova() {
     _seloForm.atividadeId = null;
-    const inp = document.getElementById('selo-novo-nome');
+    const inp = _elForm('selo-novo-nome');
     if (inp) { inp.style.display = 'block'; inp.focus(); }
     _seloMarcarChip('__nova');
 }
@@ -3507,6 +3507,20 @@ function atualizarBotaoFeedback(screenId) {
 }
 
 let screenHistory = [];
+/**
+ * Os formulários de categoria (Base/Vida, Futuro) e o de renda usam os mesmos ids de campo e ficam cada um no
+ * contêiner da sua tela. Depois de abrir um, o outro continua no DOM (escondido): getElementById devolvia o campo
+ * ESCONDIDO e o app lia nome/valor vazios ("Insira um valor maior que zero" com tudo preenchido).
+ * Aqui vale o campo que está dentro da tela ativa.
+ */
+function _elForm(id) {
+    const todos = document.querySelectorAll('#' + id);
+    if (todos.length < 2) return todos[0] || null;
+    const ativa = document.querySelector('.screen.active');
+    for (let i = 0; i < todos.length; i++) { if (ativa && ativa.contains(todos[i])) return todos[i]; }
+    return todos[0];
+}
+
 function goToScreen(id, pushHistory = true) {
     const currentScreen = document.querySelector('.screen.active')?.id;
     
@@ -10951,8 +10965,8 @@ function abrirFormularioCategoria(idExistente) {
 
     // Prefill em edição
     if (catExistente) {
-        const inputNome = document.getElementById('nova-cat-nome');
-        const inputValor = document.getElementById('nova-cat-valor');
+        const inputNome = _elForm('nova-cat-nome');
+        const inputValor = _elForm('nova-cat-valor');
         if (inputNome) inputNome.value = catExistente.nome || '';
         if (inputValor) inputValor.value = catExistente.valor != null ? catExistente.valor : '';
 
@@ -10966,7 +10980,7 @@ function abrirFormularioCategoria(idExistente) {
         }
 
         if (tipo === 'conta' && catExistente.vencimento) {
-            const inputVenc = document.getElementById('nova-cat-vencimento');
+            const inputVenc = _elForm('nova-cat-vencimento');
             if (inputVenc) inputVenc.value = catExistente.vencimento;
         }
 
@@ -10990,7 +11004,7 @@ function abrirFormularioCategoria(idExistente) {
 function preencherNomeCategoria(el) {
     const nome = el.textContent.trim();
     const semEmoji = nome.replace(/^[^\w]+\s*/, '');
-    document.getElementById('nova-cat-nome').value = semEmoji;
+    _elForm('nova-cat-nome').value = semEmoji;
 }
 let tipoCategoriaSelecionado = null;
 let custodiaPadraoCategoriaSelecionada = null;
@@ -10999,22 +11013,22 @@ function selecionarTipoCategoria(el, tipo) {
     document.querySelectorAll('#chips-tipo-cat .chip').forEach(c => c.classList.remove('selecionado'));
     el.classList.add('selecionado');
     tipoCategoriaSelecionado = tipo;
-    const blocoVencimento = document.getElementById('bloco-vencimento');
+    const blocoVencimento = _elForm('bloco-vencimento');
     if (blocoVencimento) {
         if (tipo === 'conta') {
             blocoVencimento.style.display = 'block';
         } else {
             blocoVencimento.style.display = 'none';
-            const inputVenc = document.getElementById('nova-cat-vencimento');
+            const inputVenc = _elForm('nova-cat-vencimento');
             if (inputVenc) inputVenc.value = '';
         }
     }
 }
 
 function pularVencimentoCategoria() {
-    const inputVenc = document.getElementById('nova-cat-vencimento');
+    const inputVenc = _elForm('nova-cat-vencimento');
     if (inputVenc) inputVenc.value = '';
-    const bloco = document.getElementById('bloco-vencimento');
+    const bloco = _elForm('bloco-vencimento');
     if (bloco) bloco.style.display = 'none';
 }
 
@@ -11031,9 +11045,9 @@ function pularCustodiaPadraoCategoria() {
 
 function salvarCategoria() {
 const caixa = caixaGastosAtiva;
-    const nome = document.getElementById('nova-cat-nome').value.trim();
-    const valor = parseFloat(document.getElementById('nova-cat-valor').value) || 0;
-    const inputVenc = document.getElementById('nova-cat-vencimento');
+    const nome = _elForm('nova-cat-nome').value.trim();
+    const valor = parseFloat(_elForm('nova-cat-valor').value) || 0;
+    const inputVenc = _elForm('nova-cat-vencimento');
     let vencimento = null;
     if (tipoCategoriaSelecionado === 'conta' && inputVenc && inputVenc.value.trim() !== '') {
     const d = parseInt(inputVenc.value);
@@ -11936,15 +11950,15 @@ container.innerHTML = `
 
     // Prefill em edição
     if (catExistente) {
-        document.getElementById('nova-cat-nome').value = catExistente.nome || '';
-        document.getElementById('nova-cat-valor').value = catExistente.valor != null ? catExistente.valor : '';
+        _elForm('nova-cat-nome').value = catExistente.nome || '';
+        _elForm('nova-cat-valor').value = catExistente.valor != null ? catExistente.valor : '';
 
         tipoCategoriaSelecionado = catExistente.tipo || 'conta';
         const chipTipo = document.querySelector(`#chips-tipo-cat .chip[data-tipo="${tipoCategoriaSelecionado}"]`);
         if (chipTipo) selecionarTipoCategoria(chipTipo, tipoCategoriaSelecionado);
 
         if (tipoCategoriaSelecionado === 'conta' && catExistente.vencimento) {
-            document.getElementById('nova-cat-vencimento').value = catExistente.vencimento;
+            _elForm('nova-cat-vencimento').value = catExistente.vencimento;
         }
 
         parcelamentoSelecionado = catExistente.parcelasTotais ? 'sim' : 'nao';
@@ -11952,12 +11966,12 @@ container.innerHTML = `
         if (chipParc) selecionarParcelamento(chipParc, parcelamentoSelecionado);
 
         if (parcelamentoSelecionado === 'sim') {
-            document.getElementById('nova-cat-parcelas').value = catExistente.parcelasTotais;
+            _elForm('nova-cat-parcelas').value = catExistente.parcelasTotais;
         }
 
         // Prefill passivo (dívida)
         if (subtipo === 'divida') {
-            const elSaldo = document.getElementById('nova-cat-saldo-devedor');
+            const elSaldo = _elForm('nova-cat-saldo-devedor');
             if (elSaldo && catExistente.saldoDevedor != null && !isNaN(Number(catExistente.saldoDevedor))) {
                 elSaldo.value = catExistente.saldoDevedor;
             }
@@ -11968,7 +11982,7 @@ container.innerHTML = `
             } else if (typeof tj === 'number' && tj > 0) {
                 const chip = document.querySelector('#chips-taxa-juros .chip[data-taxa="sei"]');
                 if (chip) selecionarTaxaJuros(chip, 'sei');
-                const elTaxa = document.getElementById('nova-cat-taxa-juros');
+                const elTaxa = _elForm('nova-cat-taxa-juros');
                 if (elTaxa) elTaxa.value = tj;
             } else {
                 const chip = document.querySelector('#chips-taxa-juros .chip[data-taxa="nao_sei"]');
@@ -11977,7 +11991,7 @@ container.innerHTML = `
         
         // Prefill data real de vencimento
 if (catExistente.dataVencimentoReal) {
-    const elVencReal = document.getElementById('nova-cat-venc-real');
+    const elVencReal = _elForm('nova-cat-venc-real');
     if (elVencReal) elVencReal.value = catExistente.dataVencimentoReal;
 }
 // Prefill tipo de crédito
@@ -12006,7 +12020,7 @@ function selecionarParcelamento(el, escolha) {
     el.classList.add('selecionado');
     parcelamentoSelecionado = escolha;
 
-    const blocoParcelas = document.getElementById('bloco-parcelas');
+    const blocoParcelas = _elForm('bloco-parcelas');
     if (blocoParcelas) blocoParcelas.style.display = escolha === 'sim' ? 'block' : 'none';
 }
 
@@ -12014,7 +12028,7 @@ function selecionarTaxaJuros(el, escolha) {
     document.querySelectorAll('#chips-taxa-juros .chip').forEach(c => c.classList.remove('selecionado'));
     if (el) el.classList.add('selecionado');
     taxaJurosSelecionada = escolha;
-    const bloco = document.getElementById('bloco-taxa-juros-valor');
+    const bloco = _elForm('bloco-taxa-juros-valor');
     if (bloco) bloco.style.display = escolha === 'sei' ? 'block' : 'none';
 }
 
@@ -12026,11 +12040,11 @@ function selecionarCustodiaReservaFuturo(el) {
 
 
 function salvarCategoriaFuturo() {
-    const nome = document.getElementById('nova-cat-nome').value.trim();
-    const valor = parseFloat(document.getElementById('nova-cat-valor').value) || 0;
-    const vencimento = parseInt(document.getElementById('nova-cat-vencimento').value) || null;
+    const nome = _elForm('nova-cat-nome').value.trim();
+    const valor = parseFloat(_elForm('nova-cat-valor').value) || 0;
+    const vencimento = parseInt(_elForm('nova-cat-vencimento').value) || null;
     const subtipo = caixaFuturoAtiva;
-    const parcelasInput = document.getElementById('nova-cat-parcelas');
+    const parcelasInput = _elForm('nova-cat-parcelas');
     const parcelasTotais = parcelamentoSelecionado === 'sim'
         ? (parseInt(parcelasInput && parcelasInput.value) || 0)
         : null;
@@ -12057,7 +12071,7 @@ function salvarCategoriaFuturo() {
     let dataVencRealForm = null;  
     let tipoCreditoForm = null;  
     if (subtipo === 'divida') {
-        const elSaldo = document.getElementById('nova-cat-saldo-devedor');
+        const elSaldo = _elForm('nova-cat-saldo-devedor');
         if (elSaldo && String(elSaldo.value).trim() !== '') {
             const s = parseFloat(elSaldo.value);
             if (!isNaN(s) && s >= 0) saldoDevedorForm = s;
@@ -12065,7 +12079,7 @@ function salvarCategoriaFuturo() {
         if (taxaJurosSelecionada === 'sem') {
             taxaJurosForm = 0;
         } else if (taxaJurosSelecionada === 'sei') {
-            const elTaxa = document.getElementById('nova-cat-taxa-juros');
+            const elTaxa = _elForm('nova-cat-taxa-juros');
             const t = elTaxa ? parseFloat(elTaxa.value) : NaN;
             if (isNaN(t) || t < 0) {
                 alert('Informe a taxa de juros ao mês, ou escolha "Não sei".');
@@ -12076,7 +12090,7 @@ function salvarCategoriaFuturo() {
             taxaJurosForm = null; // não sei
         }
         
-                const elDataReal = document.getElementById('nova-cat-venc-real');
+                const elDataReal = _elForm('nova-cat-venc-real');
         const vDataReal = elDataReal && elDataReal.value;
         if (vDataReal && /^\d{4}-\d{2}-\d{2}$/.test(String(vDataReal))) {
             dataVencRealForm = String(vDataReal);
