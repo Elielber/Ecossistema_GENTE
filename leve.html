@@ -4565,7 +4565,10 @@ function _simularDiluicaoDiaria(orc, fluxo, opcoes) {
     const inicioDt = new Date(fluxo.inicio + 'T00:00:00');
     const fimMes = new Date(inicioDt.getFullYear(), inicioDt.getMonth() + 1, 0);
     const diasMes = Math.round((fimMes - inicioDt) / 86400000) + 1;
-    const ritmoProx = planejado / 30;
+    // Plano gravado para o mês seguinte: o ritmo diluído desse mês vem do plano, não do mês atual.
+    const pp = fluxo.planoProx;
+    const planejadoProx = pp ? (custodiaId ? (pp.porCustodia[custodiaId] || 0) : pp.planejado) : planejado;
+    const ritmoProx = planejadoProx / 30;
 
     const eventosDe = (key) => {
         const dd = fluxo.porDia[key];
@@ -5718,10 +5721,96 @@ function concluirOnboardingNivel2() {
     renderizarOrcamentoInicio();
 }
 
-function renderizarOnboardingNivel3Home(orc) {
-    if (!orc || (orc.nivel || 1) < 3) return '';
+// Guias do N3, um por semana (v3.20). Só decide qual card mostrar: não trava ferramenta nem muda nível.
+// 1 = guiado de carteiras (já existia); 2 = "Olhar à frente" (semana 1); 3 = "Testar caminhos" (semana 2).
+function _guiaN3Atual(orc) {
+    if (!orc || (orc.nivel || 1) < 3) return 0;
     const ob = orc.onboardingNivel3;
-    if (!ob || ob.concluido) return '';
+    if (!ob || typeof ob !== 'object') return 0;
+    if (ob.forcarGuia === 2 || ob.forcarGuia === 3) return ob.forcarGuia; // vindo da Ajuda
+    if (ob.pulouGuias) return 0;
+    if (!ob.concluido) return 1;
+    const vistos = Array.isArray(ob.vistos) ? ob.vistos : [];
+    const sem = orc.semanasNoNivelAtual || 0;
+    if (sem >= 1 && vistos.indexOf(2) < 0) return 2;
+    if (sem >= 2 && vistos.indexOf(3) < 0) return 3;
+    return 0;
+}
+
+const GUIAS_N3_TEXTO = {
+    2: {
+        titulo: 'Guia 2 de 3 — Olhar à frente',
+        pergunta: 'Em que dia o saldo fica mais baixo?',
+        aviso: 'O Fluxo só enxerga a fatura de cartão que já está cadastrada; sem ela, o futuro aparece mais leve do que será.',
+        passos: [
+            { t: 'Veja o saldo dia a dia nos próximos dias.', btn: 'Fluxo de Caixa', acao: 'abrirTelaFluxoCaixa()' },
+            { t: 'Confira o que vence neste mês.', btn: 'Agenda', acao: 'abrirTelaMapaMes()' },
+            { t: 'Complete o que falta: renda com dia, contas com vencimento e, se usa cartão, fatura aberta e dia de vencimento.', btn: 'Carteiras', acao: 'abrirTelaCustodias()' }
+        ]
+    },
+    3: {
+        titulo: 'Guia 3 de 3 — Testar caminhos',
+        pergunta: 'Qual caminho cabe no meu orçamento?',
+        aviso: '',
+        passos: [
+            { t: 'Compare o orçamento atual com um cenário. Se um deles servir, dá para gravar como plano do próximo mês.', btn: 'Simulador', acao: 'abrirTelaSimulador()' },
+            { t: 'Se tiver dívida, veja o Plano de Recuperação.', btn: 'Plano de Recuperação', acao: 'abrirPlanoRecuperacao()' }
+        ]
+    }
+};
+
+function _renderizarGuiaN3SemanaHome(n) {
+    const g = GUIAS_N3_TEXTO[n];
+    if (!g) return '';
+    const passos = g.passos.map((p, i) => `
+        <div style="margin:8px 0;">
+            <div style="font-size:0.9rem;color:var(--secondary);line-height:1.4;">${i + 1}. ${p.t}</div>
+            <button class="btn-sm" style="background:var(--primary);color:#fff;margin-top:4px;" onclick="${p.acao}">${p.btn}</button>
+        </div>`).join('');
+    return `
+        <div class="card" style="border-left:4px solid var(--primary);background:var(--purple-light);margin-bottom:14px;padding:16px;">
+            <div style="display:flex;gap:10px;align-items:flex-start;">
+                <span style="font-size:1.5rem;">🛡️</span>
+                <div style="flex:1;">
+                    <div style="font-size:0.9rem;font-weight:700;color:var(--primary);text-transform:uppercase;">Torres · guiado Nível 3</div>
+                    <div style="font-weight:700;color:var(--primary);margin-top:4px;">${g.titulo}</div>
+                    ${passos}
+                    <p style="font-size:0.9rem;color:var(--primary);font-weight:600;margin:10px 0 4px;">Pergunta: ${g.pergunta}</p>
+                    ${g.aviso ? `<p style="font-size:0.85rem;color:var(--secondary);line-height:1.4;margin:0 0 8px;">${g.aviso}</p>` : ''}
+                    <button class="btn-sm" style="background:var(--primary);color:#fff;" onclick="marcarGuiaN3Visto(${n})">Entendi</button>
+                    <button class="btn-option" style="margin-top:8px;justify-content:center;border:none;color:var(--secondary);font-size:0.9rem;" onclick="pularOnboardingNivel3()">Pular guiado</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function marcarGuiaN3Visto(n) {
+    const ob = state.orcamento.onboardingNivel3 = state.orcamento.onboardingNivel3 || {};
+    if (!Array.isArray(ob.vistos)) ob.vistos = [];
+    if (ob.vistos.indexOf(n) < 0) ob.vistos.push(n);
+    if (n === 3 && ob.vistos.indexOf(2) < 0) ob.vistos.push(2);
+    delete ob.forcarGuia;
+    salvarEstado();
+    renderizarOrcamentoInicio();
+}
+
+// Ajuda: rever um guia da semana sem esperar
+function reiniciarGuiaN3(n) {
+    const ob = state.orcamento.onboardingNivel3 = state.orcamento.onboardingNivel3 || {};
+    ob.concluido = true;
+    delete ob.pulouGuias;
+    ob.forcarGuia = n;
+    salvarEstado();
+    renderizarOrcamentoInicio();
+    goToScreen('screen-orcamento-inicio');
+}
+
+function renderizarOnboardingNivel3Home(orc) {
+    const guia = _guiaN3Atual(orc);
+    if (guia === 2 || guia === 3) return _renderizarGuiaN3SemanaHome(guia);
+    if (guia !== 1) return '';
+    const ob = orc.onboardingNivel3;
     const etapa = ob.etapa || 1;
     const passos = {
         1: {
@@ -5811,6 +5900,11 @@ function _tickOnboardingAposConciliacao() {
 
 function pularOnboardingNivel3() {
     concluirOnboardingNivel3();
+    const ob = state.orcamento.onboardingNivel3;
+    ob.pulouGuias = true; // encerra também os guias das semanas 1 e 2
+    delete ob.forcarGuia;
+    salvarEstado();
+    renderizarOrcamentoInicio();
 }
 
 function _tickOnboardingAposCustodia() {
@@ -6237,7 +6331,9 @@ function renderizarAjuda() {
     if (nivel >= 3) {
         tuts += `
         <button type="button" class="chip" onclick="abrirTelaTutorial(3)">🎬 Como o N3 funciona</button>
-        <button type="button" class="chip" onclick="reiniciarOnboardingNivel3()">▶️ Ver guiado N3 de novo</button>`;
+        <button type="button" class="chip" onclick="reiniciarOnboardingNivel3()">▶️ Ver guiado N3 de novo</button>
+        <button type="button" class="chip" onclick="reiniciarGuiaN3(2)">▶️ Ver guia N3: Olhar à frente</button>
+        <button type="button" class="chip" onclick="reiniciarGuiaN3(3)">▶️ Ver guia N3: Testar caminhos</button>`;
     }
     el.innerHTML = `
         ${cabecalhoTelaSecundaria('Ajuda', 'Tutoriais e orientações')}
@@ -6711,7 +6807,7 @@ function renderizarTelaAjustes() {
     el.innerHTML = `
         ${cabecalhoTelaSecundaria('Ajustes', 'Preferências')}
         
-        <div class="secao-titulo">Modo</div>
+        <div class="secao-titulo">Aparência</div>
         <div class="ajustes-grid" style="margin-bottom: 24px;">${chips}</div>
 
         <div class="secao-titulo">Tamanho da letra</div>
@@ -9660,6 +9756,7 @@ function abrirTelaTransicaoNivel3() {
                 <li>Nas categorias de Base e Vida, pode definir a <strong>origem padrão</strong> (é só tocar nelas)</li>
                 <li>Saldos e faturas aparecem na tela de controle, como as caixinhas</li>
             </ul>
+            <p style="font-size: 0.9rem; color: var(--secondary); margin-top: 10px; line-height: 1.5;">Três guias curtos vão aparecendo na Home, um por semana: <strong>onde o dinheiro mora</strong>, <strong>olhar à frente</strong> (Fluxo de Caixa e Agenda) e <strong>testar caminhos</strong> (Simulador). Nada trava; você abre o que quiser quando quiser.</p>
         </div>
 
         <div class="card" style="background: var(--purple-light); border-color: var(--purple-light);">
@@ -16636,11 +16733,15 @@ function _renderizarAgendaMes() {
 
     container.innerHTML = `
         ${cabecalhoTelaSecundaria('Agenda do mês', 'Vencimentos nos próximos 30 dias')}
+        
         <div class="fala-avatar">
             <span class="icone">🛡️</span>
             <span class="texto">Esses são os boletos que vencem nos próximos 30 dias. Não é pra decorar. É pra saber o que vem.</span>
+            
         </div>
-
+<button class="btn-option" style="margin:0; padding:14px 10px; flex-direction:column; align-items:center; text-align:center; gap:8px;" onclick="abrirTelaFluxoCaixa()">
+                <span style="font-size:1.5rem;">🧭</span><span style="font-size:0.85rem; font-weight:700; color:var(--text-main);">Fluxo de Caixa</span>
+            </button>
         <div class="totalizador" style="margin-bottom: 20px;">
             Total do mês: <strong>${fmt(totalMes)}</strong>
         </div>
@@ -18819,6 +18920,7 @@ function renderizarFluxoCaixa() {
             <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--primary); margin-top: 4px;">Olhar à frente</h2>
         </div>
         ${_fluxoHtmlAbas(orc)}
+        ${(fluxo.planoProx ? `<div style="font-size:0.85rem;color:var(--secondary);line-height:1.4;margin:-4px 0 12px;">A partir de ${fluxo.planoProx.inicio.slice(8, 10)}/${fluxo.planoProx.inicio.slice(5, 7)} esta projeção usa o <strong>plano que você gravou</strong>; até lá segue o orçamento de hoje.</div>` : '')}
         ${htmlResumo}
         ${htmlLinkSimulador}
         ${htmlConexaoEnvelopes}
@@ -19541,6 +19643,32 @@ if (Array.isArray(orc.obrigacoesCartao)) {
 }
 
 
+/**
+ * Se há plano gravado (pendente) para um mês que começa depois do início da janela e a janela chega nele,
+ * devolve uma cópia do orçamento com o plano aplicado e o ritmo diluído do mês planejado. Senão null.
+ */
+function _fluxoSobreporPlano(orc, inicio, fim) {
+    const p = orc && orc.planoPlanejado;
+    if (!p || typeof p !== 'object' || p.aplicadoEm || p.descartadoEm) return null;
+    if (!Array.isArray(p.alteracoes) || !p.alteracoes.length || typeof p.mes !== 'string') return null;
+    const ano = parseInt(p.mes.slice(0, 4), 10), mes0 = parseInt(p.mes.slice(5, 7), 10) - 1;
+    if (!isFinite(ano) || !isFinite(mes0)) return null;
+    const inicioPlano = new Date(ano, mes0, 1);
+    if (inicioPlano <= inicio || inicioPlano > fim) return null; // plano do mês corrente espera a virada; não se mistura
+    const clone = JSON.parse(JSON.stringify(orc));
+    _planoAplicar(clone, 'projecao');
+    const porCustodia = {};
+    let planejado = 0;
+    (clone.categorias || []).forEach(c => {
+        if (!c || _categoriaParcelasQuitada(c)) return;
+        if (c.vencimento !== null && c.vencimento !== undefined && c.vencimento !== '') return;
+        const v = Math.max(0, Number(c.valor) || 0);
+        planejado += v;
+        if (c.custodiaPadraoId) porCustodia[c.custodiaPadraoId] = (porCustodia[c.custodiaPadraoId] || 0) + v;
+    });
+    return { mes: p.mes, clone: clone, inicioPlano: inicioPlano, planejado: planejado, porCustodia: porCustodia };
+}
+
 function projetarFluxo(orc, opcoes) {
     opcoes = opcoes || {};
     const diasJanela = (typeof opcoes.dias === 'number' && opcoes.dias > 0) ? opcoes.dias : 30;
@@ -19553,9 +19681,19 @@ function projetarFluxo(orc, opcoes) {
     fim.setDate(inicio.getDate() + diasJanela - 1);
     fim.setHours(0, 0, 0, 0);
 
-    const recebimentos = _eventosRecebimentoDeclarados(orc, inicio, fim);
-    const vencimentos = _eventosVencimentoDeclarados(orc, inicio, fim);
-    const faturas = _eventosPagamentoFaturaDeclarados(orc, inicio, fim);
+    // Plano do mês seguinte já gravado: os dias desse mês usam o plano (receitas e contas novas, encerradas ou
+    // alteradas) em vez da repetição do mês atual. Só lê uma cópia; o orçamento não muda.
+    const sobreposto = opcoes.semPlano ? null : _fluxoSobreporPlano(orc, inicio, fim);
+    const corteMs = sobreposto ? sobreposto.inicioPlano : null;
+    const dentro = (ev) => !corteMs || new Date(ev.data + 'T00:00:00') < corteMs;
+    let recebimentos = _eventosRecebimentoDeclarados(orc, inicio, fim);
+    let vencimentos = _eventosVencimentoDeclarados(orc, inicio, fim);
+    let faturas = _eventosPagamentoFaturaDeclarados(orc, inicio, fim);
+    if (sobreposto) {
+        recebimentos = recebimentos.filter(dentro).concat(_eventosRecebimentoDeclarados(sobreposto.clone, corteMs, fim));
+        vencimentos = vencimentos.filter(dentro).concat(_eventosVencimentoDeclarados(sobreposto.clone, corteMs, fim));
+        faturas = faturas.filter(dentro).concat(_eventosPagamentoFaturaDeclarados(sobreposto.clone, corteMs, fim));
+    }
     const eventos = recebimentos.concat(vencimentos).concat(faturas).sort((a, b) => {
         if (a.data < b.data) return -1;
         if (a.data > b.data) return 1;
@@ -19596,6 +19734,7 @@ function projetarFluxo(orc, opcoes) {
         eventos: eventos,
         porDia: porDia,
         totais: { entradas: entradas, saidas: saidas, saldo: entradas - saidas },
+        planoProx: sobreposto ? { mes: sobreposto.mes, planejado: sobreposto.planejado, porCustodia: sobreposto.porCustodia, inicio: _chaveDataLocal(sobreposto.inicioPlano) } : null,
         lacunas: {
             fontesSemDia: fontesSemDia,
             fontesSemCustodia: fontesSemCustodia,
@@ -22381,7 +22520,7 @@ function _renderizarSimuladorDatasOriginal() {
     const diasAtras = 14;
     const diasFrente = 30;
     const historico = reconstruirSaldoHistorico(orc, { diasAtras });
-    const fluxoAtual = projetarFluxo(orc, { dias: diasFrente });
+    const fluxoAtual = projetarFluxo(orc, { dias: diasFrente, semPlano: true }); // Simulador compara cenários com a repetição do mês atual
 
     const cen = _garantirCenarioAlisamento();
     const protegerSaldoSim = cen.protegerSaldoSimulador !== null
@@ -23199,7 +23338,7 @@ function simularCenario(orc, overrides) {
             if (overrides.ajustarCustodia.faturaAcumulada !== undefined) cust.faturaAcumulada = overrides.ajustarCustodia.faturaAcumulada;
         }
     }
-    const opcoesFluxo = {};
+    const opcoesFluxo = { semPlano: true }; // cenário do Simulador: não mistura com o plano já gravado
     if (overrides.dias !== undefined) opcoesFluxo.dias = overrides.dias;
     if (overrides.inicio !== undefined) opcoesFluxo.inicio = overrides.inicio;
     const fluxo = projetarFluxo(clone, opcoesFluxo);
